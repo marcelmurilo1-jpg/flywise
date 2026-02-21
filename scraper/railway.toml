@@ -1,14 +1,11 @@
-# Railway + Render deploy config
-# Roda o scraper uma vez por hora via cron
+# railwayapp.toml — Railway deploy config for the scraper
+# Docs: https://docs.railway.app/reference/config-as-code
 
 [build]
 builder = "NIXPACKS"
+buildCommand = "pip install -r requirements.txt"
 
 [deploy]
 startCommand = "python run.py"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
-
-# Para rodar como cron job no Railway:
-# Vá em Settings → Cron Job e configure: 0 * * * *
-# (roda no início de cada hora)
