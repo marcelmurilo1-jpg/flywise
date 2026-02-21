@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+env/
+
+# Banco local (não subir ao GitHub)
+*.db
+*.sqlite3
+
+# Ambiente (chaves secretas!)
+.env
+
+# Logs e dumps
+*.log
+today_posts.json
+delete_expired.log
+
+# macOS
+.DS_Store
