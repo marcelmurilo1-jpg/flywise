@@ -155,22 +155,29 @@ def main():
 
 if __name__ == "__main__":
     import signal
-    # No Railway, o processo precisa rodar indefinidamente (não pode terminar)
-    # Rodamos o scraper e dormimos 1 hora — loop eterno
-    INTERVAL_SECONDS = 3600  # 1 hora
 
-    def handle_signal(sig, frame):
-        print("\n⛔  Sinal recebido, encerrando...")
-        raise SystemExit(0)
+    # GitHub Actions define GITHUB_ACTIONS=true automaticamente
+    # Nesse caso roda uma vez e sai (o agendamento é feito pelo workflow)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        print("📋  Modo GitHub Actions — execução única")
+        main()
+    else:
+        # Railway / servidor local — loop eterno, roda a cada hora
+        INTERVAL_SECONDS = 3600
 
-    signal.signal(signal.SIGTERM, handle_signal)
-    signal.signal(signal.SIGINT, handle_signal)
+        def handle_signal(sig, frame):
+            print("\n⛔  Sinal recebido, encerrando...")
+            raise SystemExit(0)
 
-    print(f"🔄  Modo loop ativo — rodará a cada {INTERVAL_SECONDS // 60} minutos")
-    while True:
-        try:
-            main()
-        except Exception as e:
-            print(f"❌  Erro em main(): {e}")
-        print(f"\n⏳  Próxima execução em {INTERVAL_SECONDS // 60} minutos...\n")
-        time.sleep(INTERVAL_SECONDS)
+        signal.signal(signal.SIGTERM, handle_signal)
+        signal.signal(signal.SIGINT, handle_signal)
+
+        print(f"🔄  Modo loop ativo — rodará a cada {INTERVAL_SECONDS // 60} minutos")
+        while True:
+            try:
+                main()
+            except Exception as e:
+                print(f"❌  Erro em main(): {e}")
+            print(f"\n⏳  Próxima execução em {INTERVAL_SECONDS // 60} minutos...\n")
+            time.sleep(INTERVAL_SECONDS)
+
