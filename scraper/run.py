@@ -154,4 +154,23 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import signal
+    # No Railway, o processo precisa rodar indefinidamente (não pode terminar)
+    # Rodamos o scraper e dormimos 1 hora — loop eterno
+    INTERVAL_SECONDS = 3600  # 1 hora
+
+    def handle_signal(sig, frame):
+        print("\n⛔  Sinal recebido, encerrando...")
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
+
+    print(f"🔄  Modo loop ativo — rodará a cada {INTERVAL_SECONDS // 60} minutos")
+    while True:
+        try:
+            main()
+        except Exception as e:
+            print(f"❌  Erro em main(): {e}")
+        print(f"\n⏳  Próxima execução em {INTERVAL_SECONDS // 60} minutos...\n")
+        time.sleep(INTERVAL_SECONDS)
