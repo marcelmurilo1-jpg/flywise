@@ -646,7 +646,14 @@ def extrair_conteudo(url, feed_title=None, published_dt: Optional[datetime] = No
 
 
 def posts_de_hoje():
-    feed = feedparser.parse(RSS_URL)
+    # O site bloqueia o User-Agent padrão do feedparser → busca com requests primeiro
+    try:
+        rss_resp = requests.get(RSS_URL, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT)
+        rss_resp.raise_for_status()
+        feed = feedparser.parse(rss_resp.text)
+    except Exception as e:
+        print(f"⚠️  Erro ao buscar RSS: {e} — tentando feedparser direto...")
+        feed = feedparser.parse(RSS_URL)
     hoje = datetime.now(TZ).date()
     items = []
     for entry in feed.entries:
