@@ -34,14 +34,17 @@ REQUEST_TIMEOUT = 20
 # ------------------------
 
 # -------- DB CONFIG --------
-load_dotenv()
-DB_URL = os.getenv("DATABASE_URL")
-if not DB_URL:
-    raise RuntimeError("DATABASE_URL não encontrado no .env")
+# load_dotenv é opcional: no Railway as vars são injetadas pelo sistema
+# override=False garante que vars do sistema têm prioridade sobre .env local
+load_dotenv(override=False)
+DB_URL = os.getenv("DATABASE_URL")  # pode ser None se não configurado ainda
 
 
 def db_connect():
-    return psycopg2.connect(DB_URL)
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL não encontrado. Configure a variável de ambiente.")
+    return psycopg2.connect(url)
 
 
 def init_db():
