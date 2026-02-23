@@ -3,7 +3,21 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Guard: if env vars are missing, we create a dummy client that won't crash the app
+// This allows the Landing page and Auth page to render while the user configures .env.local
+if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn(
+        '[FlyWise] Missing Supabase environment variables.\n' +
+        'Create a .env.local file with:\n' +
+        '  VITE_SUPABASE_URL=your_supabase_project_url\n' +
+        '  VITE_SUPABASE_ANON_KEY=your_supabase_anon_key\n'
+    )
+}
+
+export const supabase = createClient(
+    supabaseUrl || 'https://placeholder.supabase.co',
+    supabaseAnonKey || 'placeholder-anon-key'
+)
 
 // Database types
 export interface Busca {
