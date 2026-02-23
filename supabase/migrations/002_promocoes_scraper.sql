@@ -1,36 +1,44 @@
 -- ============================================================
--- Fly Wise — Migração 002: Adapta tabela promocoes para o scraper
--- Execute no SQL Editor do Supabase antes de rodar o scraper
+-- Fly Wise — Migração 002: Cria/adapta tabela promocoes para o scraper
+-- Execute no Supabase → SQL Editor → New Query
 -- ============================================================
 
--- Adiciona colunas que o scraper precisa (se ainda não existirem)
-ALTER TABLE promocoes
-  ADD COLUMN IF NOT EXISTS url    TEXT,
-  ADD COLUMN IF NOT EXISTS fonte  TEXT DEFAULT 'passageirodeprimeira.com',
-  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+-- Cria a tabela completa (com todos os campos que o scraper precisa)
+CREATE TABLE IF NOT EXISTS promocoes (
+  id          BIGSERIAL PRIMARY KEY,
+  titulo      TEXT,
+  url         TEXT UNIQUE,                            -- unique: evita duplicatas no upsert
+  conteudo    TEXT,
+  fonte       TEXT DEFAULT 'passageirodeprimeira.com',
+  valid_until TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
 
--- Garante unicidade por URL (evita duplicatas no upsert)
--- Cria o índice unique apenas se ainda não existir
+-- Se a tabela já existia sem as novas colunas, adiciona individualmente:
+ALTER TABLE promocoes
+  ADD COLUMN IF NOT EXISTS fonte       TEXT DEFAULT 'passageirodeprimeira.com',
+  ADD COLUMN IF NOT EXISTS updated_at  TIMESTAMPTZ DEFAULT NOW();
+
+-- Garante unicidade por URL (caso a tabela já existisse sem constraint)
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'promocoes_url_key'
+    SELECT 1 FROM pg_constraint WHERE conname = 'promocoes_url_key'
   ) THEN
     ALTER TABLE promocoes ADD CONSTRAINT promocoes_url_key UNIQUE (url);
   END IF;
 END $$;
 
--- Política RLS: qualquer usuário autenticado pode LER promoções
-DROP POLICY IF EXISTS "Leitura pública de promoções" ON promocoes;
-CREATE POLICY "Leitura pública de promoções"
-  ON promocoes FOR SELECT
-  USING (true);
+-- Habilita RLS
+ALTER TABLE promocoes ENABLE ROW LEVEL SECURITY;
 
--- Apenas service_role (scraper) pode INSERIR / ATUALIZAR / DELETAR
--- (RLS já bloqueia anon/authenticated por padrão para INSERT/UPDATE/DELETE)
+-- Qualquer um pode LER promoções (sem precisar de login)
+DROP POLICY IF EXISTS "Leitura publica promocoes" ON promocoes;
+CREATE POLICY "Leitura publica promocoes"
+  ON promocoes FOR SELECT USING (true);
 
--- View atualizada que só retorna promoções ainda válidas
+-- View que só retorna promoções ainda válidas (o app usa esta view)
 CREATE OR REPLACE VIEW vw_promocoes_ativas AS
   SELECT *
   FROM   promocoes
