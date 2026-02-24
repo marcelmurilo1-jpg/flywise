@@ -193,65 +193,106 @@ export default function Landing() {
         <div style={{ minHeight: '100vh', background: '#fff', fontFamily: 'Inter, system-ui, sans-serif' }}>
 
             {/* ████ 1. HERO ████ */}
-            <section style={{ position: 'relative', minHeight: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <section style={{ position: 'relative', minHeight: '75vh', display: 'flex', flexDirection: 'column' }}>
 
-                {/* Background foto */}
-                <div style={{
-                    position: 'absolute', inset: 0,
-                    backgroundImage: 'url(/hero-sky.jpg)',
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center center',
-                }} />
-                {/* Leve overlay — minimal, não pesado */}
-                <div style={{
-                    position: 'absolute', inset: 0,
-                    background: 'linear-gradient(180deg, rgba(14,42,85,0.55) 0%, rgba(14,42,85,0.25) 55%, rgba(14,42,85,0.50) 100%)',
-                }} />
+                {/* Background foto + overlay — clipped ao hero */}
+                <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0 }}>
+                    <div style={{
+                        position: 'absolute', inset: 0,
+                        backgroundImage: 'url(/hero-new.jpg)',
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center center',
+                    }} />
+                    {/* Leve overlay — minimal, não pesado */}
+                    <div style={{
+                        position: 'absolute', inset: 0,
+                        background: 'linear-gradient(180deg, rgba(14,42,85,0.55) 0%, rgba(14,42,85,0.25) 55%, rgba(14,42,85,0.50) 100%)',
+                    }} />
+                </div>
 
-                {/* HEADER */}
-                <header style={{ position: 'relative', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 60px' }}>
-                    <Link to="/" style={{ textDecoration: 'none' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            {/* Logo FlyWise oficial: W + avião */}
-                            <svg width="44" height="44" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="3" y="3" width="94" height="94" rx="22" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="4" />
-                                {/* W shape */}
-                                <path d="M18 65 L30 35 L42 58 L50 42 L58 58 L70 35 L82 65" stroke="rgba(255,255,255,0.9)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                                {/* Airplane */}
-                                <path d="M62 22 L80 14 L76 30" stroke="#4A90E2" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                                <path d="M45 38 L76 14" stroke="#4A90E2" strokeWidth="3" strokeLinecap="round" />
-                            </svg>
-                            <span style={{ fontWeight: 800, fontSize: '22px', letterSpacing: '-0.04em', color: '#fff' }}>
-                                <span style={{ color: '#fff' }}>Fly</span><span style={{ color: '#4A90E2' }}>Wise</span>
-                            </span>
+                {/* HEADER — grid 3 colunas para nav absolutamente centralizado */}
+                <header style={{
+                    position: 'relative', zIndex: 20,
+                    width: '100%',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    padding: '24px 0',
+                }}>
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'auto 1fr auto',
+                        alignItems: 'center',
+                        gap: '24px',
+                        width: 'calc(100% - 80px)',
+                        maxWidth: '1100px',
+                    }}>
+                        {/* Coluna 1 — Logo */}
+                        <Link to="/" style={{ textDecoration: 'none', justifySelf: 'start' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <img src="/logo.png" alt="FlyWise" style={{ height: '120px', objectFit: 'contain' }} />
+                            </div>
+                        </Link>
+
+                        {/* Coluna 2 — Nav centralizado */}
+                        <nav style={{
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            background: 'rgba(255,255,255,0.10)',
+                            backdropFilter: 'blur(16px)',
+                            WebkitBackdropFilter: 'blur(16px)',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: '14px',
+                            padding: '5px',
+                            justifySelf: 'center',
+                        }}>
+                            {NAV_LINKS.map(l => (
+                                <a key={l.label} href={l.href}
+                                    style={{
+                                        color: 'rgba(255,255,255,0.80)', fontSize: '13.5px', fontWeight: 500,
+                                        textDecoration: 'none', padding: '7px 16px', borderRadius: '10px',
+                                        transition: 'background 0.18s ease, color 0.18s ease',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                    onMouseEnter={e => {
+                                        e.currentTarget.style.background = 'rgba(255,255,255,0.15)'
+                                        e.currentTarget.style.color = '#fff'
+                                    }}
+                                    onMouseLeave={e => {
+                                        e.currentTarget.style.background = 'transparent'
+                                        e.currentTarget.style.color = 'rgba(255,255,255,0.80)'
+                                    }}
+                                >{l.label}</a>
+                            ))}
+                        </nav>
+
+                        {/* Coluna 3 — CTAs */}
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifySelf: 'end' }}>
+                            <Link to="/auth"
+                                style={{
+                                    color: 'rgba(255,255,255,0.90)', fontSize: '13.5px', fontWeight: 600,
+                                    textDecoration: 'none', padding: '8px 18px', borderRadius: '10px',
+                                    border: '1.5px solid rgba(255,255,255,0.30)',
+                                    background: 'rgba(255,255,255,0.07)',
+                                    transition: 'all 0.18s ease',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.7)'; e.currentTarget.style.background = 'rgba(255,255,255,0.14)'; e.currentTarget.style.color = '#fff' }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.30)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = 'rgba(255,255,255,0.90)' }}
+                            >Entrar</Link>
+                            <Link to="/auth?tab=signup"
+                                style={{
+                                    background: '#2A60C2', color: '#fff', fontSize: '13.5px', fontWeight: 700,
+                                    textDecoration: 'none', padding: '8px 20px', borderRadius: '10px',
+                                    boxShadow: '0 4px 14px rgba(42,96,194,0.45)',
+                                    transition: 'background 0.18s ease, transform 0.18s ease',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#1A4EA8'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                                onMouseLeave={e => { e.currentTarget.style.background = '#2A60C2'; e.currentTarget.style.transform = 'translateY(0)' }}
+                            >Começar grátis</Link>
                         </div>
-                    </Link>
-
-                    {/* Nav */}
-                    <nav style={{ display: 'flex', gap: '36px' }}>
-                        {NAV_LINKS.map(l => (
-                            <a key={l.label} href={l.href} style={{ color: 'rgba(255,255,255,0.88)', fontSize: '14px', fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }}
-                                onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-                                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.88)')}
-                            >{l.label}</a>
-                        ))}
-                    </nav>
-
-                    {/* CTAs */}
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        <Link to="/auth" style={{ color: '#fff', fontSize: '14px', fontWeight: 600, textDecoration: 'none', padding: '9px 20px', borderRadius: '10px', border: '1.5px solid rgba(255,255,255,0.45)', transition: 'border-color 0.15s' }}
-                            onMouseEnter={e => (e.currentTarget.style.borderColor = '#fff')}
-                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.45)')}
-                        >Entrar</Link>
-                        <Link to="/auth?tab=signup" style={{ background: '#2A60C2', color: '#fff', fontSize: '14px', fontWeight: 700, textDecoration: 'none', padding: '9px 22px', borderRadius: '10px', boxShadow: '0 4px 14px rgba(42,96,194,0.40)', transition: 'background 0.15s' }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#1A4EA8')}
-                            onMouseLeave={e => (e.currentTarget.style.background = '#2A60C2')}
-                        >Começar grátis</Link>
                     </div>
                 </header>
 
                 {/* HERO CONTENT */}
-                <div style={{ position: 'relative', zIndex: 10, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 24px 80px' }}>
+                <div style={{ position: 'relative', zIndex: 10, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', textAlign: 'left', padding: '0 0 48px', maxWidth: '1100px', width: 'calc(100% - 80px)', margin: '0 auto' }}>
                     <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: 'easeOut' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '999px', padding: '6px 16px', marginBottom: '28px' }}>
                             <Star size={13} color="#4A90E2" fill="#4A90E2" />
@@ -261,30 +302,31 @@ export default function Landing() {
                             Viaje com Mais<br />
                             <span style={{ color: '#4A90E2' }}>Inteligência.</span>
                         </h1>
-                        <p style={{ color: 'rgba(255,255,255,0.80)', fontSize: '18px', fontWeight: 400, lineHeight: 1.6, maxWidth: '520px', margin: '0 auto 44px' }}>
+                        <p style={{ color: 'rgba(255,255,255,0.80)', fontSize: '18px', fontWeight: 400, lineHeight: 1.6, maxWidth: '520px', margin: '0 0 44px 0' }}>
                             O FlyWise transforma suas milhas em decisões estratégicas — analisando cenários, calculando o valor real e gerando o melhor plano de viagem.
                         </p>
                     </motion.div>
                 </div>
 
                 {/* PILL FLUTUANTE — sobreposta entre hero e próxima seção */}
-                <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: 0.35 }}
-                    style={{
-                        position: 'absolute', bottom: '-44px', left: '50%',
-                        transform: 'translateX(-50%)',
-                        width: 'calc(100% - 80px)', maxWidth: '1100px',
-                        zIndex: 30,
-                    }}
-                >
-                    <SearchPill />
-                </motion.div>
+                <div style={{
+                    position: 'absolute', bottom: '-36px', left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 'calc(100% - 80px)', maxWidth: '1100px',
+                    zIndex: 30,
+                }}>
+                    <motion.div
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, delay: 0.35 }}
+                    >
+                        <SearchPill />
+                    </motion.div>
+                </div>
             </section>
 
             {/* Espaçador para a pill sobreposta */}
-            <div style={{ height: '100px' }} />
+            <div style={{ height: '80px' }} />
 
             {/* ████ 2. DESTINOS ESTRATÉGICOS ████ */}
             <section id="destinos" style={{ padding: '100px 60px', maxWidth: '1280px', margin: '0 auto' }}>
