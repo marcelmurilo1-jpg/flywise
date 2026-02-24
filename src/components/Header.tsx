@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Plane, Search, Tag, LogOut, User, LayoutGrid, Sliders } from 'lucide-react'
+import { Search, Tag, LogOut, User, LayoutGrid, Sliders } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface HeaderProps {
@@ -35,16 +35,13 @@ export function Header({ variant = 'app' }: HeaderProps) {
 
                 {/* Logo */}
                 <Link to={user ? '/home' : '/'} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '9px', marginRight: 'auto' }}>
-                    <div style={{
-                        width: '28px', height: '28px', borderRadius: '8px',
-                        background: 'var(--green-strat)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 2px 8px rgba(14,107,87,0.4)',
-                    }}>
-                        <Plane size={13} color="#fff" strokeWidth={2.5} />
-                    </div>
-                    <span style={{ fontWeight: 700, fontSize: '16px', color: '#fff', letterSpacing: '-0.03em' }}>
-                        FlyWise
+                    <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
+                        <rect x="2" y="2" width="44" height="44" rx="12" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" />
+                        <path d="M12 30 Q18 18 24 24 Q30 30 36 18" stroke="#4A90E2" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                        <path d="M28 10 L38 6 L34 16" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    </svg>
+                    <span style={{ fontWeight: 800, fontSize: '17px', color: '#fff', letterSpacing: '-0.03em' }}>
+                        <span style={{ color: '#4A90E2' }}>Fly</span><span style={{ color: '#fff' }}>Wise</span>
                     </span>
                 </Link>
 
