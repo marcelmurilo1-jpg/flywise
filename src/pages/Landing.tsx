@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-    Search, ArrowRight, ArrowRightLeft, Calendar, Users,
+    Search, ArrowRight, ArrowRightLeft, Users,
     ChevronDown, CheckCircle2, BarChart3, Globe, Zap, Shield, Star,
-    Twitter, Instagram, Linkedin, Youtube, Flame
+    Twitter, Instagram, Linkedin, Youtube, Flame, Lock, ChevronUp
 } from 'lucide-react'
 import { PromotionsSection } from '@/components/PromotionsSection'
+import { AirportInput } from '@/components/AirportInput'
+import { DateRangePicker } from '@/components/DateRangePicker'
 
 
 // ─── Dados ───────────────────────────────────────────────────────────────────
@@ -63,99 +65,245 @@ const NAV_LINKS = [
     { label: 'Sobre', href: '#sobre' },
 ]
 
-// ─── SearchPill Flutuante ─────────────────────────────────────────────────────
+// ─── Miles Programs (for locked teaser) ─────────────────────────────────────
+const MILES_PROGRAMS = [
+    { name: 'Smiles (GOL)', placeholder: 'Ex: 80.000 pts', color: '#E85D04' },
+    { name: 'LATAM Pass', placeholder: 'Ex: 60.000 pts', color: '#E3000F' },
+    { name: 'TudoAzul', placeholder: 'Ex: 45.000 pts', color: '#003DA5' },
+]
+
+// ─── SearchPill — usa componentes reais do dashboard ─────────────────────────
 function SearchPill() {
-    const [from, setFrom] = useState('GRU – São Paulo')
-    const [to, setTo] = useState('')
-    const [dateOut, setDateOut] = useState('')
+    const navigate = useNavigate()
+    const [tripType, setTripType] = useState<'round-trip' | 'one-way'>('round-trip')
+    const [originLabel, setOriginLabel] = useState('')
+    const [originIata, setOriginIata] = useState('')
+    const [destLabel, setDestLabel] = useState('')
+    const [destIata, setDestIata] = useState('')
+    const [dateGo, setDateGo] = useState('')
     const [dateBack, setDateBack] = useState('')
-    const [pax, setPax] = useState('1 Adulto')
+    const [pax, setPax] = useState(1)
+    const [milesOpen, setMilesOpen] = useState(false)
+
+    function handleSwap() {
+        setOriginLabel(destLabel); setOriginIata(destIata)
+        setDestLabel(originLabel); setDestIata(originIata)
+    }
 
     return (
-        <div style={{
-            background: '#fff',
-            borderRadius: '20px',
-            boxShadow: '0 16px 60px rgba(14,42,85,0.18)',
-            padding: '8px 8px 8px 0',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0',
-            flexWrap: 'wrap',
-            border: '1px solid rgba(14,42,85,0.06)',
-        }}>
-            {/* De */}
-            <div style={{ flex: '1 1 140px', padding: '10px 20px', borderRight: '1px solid #E2EAF5', minWidth: '130px' }}>
-                <div style={{ fontSize: '10px', fontWeight: 700, color: '#6B7A99', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>De</div>
-                <input
-                    value={from} onChange={e => setFrom(e.target.value)}
-                    style={{ border: 'none', outline: 'none', fontSize: '14px', fontWeight: 600, color: '#0E2A55', background: 'transparent', width: '100%', fontFamily: 'Inter, sans-serif' }}
-                    placeholder="Cidade ou aeroporto"
-                />
-            </div>
-            {/* Swap */}
-            <button
-                onClick={() => { const t = from; setFrom(to); setTo(t) }}
-                style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#EEF2F8', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, margin: '0 4px' }}
-            >
-                <ArrowRightLeft size={14} color="#4A90E2" />
-            </button>
-            {/* Para */}
-            <div style={{ flex: '1 1 140px', padding: '10px 20px', borderRight: '1px solid #E2EAF5', minWidth: '130px' }}>
-                <div style={{ fontSize: '10px', fontWeight: 700, color: '#6B7A99', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>Para</div>
-                <input
-                    value={to} onChange={e => setTo(e.target.value)}
-                    style={{ border: 'none', outline: 'none', fontSize: '14px', fontWeight: 600, color: '#0E2A55', background: 'transparent', width: '100%', fontFamily: 'Inter, sans-serif' }}
-                    placeholder="Destino"
-                />
-            </div>
-            {/* Data Ida */}
-            <div style={{ flex: '1 1 120px', padding: '10px 20px', borderRight: '1px solid #E2EAF5', minWidth: '110px' }}>
-                <div style={{ fontSize: '10px', fontWeight: 700, color: '#6B7A99', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>Data de Ida</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Calendar size={13} color="#4A90E2" />
-                    <input type="text" value={dateOut} onChange={e => setDateOut(e.target.value)} placeholder="DD/MM/AAAA"
-                        style={{ border: 'none', outline: 'none', fontSize: '14px', fontWeight: 600, color: '#0E2A55', background: 'transparent', width: '100%', fontFamily: 'Inter, sans-serif' }} />
+        <div style={{ fontFamily: 'Manrope, Inter, sans-serif' }}>
+            {/* Main search card */}
+            <div style={{
+                background: '#fff',
+                borderRadius: '20px',
+                boxShadow: '0 20px 70px rgba(14,42,85,0.22)',
+                padding: '20px 24px 16px',
+                border: '1px solid rgba(14,42,85,0.06)',
+            }}>
+                {/* Trip type toggle */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                    {(['round-trip', 'one-way'] as const).map(t => (
+                        <button
+                            key={t}
+                            type="button"
+                            onClick={() => setTripType(t)}
+                            style={{
+                                padding: '6px 14px', borderRadius: 10, border: 'none',
+                                cursor: 'pointer', fontFamily: 'inherit',
+                                fontSize: 12, fontWeight: 700,
+                                background: tripType === t ? '#0E2A55' : '#F1F5F9',
+                                color: tripType === t ? '#fff' : '#64748B',
+                                transition: 'all 0.15s',
+                            }}
+                        >
+                            {t === 'round-trip' ? '⇄ Ida e volta' : '→ Só ida'}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Inputs row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {/* Origin */}
+                    <div style={{
+                        flex: '1 1 150px', border: '1.5px solid #E2EAF5', borderRadius: 12,
+                        padding: '10px 14px', background: '#FAFBFF', minWidth: 140,
+                    }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Origem</div>
+                        <AirportInput
+                            value={originLabel}
+                            iataCode={originIata}
+                            onChange={(label, iata) => { setOriginLabel(label); setOriginIata(iata) }}
+                            placeholder="São Paulo, GRU..."
+                        />
+                    </div>
+
+                    {/* Swap */}
+                    <button
+                        type="button"
+                        onClick={handleSwap}
+                        style={{
+                            width: 34, height: 34, borderRadius: '50%',
+                            background: '#EEF2F8', border: 'none',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center',
+                            justifyContent: 'center', flexShrink: 0,
+                        }}
+                    >
+                        <ArrowRightLeft size={14} color="#4A90E2" />
+                    </button>
+
+                    {/* Destination */}
+                    <div style={{
+                        flex: '1 1 150px', border: '1.5px solid #E2EAF5', borderRadius: 12,
+                        padding: '10px 14px', background: '#FAFBFF', minWidth: 140,
+                    }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Destino</div>
+                        <AirportInput
+                            value={destLabel}
+                            iataCode={destIata}
+                            onChange={(label, iata) => { setDestLabel(label); setDestIata(iata) }}
+                            placeholder="Nova York, JFK..."
+                        />
+                    </div>
+
+                    {/* DateRangePicker */}
+                    <div style={{ flexShrink: 0 }}>
+                        <DateRangePicker
+                            dateGo={dateGo}
+                            dateBack={dateBack}
+                            tripType={tripType}
+                            onDateGoChange={setDateGo}
+                            onDateBackChange={setDateBack}
+                        />
+                    </div>
+
+                    {/* Passengers */}
+                    <div style={{
+                        border: '1.5px solid #E2EAF5', borderRadius: 12,
+                        padding: '10px 14px', background: '#FAFBFF', flexShrink: 0,
+                    }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Pax</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Users size={13} color="#94A3B8" />
+                            <button type="button" onClick={() => setPax(p => Math.max(1, p - 1))} style={{ width: 18, height: 18, borderRadius: '50%', background: '#E2EAF5', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: '18px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', color: '#0E2A55' }}>−</button>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55', minWidth: 12, textAlign: 'center' }}>{pax}</span>
+                            <button type="button" onClick={() => setPax(p => Math.min(9, p + 1))} style={{ width: 18, height: 18, borderRadius: '50%', background: '#E2EAF5', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: '18px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', color: '#0E2A55' }}>+</button>
+                        </div>
+                    </div>
+
+                    {/* CTA → goes to auth, never executes search */}
+                    <button
+                        type="button"
+                        onClick={() => navigate('/auth')}
+                        style={{
+                            background: '#2A60C2', color: '#fff',
+                            borderRadius: 14, padding: '14px 24px',
+                            border: 'none', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            fontFamily: 'inherit', fontWeight: 800, fontSize: 14,
+                            whiteSpace: 'nowrap', flexShrink: 0,
+                            boxShadow: '0 4px 16px rgba(42,96,194,0.35)',
+                            transition: 'background 0.18s, transform 0.18s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#1A4EA8'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = '#2A60C2'; e.currentTarget.style.transform = 'translateY(0)' }}
+                    >
+                        <Search size={15} /> Analisar
+                    </button>
                 </div>
             </div>
-            {/* Data Volta */}
-            <div style={{ flex: '1 1 120px', padding: '10px 20px', borderRight: '1px solid #E2EAF5', minWidth: '110px' }}>
-                <div style={{ fontSize: '10px', fontWeight: 700, color: '#6B7A99', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>Data de Volta</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Calendar size={13} color="#4A90E2" />
-                    <input type="text" value={dateBack} onChange={e => setDateBack(e.target.value)} placeholder="DD/MM/AAAA"
-                        style={{ border: 'none', outline: 'none', fontSize: '14px', fontWeight: 600, color: '#0E2A55', background: 'transparent', width: '100%', fontFamily: 'Inter, sans-serif' }} />
-                </div>
+
+            {/* ─── Busca Avançada de Milhas (locked teaser) ─────────────────── */}
+            <div style={{ marginTop: 10 }}>
+                <button
+                    type="button"
+                    onClick={() => setMilesOpen(o => !o)}
+                    style={{
+                        background: 'rgba(255,255,255,0.12)',
+                        backdropFilter: 'blur(8px)',
+                        border: '1px solid rgba(255,255,255,0.20)',
+                        borderRadius: 12, padding: '8px 16px',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                        color: 'rgba(255,255,255,0.90)', fontFamily: 'Manrope, Inter, sans-serif',
+                        fontSize: 12, fontWeight: 700, transition: 'background 0.15s',
+                        width: '100%',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.18)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+                >
+                    <Lock size={13} color="#4A90E2" />
+                    <span style={{ flex: 1, textAlign: 'left' }}>
+                        ✨ Busca avançada com milhas — <span style={{ color: '#94BCFF', fontWeight: 500 }}>disponível após criar sua conta</span>
+                    </span>
+                    {milesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+
+                <AnimatePresence>
+                    {milesOpen && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.22 }}
+                            style={{ overflow: 'hidden' }}
+                        >
+                            <div style={{
+                                background: 'rgba(255,255,255,0.10)',
+                                backdropFilter: 'blur(12px)',
+                                border: '1px solid rgba(255,255,255,0.18)',
+                                borderRadius: '0 0 16px 16px',
+                                borderTop: 'none',
+                                padding: '16px 20px',
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(3, 1fr)',
+                                gap: 12,
+                            }}>
+                                {MILES_PROGRAMS.map(prog => (
+                                    <div key={prog.name} style={{ position: 'relative' }}>
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                                            {prog.name}
+                                        </div>
+                                        <div style={{
+                                            display: 'flex', alignItems: 'center', gap: 8,
+                                            background: 'rgba(255,255,255,0.08)',
+                                            border: '1px solid rgba(255,255,255,0.15)',
+                                            borderRadius: 10, padding: '9px 12px',
+                                            cursor: 'not-allowed',
+                                        }}>
+                                            <Lock size={12} color="rgba(255,255,255,0.40)" style={{ flexShrink: 0 }} />
+                                            <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.35)', fontFamily: 'Manrope, Inter, sans-serif' }}>
+                                                {prog.placeholder}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div style={{ gridColumn: '1 / -1', textAlign: 'center', marginTop: 4 }}>
+                                    <Link
+                                        to="/auth?tab=signup"
+                                        style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 8,
+                                            color: '#fff', fontSize: 12, fontWeight: 700,
+                                            textDecoration: 'none',
+                                            background: 'rgba(42,96,194,0.75)',
+                                            backdropFilter: 'blur(8px)',
+                                            border: '1px solid rgba(74,144,226,0.40)',
+                                            padding: '8px 20px', borderRadius: 10,
+                                            transition: 'background 0.15s',
+                                        }}
+                                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(42,96,194,0.95)')}
+                                        onMouseLeave={e => (e.currentTarget.style.background = 'rgba(42,96,194,0.75)')}
+                                    >
+                                        Criar conta grátis para desbloquear <ArrowRight size={13} />
+                                    </Link>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
-            {/* Passageiros */}
-            <div style={{ flex: '1 1 110px', padding: '10px 20px', minWidth: '100px' }}>
-                <div style={{ fontSize: '10px', fontWeight: 700, color: '#6B7A99', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>Passageiros</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Users size={13} color="#4A90E2" />
-                    <input value={pax} onChange={e => setPax(e.target.value)}
-                        style={{ border: 'none', outline: 'none', fontSize: '14px', fontWeight: 600, color: '#0E2A55', background: 'transparent', width: '100%', fontFamily: 'Inter, sans-serif' }} />
-                </div>
-            </div>
-            {/* Buscar */}
-            <Link to="/auth"
-                style={{
-                    margin: '6px 8px 6px 12px',
-                    background: '#2A60C2', color: '#fff',
-                    borderRadius: '14px', padding: '14px 24px',
-                    display: 'flex', alignItems: 'center', gap: '8px',
-                    textDecoration: 'none', fontWeight: 700, fontSize: '14px',
-                    whiteSpace: 'nowrap', flexShrink: 0,
-                    boxShadow: '0 4px 16px rgba(42,96,194,0.35)',
-                    transition: 'background 0.2s ease',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#1A4EA8')}
-                onMouseLeave={e => (e.currentTarget.style.background = '#2A60C2')}
-            >
-                <Search size={16} />
-                Analisar
-            </Link>
         </div>
     )
 }
+
 
 // ─── FAQ Item ─────────────────────────────────────────────────────────────────
 function FaqItem({ q, a }: { q: string; a: string }) {
@@ -311,7 +459,7 @@ export default function Landing() {
 
                 {/* PILL FLUTUANTE — sobreposta entre hero e próxima seção */}
                 <div style={{
-                    position: 'absolute', bottom: '-36px', left: '50%',
+                    position: 'absolute', bottom: '-52px', left: '50%',
                     transform: 'translateX(-50%)',
                     width: 'calc(100% - 80px)', maxWidth: '1100px',
                     zIndex: 30,
@@ -327,7 +475,7 @@ export default function Landing() {
             </section>
 
             {/* Espaçador para a pill sobreposta */}
-            <div style={{ height: '80px' }} />
+            <div style={{ height: '120px' }} />
 
             {/* ████ 2. DESTINOS ESTRATÉGICOS ████ */}
             <section id="destinos" style={{ padding: '100px 60px', maxWidth: '1280px', margin: '0 auto' }}>
