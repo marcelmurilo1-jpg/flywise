@@ -1,129 +1,172 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Search, Tag, LogOut, User, LayoutGrid, Sliders } from 'lucide-react'
+import { Search, Tag, Wallet, Plane, User, Settings, LogOut } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useState, useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface HeaderProps {
     variant?: 'landing' | 'app'
 }
 
 const NAV_ITEMS = [
-    { to: '/home', icon: <Search size={15} />, label: 'Buscar' },
-    { to: '/home#insights', icon: <LayoutGrid size={15} />, label: 'Insights' },
-    { to: '/promotions', icon: <Tag size={15} />, label: 'Promoções' },
-    { to: '/home#settings', icon: <Sliders size={15} />, label: 'Configurações' },
+    { id: 'search', to: '/home', icon: <Search size={18} strokeWidth={2.5} />, label: 'Buscar' },
+    { id: 'promotions', to: '/promotions', icon: <Tag size={18} strokeWidth={2.5} />, label: 'Promoções' },
+    { id: 'wallet', to: '/wallet', icon: <Wallet size={18} strokeWidth={2.5} />, label: 'Carteira' },
+    { id: 'saved', to: '/saved-strategies', icon: <Plane size={18} strokeWidth={2.5} />, label: 'Estratégias' },
 ]
 
 export function Header({ variant = 'app' }: HeaderProps) {
     const { user, signOut } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
+    const [userMenuOpen, setUserMenuOpen] = useState(false)
+    const menuRef = useRef<HTMLDivElement>(null)
+
+    // Fechar menu ao clicar fora
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setUserMenuOpen(false)
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside)
+        return () => document.removeEventListener("mousedown", handleClickOutside)
+    }, [])
 
     const handleSignOut = async () => {
         await signOut()
         navigate('/')
     }
 
-    /* Landing uses its own header over the photo — nothing to render */
     if (variant === 'landing') return null
 
     return (
         <header style={{
             background: 'transparent',
             borderBottom: '1px solid rgba(255,255,255,0.07)',
+            position: 'relative',
         }}>
-            <div style={{ display: 'flex', alignItems: 'center', height: '56px', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', height: '110px', padding: '0 8px', maxWidth: '880px', margin: '0 auto' }}>
 
-                {/* Logo */}
-                <Link to={user ? '/home' : '/'} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '9px', marginRight: 'auto' }}>
-                    <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
-                        <rect x="2" y="2" width="44" height="44" rx="12" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" />
-                        <path d="M12 30 Q18 18 24 24 Q30 30 36 18" stroke="#4A90E2" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-                        <path d="M28 10 L38 6 L34 16" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                    </svg>
-                    <span style={{ fontWeight: 800, fontSize: '17px', color: '#fff', letterSpacing: '-0.03em' }}>
-                        <span style={{ color: '#4A90E2' }}>Fly</span><span style={{ color: '#fff' }}>Wise</span>
-                    </span>
+                {/* Left: Logo */}
+                <Link to={user ? '/home' : '/'} style={{ display: 'flex', alignItems: 'center', justifySelf: 'start' }}>
+                    <img src="/logo.png" alt="FlyWise" style={{ height: '96px', objectFit: 'contain' }} />
                 </Link>
 
-                {/* App nav */}
-                {user && variant === 'app' && (
+                {/* Center: Navigation Icons */}
+                {user && variant === 'app' ? (
                     <nav style={{
-                        display: 'flex', alignItems: 'center', gap: '2px',
-                        background: 'rgba(255,255,255,0.07)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '12px', padding: '4px',
+                        display: 'flex', alignItems: 'center', gap: '12px',
+                        justifySelf: 'center'
                     }}>
                         {NAV_ITEMS.map((item) => {
-                            const isActive = location.pathname === item.to && !item.to.includes('#')
+                            const isActive = location.pathname.startsWith(item.to)
                             return (
                                 <Link
-                                    key={item.label}
+                                    key={item.id}
                                     to={item.to}
                                     title={item.label}
                                     style={{
-                                        display: 'flex', alignItems: 'center', gap: '6px',
-                                        padding: '6px 12px', borderRadius: '9px',
-                                        textDecoration: 'none', transition: 'all 0.18s ease',
-                                        background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
-                                        color: isActive ? '#fff' : 'rgba(255,255,255,0.55)',
-                                        fontSize: '13px', fontWeight: isActive ? 600 : 500,
-                                        whiteSpace: 'nowrap',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        width: '42px', height: '42px', borderRadius: '12px',
+                                        textDecoration: 'none', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        background: 'var(--bg-white)',
+                                        color: isActive ? 'var(--text-dark)' : 'var(--text-muted)',
+                                        boxShadow: '0 2px 8px rgba(14,42,85,0.06)',
+                                        border: isActive ? '1.5px solid var(--border-light)' : '1px solid var(--border-light)',
+                                    }}
+                                    onMouseEnter={e => {
+                                        e.currentTarget.style.color = 'var(--text-body)'
+                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(14,42,85,0.1)'
+                                    }}
+                                    onMouseLeave={e => {
+                                        e.currentTarget.style.color = isActive ? 'var(--text-dark)' : 'var(--text-muted)'
+                                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(14,42,85,0.06)'
                                     }}
                                 >
                                     {item.icon}
-                                    {isActive && <span>{item.label}</span>}
                                 </Link>
                             )
                         })}
                     </nav>
-                )}
+                ) : <div />}
 
-                {/* Landing CTAs — handled by FloatingNav in Landing.tsx */}
-                {!user && (
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <Link to="/auth" className="btn btn-ghost btn-sm">Entrar</Link>
-                        <Link to="/auth?tab=signup" className="btn btn-green btn-sm">Começar grátis</Link>
-                    </div>
-                )}
-
-                {/* User area */}
-                {user && (
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginLeft: '8px' }}>
-                        <div style={{
-                            display: 'flex', alignItems: 'center', gap: '8px',
-                            background: 'rgba(255,255,255,0.08)',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            borderRadius: '10px', padding: '5px 10px 5px 6px',
-                            cursor: 'default',
-                        }}>
-                            <div style={{
-                                width: '26px', height: '26px', borderRadius: '7px',
-                                background: 'var(--green-strat)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                                <User size={13} color="#fff" strokeWidth={2.5} />
-                            </div>
-                            <span style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.8)', maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {user.email?.split('@')[0]}
-                            </span>
+                {/* Right: User Menu */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    {!user ? (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <Link to="/auth" className="btn btn-outline-white btn-sm">Entrar</Link>
+                            <Link to="/auth?tab=signup" className="btn btn-green btn-sm">Criar conta</Link>
                         </div>
-                        <button
-                            onClick={handleSignOut}
-                            title="Sair"
-                            style={{
-                                width: '34px', height: '34px', borderRadius: '9px',
-                                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
-                                color: 'rgba(255,255,255,0.5)',
-                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                transition: 'all 0.15s ease',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)' }}
-                            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
-                        >
-                            <LogOut size={14} />
-                        </button>
-                    </div>
-                )}
+                    ) : (
+                        <div ref={menuRef} style={{ position: 'relative' }}>
+                            <button
+                                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    width: '42px', height: '42px', borderRadius: '50%',
+                                    background: 'var(--bg-white)', border: '1px solid var(--border-light)',
+                                    cursor: 'pointer', transition: 'all 0.2s ease',
+                                    boxShadow: '0 2px 8px rgba(14,42,85,0.06)',
+                                    color: 'var(--text-dark)'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 12px rgba(14,42,85,0.1)'}
+                                onMouseLeave={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(14,42,85,0.06)'}
+                            >
+                                <User size={18} strokeWidth={2.5} />
+                            </button>
+
+                            {/* Dropdown Menu */}
+                            <AnimatePresence>
+                                {userMenuOpen && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        transition={{ duration: 0.15 }}
+                                        style={{
+                                            position: 'absolute', top: 'calc(100% + 12px)', right: 0,
+                                            width: '240px', background: 'var(--bg-white)',
+                                            borderRadius: '16px', boxShadow: 'var(--shadow-lg)',
+                                            border: '1px solid var(--border-light)',
+                                            padding: '8px', zIndex: 100,
+                                        }}
+                                    >
+                                        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-light)', marginBottom: '8px' }}>
+                                            <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Logado como</p>
+                                            <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-dark)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</p>
+                                        </div>
+
+                                        <Link to="/configuracoes" onClick={() => setUserMenuOpen(false)} style={{
+                                            display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px',
+                                            borderRadius: '10px', textDecoration: 'none', color: 'var(--text-body)',
+                                            fontWeight: 600, fontSize: '14px', transition: 'background 0.2s',
+                                        }}
+                                            onMouseEnter={e => e.currentTarget.style.background = 'var(--snow)'}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                        >
+                                            <Settings size={16} color="var(--text-muted)" />
+                                            Configurações Pessoais
+                                        </Link>
+
+                                        <button onClick={() => { setUserMenuOpen(false); handleSignOut(); }} style={{
+                                            width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px',
+                                            borderRadius: '10px', border: 'none', background: 'transparent', color: '#EF4444',
+                                            fontWeight: 600, fontSize: '14px', transition: 'background 0.2s', cursor: 'pointer',
+                                            marginTop: '4px',
+                                        }}
+                                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)' }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                                        >
+                                            <LogOut size={16} />
+                                            Sair da conta
+                                        </button>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    )}
+                </div>
             </div>
         </header>
     )
