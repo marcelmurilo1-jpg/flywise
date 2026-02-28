@@ -112,7 +112,9 @@ export default function Resultados() {
                     return
                 }
 
+                // Display results immediately - don't wait for Supabase save
                 const rows = offers.map(o => ({
+                    id: 0,
                     busca_id: buscaId,
                     user_id: user.id,
                     provider: o.provider,
@@ -132,13 +134,17 @@ export default function Resultados() {
                     moeda: 'BRL',
                     segmentos: o.segmentos,
                     detalhes: { paradas: o.paradas, voo_numero: o.voo_numero },
-                }))
+                    created_at: new Date().toISOString(),
+                } as unknown as ResultadoVoo))
 
-                const { data: saved, error: saveErr } = await supabase
-                    .from('resultados_voos').insert(rows).select()
-                if (saveErr) console.error('[Resultados] Save error:', saveErr)
+                // Show results right away
+                setFlights(rows)
 
-                setFlights(saved ?? (rows as unknown as ResultadoVoo[]))
+                // Save to Supabase in background (non-blocking)
+                const insertRows = rows.map(r => { const { id, ...rest } = r; return rest })
+                supabase.from('resultados_voos').insert(insertRows).then(({ error: saveErr }) => {
+                    if (saveErr) console.error('[Resultados] Save error (non-blocking):', saveErr)
+                })
 
             } catch (e: unknown) {
                 console.error('[Resultados] load error:', e)
