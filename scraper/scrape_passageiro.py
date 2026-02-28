@@ -375,8 +375,16 @@ def _parse_date_from_text_snippet(txt: str, base_date: datetime) -> Optional[dat
             dt = dt.replace(tzinfo=timezone(timedelta(hours=tz_offset_hours))).astimezone(TZ)
         return dt
 
-    # 2) patterns like "até hoje [às HH[:MM]]"
-    m = re.search(r"até\s+hoje\b(?:.*?(?:às|a)\s*(\d{1,2})(?::(\d{2}))?)?", txt_low)
+    # 2) patterns like "até hoje [27] [às|a] HH[:MM]" or "até hoje 27 23:59"
+    # Handles: "até hoje", "até hoje às 23:59", "até hoje 27 23:59", "só hoje 23:59"
+    m = re.search(
+        r"(?:até|só|somente)\s+hoje(?:\s+\d{1,2})?"        # "até hoje" optionally followed by day number
+        r"(?:\s*(?:às?|as|a)\s*(\d{1,2})(?::(\d{2}))?)?",  # optionally "às HH:MM"
+        txt_low,
+    )
+    if not m:
+        # Fallback: catch bare "hoje 23:59" or "hoje às 23:59"
+        m = re.search(r"hoje\s+(?:às?\s*)?(\d{1,2}):(\d{2})", txt_low)
     if m:
         hh = _to_int(m.group(1), kind="hour")
         mm = _to_int(m.group(2), kind="minute")

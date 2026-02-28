@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
     Search, ArrowRight, ArrowRightLeft, Calendar, Users,
     ChevronDown, CheckCircle2, BarChart3, Globe, Zap, Shield, Star,
-    Twitter, Instagram, Linkedin, Youtube
+    Twitter, Instagram, Linkedin, Youtube, Flame
 } from 'lucide-react'
+import { PromotionsSection } from '@/components/PromotionsSection'
 
 
 // ─── Dados ───────────────────────────────────────────────────────────────────
@@ -424,6 +425,28 @@ export default function Landing() {
                         ))}
                     </div>
                 </div>
+            </section>
+
+            {/* ████ 3.5 PROMOÇÕES EM DESTAQUE ████ */}
+            <section style={{ padding: '100px 60px', maxWidth: '1280px', margin: '0 auto' }}>
+                <div style={{ marginBottom: '48px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                    <div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#FEF3C7', color: '#D97706', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '14px' }}>
+                            <Flame size={13} /> Promoções em Destaque
+                        </div>
+                        <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em', lineHeight: 1.1, margin: 0 }}>
+                            Últimas promoções<br />
+                            <span style={{ WebkitTextStroke: '2px #0E2A55', color: 'transparent' }}>de milhas</span>
+                        </h2>
+                        <p style={{ color: '#6B7A99', fontSize: '15px', marginTop: '12px', maxWidth: '480px', lineHeight: 1.6 }}>
+                            Colhidas automaticamente do maior blog de milhas do Brasil. Crie sua conta para acessar todas.
+                        </p>
+                    </div>
+                    <Link to="/auth" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#D97706', fontWeight: 700, fontSize: '14px', textDecoration: 'none', letterSpacing: '0.01em' }}>
+                        Ver todas as promoções <ArrowRight size={16} />
+                    </Link>
+                </div>
+                <PromotionsSection limit={3} landingMode />
             </section>
 
             {/* ████ 4. COMO FUNCIONA ████ */}
