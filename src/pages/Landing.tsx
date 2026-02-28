@@ -91,7 +91,7 @@ function SearchPill() {
     }
 
     return (
-        <div style={{ fontFamily: 'Manrope, Inter, sans-serif' }}>
+        <div style={{ fontFamily: 'Manrope, Inter, sans-serif', position: 'relative' }}>
             {/* Main search card */}
             <div style={{
                 background: '#fff',
@@ -233,21 +233,28 @@ function SearchPill() {
                 </div>
             </div>{/* end white card */}
 
-            {/* Programs panel — outside the white card, expands below without moving it */}
+            {/* Programs panel — floats BELOW card absolutely, zero impact on wrapper height */}
             <AnimatePresence>
                 {milesOpen && (
                     <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.22 }}
-                        style={{ overflow: 'hidden', marginTop: 8 }}
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.2 }}
+                        style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            marginTop: 8,
+                            zIndex: 50,
+                        }}
                     >
                         <div style={{
                             background: '#fff',
                             borderRadius: 16,
                             border: '1px solid #E2EAF5',
-                            boxShadow: '0 8px 32px rgba(14,42,85,0.12)',
+                            boxShadow: '0 8px 32px rgba(14,42,85,0.14)',
                             padding: '16px 20px',
                             display: 'grid',
                             gridTemplateColumns: 'repeat(3, 1fr)',
@@ -287,7 +294,7 @@ function SearchPill() {
                                     onMouseEnter={e => (e.currentTarget.style.background = '#1A4EA8')}
                                     onMouseLeave={e => (e.currentTarget.style.background = '#2A60C2')}
                                 >
-                                    Criar conta grátis para desbloquear <ArrowRight size={13} />
+                                    Criar conta <ArrowRight size={13} />
                                 </Link>
                             </div>
                         </div>
