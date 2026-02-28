@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useNavigate, Link, useLocation } from 'react-router-dom'
-import { X, ArrowRight, Search, Tag, Wallet, Plane, Minus, Plus, Check, Zap, Shield, Sparkles, Loader2 } from 'lucide-react'
+import { useNavigate, Link } from 'react-router-dom'
+import { X, ArrowRight, Minus, Plus, Check, Zap, Shield, Sparkles, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { generateMockFlights } from '@/lib/mockFlights'
@@ -55,16 +55,10 @@ type WizardData = {
 
 const TOTAL_STEPS = 5
 
-const NAV_ITEMS = [
-    { to: '/home', icon: <Search size={16} strokeWidth={2.5} />, label: 'Buscar' },
-    { to: '/promotions', icon: <Tag size={16} strokeWidth={2.5} />, label: 'Promoções' },
-    { to: '/wallet', icon: <Wallet size={16} strokeWidth={2.5} />, label: 'Carteira' },
-    { to: '/saved-strategies', icon: <Plane size={16} strokeWidth={2.5} />, label: 'Estratégias' },
-]
+
 
 export default function SearchWizard() {
     const navigate = useNavigate()
-    const location = useLocation()
     const { user } = useAuth()
     const [step, setStep] = useState(1)
     const [submitting, setSubmitting] = useState(false)
@@ -162,8 +156,8 @@ export default function SearchWizard() {
 
             {/* ─── HEADER ─── */}
             <header style={{
-                background: 'rgba(255,255,255,0.90)',
-                backdropFilter: 'blur(12px)',
+                background: 'rgba(255,255,255,0.92)',
+                backdropFilter: 'blur(14px)',
                 borderBottom: '1px solid rgba(14,42,85,0.07)',
                 position: 'sticky',
                 top: 0,
@@ -173,41 +167,37 @@ export default function SearchWizard() {
                     display: 'grid',
                     gridTemplateColumns: '1fr auto 1fr',
                     alignItems: 'center',
-                    height: '72px',
-                    padding: '0 16px',
+                    height: '68px',
+                    padding: '0 20px',
                     maxWidth: '960px',
                     margin: '0 auto',
                 }}>
                     {/* Logo */}
                     <Link to="/home" style={{ justifySelf: 'start', display: 'flex', alignItems: 'center' }}>
-                        <img src="/logo.png" alt="FlyWise" style={{ height: '56px', objectFit: 'contain' }} />
+                        <img src="/logo.png" alt="FlyWise" style={{ height: '52px', objectFit: 'contain' }} />
                     </Link>
 
-                    {/* Nav icons */}
-                    {user && (
-                        <nav style={{ display: 'flex', alignItems: 'center', gap: '8px', justifySelf: 'center' }}>
-                            {NAV_ITEMS.map(item => {
-                                const isActive = location.pathname.startsWith(item.to)
-                                return (
-                                    <Link
-                                        key={item.to}
-                                        to={item.to}
-                                        title={item.label}
-                                        style={{
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            width: '38px', height: '38px', borderRadius: '10px',
-                                            textDecoration: 'none', transition: 'all 0.2s',
-                                            background: isActive ? 'rgba(74,144,226,0.10)' : 'rgba(14,42,85,0.04)',
-                                            color: isActive ? '#4a90e2' : 'var(--text-muted)',
-                                            border: isActive ? '1.5px solid rgba(74,144,226,0.25)' : '1px solid transparent',
-                                        }}
-                                    >
-                                        {item.icon}
-                                    </Link>
-                                )
-                            })}
-                        </nav>
-                    )}
+                    {/* ── Step progress – center ── */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', justifySelf: 'center' }}>
+                        {/* dots */}
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+                                <motion.div
+                                    key={i}
+                                    animate={{
+                                        width: i + 1 === step ? 20 : 6,
+                                        background: i + 1 <= step ? '#4a90e2' : 'rgba(14,42,85,0.12)',
+                                    }}
+                                    transition={{ duration: 0.3, ease: 'easeInOut' }}
+                                    style={{ height: 6, borderRadius: 99 }}
+                                />
+                            ))}
+                        </div>
+                        {/* label */}
+                        <span style={{ fontSize: '11px', color: 'rgba(14,42,85,0.40)', fontWeight: 500, letterSpacing: '0.04em' }}>
+                            {step} de {TOTAL_STEPS}
+                        </span>
+                    </div>
 
                     {/* Close */}
                     <div style={{ justifySelf: 'end' }}>
@@ -215,12 +205,12 @@ export default function SearchWizard() {
                             onClick={() => navigate('/home')}
                             style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                width: '36px', height: '36px', borderRadius: '50%',
-                                border: 'none', background: 'rgba(14,42,85,0.06)',
-                                cursor: 'pointer', transition: 'background 0.2s', color: 'var(--text-muted)',
+                                width: '34px', height: '34px', borderRadius: '50%',
+                                border: 'none', background: 'rgba(14,42,85,0.05)',
+                                cursor: 'pointer', transition: 'background 0.2s', color: 'rgba(14,42,85,0.4)',
                             }}
                             onMouseEnter={e => e.currentTarget.style.background = 'rgba(14,42,85,0.10)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(14,42,85,0.06)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(14,42,85,0.05)'}
                         >
                             <X className="w-4 h-4" />
                         </button>
@@ -489,20 +479,6 @@ export default function SearchWizard() {
                 </div>
             </main>
 
-            {/* ─── PROGRESS FOOTER ─── */}
-            <footer className="sticky bottom-0 w-full z-10 bg-white/80 backdrop-blur-sm border-t border-slate-100">
-                <div className="max-w-2xl mx-auto px-6 py-3 flex items-center gap-3">
-                    <span className="text-xs text-slate-400 font-medium w-16">Passo {step} de {TOTAL_STEPS}</span>
-                    <div className="flex gap-1.5 flex-1">
-                        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-                            <div key={i}
-                                className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${i + 1 === step ? 'bg-[#4a90e2]' : i + 1 < step ? 'bg-[#4a90e2]/40' : 'bg-slate-100'}`}
-                            />
-                        ))}
-                    </div>
-                    <span className="text-xs text-[#4a90e2] font-semibold w-16 text-right">{Math.round((step / TOTAL_STEPS) * 100)}%</span>
-                </div>
-            </footer>
         </div>
     )
 }
@@ -519,15 +495,15 @@ function WizardNextBtn({ onClick, disabled, label, className = '' }: {
         <button
             onClick={onClick}
             disabled={disabled}
-            className={`flex items-center gap-2 bg-[#4a90e2] hover:bg-[#357abd] text-white disabled:opacity-40 disabled:cursor-not-allowed rounded-full px-8 py-4 text-base font-semibold shadow-[0_4px_16px_rgba(74,144,226,0.3)] hover:shadow-[0_6px_20px_rgba(74,144,226,0.4)] transition-all ${className}`}
+            className={`flex items-center gap-1.5 bg-slate-900 hover:bg-slate-700 text-white text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed rounded-full px-6 py-3 transition-all ${className}`}
         >
             {label}
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-3.5 h-3.5" />
         </button>
     )
 }
 
-function WizardNav({ onBack, onNext, nextDisabled, nextLabel = 'Próximo', nextClassName = '' }: {
+function WizardNav({ onBack, onNext, nextDisabled, nextLabel = 'Continuar', nextClassName = '' }: {
     onBack: () => void
     onNext: () => void
     nextDisabled: boolean
@@ -535,9 +511,12 @@ function WizardNav({ onBack, onNext, nextDisabled, nextLabel = 'Próximo', nextC
     nextClassName?: string
 }) {
     return (
-        <div className="flex justify-between items-center mt-4">
-            <button onClick={onBack} className="text-slate-400 hover:text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:bg-slate-100 transition-all">
-                ← Voltar
+        <div className="flex justify-between items-center mt-8 pt-6 border-t border-slate-100">
+            <button
+                onClick={onBack}
+                className="text-xs text-slate-400 hover:text-slate-600 font-medium tracking-wide uppercase transition-colors"
+            >
+                Voltar
             </button>
             <WizardNextBtn onClick={onNext} disabled={nextDisabled} label={nextLabel} className={nextClassName} />
         </div>
@@ -549,16 +528,24 @@ function OptionCard({ selected, onClick, emoji, label, desc }: {
 }) {
     return (
         <button onClick={onClick}
-            className={`flex flex-col items-start gap-2 p-5 rounded-2xl border-2 text-left transition-all duration-200 ${selected ? 'border-[#4a90e2] bg-[#4a90e2]/5 shadow-[0_8px_20px_rgba(74,144,226,0.12)]' : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'}`}
+            className={`relative flex flex-col items-start gap-1.5 p-4 rounded-xl border text-left transition-all duration-200 ${selected
+                ? 'border-[#4a90e2] bg-[#4a90e2]/4'
+                : 'border-slate-200 hover:border-slate-300 bg-white'
+                }`}
+            style={{ background: selected ? 'rgba(74,144,226,0.04)' : undefined }}
         >
-            <div className="flex items-center justify-between w-full">
-                <span className="text-2xl">{emoji}</span>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selected ? 'border-[#4a90e2] bg-[#4a90e2]' : 'border-slate-300'}`}>
-                    {selected && <Check className="w-3 h-3 text-white" />}
-                </div>
+            {/* Top row: emoji + tick */}
+            <div className="flex items-center justify-between w-full mb-1">
+                <span className="text-xl">{emoji}</span>
+                {/* Minimalist tick indicator */}
+                <span className={`w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 transition-all duration-200 ${selected ? 'border-[#4a90e2] bg-[#4a90e2]' : 'border-slate-300'
+                    }`}>
+                    {selected && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+                </span>
             </div>
-            <p className={`font-semibold text-sm ${selected ? 'text-[#4a90e2]' : 'text-slate-800'}`}>{label}</p>
-            <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
+            <p className={`font-semibold text-sm leading-tight ${selected ? 'text-[#2d6bbf]' : 'text-slate-800'
+                }`}>{label}</p>
+            <p className="text-xs text-slate-400 leading-relaxed">{desc}</p>
         </button>
     )
 }
