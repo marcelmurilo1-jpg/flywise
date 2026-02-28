@@ -452,9 +452,6 @@ export default function Landing() {
                             Viaje com Mais<br />
                             <span style={{ color: '#4A90E2' }}>Inteligência.</span>
                         </h1>
-                        <p style={{ color: 'rgba(255,255,255,0.80)', fontSize: '18px', fontWeight: 400, lineHeight: 1.6, maxWidth: '520px', margin: '0 0 44px 0' }}>
-                            O FlyWise transforma suas milhas em decisões estratégicas — analisando cenários, calculando o valor real e gerando o melhor plano de viagem.
-                        </p>
                     </motion.div>
                 </div>
 
@@ -475,8 +472,8 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* Espaçador para a pill sobreposta */}
-            <div style={{ height: '120px' }} />
+            {/* Espaçador para acomodar pill + painel de busca avançada */}
+            <div style={{ height: '260px' }} />
 
             {/* ████ 2. DESTINOS ESTRATÉGICOS ████ */}
             <section id="destinos" style={{ padding: '100px 60px', maxWidth: '1280px', margin: '0 auto' }}>
