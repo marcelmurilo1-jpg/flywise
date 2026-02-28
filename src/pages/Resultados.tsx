@@ -11,7 +11,6 @@ import { Sidebar, type FilterState } from '@/components/Sidebar'
 import { SearchBarTop } from '@/components/SearchBarTop'
 import { motion } from 'framer-motion'
 
-
 export default function Resultados() {
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
@@ -23,7 +22,7 @@ export default function Resultados() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
 
-    // Search Bar State
+    // Search bar state
     const [origin, setOrigin] = useState('')
     const [originIata, setOriginIata] = useState('')
     const [dest, setDest] = useState('')
@@ -32,77 +31,128 @@ export default function Resultados() {
     const [dateBack, setDateBack] = useState('')
     const [tripType, setTripType] = useState<'one-way' | 'round-trip'>('round-trip')
     const [pax, setPax] = useState(1)
-
-    // New Search State
     const [searchLoading, setSearchLoading] = useState(false)
     const [searchError, setSearchError] = useState('')
     const searchStepTimers = useRef<ReturnType<typeof setTimeout>[]>([])
 
-    // Sidebar State
+    // Sidebar state
     const [filters, setFilters] = useState<FilterState>({ programs: [], stops: [], cabin: 'economy', minMiles: '', maxMiles: '' })
     const [showMobileFilters, setShowMobileFilters] = useState(false)
     const [activeTab, setActiveTab] = useState(0)
 
     useEffect(() => {
         if (!user || !buscaId) { navigate('/home'); return }
-        const MIN_ANIM_MS = 3500
+
+        // Read URL params at effect setup time
         const orig = searchParams.get('orig')
         const destP = searchParams.get('dest')
         const date = searchParams.get('date')
         const ret = searchParams.get('ret')
         const paxP = parseInt(searchParams.get('pax') ?? '1', 10)
 
+        const MIN_ANIM_MS = 3500
+
         const load = async () => {
             setLoading(true)
+            setError('')
             try {
-                const [buscaRes] = await Promise.all([
-                    supabase.from('buscas').select('*').eq('id', buscaId).eq('user_id', user.id).single(),
+                // 1. Load busca metadata
+                const buscaRes = await supabase.from('buscas').select('*')
+                    .eq('id', buscaId).eq('user_id', user.id).single()
+                if (buscaRes.error) throw buscaRes.error
+
+                const buscaData = buscaRes.data
+                setBusca(buscaData)
+                if (buscaData) {
+                    setOrigin(buscaData.origem); setOriginIata(buscaData.origem)
+                    setDest(buscaData.destino); setDestIata(buscaData.destino)
+                    setDateGo(buscaData.data_ida); setPax(buscaData.passageiros)
+                }
+
+                // 2. Check for already-saved results
+                const { data: cached, error: cacheErr } = await supabase
+                    .from('resultados_voos').select('*')
+                    .eq('busca_id', buscaId).eq('user_id', user.id)
+                    .order('preco_brl')
+                if (cacheErr) throw cacheErr
+
+                if (cached && cached.length > 0) {
+                    // Already have results — just wait for animation
+                    await new Promise<void>(r => setTimeout(r, MIN_ANIM_MS))
+                    setFlights(cached)
+                    return
+                }
+
+                // 3. No cached results — call Amadeus IN PARALLEL with animation timer
+                if (!orig || !destP || !date) {
+                    console.warn('[Resultados] No search params in URL, cannot call Amadeus')
+                    await new Promise<void>(r => setTimeout(r, MIN_ANIM_MS))
+                    setFlights([])
+                    return
+                }
+
+                console.log('[Resultados] Calling Amadeus:', orig, '→', destP, date, ret ? `return:${ret}` : 'one-way')
+
+                const [offers] = await Promise.all([
+                    searchFlights({
+                        origin: orig,
+                        destination: destP,
+                        departureDate: date,
+                        adults: paxP,
+                        max: 20,
+                        returnDate: ret ?? undefined,
+                    }),
                     new Promise<void>(r => setTimeout(r, MIN_ANIM_MS)),
                 ])
-                if (buscaRes.error) throw buscaRes.error
-                setBusca(buscaRes.data)
-                if (buscaRes.data) {
-                    setOrigin(buscaRes.data.origem); setOriginIata(buscaRes.data.origem)
-                    setDest(buscaRes.data.destino); setDestIata(buscaRes.data.destino)
-                    setDateGo(buscaRes.data.data_ida); setPax(buscaRes.data.passageiros)
+
+                console.log('[Resultados] Got', offers.length, 'offers from Amadeus')
+
+                if (offers.length === 0) {
+                    setFlights([])
+                    return
                 }
 
-                // Try cached results first
-                const voosRes = await supabase.from('resultados_voos').select('*')
-                    .eq('busca_id', buscaId).eq('user_id', user.id).order('preco_brl')
-                if (voosRes.error) throw voosRes.error
+                const rows = offers.map(o => ({
+                    busca_id: buscaId,
+                    user_id: user.id,
+                    provider: o.provider,
+                    companhia: o.companhia,
+                    preco_brl: o.preco_brl,
+                    preco_milhas: null,
+                    taxas_brl: o.taxas_brl,
+                    cpm: null,
+                    partida: o.partida,
+                    chegada: o.chegada,
+                    origem: o.origem,
+                    destino: o.destino,
+                    duracao_min: o.duracao_min,
+                    cabin_class: o.cabin_class,
+                    flight_key: o.flight_key,
+                    estrategia_disponivel: true,
+                    moeda: 'BRL',
+                    segmentos: o.segmentos,
+                    detalhes: { paradas: o.paradas, voo_numero: o.voo_numero },
+                }))
 
-                if (voosRes.data && voosRes.data.length > 0) {
-                    setFlights(voosRes.data)
-                } else if (orig && destP && date) {
-                    // Call Amadeus — Home navigated here before API call
-                    const offers = await searchFlights({
-                        origin: orig, destination: destP,
-                        departureDate: date, adults: paxP, max: 20,
-                        returnDate: ret ?? undefined,
-                    })
-                    const rows = offers.map(o => ({
-                        busca_id: buscaId, user_id: user.id,
-                        provider: o.provider, companhia: o.companhia,
-                        preco_brl: o.preco_brl, preco_milhas: null,
-                        taxas_brl: o.taxas_brl, cpm: null,
-                        partida: o.partida, chegada: o.chegada,
-                        origem: o.origem, destino: o.destino,
-                        duracao_min: o.duracao_min, cabin_class: o.cabin_class,
-                        flight_key: o.flight_key, estrategia_disponivel: true,
-                        moeda: 'BRL', segmentos: o.segmentos,
-                        detalhes: { paradas: o.paradas, voo_numero: o.voo_numero },
-                    }))
-                    if (rows.length > 0) {
-                        const { data: saved } = await supabase.from('resultados_voos').insert(rows).select()
-                        setFlights(saved ?? [])
-                    }
-                }
+                const { data: saved, error: saveErr } = await supabase
+                    .from('resultados_voos').insert(rows).select()
+                if (saveErr) console.error('[Resultados] Save error:', saveErr)
+
+                setFlights(saved ?? (rows as unknown as ResultadoVoo[]))
+
             } catch (e: unknown) {
-                setError(e instanceof Error ? e.message : 'Erro ao carregar resultados.')
-            } finally { setLoading(false) }
+                console.error('[Resultados] load error:', e)
+                const msg = e instanceof Error ? e.message : 'Erro ao carregar resultados.'
+                setError(msg)
+                await new Promise<void>(r => setTimeout(r, MIN_ANIM_MS))
+            } finally {
+                setLoading(false)
+            }
         }
+
         load()
+        // searchParams is captured at render time — buscaId change triggers re-run with fresh params
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, buscaId, navigate])
 
     useEffect(() => () => { searchStepTimers.current.forEach(clearTimeout) }, [])
@@ -113,20 +163,23 @@ export default function Resultados() {
         const originCode = originIata || origin.trim().toUpperCase()
         const destCode = destIata || dest.trim().toUpperCase()
         if (!originCode || !destCode) return setSearchError('Selecione origem e destino.')
+        if (originCode.length !== 3) return setSearchError('Selecione um aeroporto válido na origem.')
+        if (destCode.length !== 3) return setSearchError('Selecione um aeroporto válido no destino.')
         if (!dateGo) return setSearchError('Informe a data de ida.')
         if (!user) return setSearchError('Faça login para buscar voos.')
 
         setSearchLoading(true)
-        searchStepTimers.current.forEach(clearTimeout)
-        searchStepTimers.current = []
-
         try {
-            const { data: buscaData, error: buscaErr } = await supabase.from('buscas').insert({
+            const insertData: Record<string, unknown> = {
                 user_id: user.id, origem: originCode, destino: destCode,
                 data_ida: dateGo, passageiros: pax, bagagem: 'sem_bagagem', user_miles: {},
-            }).select().single()
+            }
+            if (tripType === 'round-trip' && dateBack) insertData.data_volta = dateBack
+
+            const { data: buscaData, error: buscaErr } = await supabase
+                .from('buscas').insert(insertData).select().single()
             if (buscaErr) throw buscaErr
-            // Navigate — Resultados will call Amadeus on fresh buscaId
+
             const retParam = tripType === 'round-trip' && dateBack ? `&ret=${dateBack}` : ''
             navigate(`/resultados?buscaId=${buscaData.id}&orig=${originCode}&dest=${destCode}&date=${dateGo}${retParam}&pax=${pax}`)
             setSearchLoading(false)
@@ -141,9 +194,7 @@ export default function Resultados() {
     return (
         <div style={{ minHeight: '100vh', background: 'var(--snow)', fontFamily: 'Manrope, system-ui, sans-serif' }}>
 
-            {/* ════════════════════════════
-                DARK APP HEADER & SEARCH
-            ════════════════════════════ */}
+            {/* ══════════════  HEADER + SEARCH BAR  ══════════════ */}
             <div style={{
                 background: 'var(--bg-white)',
                 borderBottom: '1px solid var(--border-light)',
@@ -152,7 +203,6 @@ export default function Resultados() {
                 <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 28px' }}>
                     <Header variant="app" />
                 </div>
-
                 <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '14px 28px 18px' }}>
                     <SearchBarTop
                         origin={origin} setOrigin={setOrigin}
@@ -166,21 +216,15 @@ export default function Resultados() {
                         loading={searchLoading} error={searchError}
                         onSubmit={handleNewSearch}
                     />
-
                 </div>
             </div>
 
-            {/* ════════════════════════════
-                MAIN CONTENT — 2 COLUMNS
-            ════════════════════════════ */}
+            {/* ══════════════  MAIN CONTENT — 2 COLUMNS  ══════════════ */}
             <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 28px 80px', display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
 
-                {/* SIDEBAR */}
                 <Sidebar filters={filters} setFilters={setFilters} />
 
-                {/* MAIN AREA */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* Mobile filters toggle */}
                     <button onClick={() => setShowMobileFilters(!showMobileFilters)}
                         style={{ display: 'none', alignItems: 'center', gap: '8px', marginBottom: '16px', padding: '10px 16px', background: '#fff', border: '1px solid var(--border-light)', borderRadius: '10px', fontFamily: 'inherit', fontSize: '13px', fontWeight: 600, color: 'var(--graphite)', cursor: 'pointer' }}>
                         <SlidersHorizontal size={14} /> Filtros
@@ -189,16 +233,15 @@ export default function Resultados() {
                     {error ? (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ background: '#fff', border: '1px solid var(--border-light)', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '60px', color: '#f87171' }}>
                             <AlertCircle size={40} />
-                            <p style={{ fontSize: '15px' }}>{error}</p>
+                            <p style={{ fontSize: '15px', textAlign: 'center' }}>{error}</p>
                             <button onClick={() => navigate('/home')} className="btn" style={{ background: 'var(--blue-medium)', color: '#fff' }}>Voltar para busca</button>
                         </motion.div>
                     ) : (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-
-                            {/* Tabs à la Fly Society */}
+                            {/* Tabs */}
                             <div style={{
-                                display: 'flex', gap: '0',
-                                background: '#fff', border: '1px solid var(--border-light)',
+                                display: 'flex', background: '#fff',
+                                border: '1px solid var(--border-light)',
                                 borderRadius: '14px', padding: '6px', marginBottom: '20px',
                                 boxShadow: 'var(--shadow-xs)',
                             }}>
