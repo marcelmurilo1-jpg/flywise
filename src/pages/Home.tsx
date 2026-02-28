@@ -41,26 +41,32 @@ export default function Home() {
         setError('')
         const originCode = originIata || originLabel.trim().toUpperCase()
         const destCode = destIata || destLabel.trim().toUpperCase()
-        if (!originCode || !destCode) return setError('Selecione origem e destino.')
-        if (originCode.length !== 3) return setError('Código de origem inválido (ex: GRU).')
-        if (destCode.length !== 3) return setError('Código de destino inválido (ex: JFK).')
+        if (!originCode) return setError('Selecione a cidade ou aeroporto de origem.')
+        if (!destCode) return setError('Selecione a cidade ou aeroporto de destino.')
+        if (originCode.length !== 3) return setError('Selecione um aeroporto válido na origem (ex: São Paulo).')
+        if (destCode.length !== 3) return setError('Selecione um aeroporto válido no destino (ex: Nova York).')
         if (!dateGo) return setError('Informe a data de ida.')
         if (!user) return setError('Faça login para buscar voos.')
         setLoading(true)
         try {
-            const { data: buscaData, error: buscaErr } = await supabase.from('buscas').insert({
+            const insertData: Record<string, unknown> = {
                 user_id: user.id,
                 origem: originCode,
                 destino: destCode,
                 data_ida: dateGo,
-                data_volta: tripType === 'round-trip' && dateBack ? dateBack : null,
                 passageiros: pax,
                 bagagem: 'sem_bagagem',
                 user_miles: {},
-            }).select().single()
+            }
+            if (tripType === 'round-trip' && dateBack) {
+                insertData.data_volta = dateBack
+            }
+            const { data: buscaData, error: buscaErr } = await supabase
+                .from('buscas').insert(insertData).select().single()
             if (buscaErr) throw buscaErr
-            // Navigate immediately — Resultados will call Amadeus and show PlaneWindowLoader
-            navigate(`/resultados?buscaId=${buscaData.id}&orig=${originCode}&dest=${destCode}&date=${dateGo}${tripType === 'round-trip' && dateBack ? '&ret=' + dateBack : ''}&pax=${pax}`)
+            // Navigate immediately — Resultados shows PlaneWindowLoader and calls Amadeus
+            const retParam = tripType === 'round-trip' && dateBack ? `&ret=${dateBack}` : ''
+            navigate(`/resultados?buscaId=${buscaData.id}&orig=${originCode}&dest=${destCode}&date=${dateGo}${retParam}&pax=${pax}`)
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Erro ao buscar.')
             setLoading(false)

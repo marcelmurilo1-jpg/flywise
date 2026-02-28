@@ -18,6 +18,12 @@ async function getToken(): Promise<string> {
     const now = Date.now()
     if (_token && _tokenExpiresAt > now + 60_000) return _token
 
+    if (!CLIENT_ID || !CLIENT_SECRET) {
+        console.error('[Amadeus] MISSING env vars: VITE_AMADEUS_CLIENT_ID / VITE_AMADEUS_CLIENT_SECRET')
+        throw new Error('Credenciais Amadeus não configuradas. Verifique as variáveis de ambiente na Vercel.')
+    }
+
+    console.log('[Amadeus] Requesting token...')
     const res = await fetch(`${BASE_URL}/v1/security/oauth2/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -30,12 +36,15 @@ async function getToken(): Promise<string> {
 
     if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err.error_description ?? 'Falha ao autenticar com Amadeus')
+        const msg = err.error_description ?? 'Falha ao autenticar com Amadeus'
+        console.error('[Amadeus] Auth error:', msg)
+        throw new Error(msg)
     }
 
     const data = await res.json()
     _token = data.access_token as string
     _tokenExpiresAt = now + (data.expires_in as number) * 1000
+    console.log('[Amadeus] Token OK, expires in', data.expires_in, 's')
     return _token
 }
 
@@ -143,6 +152,7 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
     if (params.cabin) qp.travelClass = params.cabin
     if (params.nonStop) qp.nonStop = 'true'
 
+    console.log('[Amadeus] searchFlights:', qp.toString())
     const res = await fetch(
         `${BASE_URL}/v2/shopping/flight-offers?${new URLSearchParams(qp)}`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -151,10 +161,12 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
     if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         const detail = err.errors?.[0]?.detail ?? err.errors?.[0]?.title ?? 'Erro ao buscar voos'
+        console.error('[Amadeus] Flight search error:', detail, err)
         throw new Error(detail)
     }
 
     const data = await res.json()
+    console.log('[Amadeus] Flight search result:', data.data?.length, 'offers')
     const offers: any[] = data.data ?? []
 
     return offers.map((offer): FlightOffer => {
