@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { motion } from 'framer-motion'
 import { Header } from '@/components/Header'
 import { AirportInput } from '@/components/AirportInput'
+import { DateRangePicker } from '@/components/DateRangePicker'
 import type { Busca } from '@/lib/supabase'
 
 export default function Home() {
@@ -107,7 +108,7 @@ export default function Home() {
                             ))}
                         </div>
                         {/* Inputs Row */}
-                        <div style={{ display: 'grid', gridTemplateColumns: tripType === 'round-trip' ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: '12px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: tripType === 'round-trip' ? '1fr 1fr 1fr 1fr auto' : '1fr 1fr auto auto', gap: '12px', alignItems: 'start' }}>
                             {/* Origin */}
                             <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff', overflow: 'visible', position: 'relative' }}>
                                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Origem</label>
@@ -130,22 +131,14 @@ export default function Home() {
                                     icon={<Plane size={13} color="var(--text-faint)" style={{ transform: 'scaleX(-1)', flexShrink: 0 }} />}
                                 />
                             </div>
-                            {/* Dates */}
-                            <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff' }}>
-                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Ida</label>
-                                <input
-                                    type="date" value={dateGo} onChange={e => setDateGo(e.target.value)} min={new Date().toISOString().split('T')[0]}
-                                    style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: '14px', fontWeight: 500, color: 'var(--text-dark)', cursor: 'pointer' }}
-                                />
-                            </div>
-                            {/* Return date */}
-                            <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff', opacity: tripType === 'one-way' ? 0.45 : 1 }}>
-                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Volta</label>
-                                <input
-                                    type="date" value={dateBack} onChange={e => setDateBack(e.target.value)}
-                                    min={dateGo || new Date().toISOString().split('T')[0]}
-                                    disabled={tripType === 'one-way'}
-                                    style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: '14px', fontWeight: 500, color: 'var(--text-dark)', cursor: tripType === 'one-way' ? 'not-allowed' : 'pointer' }}
+                            {/* Date Range Picker - both ida and volta in one component */}
+                            <div style={{ gridColumn: tripType === 'round-trip' ? 'span 2' : 'span 1' }}>
+                                <DateRangePicker
+                                    dateGo={dateGo}
+                                    dateBack={dateBack}
+                                    tripType={tripType}
+                                    onDateGoChange={setDateGo}
+                                    onDateBackChange={setDateBack}
                                 />
                             </div>
                             {/* Passengers */}

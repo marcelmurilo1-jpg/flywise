@@ -207,11 +207,32 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                     </span>
                                 )}
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontSize: 22, fontWeight: 800, color: '#0E2A55', letterSpacing: '-0.02em' }}>
-                                    R$ {flight.preco_brl?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'flex-end', gap: 16 }}>
+                                {/* Mock miles preview */}
+                                {flight.preco_brl && (
+                                    <div style={{
+                                        textAlign: 'right', padding: '6px 12px',
+                                        background: 'linear-gradient(135deg, #F0F4FF, #E8F0FF)',
+                                        borderRadius: 10, border: '1px solid #D4E2FA',
+                                    }}>
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: '#2A60C2', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>
+                                            ✨ Milhas <span style={{ background: '#2A60C2', color: '#fff', padding: '1px 5px', borderRadius: 4, fontSize: 9 }}>estimado</span>
+                                        </div>
+                                        <div style={{ fontSize: 15, fontWeight: 800, color: '#1E3A7A', letterSpacing: '-0.01em' }}>
+                                            ~{(Math.round((flight.preco_brl * 55) / 1000) * 1000).toLocaleString('pt-BR')} pts
+                                        </div>
+                                        <div style={{ fontSize: 10, color: '#64748B' }}>
+                                            + R$ {Math.round(flight.preco_brl * 0.15).toLocaleString('pt-BR')} taxas
+                                        </div>
+                                    </div>
+                                )}
+                                {/* Cash price */}
+                                <div>
+                                    <div style={{ fontSize: 22, fontWeight: 800, color: '#0E2A55', letterSpacing: '-0.02em' }}>
+                                        R$ {flight.preco_brl?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#94A3B8' }}>por pessoa</div>
                                 </div>
-                                <div style={{ fontSize: 11, color: '#94A3B8' }}>por pessoa</div>
                             </div>
                         </div>
 

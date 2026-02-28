@@ -84,18 +84,21 @@ export function AirportInput({ value, iataCode, onChange, placeholder = 'Cidade 
     const [dropRect, setDropRect] = useState<{ top: number; left: number; width: number } | null>(null)
     const wrapRef = useRef<HTMLDivElement>(null)
     const justSelected = useRef(false)
-    const internalQuery = useRef(value) // tracks last value set by user typing
+    const internalQuery = useRef(value)     // tracks value changed by user typing
+    const hasFocused = useRef(false)        // MUST be true for dropdown to ever open
     const debQ = useDebounce(query, 300)
 
     // Sync from parent ONLY when value changes externally (not from the user's own typing)
     useEffect(() => {
         if (value === internalQuery.current) return
-        // External change (swap, Resultados setting origin etc.) — sync but NEVER open dropdown
+        // External injection (swap buttons, Resultados setting origin, etc.)
+        // → sync text but NEVER allow dropdown to open; also reset user-focus state
         justSelected.current = true
+        hasFocused.current = false   // user didn't focus this newly-set value
         internalQuery.current = value
         setQuery(value)
-        setOpen(false)   // ← explicit close: no auto-open on parent injection
-        setList([])      // ← clear list so onFocus doesn't re-open
+        setOpen(false)
+        setList([])
     }, [value])
 
     // Update dropdown position whenever it opens
@@ -131,15 +134,17 @@ export function AirportInput({ value, iataCode, onChange, placeholder = 'Cidade 
             if (wrapRef.current?.contains(t)) return
             if (t.closest?.('[data-ap-drop]')) return
             setOpen(false)
+            hasFocused.current = false
         }
         document.addEventListener('mousedown', handler)
         return () => document.removeEventListener('mousedown', handler)
     }, [])
 
-    // Search effect
+    // Search effect — dropdown ONLY opens when hasFocused is true
     useEffect(() => {
         if (justSelected.current) { justSelected.current = false; return }
         if (debQ.length < 2) { setList([]); setOpen(false); return }
+        if (!hasFocused.current) return  // ← THE KEY GATE: do nothing without user focus
 
         const local = filterLocal(debQ)
         setList(local)
@@ -149,13 +154,13 @@ export function AirportInput({ value, iataCode, onChange, placeholder = 'Cidade 
         setApiLoading(true)
         searchAirports(debQ)
             .then(api => {
-                if (cancelled || justSelected.current) return
+                if (cancelled || justSelected.current || !hasFocused.current) return
                 const seen = new Set(api.map(a => a.iataCode))
                 const extras = local.filter(l => !seen.has(l.iataCode))
                 const merged = [...api, ...extras].slice(0, 7)
                 const final = merged.length > 0 ? merged : local
                 setList(final)
-                setOpen(final.length > 0)
+                setOpen(final.length > 0 && hasFocused.current)
             })
             .catch(() => { /* keep local */ })
             .finally(() => { if (!cancelled) setApiLoading(false) })
@@ -164,6 +169,7 @@ export function AirportInput({ value, iataCode, onChange, placeholder = 'Cidade 
 
     const select = useCallback((airport: Airport) => {
         justSelected.current = true
+        hasFocused.current = false
         const label = airport.cityName || airport.name
         setQuery(label)
         setOpen(false)
@@ -253,6 +259,7 @@ export function AirportInput({ value, iataCode, onChange, placeholder = 'Cidade 
                         onChange(v, '')
                     }}
                     onFocus={() => {
+                        hasFocused.current = true   // user explicitly focused: now allow dropdown
                         if (list.length > 0 && !justSelected.current) setOpen(true)
                     }}
                     style={{
