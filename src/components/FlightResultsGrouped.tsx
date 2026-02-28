@@ -26,6 +26,11 @@ function formatDur(m?: number) {
     if (!m) return ''
     return `${Math.floor(m / 60)}h${m % 60 > 0 ? ` ${m % 60}min` : ''}`
 }
+function getStopCodes(flight: ResultadoVoo): string {
+    const segs = (flight.segmentos as any[])
+    if (!segs || segs.length <= 1) return ''
+    return segs.slice(0, -1).map((s: any) => s.destino ?? s.arrival?.iataCode ?? '').filter(Boolean).join(' · ')
+}
 function groupByAirline(flights: ResultadoVoo[]) {
     const g: Record<string, { cash?: ResultadoVoo; miles?: ResultadoVoo }> = {}
     for (const f of flights) {
@@ -126,7 +131,9 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                         origin={cash.origem ?? '—'}
                                         dest={cash.destino ?? '—'}
                                         duration={formatDur(cash.duracao_min)}
-                                        priceMain={`R$ ${cash.preco_brl?.toLocaleString('pt-BR')}`}
+                                        stops={(cash.detalhes as any)?.paradas ?? 0}
+                                        stopCodes={getStopCodes(cash)}
+                                        priceMain={`R$ ${cash.preco_brl?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                                         priceSub="por pessoa"
                                     />
                                 )}
@@ -142,6 +149,8 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                         origin={miles.origem ?? '—'}
                                         dest={miles.destino ?? '—'}
                                         duration={formatDur(miles.duracao_min)}
+                                        stops={(miles.detalhes as any)?.paradas ?? 0}
+                                        stopCodes={getStopCodes(miles)}
                                         priceMain={`${miles.preco_milhas?.toLocaleString('pt-BR')} mil.`}
                                         priceSub={miles.taxas_brl ? `+ R$ ${miles.taxas_brl} taxas` : undefined}
                                         cpm={miles.cpm ? `CPM R$ ${miles.cpm.toFixed(2)}/1k` : undefined}
@@ -176,6 +185,8 @@ interface FlightOptionProps {
     origin: string
     dest: string
     duration: string
+    stops: number
+    stopCodes: string
     priceMain: string
     priceSub?: string
     cpm?: string
@@ -184,7 +195,7 @@ interface FlightOptionProps {
     onStrategy?: () => void
 }
 
-function FlightOption({ type, label, labelColor, departure, arrival, origin, dest, duration, priceMain, priceSub, cpm, cta, hasStrategy, onStrategy }: FlightOptionProps) {
+function FlightOption({ type, label, labelColor, departure, arrival, origin, dest, duration, stops, stopCodes, priceMain, priceSub, cpm, cta, hasStrategy, onStrategy }: FlightOptionProps) {
     return (
         <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: labelColor }}>{label}</span>
@@ -202,7 +213,10 @@ function FlightOption({ type, label, labelColor, departure, arrival, origin, des
                     <div style={{ position: 'relative', height: '1px', background: 'var(--border-light)' }}>
                         <Plane size={11} style={{ position: 'absolute', right: '-1px', top: '-5px', color: 'var(--text-faint)' }} />
                     </div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-faint)', marginTop: '4px' }}>Direto</div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-faint)', marginTop: '4px' }}>
+                        {stops === 0 ? 'Direto' : stops === 1 ? '1 conexão' : `${stops} conexões`}
+                        {stopCodes && <span style={{ color: '#94A3B8' }}> · {stopCodes}</span>}
+                    </div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1 }}>{arrival}</div>
