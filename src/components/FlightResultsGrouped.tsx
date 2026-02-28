@@ -3,7 +3,7 @@ import { Plane, Clock, ArrowRight, Zap, TrendingDown } from 'lucide-react'
 import { motion } from 'framer-motion'
 import type { ResultadoVoo } from '@/lib/supabase'
 import { StrategyPanel } from '@/components/StrategyPanel'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 interface SearchInfo { origem: string; destino: string; data_ida: string; passageiros: number }
@@ -19,7 +19,8 @@ const AIRLINE_PROGRAMS: Record<string, string> = { LATAM: 'LATAM Pass', GOL: 'Sm
 
 function formatTime(iso?: string) {
     if (!iso) return '--:--'
-    try { return format(new Date(iso), 'HH:mm') } catch { return '--:--' }
+    // parseISO treats datetime strings without timezone as LOCAL time (correct for airport local times)
+    try { return format(parseISO(iso), 'HH:mm') } catch { return '--:--' }
 }
 function formatDur(m?: number) {
     if (!m) return ''
@@ -61,7 +62,7 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                             <span style={{ fontWeight: 800, fontSize: '15px', letterSpacing: '0.06em', color: 'var(--text-primary)' }}>{searchInfo.destino}</span>
                         </div>
                         <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                            {format(new Date(searchInfo.data_ida), "dd 'de' MMMM", { locale: ptBR })} · {searchInfo.passageiros} pax
+                            {format(parseISO(searchInfo.data_ida + 'T12:00:00'), "dd 'de' MMMM", { locale: ptBR })} · {searchInfo.passageiros} {searchInfo.passageiros === 1 ? 'Passageiro' : 'Passageiros'}
                         </span>
                     </div>
                 )}

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { AlertCircle, SlidersHorizontal, CheckCircle, Loader2 } from 'lucide-react'
+import { AlertCircle, SlidersHorizontal } from 'lucide-react'
 import { supabase, type ResultadoVoo, type Busca } from '@/lib/supabase'
 import { searchFlights } from '@/lib/amadeus'
 import { useAuth } from '@/contexts/AuthContext'
@@ -9,9 +9,8 @@ import { FlightResultsGrouped } from '@/components/FlightResultsGrouped'
 import { PlaneWindowLoader } from '@/components/PlaneWindowLoader'
 import { Sidebar, type FilterState } from '@/components/Sidebar'
 import { SearchBarTop } from '@/components/SearchBarTop'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 
-const STEPS_LIST = ['Salvando busca...', 'Gerando cenários...', 'Calculando estratégias...']
 
 export default function Resultados() {
     const [searchParams] = useSearchParams()
@@ -36,7 +35,6 @@ export default function Resultados() {
 
     // New Search State
     const [searchLoading, setSearchLoading] = useState(false)
-    const [searchStep, setSearchStep] = useState(-1)
     const [searchError, setSearchError] = useState('')
     const searchStepTimers = useRef<ReturnType<typeof setTimeout>[]>([])
 
@@ -47,29 +45,58 @@ export default function Resultados() {
 
     useEffect(() => {
         if (!user || !buscaId) { navigate('/home'); return }
-        const MIN_ANIM_MS = 3500 // garante que a animação da janela sempre toca completa
+        const MIN_ANIM_MS = 3500
+        const orig = searchParams.get('orig')
+        const destP = searchParams.get('dest')
+        const date = searchParams.get('date')
+        const ret = searchParams.get('ret')
+        const paxP = parseInt(searchParams.get('pax') ?? '1', 10)
+
         const load = async () => {
             setLoading(true)
             try {
-                const [voosRes, buscaRes] = await Promise.all([
-                    supabase.from('resultados_voos').select('*').eq('busca_id', buscaId).eq('user_id', user.id).order('companhia'),
+                const [buscaRes] = await Promise.all([
                     supabase.from('buscas').select('*').eq('id', buscaId).eq('user_id', user.id).single(),
                     new Promise<void>(r => setTimeout(r, MIN_ANIM_MS)),
                 ])
-                if (voosRes.error) throw voosRes.error
                 if (buscaRes.error) throw buscaRes.error
-
-                setFlights(voosRes.data ?? [])
                 setBusca(buscaRes.data)
-
-                // Initialize top bar with current search
                 if (buscaRes.data) {
-                    setOrigin(buscaRes.data.origem)
-                    setOriginIata(buscaRes.data.origem)   // IATA is stored directly
-                    setDest(buscaRes.data.destino)
-                    setDestIata(buscaRes.data.destino)
-                    setDateGo(buscaRes.data.data_ida)
-                    setPax(buscaRes.data.passageiros)
+                    setOrigin(buscaRes.data.origem); setOriginIata(buscaRes.data.origem)
+                    setDest(buscaRes.data.destino); setDestIata(buscaRes.data.destino)
+                    setDateGo(buscaRes.data.data_ida); setPax(buscaRes.data.passageiros)
+                }
+
+                // Try cached results first
+                const voosRes = await supabase.from('resultados_voos').select('*')
+                    .eq('busca_id', buscaId).eq('user_id', user.id).order('preco_brl')
+                if (voosRes.error) throw voosRes.error
+
+                if (voosRes.data && voosRes.data.length > 0) {
+                    setFlights(voosRes.data)
+                } else if (orig && destP && date) {
+                    // Call Amadeus — Home navigated here before API call
+                    const offers = await searchFlights({
+                        origin: orig, destination: destP,
+                        departureDate: date, adults: paxP, max: 20,
+                        returnDate: ret ?? undefined,
+                    })
+                    const rows = offers.map(o => ({
+                        busca_id: buscaId, user_id: user.id,
+                        provider: o.provider, companhia: o.companhia,
+                        preco_brl: o.preco_brl, preco_milhas: null,
+                        taxas_brl: o.taxas_brl, cpm: null,
+                        partida: o.partida, chegada: o.chegada,
+                        origem: o.origem, destino: o.destino,
+                        duracao_min: o.duracao_min, cabin_class: o.cabin_class,
+                        flight_key: o.flight_key, estrategia_disponivel: true,
+                        moeda: 'BRL', segmentos: o.segmentos,
+                        detalhes: { paradas: o.paradas, voo_numero: o.voo_numero },
+                    }))
+                    if (rows.length > 0) {
+                        const { data: saved } = await supabase.from('resultados_voos').insert(rows).select()
+                        setFlights(saved ?? [])
+                    }
                 }
             } catch (e: unknown) {
                 setError(e instanceof Error ? e.message : 'Erro ao carregar resultados.')
@@ -89,9 +116,9 @@ export default function Resultados() {
         if (!dateGo) return setSearchError('Informe a data de ida.')
         if (!user) return setSearchError('Faça login para buscar voos.')
 
-        setSearchLoading(true); setSearchStep(0)
-        searchStepTimers.current.push(setTimeout(() => setSearchStep(1), 900))
-        searchStepTimers.current.push(setTimeout(() => setSearchStep(2), 2400))
+        setSearchLoading(true)
+        searchStepTimers.current.forEach(clearTimeout)
+        searchStepTimers.current = []
 
         try {
             const { data: buscaData, error: buscaErr } = await supabase.from('buscas').insert({
@@ -99,34 +126,13 @@ export default function Resultados() {
                 data_ida: dateGo, passageiros: pax, bagagem: 'sem_bagagem', user_miles: {},
             }).select().single()
             if (buscaErr) throw buscaErr
-
-            const offers = await searchFlights({
-                origin: originCode, destination: destCode,
-                departureDate: dateGo, adults: pax, max: 20,
-            })
-
-            const voosToInsert = offers.map(o => ({
-                busca_id: buscaData.id, user_id: user.id,
-                provider: o.provider, companhia: o.companhia,
-                preco_brl: o.preco_brl, preco_milhas: null,
-                taxas_brl: o.taxas_brl, cpm: null,
-                partida: o.partida, chegada: o.chegada,
-                origem: o.origem, destino: o.destino,
-                duracao_min: o.duracao_min, cabin_class: o.cabin_class,
-                flight_key: o.flight_key, estrategia_disponivel: true,
-                moeda: 'BRL', segmentos: o.segmentos,
-                detalhes: { paradas: o.paradas, voo_numero: o.voo_numero, carrierCode: o.carrierCode },
-            }))
-
-            if (voosToInsert.length > 0) await supabase.from('resultados_voos').insert(voosToInsert)
-
-            setSearchStep(3)
-            await new Promise(r => setTimeout(r, 300))
-            navigate(`/resultados?buscaId=${buscaData.id}`)
-            setSearchLoading(false); setSearchStep(-1)
+            // Navigate — Resultados will call Amadeus on fresh buscaId
+            const retParam = tripType === 'round-trip' && dateBack ? `&ret=${dateBack}` : ''
+            navigate(`/resultados?buscaId=${buscaData.id}&orig=${originCode}&dest=${destCode}&date=${dateGo}${retParam}&pax=${pax}`)
+            setSearchLoading(false)
         } catch (err: unknown) {
             setSearchError(err instanceof Error ? err.message : 'Erro ao buscar.')
-            setSearchLoading(false); setSearchStep(-1)
+            setSearchLoading(false)
         }
     }
 
@@ -161,19 +167,6 @@ export default function Resultados() {
                         onSubmit={handleNewSearch}
                     />
 
-                    <AnimatePresence>
-                        {searchLoading && searchStep >= 0 && (
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                style={{ display: 'flex', gap: '20px', marginTop: '10px', flexWrap: 'wrap' }}>
-                                {STEPS_LIST.map((s, i) => (
-                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: i <= searchStep ? 1 : 0.35 }}>
-                                        {i < searchStep ? <CheckCircle size={12} color="var(--blue-medium)" /> : i === searchStep ? <Loader2 size={12} color="rgba(255,255,255,0.7)" className="spin" /> : <div style={{ width: 12, height: 12, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.2)' }} />}
-                                        <span style={{ fontSize: '11.5px', color: i === searchStep ? '#fff' : 'rgba(255,255,255,0.45)', fontWeight: i === searchStep ? 600 : 400 }}>{s}</span>
-                                    </div>
-                                ))}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
                 </div>
             </div>
 

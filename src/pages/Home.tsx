@@ -1,15 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plane, Loader2, CheckCircle } from 'lucide-react'
+import { Plane, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { searchFlights } from '@/lib/amadeus'
 import { useAuth } from '@/contexts/AuthContext'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Header } from '@/components/Header'
 import { AirportInput } from '@/components/AirportInput'
 import type { Busca } from '@/lib/supabase'
-
-const STEPS_LIST = ['Salvando busca...', 'Consultando Amadeus...', 'Calculando estratégias...']
 
 export default function Home() {
     const [originLabel, setOriginLabel] = useState('')
@@ -22,15 +19,13 @@ export default function Home() {
     const [pax, setPax] = useState(1)
 
     const [loading, setLoading] = useState(false)
-    const [step, setStep] = useState(-1)
     const [error, setError] = useState('')
     const [recentSearches, setRecentSearches] = useState<Busca[]>([])
 
     const { user } = useAuth()
     const navigate = useNavigate()
-    const stepTimers = useRef<ReturnType<typeof setTimeout>[]>([])
 
-    useEffect(() => () => { stepTimers.current.forEach(clearTimeout) }, [])
+    useEffect(() => () => { }, [])
 
     useEffect(() => {
         if (!user) return
@@ -51,63 +46,24 @@ export default function Home() {
         if (destCode.length !== 3) return setError('Código de destino inválido (ex: JFK).')
         if (!dateGo) return setError('Informe a data de ida.')
         if (!user) return setError('Faça login para buscar voos.')
-        setLoading(true); setStep(0)
-        stepTimers.current.push(setTimeout(() => setStep(1), 900))
-        stepTimers.current.push(setTimeout(() => setStep(2), 2400))
+        setLoading(true)
         try {
             const { data: buscaData, error: buscaErr } = await supabase.from('buscas').insert({
                 user_id: user.id,
                 origem: originCode,
                 destino: destCode,
                 data_ida: dateGo,
+                data_volta: tripType === 'round-trip' && dateBack ? dateBack : null,
                 passageiros: pax,
                 bagagem: 'sem_bagagem',
                 user_miles: {},
             }).select().single()
             if (buscaErr) throw buscaErr
-
-            // Real Amadeus API call
-            const offers = await searchFlights({
-                origin: originCode,
-                destination: destCode,
-                departureDate: dateGo,
-                adults: pax,
-                max: 20,
-                returnDate: tripType === 'round-trip' && dateBack ? dateBack : undefined,
-            })
-
-            const voosToInsert = offers.map(o => ({
-                busca_id: buscaData.id,
-                user_id: user.id,
-                provider: o.provider,
-                companhia: o.companhia,
-                preco_brl: o.preco_brl,
-                preco_milhas: null,
-                taxas_brl: o.taxas_brl,
-                cpm: null,
-                partida: o.partida,
-                chegada: o.chegada,
-                origem: o.origem,
-                destino: o.destino,
-                duracao_min: o.duracao_min,
-                cabin_class: o.cabin_class,
-                flight_key: o.flight_key,
-                estrategia_disponivel: true,
-                moeda: 'BRL',
-                segmentos: o.segmentos,
-                detalhes: { paradas: o.paradas, voo_numero: o.voo_numero, carrierCode: o.carrierCode },
-            }))
-
-            if (voosToInsert.length > 0) {
-                await supabase.from('resultados_voos').insert(voosToInsert)
-            }
-
-            setStep(3)
-            await new Promise(r => setTimeout(r, 300))
-            navigate(`/resultados?buscaId=${buscaData.id}`)
+            // Navigate immediately — Resultados will call Amadeus and show PlaneWindowLoader
+            navigate(`/resultados?buscaId=${buscaData.id}&orig=${originCode}&dest=${destCode}&date=${dateGo}${tripType === 'round-trip' && dateBack ? '&ret=' + dateBack : ''}&pax=${pax}`)
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Erro ao buscar.')
-            setLoading(false); setStep(-1)
+            setLoading(false)
         }
     }
 
@@ -227,21 +183,6 @@ export default function Home() {
                         </button>
 
                         {error && <p style={{ fontSize: '13px', color: '#f87171', textAlign: 'center', margin: 0 }}>{error}</p>}
-
-                        {/* Loading Steps */}
-                        <AnimatePresence>
-                            {loading && step >= 0 && (
-                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                                    style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '4px', flexWrap: 'wrap' }}>
-                                    {STEPS_LIST.map((s, i) => (
-                                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: i <= step ? 1 : 0.4 }}>
-                                            {i < step ? <CheckCircle size={14} color="var(--green-strat)" /> : i === step ? <Loader2 size={14} color="var(--blue-medium)" className="spin" /> : <div style={{ width: 14, height: 14, borderRadius: '50%', border: '1.5px solid var(--border-mid)' }} />}
-                                            <span style={{ fontSize: '12.5px', color: i <= step ? 'var(--text-dark)' : 'var(--text-muted)', fontWeight: i === step ? 600 : 500 }}>{s}</span>
-                                        </div>
-                                    ))}
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
                     </form>
                 </motion.div>
 
