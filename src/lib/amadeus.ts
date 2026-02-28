@@ -112,13 +112,23 @@ export interface FlightOffer {
     carrierCode: string
     preco_brl: number
     taxas_brl: number
+    // Outbound leg
     partida: string
     chegada: string
     origem: string
     destino: string
     duracao_min: number
-    cabin_class: string
     paradas: number
+    // Return leg (only for round-trips)
+    returnPartida?: string
+    returnChegada?: string
+    returnOrigem?: string
+    returnDestino?: string
+    returnDuracaoMin?: number
+    returnParadas?: number
+    returnSegmentos?: unknown
+    // Other
+    cabin_class: string
     voo_numero: string
     segmentos: unknown
     flight_key: string
@@ -170,15 +180,41 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
     const offers: any[] = data.data ?? []
 
     return offers.map((offer): FlightOffer => {
-        const itin = offer.itineraries[0]
-        const segs: any[] = itin.segments
-        const first = segs[0]
-        const last = segs[segs.length - 1]
-        const carrier = first.carrierCode as string
+        const itin0 = offer.itineraries[0]
+        const segs0: any[] = itin0.segments
+        const first0 = segs0[0]
+        const last0 = segs0[segs0.length - 1]
+        const carrier = first0.carrierCode as string
         const totalBrl = parseFloat(offer.price.grandTotal ?? offer.price.total)
         const baseBrl = parseFloat(offer.price.base ?? '0')
         const taxas = Math.max(0, totalBrl - baseBrl)
         const cabin = (offer.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.cabin as string | undefined) ?? 'ECONOMY'
+
+        // Return leg (itineraries[1] exists for round-trips)
+        const itin1 = offer.itineraries[1]
+        let returnFields: Partial<FlightOffer> = {}
+        if (itin1) {
+            const segs1: any[] = itin1.segments
+            const first1 = segs1[0]
+            const last1 = segs1[segs1.length - 1]
+            returnFields = {
+                returnPartida: first1.departure.at,
+                returnChegada: last1.arrival.at,
+                returnOrigem: first1.departure.iataCode,
+                returnDestino: last1.arrival.iataCode,
+                returnDuracaoMin: parseDuration(itin1.duration),
+                returnParadas: segs1.length - 1,
+                returnSegmentos: segs1.map((s: any) => ({
+                    origem: s.departure.iataCode,
+                    partida: s.departure.at,
+                    destino: s.arrival.iataCode,
+                    chegada: s.arrival.at,
+                    companhia: AIRLINE_NAMES[s.carrierCode] ?? s.carrierCode,
+                    numero: `${s.carrierCode}${s.number}`,
+                    duracao_min: parseDuration(s.duration),
+                })),
+            }
+        }
 
         return {
             id: offer.id,
@@ -186,15 +222,15 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
             carrierCode: carrier,
             preco_brl: totalBrl,
             taxas_brl: taxas,
-            partida: first.departure.at,
-            chegada: last.arrival.at,
-            origem: first.departure.iataCode,
-            destino: last.arrival.iataCode,
-            duracao_min: parseDuration(itin.duration),
+            partida: first0.departure.at,
+            chegada: last0.arrival.at,
+            origem: first0.departure.iataCode,
+            destino: last0.arrival.iataCode,
+            duracao_min: parseDuration(itin0.duration),
             cabin_class: CABIN_PT[cabin] ?? 'economy',
-            paradas: segs.length - 1,
-            voo_numero: `${carrier}${first.number}`,
-            segmentos: segs.map(s => ({
+            paradas: segs0.length - 1,
+            voo_numero: `${carrier}${first0.number}`,
+            segmentos: segs0.map((s: any) => ({
                 origem: s.departure.iataCode,
                 partida: s.departure.at,
                 destino: s.arrival.iataCode,
@@ -203,8 +239,9 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
                 numero: `${s.carrierCode}${s.number}`,
                 duracao_min: parseDuration(s.duration),
             })),
-            flight_key: `${carrier}-${first.number}-${params.departureDate}-${first.departure.iataCode}-${last.arrival.iataCode}`,
+            flight_key: `${carrier}-${first0.number}-${params.departureDate}-${first0.departure.iataCode}-${last0.arrival.iataCode}`,
             provider: 'amadeus',
+            ...returnFields,
         }
     })
 }

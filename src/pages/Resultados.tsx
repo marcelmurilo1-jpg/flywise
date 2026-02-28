@@ -67,6 +67,10 @@ export default function Resultados() {
                     setOrigin(buscaData.origem); setOriginIata(buscaData.origem)
                     setDest(buscaData.destino); setDestIata(buscaData.destino)
                     setDateGo(buscaData.data_ida); setPax(buscaData.passageiros)
+                    // Set return date from DB or URL param
+                    const retDate = buscaData.data_volta ?? ret ?? ''
+                    setDateBack(retDate)
+                    if (retDate) setTripType('round-trip')
                 }
 
                 // 2. Check for already-saved results
@@ -133,7 +137,18 @@ export default function Resultados() {
                     estrategia_disponivel: true,
                     moeda: 'BRL',
                     segmentos: o.segmentos,
-                    detalhes: { paradas: o.paradas, voo_numero: o.voo_numero },
+                    // Store all return leg info + stops in detalhes
+                    detalhes: {
+                        paradas: o.paradas,
+                        voo_numero: o.voo_numero,
+                        returnPartida: o.returnPartida,
+                        returnChegada: o.returnChegada,
+                        returnOrigem: o.returnOrigem,
+                        returnDestino: o.returnDestino,
+                        returnDuracaoMin: o.returnDuracaoMin,
+                        returnParadas: o.returnParadas,
+                        returnSegmentos: o.returnSegmentos,
+                    },
                     created_at: new Date().toISOString(),
                 } as unknown as ResultadoVoo))
 
