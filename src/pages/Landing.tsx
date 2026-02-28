@@ -335,7 +335,7 @@ export default function Landing() {
                     <div>
                         <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '14px' }}>Destinos Populares</div>
                         <h2 style={{ fontSize: 'clamp(30px, 4vw, 48px)', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em', lineHeight: 1.1, margin: 0 }}>
-                            Destinos<br /><span style={{ WebkitTextStroke: '2px #0E2A55', WebkitTextFillColor: 'transparent', color: '#0E2A55', paintOrder: 'stroke fill' }}>Estratégicos</span>
+                            Destinos<br /><span style={{ color: '#4A90E2' }}>Estratégicos</span>
                         </h2>
                     </div>
                     <Link to="/auth" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2A60C2', fontWeight: 700, fontSize: '14px', textDecoration: 'none', letterSpacing: '0.01em' }}>
@@ -390,7 +390,7 @@ export default function Landing() {
                         <h2 style={{ fontSize: 'clamp(36px, 5vw, 64px)', fontWeight: 900, lineHeight: 1.0, letterSpacing: '-0.04em', margin: '0 0 32px' }}>
                             <span style={{ display: 'block', color: '#0E2A55' }}>FLYWISE NÃO</span>
                             <span style={{ display: 'block', color: '#0E2A55' }}>É APENAS UM</span>
-                            <span style={{ display: 'block', WebkitTextStroke: '2px #0E2A55', WebkitTextFillColor: 'transparent', color: '#0E2A55', paintOrder: 'stroke fill' }}>BUSCADOR,</span>
+                            <span style={{ display: 'block', color: '#4A90E2' }}>BUSCADOR,</span>
                             <span style={{ display: 'block', color: '#2A60C2' }}>É SEU</span>
                             <span style={{ display: 'block', color: '#2A60C2' }}>ESTRATEGISTA</span>
                         </h2>
@@ -436,7 +436,7 @@ export default function Landing() {
                         </div>
                         <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em', lineHeight: 1.1, margin: 0 }}>
                             Últimas promoções<br />
-                            <span style={{ WebkitTextStroke: '2px #0E2A55', WebkitTextFillColor: 'transparent', color: '#0E2A55', paintOrder: 'stroke fill' }}>de milhas</span>
+                            <span style={{ color: '#4A90E2' }}>de milhas</span>
                         </h2>
                         <p style={{ color: '#6B7A99', fontSize: '15px', marginTop: '12px', maxWidth: '480px', lineHeight: 1.6 }}>
                             Colhidas automaticamente do maior blog de milhas do Brasil. Crie sua conta para acessar todas.
