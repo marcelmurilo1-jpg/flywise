@@ -1,10 +1,15 @@
 import { Plane, ArrowLeftRight, Search, Loader2 } from 'lucide-react'
+import { AirportInput } from './AirportInput'
 
 interface SearchBarTopProps {
-    origin: string
+    origin: string          // display label
     setOrigin: (v: string) => void
+    originIata: string      // IATA code
+    setOriginIata: (v: string) => void
     dest: string
     setDest: (v: string) => void
+    destIata: string
+    setDestIata: (v: string) => void
     dateGo: string
     setDateGo: (v: string) => void
     pax: number
@@ -15,10 +20,16 @@ interface SearchBarTopProps {
 }
 
 export function SearchBarTop({
-    origin, setOrigin, dest, setDest, dateGo, setDateGo, pax, setPax,
+    origin, setOrigin, originIata, setOriginIata,
+    dest, setDest, destIata, setDestIata,
+    dateGo, setDateGo, pax, setPax,
     loading, error, onSubmit
 }: SearchBarTopProps) {
-    const swap = () => { setOrigin(dest); setDest(origin) }
+    const swap = () => {
+        const tmpL = origin; const tmpI = originIata
+        setOrigin(dest); setOriginIata(destIata)
+        setDest(tmpL); setDestIata(tmpI)
+    }
 
     return (
         <form onSubmit={onSubmit}>
@@ -27,16 +38,20 @@ export function SearchBarTop({
                 background: 'var(--bg-white)',
                 border: '1px solid var(--border-light)',
                 borderRadius: '14px',
-                overflow: 'hidden',
+                overflow: 'visible',   // allow dropdown to overflow
                 height: '52px',
                 boxShadow: '0 4px 12px rgba(14,42,85,0.04)',
+                position: 'relative',  // stacking context for dropdowns
             }}>
                 {/* Origin */}
-                <div style={{ display: 'flex', alignItems: 'center', padding: '0 14px', gap: '8px', borderRight: '1px solid var(--border-light)', minWidth: '140px' }}>
-                    <Plane size={14} color="var(--text-faint)" />
-                    <input type="text" placeholder="De — GRU" value={origin} maxLength={3}
-                        onChange={e => setOrigin(e.target.value.toUpperCase())}
-                        style={{ border: 'none', background: 'transparent', color: 'var(--text-dark)', fontFamily: 'inherit', fontSize: '14px', fontWeight: 600, width: '100%', outline: 'none', letterSpacing: '0.04em' }} />
+                <div style={{ display: 'flex', alignItems: 'center', padding: '0 14px', gap: '8px', borderRight: '1px solid var(--border-light)', flex: '1 1 175px', overflow: 'visible' }}>
+                    <AirportInput
+                        value={origin}
+                        iataCode={originIata}
+                        onChange={(display, iata) => { setOrigin(display); setOriginIata(iata) }}
+                        placeholder="De — GRU"
+                        icon={<Plane size={14} color="var(--text-faint)" style={{ flexShrink: 0 }} />}
+                    />
                 </div>
 
                 {/* Swap */}
@@ -53,11 +68,14 @@ export function SearchBarTop({
                 </button>
 
                 {/* Destination */}
-                <div style={{ display: 'flex', alignItems: 'center', padding: '0 14px', gap: '8px', borderRight: '1px solid var(--border-light)', minWidth: '140px' }}>
-                    <Plane size={14} color="var(--text-faint)" style={{ transform: 'scaleX(-1)' }} />
-                    <input type="text" placeholder="Para — JFK" value={dest} maxLength={3}
-                        onChange={e => setDest(e.target.value.toUpperCase())}
-                        style={{ border: 'none', background: 'transparent', color: 'var(--text-dark)', fontFamily: 'inherit', fontSize: '14px', fontWeight: 600, width: '100%', outline: 'none', letterSpacing: '0.04em' }} />
+                <div style={{ display: 'flex', alignItems: 'center', padding: '0 14px', gap: '8px', borderRight: '1px solid var(--border-light)', flex: '1 1 175px', overflow: 'visible' }}>
+                    <AirportInput
+                        value={dest}
+                        iataCode={destIata}
+                        onChange={(display, iata) => { setDest(display); setDestIata(iata) }}
+                        placeholder="Para — JFK"
+                        icon={<Plane size={14} color="var(--text-faint)" style={{ transform: 'scaleX(-1)', flexShrink: 0 }} />}
+                    />
                 </div>
 
                 {/* Date */}
@@ -82,6 +100,7 @@ export function SearchBarTop({
                     cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.75 : 1,
                     display: 'flex', alignItems: 'center', gap: '8px',
                     transition: 'background 0.18s', flexShrink: 0, letterSpacing: '0.01em',
+                    borderRadius: '0 13px 13px 0',
                 }}
                     onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'var(--blue-vibrant)' }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'var(--blue-medium)' }}
@@ -91,7 +110,6 @@ export function SearchBarTop({
                 </button>
             </div>
 
-            {/* Error inline */}
             {error && (
                 <p style={{ fontSize: '12px', color: '#f87171', marginTop: '8px', paddingLeft: '4px' }}>{error}</p>
             )}

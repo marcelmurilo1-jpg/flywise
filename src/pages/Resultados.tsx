@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { AlertCircle, SlidersHorizontal, CheckCircle, Loader2 } from 'lucide-react'
 import { supabase, type ResultadoVoo, type Busca } from '@/lib/supabase'
-import { generateMockFlights } from '@/lib/mockFlights'
+import { searchFlights } from '@/lib/amadeus'
 import { useAuth } from '@/contexts/AuthContext'
 import { Header } from '@/components/Header'
 import { FlightResultsGrouped } from '@/components/FlightResultsGrouped'
@@ -26,7 +26,9 @@ export default function Resultados() {
 
     // Search Bar State
     const [origin, setOrigin] = useState('')
+    const [originIata, setOriginIata] = useState('')
     const [dest, setDest] = useState('')
+    const [destIata, setDestIata] = useState('')
     const [dateGo, setDateGo] = useState('')
     const [pax, setPax] = useState(1)
 
@@ -61,7 +63,9 @@ export default function Resultados() {
                 // Initialize top bar with current search
                 if (buscaRes.data) {
                     setOrigin(buscaRes.data.origem)
+                    setOriginIata(buscaRes.data.origem)   // IATA is stored directly
                     setDest(buscaRes.data.destino)
+                    setDestIata(buscaRes.data.destino)
                     setDateGo(buscaRes.data.data_ida)
                     setPax(buscaRes.data.passageiros)
                 }
@@ -77,33 +81,47 @@ export default function Resultados() {
     const handleNewSearch = async (e: React.FormEvent) => {
         e.preventDefault()
         setSearchError('')
-        if (!origin.trim() || !dest.trim()) return setSearchError('Preencha origem e destino.')
+        const originCode = originIata || origin.trim().toUpperCase()
+        const destCode = destIata || dest.trim().toUpperCase()
+        if (!originCode || !destCode) return setSearchError('Selecione origem e destino.')
         if (!dateGo) return setSearchError('Informe a data de ida.')
         if (!user) return setSearchError('Faça login para buscar voos.')
 
         setSearchLoading(true); setSearchStep(0)
         searchStepTimers.current.push(setTimeout(() => setSearchStep(1), 900))
-        searchStepTimers.current.push(setTimeout(() => setSearchStep(2), 1800))
+        searchStepTimers.current.push(setTimeout(() => setSearchStep(2), 2400))
 
         try {
             const { data: buscaData, error: buscaErr } = await supabase.from('buscas').insert({
-                user_id: user.id, origem: origin, destino: dest,
+                user_id: user.id, origem: originCode, destino: destCode,
                 data_ida: dateGo, passageiros: pax, bagagem: 'sem_bagagem', user_miles: {},
             }).select().single()
             if (buscaErr) throw buscaErr
 
-            const mocks = generateMockFlights(origin, dest, dateGo, pax, {})
-            const voosToInsert = mocks.map(m => ({ ...m, busca_id: buscaData.id, user_id: user.id }))
-            await supabase.from('resultados_voos').insert(voosToInsert)
+            const offers = await searchFlights({
+                origin: originCode, destination: destCode,
+                departureDate: dateGo, adults: pax, max: 20,
+            })
 
-            await new Promise(r => setTimeout(r, 600))
+            const voosToInsert = offers.map(o => ({
+                busca_id: buscaData.id, user_id: user.id,
+                provider: o.provider, companhia: o.companhia,
+                preco_brl: o.preco_brl, preco_milhas: null,
+                taxas_brl: o.taxas_brl, cpm: null,
+                partida: o.partida, chegada: o.chegada,
+                origem: o.origem, destino: o.destino,
+                duracao_min: o.duracao_min, cabin_class: o.cabin_class,
+                flight_key: o.flight_key, estrategia_disponivel: true,
+                moeda: 'BRL', segmentos: o.segmentos,
+                detalhes: { paradas: o.paradas, voo_numero: o.voo_numero, carrierCode: o.carrierCode },
+            }))
+
+            if (voosToInsert.length > 0) await supabase.from('resultados_voos').insert(voosToInsert)
+
             setSearchStep(3)
             await new Promise(r => setTimeout(r, 300))
-
-            // Navigate to the same page with new buscaId to reload
             navigate(`/resultados?buscaId=${buscaData.id}`)
-            setSearchLoading(false)
-            setSearchStep(-1)
+            setSearchLoading(false); setSearchStep(-1)
         } catch (err: unknown) {
             setSearchError(err instanceof Error ? err.message : 'Erro ao buscar.')
             setSearchLoading(false); setSearchStep(-1)
@@ -130,7 +148,9 @@ export default function Resultados() {
                 <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '14px 28px 18px' }}>
                     <SearchBarTop
                         origin={origin} setOrigin={setOrigin}
+                        originIata={originIata} setOriginIata={setOriginIata}
                         dest={dest} setDest={setDest}
+                        destIata={destIata} setDestIata={setDestIata}
                         dateGo={dateGo} setDateGo={setDateGo}
                         pax={pax} setPax={setPax}
                         loading={searchLoading} error={searchError}

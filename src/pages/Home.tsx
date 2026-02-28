@@ -2,17 +2,20 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plane, Loader2, CheckCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { generateMockFlights } from '@/lib/mockFlights'
+import { searchFlights } from '@/lib/amadeus'
 import { useAuth } from '@/contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Header } from '@/components/Header'
+import { AirportInput } from '@/components/AirportInput'
 import type { Busca } from '@/lib/supabase'
 
-const STEPS_LIST = ['Salvando busca...', 'Gerando cenários...', 'Calculando estratégias...']
+const STEPS_LIST = ['Salvando busca...', 'Consultando Amadeus...', 'Calculando estratégias...']
 
 export default function Home() {
-    const [origin, setOrigin] = useState('')
-    const [dest, setDest] = useState('')
+    const [originLabel, setOriginLabel] = useState('')
+    const [originIata, setOriginIata] = useState('')
+    const [destLabel, setDestLabel] = useState('')
+    const [destIata, setDestIata] = useState('')
     const [dateGo, setDateGo] = useState('')
     const [pax, setPax] = useState(1)
 
@@ -39,22 +42,63 @@ export default function Home() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setError('')
-        if (!origin.trim() || !dest.trim()) return setError('Preencha origem e destino.')
+        const originCode = originIata || originLabel.trim().toUpperCase()
+        const destCode = destIata || destLabel.trim().toUpperCase()
+        if (!originCode || !destCode) return setError('Selecione origem e destino.')
+        if (originCode.length !== 3) return setError('Código de origem inválido (ex: GRU).')
+        if (destCode.length !== 3) return setError('Código de destino inválido (ex: JFK).')
         if (!dateGo) return setError('Informe a data de ida.')
         if (!user) return setError('Faça login para buscar voos.')
         setLoading(true); setStep(0)
         stepTimers.current.push(setTimeout(() => setStep(1), 900))
-        stepTimers.current.push(setTimeout(() => setStep(2), 1800))
+        stepTimers.current.push(setTimeout(() => setStep(2), 2400))
         try {
             const { data: buscaData, error: buscaErr } = await supabase.from('buscas').insert({
-                user_id: user.id, origem: origin, destino: dest,
-                data_ida: dateGo, passageiros: pax, bagagem: 'sem_bagagem', user_miles: {},
+                user_id: user.id,
+                origem: originCode,
+                destino: destCode,
+                data_ida: dateGo,
+                passageiros: pax,
+                bagagem: 'sem_bagagem',
+                user_miles: {},
             }).select().single()
             if (buscaErr) throw buscaErr
-            const mocks = generateMockFlights(origin, dest, dateGo, pax, {})
-            const voosToInsert = mocks.map(m => ({ ...m, busca_id: buscaData.id, user_id: user.id }))
-            await supabase.from('resultados_voos').insert(voosToInsert)
-            await new Promise(r => setTimeout(r, 600))
+
+            // Real Amadeus API call
+            const offers = await searchFlights({
+                origin: originCode,
+                destination: destCode,
+                departureDate: dateGo,
+                adults: pax,
+                max: 20,
+            })
+
+            const voosToInsert = offers.map(o => ({
+                busca_id: buscaData.id,
+                user_id: user.id,
+                provider: o.provider,
+                companhia: o.companhia,
+                preco_brl: o.preco_brl,
+                preco_milhas: null,
+                taxas_brl: o.taxas_brl,
+                cpm: null,
+                partida: o.partida,
+                chegada: o.chegada,
+                origem: o.origem,
+                destino: o.destino,
+                duracao_min: o.duracao_min,
+                cabin_class: o.cabin_class,
+                flight_key: o.flight_key,
+                estrategia_disponivel: true,
+                moeda: 'BRL',
+                segmentos: o.segmentos,
+                detalhes: { paradas: o.paradas, voo_numero: o.voo_numero, carrierCode: o.carrierCode },
+            }))
+
+            if (voosToInsert.length > 0) {
+                await supabase.from('resultados_voos').insert(voosToInsert)
+            }
+
             setStep(3)
             await new Promise(r => setTimeout(r, 300))
             navigate(`/resultados?buscaId=${buscaData.id}`)
@@ -85,21 +129,25 @@ export default function Home() {
                         {/* Inputs Row */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
                             {/* Origin */}
-                            <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff' }}>
+                            <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff', overflow: 'visible', position: 'relative' }}>
                                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Origem</label>
-                                <input
-                                    type="text" placeholder="GRU" value={origin} maxLength={3}
-                                    onChange={e => setOrigin(e.target.value.toUpperCase())}
-                                    style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: '15px', fontWeight: 600, color: 'var(--text-dark)' }}
+                                <AirportInput
+                                    value={originLabel}
+                                    iataCode={originIata}
+                                    onChange={(label, iata) => { setOriginLabel(label); setOriginIata(iata) }}
+                                    placeholder="São Paulo, GRU..."
+                                    icon={<Plane size={13} color="var(--text-faint)" style={{ flexShrink: 0 }} />}
                                 />
                             </div>
                             {/* Destination */}
-                            <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff' }}>
+                            <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff', overflow: 'visible', position: 'relative' }}>
                                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Destino</label>
-                                <input
-                                    type="text" placeholder="JFK" value={dest} maxLength={3}
-                                    onChange={e => setDest(e.target.value.toUpperCase())}
-                                    style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: '15px', fontWeight: 600, color: 'var(--text-dark)' }}
+                                <AirportInput
+                                    value={destLabel}
+                                    iataCode={destIata}
+                                    onChange={(label, iata) => { setDestLabel(label); setDestIata(iata) }}
+                                    placeholder="Nova York, JFK..."
+                                    icon={<Plane size={13} color="var(--text-faint)" style={{ transform: 'scaleX(-1)', flexShrink: 0 }} />}
                                 />
                             </div>
                             {/* Dates */}
