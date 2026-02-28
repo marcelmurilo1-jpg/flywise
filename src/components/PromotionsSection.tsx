@@ -352,7 +352,7 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
                             onClick={() => setActiveTab(tab.key as 'all' | 'today')}
                             style={{
                                 display: 'inline-flex', alignItems: 'center', gap: '7px',
-                                padding: '9px 18px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                                padding: '9px 18px', borderRadius: '10px', cursor: 'pointer',
                                 fontFamily: 'inherit', fontWeight: 600, fontSize: '13.5px',
                                 transition: 'all 0.18s',
                                 background: activeTab === tab.key
