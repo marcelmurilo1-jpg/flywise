@@ -442,7 +442,7 @@ export default function Landing() {
                 </header>
 
                 {/* HERO CONTENT */}
-                <div style={{ position: 'relative', zIndex: 10, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', textAlign: 'left', padding: '0 0 48px', maxWidth: '1100px', width: 'calc(100% - 80px)', margin: '0 auto' }}>
+                <div style={{ position: 'relative', zIndex: 10, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', textAlign: 'left', padding: '0 0 110px', maxWidth: '1100px', width: 'calc(100% - 80px)', margin: '0 auto' }}>
                     <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: 'easeOut' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '999px', padding: '6px 16px', marginBottom: '28px' }}>
                             <Star size={13} color="#4A90E2" fill="#4A90E2" />
@@ -457,7 +457,7 @@ export default function Landing() {
 
                 {/* PILL FLUTUANTE — sobreposta entre hero e próxima seção */}
                 <div style={{
-                    position: 'absolute', bottom: '-52px', left: '50%',
+                    position: 'absolute', bottom: '-65px', left: '50%',
                     transform: 'translateX(-50%)',
                     width: 'calc(100% - 80px)', maxWidth: '1100px',
                     zIndex: 30,
@@ -472,8 +472,8 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* Espaçador para acomodar pill + painel de busca avançada */}
-            <div style={{ height: '260px' }} />
+            {/* Espaçador: card protrudes 65px below hero, rest clears destinos */}
+            <div style={{ height: '190px' }} />
 
             {/* ████ 2. DESTINOS ESTRATÉGICOS ████ */}
             <section id="destinos" style={{ padding: '100px 60px', maxWidth: '1280px', margin: '0 auto' }}>
