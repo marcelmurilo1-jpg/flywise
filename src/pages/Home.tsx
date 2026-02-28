@@ -17,6 +17,8 @@ export default function Home() {
     const [destLabel, setDestLabel] = useState('')
     const [destIata, setDestIata] = useState('')
     const [dateGo, setDateGo] = useState('')
+    const [dateBack, setDateBack] = useState('')
+    const [tripType, setTripType] = useState<'one-way' | 'round-trip'>('round-trip')
     const [pax, setPax] = useState(1)
 
     const [loading, setLoading] = useState(false)
@@ -71,6 +73,7 @@ export default function Home() {
                 departureDate: dateGo,
                 adults: pax,
                 max: 20,
+                returnDate: tripType === 'round-trip' && dateBack ? dateBack : undefined,
             })
 
             const voosToInsert = offers.map(o => ({
@@ -125,9 +128,24 @@ export default function Home() {
                     className="card"
                     style={{ width: '100%', padding: '32px', borderRadius: '24px', boxShadow: '0 12px 48px rgba(14,42,85,0.08)' }}
                 >
-                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        {/* Trip type */}
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            {(['round-trip', 'one-way'] as const).map(t => (
+                                <button key={t} type="button" onClick={() => setTripType(t)} style={{
+                                    padding: '6px 16px', borderRadius: '999px', cursor: 'pointer',
+                                    fontFamily: 'inherit', fontSize: '12.5px', fontWeight: 700,
+                                    background: tripType === t ? '#0E2A55' : '#fff',
+                                    color: tripType === t ? '#fff' : 'var(--text-muted)',
+                                    border: tripType === t ? '1.5px solid #0E2A55' : '1.5px solid var(--border-light)',
+                                    transition: 'all 0.15s',
+                                }}>
+                                    {t === 'round-trip' ? '⇄ Ida e volta' : '→ Só ida'}
+                                </button>
+                            ))}
+                        </div>
                         {/* Inputs Row */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: tripType === 'round-trip' ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: '12px' }}>
                             {/* Origin */}
                             <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff', overflow: 'visible', position: 'relative' }}>
                                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Origem</label>
@@ -158,6 +176,16 @@ export default function Home() {
                                     style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: '14px', fontWeight: 500, color: 'var(--text-dark)', cursor: 'pointer' }}
                                 />
                             </div>
+                            {/* Return date */}
+                            <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff', opacity: tripType === 'one-way' ? 0.45 : 1 }}>
+                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Volta</label>
+                                <input
+                                    type="date" value={dateBack} onChange={e => setDateBack(e.target.value)}
+                                    min={dateGo || new Date().toISOString().split('T')[0]}
+                                    disabled={tripType === 'one-way'}
+                                    style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: '14px', fontWeight: 500, color: 'var(--text-dark)', cursor: tripType === 'one-way' ? 'not-allowed' : 'pointer' }}
+                                />
+                            </div>
                             {/* Passengers */}
                             <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff' }}>
                                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Passageiros</label>
@@ -165,7 +193,7 @@ export default function Home() {
                                     value={pax} onChange={e => setPax(Number(e.target.value))}
                                     style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: '14px', fontWeight: 500, color: 'var(--text-dark)', cursor: 'pointer' }}
                                 >
-                                    {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n} pax</option>)}
+                                    {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n} {n === 1 ? 'Passageiro' : 'Passageiros'}</option>)}
                                 </select>
                             </div>
                         </div>

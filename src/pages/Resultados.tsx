@@ -30,6 +30,8 @@ export default function Resultados() {
     const [dest, setDest] = useState('')
     const [destIata, setDestIata] = useState('')
     const [dateGo, setDateGo] = useState('')
+    const [dateBack, setDateBack] = useState('')
+    const [tripType, setTripType] = useState<'one-way' | 'round-trip'>('round-trip')
     const [pax, setPax] = useState(1)
 
     // New Search State
@@ -152,6 +154,8 @@ export default function Resultados() {
                         dest={dest} setDest={setDest}
                         destIata={destIata} setDestIata={setDestIata}
                         dateGo={dateGo} setDateGo={setDateGo}
+                        dateBack={dateBack} setDateBack={setDateBack}
+                        tripType={tripType} setTripType={setTripType}
                         pax={pax} setPax={setPax}
                         loading={searchLoading} error={searchError}
                         onSubmit={handleNewSearch}
