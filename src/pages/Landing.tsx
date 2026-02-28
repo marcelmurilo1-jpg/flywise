@@ -210,96 +210,90 @@ function SearchPill() {
                         <Search size={15} /> Analisar
                     </button>
                 </div>
-            </div>
 
-            {/* ─── Busca Avançada de Milhas (locked teaser) ─────────────────── */}
-            <div style={{ marginTop: 10 }}>
-                <button
-                    type="button"
-                    onClick={() => setMilesOpen(o => !o)}
-                    style={{
-                        background: 'rgba(255,255,255,0.12)',
-                        backdropFilter: 'blur(8px)',
-                        border: '1px solid rgba(255,255,255,0.20)',
-                        borderRadius: 12, padding: '8px 16px',
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-                        color: 'rgba(255,255,255,0.90)', fontFamily: 'Manrope, Inter, sans-serif',
-                        fontSize: 12, fontWeight: 700, transition: 'background 0.15s',
-                        width: '100%',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.18)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
-                >
-                    <Lock size={13} color="#4A90E2" />
-                    <span style={{ flex: 1, textAlign: 'left' }}>
-                        ✨ Busca avançada com milhas — <span style={{ color: '#94BCFF', fontWeight: 500 }}>disponível após criar sua conta</span>
-                    </span>
-                    {milesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
+                {/* ─── Toggle "Busca avançada" at bottom of white card ─── */}
+                <div style={{ borderTop: '1px solid #F1F5F9', marginTop: 14, paddingTop: 10 }}>
+                    <button
+                        type="button"
+                        onClick={() => setMilesOpen(o => !o)}
+                        style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            color: '#64748B', fontFamily: 'Manrope, Inter, sans-serif',
+                            fontSize: 12, fontWeight: 700, padding: '2px 0',
+                            transition: 'color 0.15s',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.color = '#2A60C2')}
+                        onMouseLeave={e => (e.currentTarget.style.color = '#64748B')}
+                    >
+                        <Lock size={12} color="#94A3B8" />
+                        ✨ Busca avançada com milhas
+                        {milesOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    </button>
+                </div>
+            </div>{/* end white card */}
 
-                <AnimatePresence>
-                    {milesOpen && (
-                        <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.22 }}
-                            style={{ overflow: 'hidden' }}
-                        >
-                            <div style={{
-                                background: 'rgba(255,255,255,0.10)',
-                                backdropFilter: 'blur(12px)',
-                                border: '1px solid rgba(255,255,255,0.18)',
-                                borderRadius: '0 0 16px 16px',
-                                borderTop: 'none',
-                                padding: '16px 20px',
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(3, 1fr)',
-                                gap: 12,
-                            }}>
-                                {MILES_PROGRAMS.map(prog => (
-                                    <div key={prog.name} style={{ position: 'relative' }}>
-                                        <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                                            {prog.name}
-                                        </div>
-                                        <div style={{
-                                            display: 'flex', alignItems: 'center', gap: 8,
-                                            background: 'rgba(255,255,255,0.08)',
-                                            border: '1px solid rgba(255,255,255,0.15)',
-                                            borderRadius: 10, padding: '9px 12px',
-                                            cursor: 'not-allowed',
-                                        }}>
-                                            <Lock size={12} color="rgba(255,255,255,0.40)" style={{ flexShrink: 0 }} />
-                                            <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.35)', fontFamily: 'Manrope, Inter, sans-serif' }}>
-                                                {prog.placeholder}
-                                            </span>
-                                        </div>
+            {/* Programs panel — outside the white card, expands below without moving it */}
+            <AnimatePresence>
+                {milesOpen && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22 }}
+                        style={{ overflow: 'hidden', marginTop: 8 }}
+                    >
+                        <div style={{
+                            background: '#fff',
+                            borderRadius: 16,
+                            border: '1px solid #E2EAF5',
+                            boxShadow: '0 8px 32px rgba(14,42,85,0.12)',
+                            padding: '16px 20px',
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(3, 1fr)',
+                            gap: 12,
+                        }}>
+                            {MILES_PROGRAMS.map(prog => (
+                                <div key={prog.name}>
+                                    <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                                        {prog.name}
                                     </div>
-                                ))}
-                                <div style={{ gridColumn: '1 / -1', textAlign: 'center', marginTop: 4 }}>
-                                    <Link
-                                        to="/auth?tab=signup"
-                                        style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: 8,
-                                            color: '#fff', fontSize: 12, fontWeight: 700,
-                                            textDecoration: 'none',
-                                            background: 'rgba(42,96,194,0.75)',
-                                            backdropFilter: 'blur(8px)',
-                                            border: '1px solid rgba(74,144,226,0.40)',
-                                            padding: '8px 20px', borderRadius: 10,
-                                            transition: 'background 0.15s',
-                                        }}
-                                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(42,96,194,0.95)')}
-                                        onMouseLeave={e => (e.currentTarget.style.background = 'rgba(42,96,194,0.75)')}
-                                    >
-                                        Criar conta grátis para desbloquear <ArrowRight size={13} />
-                                    </Link>
+                                    <div style={{
+                                        display: 'flex', alignItems: 'center', gap: 8,
+                                        background: '#F8FAFF',
+                                        border: '1.5px solid #E2EAF5',
+                                        borderRadius: 10, padding: '9px 12px',
+                                        cursor: 'not-allowed', opacity: 0.65,
+                                    }}>
+                                        <Lock size={12} color="#94A3B8" style={{ flexShrink: 0 }} />
+                                        <span style={{ fontSize: 13, fontWeight: 500, color: '#94A3B8', fontFamily: 'Manrope, Inter, sans-serif' }}>
+                                            {prog.placeholder}
+                                        </span>
+                                    </div>
                                 </div>
+                            ))}
+                            <div style={{ gridColumn: '1 / -1', textAlign: 'center', marginTop: 4 }}>
+                                <Link
+                                    to="/auth?tab=signup"
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                                        color: '#fff', fontSize: 12, fontWeight: 700,
+                                        textDecoration: 'none',
+                                        background: '#2A60C2',
+                                        padding: '8px 20px', borderRadius: 10,
+                                        boxShadow: '0 4px 12px rgba(42,96,194,0.30)',
+                                        transition: 'background 0.15s',
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = '#1A4EA8')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = '#2A60C2')}
+                                >
+                                    Criar conta grátis para desbloquear <ArrowRight size={13} />
+                                </Link>
                             </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     )
 }
