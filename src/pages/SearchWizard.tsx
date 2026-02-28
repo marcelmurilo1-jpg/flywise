@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useNavigate, Link } from 'react-router-dom'
-import { X, ArrowRight, Minus, Plus, Check, Zap, Shield, Sparkles, Loader2 } from 'lucide-react'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
+import { X, ArrowRight, Search, Tag, Wallet, Plane, Minus, Plus, Check, Zap, Shield, Sparkles, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { generateMockFlights } from '@/lib/mockFlights'
@@ -55,10 +55,16 @@ type WizardData = {
 
 const TOTAL_STEPS = 5
 
-
+const NAV_ITEMS = [
+    { to: '/home', icon: <Search size={16} strokeWidth={2.5} />, label: 'Buscar' },
+    { to: '/promotions', icon: <Tag size={16} strokeWidth={2.5} />, label: 'Promoções' },
+    { to: '/wallet', icon: <Wallet size={16} strokeWidth={2.5} />, label: 'Carteira' },
+    { to: '/saved-strategies', icon: <Plane size={16} strokeWidth={2.5} />, label: 'Estratégias' },
+]
 
 export default function SearchWizard() {
     const navigate = useNavigate()
+    const location = useLocation()
     const { user } = useAuth()
     const [step, setStep] = useState(1)
     const [submitting, setSubmitting] = useState(false)
@@ -156,8 +162,8 @@ export default function SearchWizard() {
 
             {/* ─── HEADER ─── */}
             <header style={{
-                background: 'rgba(255,255,255,0.92)',
-                backdropFilter: 'blur(14px)',
+                background: 'rgba(255,255,255,0.90)',
+                backdropFilter: 'blur(12px)',
                 borderBottom: '1px solid rgba(14,42,85,0.07)',
                 position: 'sticky',
                 top: 0,
@@ -167,37 +173,41 @@ export default function SearchWizard() {
                     display: 'grid',
                     gridTemplateColumns: '1fr auto 1fr',
                     alignItems: 'center',
-                    height: '68px',
-                    padding: '0 20px',
+                    height: '72px',
+                    padding: '0 16px',
                     maxWidth: '960px',
                     margin: '0 auto',
                 }}>
                     {/* Logo */}
                     <Link to="/home" style={{ justifySelf: 'start', display: 'flex', alignItems: 'center' }}>
-                        <img src="/logo.png" alt="FlyWise" style={{ height: '52px', objectFit: 'contain' }} />
+                        <img src="/logo.png" alt="FlyWise" style={{ height: '56px', objectFit: 'contain' }} />
                     </Link>
 
-                    {/* ── Step progress – center ── */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', justifySelf: 'center' }}>
-                        {/* dots */}
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-                                <motion.div
-                                    key={i}
-                                    animate={{
-                                        width: i + 1 === step ? 20 : 6,
-                                        background: i + 1 <= step ? '#4a90e2' : 'rgba(14,42,85,0.12)',
-                                    }}
-                                    transition={{ duration: 0.3, ease: 'easeInOut' }}
-                                    style={{ height: 6, borderRadius: 99 }}
-                                />
-                            ))}
-                        </div>
-                        {/* label */}
-                        <span style={{ fontSize: '11px', color: 'rgba(14,42,85,0.40)', fontWeight: 500, letterSpacing: '0.04em' }}>
-                            {step} de {TOTAL_STEPS}
-                        </span>
-                    </div>
+                    {/* Nav icons */}
+                    {user && (
+                        <nav style={{ display: 'flex', alignItems: 'center', gap: '8px', justifySelf: 'center' }}>
+                            {NAV_ITEMS.map(item => {
+                                const isActive = location.pathname.startsWith(item.to)
+                                return (
+                                    <Link
+                                        key={item.to}
+                                        to={item.to}
+                                        title={item.label}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            width: '38px', height: '38px', borderRadius: '10px',
+                                            textDecoration: 'none', transition: 'all 0.2s',
+                                            background: isActive ? 'rgba(74,144,226,0.10)' : 'rgba(14,42,85,0.04)',
+                                            color: isActive ? '#4a90e2' : 'var(--text-muted)',
+                                            border: isActive ? '1.5px solid rgba(74,144,226,0.25)' : '1px solid transparent',
+                                        }}
+                                    >
+                                        {item.icon}
+                                    </Link>
+                                )
+                            })}
+                        </nav>
+                    )}
 
                     {/* Close */}
                     <div style={{ justifySelf: 'end' }}>
@@ -205,12 +215,12 @@ export default function SearchWizard() {
                             onClick={() => navigate('/home')}
                             style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                width: '34px', height: '34px', borderRadius: '50%',
-                                border: 'none', background: 'rgba(14,42,85,0.05)',
-                                cursor: 'pointer', transition: 'background 0.2s', color: 'rgba(14,42,85,0.4)',
+                                width: '36px', height: '36px', borderRadius: '50%',
+                                border: 'none', background: 'rgba(14,42,85,0.06)',
+                                cursor: 'pointer', transition: 'background 0.2s', color: 'var(--text-muted)',
                             }}
                             onMouseEnter={e => e.currentTarget.style.background = 'rgba(14,42,85,0.10)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(14,42,85,0.05)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(14,42,85,0.06)'}
                         >
                             <X className="w-4 h-4" />
                         </button>
@@ -219,18 +229,21 @@ export default function SearchWizard() {
             </header>
 
             {/* ─── MAIN ─── */}
-            <main className="flex-1 flex flex-col items-center justify-center p-6 z-10 pt-10 pb-10">
-                <div className="w-full max-w-2xl">
+            <main className="flex-1 flex flex-col items-center justify-center p-6 z-10" style={{ paddingTop: '40px', paddingBottom: '60px' }}>
+                <div className="w-full max-w-xl">
                     <AnimatePresence mode="wait">
 
                         {/* STEP 1: DESTINATION */}
                         {step === 1 && (
                             <motion.div key="step1" variants={variants} initial="initial" animate="animate" exit="exit"
-                                transition={{ duration: 0.35, ease: 'easeOut' }} className="flex flex-col gap-6">
-                                <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight">
-                                    Para onde você quer <span className="font-semibold text-[#4a90e2]">viajar?</span>
-                                </h1>
-                                <p className="text-slate-500 text-lg">Pode ser uma cidade específica, país ou região.</p>
+                                transition={{ duration: 0.35, ease: 'easeOut' }} className="flex flex-col gap-8">
+                                <StepDots current={step} total={TOTAL_STEPS} />
+                                <div className="flex flex-col gap-3">
+                                    <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight leading-tight">
+                                        Para onde você quer <span className="font-semibold text-[#4a90e2]">viajar?</span>
+                                    </h1>
+                                    <p className="text-slate-400 text-base">Pode ser uma cidade específica, país ou região.</p>
+                                </div>
                                 <div className="relative">
                                     <input
                                         type="text" autoFocus
@@ -241,8 +254,8 @@ export default function SearchWizard() {
                                         className="w-full bg-transparent border-b-2 border-slate-200 focus:border-[#4a90e2] text-3xl md:text-4xl text-slate-900 py-4 outline-none transition-colors placeholder:text-slate-300 font-light"
                                     />
                                 </div>
-                                <div className="flex justify-end mt-4">
-                                    <WizardNextBtn disabled={!data.destination.trim()} onClick={nextStep} label="Próximo" />
+                                <div className="flex justify-end">
+                                    <NextBtn disabled={!data.destination.trim()} onClick={nextStep}>Próximo</NextBtn>
                                 </div>
                             </motion.div>
                         )}
@@ -250,11 +263,14 @@ export default function SearchWizard() {
                         {/* STEP 2: ORIGIN */}
                         {step === 2 && (
                             <motion.div key="step2" variants={variants} initial="initial" animate="animate" exit="exit"
-                                transition={{ duration: 0.35, ease: 'easeOut' }} className="flex flex-col gap-6">
-                                <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight">
-                                    De onde você vai <span className="font-semibold text-[#4a90e2]">sair?</span>
-                                </h1>
-                                <p className="text-slate-500 text-lg">Normalmente o aeroporto mais próximo de você.</p>
+                                transition={{ duration: 0.35, ease: 'easeOut' }} className="flex flex-col gap-8">
+                                <StepDots current={step} total={TOTAL_STEPS} />
+                                <div className="flex flex-col gap-3">
+                                    <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight leading-tight">
+                                        De onde você vai <span className="font-semibold text-[#4a90e2]">sair?</span>
+                                    </h1>
+                                    <p className="text-slate-400 text-base">Normalmente o aeroporto mais próximo de você.</p>
+                                </div>
                                 <div className="relative">
                                     <input
                                         type="text" autoFocus
@@ -266,22 +282,12 @@ export default function SearchWizard() {
                                     />
                                 </div>
                                 {/* Flexible Toggle */}
-                                <div
-                                    onClick={() => setData({ ...data, flexibleOrigin: !data.flexibleOrigin })}
-                                    className={`mt-2 p-5 rounded-2xl border flex items-center justify-between cursor-pointer transition-all duration-200 ${data.flexibleOrigin ? 'border-[#4a90e2] bg-[#4a90e2]/5' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}`}
-                                >
-                                    <div>
-                                        <h3 className="text-slate-800 font-semibold text-base">✈️ Aeroportos flexíveis</h3>
-                                        <p className="text-slate-500 text-sm mt-1">Buscar em aeroportos próximos para encontrar tarifas menores</p>
-                                    </div>
-                                    <div className={`w-12 h-7 rounded-full p-1 transition-colors duration-300 flex-shrink-0 ml-4 ${data.flexibleOrigin ? 'bg-[#4a90e2]' : 'bg-slate-300'}`}>
-                                        <motion.div
-                                            className="w-5 h-5 bg-white rounded-full shadow"
-                                            animate={{ x: data.flexibleOrigin ? 20 : 0 }}
-                                            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                        />
-                                    </div>
-                                </div>
+                                <ToggleCard
+                                    active={data.flexibleOrigin}
+                                    onToggle={() => setData({ ...data, flexibleOrigin: !data.flexibleOrigin })}
+                                    title="✈️ Aeroportos flexíveis"
+                                    desc="Buscar em aeroportos próximos para encontrar tarifas menores"
+                                />
                                 <WizardNav onBack={prevStep} onNext={nextStep} nextDisabled={!data.origin.trim()} />
                             </motion.div>
                         )}
@@ -289,11 +295,14 @@ export default function SearchWizard() {
                         {/* STEP 3: DATES */}
                         {step === 3 && (
                             <motion.div key="step3" variants={variants} initial="initial" animate="animate" exit="exit"
-                                transition={{ duration: 0.35, ease: 'easeOut' }} className="flex flex-col gap-6">
-                                <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight">
-                                    Quando você pretende <span className="font-semibold text-[#4a90e2]">viajar?</span>
-                                </h1>
-                                <p className="text-slate-500 text-lg">Datas flexíveis podem economizar até 70% no valor das passagens.</p>
+                                transition={{ duration: 0.35, ease: 'easeOut' }} className="flex flex-col gap-8">
+                                <StepDots current={step} total={TOTAL_STEPS} />
+                                <div className="flex flex-col gap-3">
+                                    <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight leading-tight">
+                                        Quando você pretende <span className="font-semibold text-[#4a90e2]">viajar?</span>
+                                    </h1>
+                                    <p className="text-slate-400 text-base">Datas flexíveis podem economizar até 70% no valor das passagens.</p>
+                                </div>
 
                                 <div className="grid grid-cols-3 gap-3">
                                     {[
@@ -365,9 +374,12 @@ export default function SearchWizard() {
                         {step === 4 && (
                             <motion.div key="step4" variants={variants} initial="initial" animate="animate" exit="exit"
                                 transition={{ duration: 0.35, ease: 'easeOut' }} className="flex flex-col gap-8">
-                                <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight">
-                                    Quem vai <span className="font-semibold text-[#4a90e2]">viajar?</span>
-                                </h1>
+                                <StepDots current={step} total={TOTAL_STEPS} />
+                                <div className="flex flex-col gap-3">
+                                    <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight leading-tight">
+                                        Quem vai <span className="font-semibold text-[#4a90e2]">viajar?</span>
+                                    </h1>
+                                </div>
 
                                 {/* Passenger counter */}
                                 <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-200 bg-slate-50">
@@ -424,11 +436,14 @@ export default function SearchWizard() {
                         {/* STEP 5: HACKER MODE */}
                         {step === 5 && (
                             <motion.div key="step5" variants={variants} initial="initial" animate="animate" exit="exit"
-                                transition={{ duration: 0.35, ease: 'easeOut' }} className="flex flex-col gap-6">
-                                <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight">
-                                    Qual é a sua <span className="font-semibold text-[#4a90e2]">estratégia?</span>
-                                </h1>
-                                <p className="text-slate-500 text-lg">Escolha o perfil da sua busca. Você pode mudar depois.</p>
+                                transition={{ duration: 0.35, ease: 'easeOut' }} className="flex flex-col gap-8">
+                                <StepDots current={step} total={TOTAL_STEPS} />
+                                <div className="flex flex-col gap-3">
+                                    <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight leading-tight">
+                                        Qual é a sua <span className="font-semibold text-[#4a90e2]">estratégia?</span>
+                                    </h1>
+                                    <p className="text-slate-400 text-base">Escolha o perfil da sua busca. Você pode mudar depois.</p>
+                                </div>
 
                                 <div className="flex flex-col gap-3">
                                     {HACKER_MODES.map(m => {
@@ -478,32 +493,104 @@ export default function SearchWizard() {
                     </AnimatePresence>
                 </div>
             </main>
-
         </div>
     )
 }
 
-// ─── Shared Components ───────────────────────────────────────────────────────
+// ─── Step Dots Progress ──────────────────────────────────────────────────────
 
-function WizardNextBtn({ onClick, disabled, label, className = '' }: {
+function StepDots({ current, total }: { current: number; total: number }) {
+    return (
+        <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+                {Array.from({ length: total }).map((_, i) => {
+                    const done = i + 1 < current
+                    const active = i + 1 === current
+                    return (
+                        <motion.div
+                            key={i}
+                            animate={{
+                                width: active ? 28 : 8,
+                                opacity: done ? 0.45 : active ? 1 : 0.2,
+                            }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                            style={{
+                                height: 8,
+                                borderRadius: 999,
+                                background: '#4a90e2',
+                                flexShrink: 0,
+                            }}
+                        />
+                    )
+                })}
+            </div>
+            <p className="text-xs font-semibold text-slate-400 tracking-wide">{current} de {total}</p>
+        </div>
+    )
+}
+
+// ─── Next Button ─────────────────────────────────────────────────────────────
+
+function NextBtn({ onClick, disabled, children, gradient = false }: {
     onClick: () => void
     disabled: boolean
-    label: string
-    className?: string
+    children: React.ReactNode
+    gradient?: boolean
 }) {
     return (
         <button
             onClick={onClick}
             disabled={disabled}
-            className={`flex items-center gap-1.5 bg-slate-900 hover:bg-slate-700 text-white text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed rounded-full px-6 py-3 transition-all ${className}`}
+            style={{
+                display: 'inline-flex', alignItems: 'center', gap: '8px',
+                padding: '14px 28px',
+                borderRadius: '14px',
+                fontSize: '15px', fontWeight: 600, letterSpacing: '0.01em',
+                color: '#fff',
+                background: gradient
+                    ? 'linear-gradient(135deg, #4a90e2 0%, #1a5db5 100%)'
+                    : '#4a90e2',
+                border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+                opacity: disabled ? 0.4 : 1,
+                boxShadow: disabled ? 'none' : '0 4px 14px rgba(74,144,226,0.35)',
+                transition: 'all 0.18s ease',
+            }}
+            onMouseEnter={e => { if (!disabled) e.currentTarget.style.boxShadow = '0 6px 20px rgba(74,144,226,0.45)'; if (!disabled) e.currentTarget.style.transform = 'translateY(-1px)' }}
+            onMouseLeave={e => { e.currentTarget.style.boxShadow = disabled ? 'none' : '0 4px 14px rgba(74,144,226,0.35)'; e.currentTarget.style.transform = 'none' }}
+            onMouseDown={e => { if (!disabled) e.currentTarget.style.transform = 'translateY(0px)' }}
         >
-            {label}
-            <ArrowRight className="w-3.5 h-3.5" />
+            {children}
+            <ArrowRight style={{ width: 16, height: 16, flexShrink: 0 }} />
         </button>
     )
 }
 
-function WizardNav({ onBack, onNext, nextDisabled, nextLabel = 'Continuar', nextClassName = '' }: {
+// ─── Back Button ─────────────────────────────────────────────────────────────
+
+function BackBtn({ onClick }: { onClick: () => void }) {
+    return (
+        <button
+            onClick={onClick}
+            style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '14px 20px',
+                borderRadius: '14px',
+                fontSize: '15px', fontWeight: 500,
+                color: '#94a3b8',
+                background: 'transparent',
+                border: '1.5px solid #e2e8f0',
+                cursor: 'pointer',
+                transition: 'all 0.18s ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#475569'; e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#f8fafc' }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = 'transparent' }}
+        >
+            ← Voltar
+        </button>
+    )
+}
+
+function WizardNav({ onBack, onNext, nextDisabled, nextLabel = 'Próximo', nextClassName = '' }: {
     onBack: () => void
     onNext: () => void
     nextDisabled: boolean
@@ -511,44 +598,92 @@ function WizardNav({ onBack, onNext, nextDisabled, nextLabel = 'Continuar', next
     nextClassName?: string
 }) {
     return (
-        <div className="flex justify-between items-center mt-8 pt-6 border-t border-slate-100">
-            <button
-                onClick={onBack}
-                className="text-xs text-slate-400 hover:text-slate-600 font-medium tracking-wide uppercase transition-colors"
-            >
-                Voltar
-            </button>
-            <WizardNextBtn onClick={onNext} disabled={nextDisabled} label={nextLabel} className={nextClassName} />
+        <div className="flex justify-between items-center mt-2">
+            <BackBtn onClick={onBack} />
+            <NextBtn onClick={onNext} disabled={nextDisabled} gradient={nextClassName.includes('gradient')}>{nextLabel}</NextBtn>
         </div>
     )
 }
+
+// ─── Toggle Card ─────────────────────────────────────────────────────────────
+
+function ToggleCard({ active, onToggle, title, desc }: {
+    active: boolean; onToggle: () => void; title: string; desc: string
+}) {
+    return (
+        <div
+            onClick={onToggle}
+            style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '18px 20px',
+                borderRadius: '16px',
+                border: active ? '1.5px solid rgba(74,144,226,0.6)' : '1.5px solid #e2e8f0',
+                background: active ? 'rgba(74,144,226,0.05)' : '#fafafa',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                gap: '16px',
+            }}
+        >
+            <div style={{ flex: 1 }}>
+                <p style={{ fontWeight: 600, fontSize: '15px', color: active ? '#4a90e2' : '#1e293b', margin: 0 }}>{title}</p>
+                <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: '3px' }}>{desc}</p>
+            </div>
+            <div style={{
+                width: 44, height: 26, borderRadius: 999,
+                background: active ? '#4a90e2' : '#cbd5e1',
+                padding: 3, flexShrink: 0,
+                transition: 'background 0.25s',
+                position: 'relative',
+            }}>
+                <motion.div
+                    style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }}
+                    animate={{ x: active ? 18 : 0 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                />
+            </div>
+        </div>
+    )
+}
+
+
+// ─── Option Card ─────────────────────────────────────────────────────────────
 
 function OptionCard({ selected, onClick, emoji, label, desc }: {
     selected: boolean; onClick: () => void; emoji: string; label: string; desc: string
 }) {
     return (
-        <button onClick={onClick}
-            className={`relative flex flex-col items-start gap-1.5 p-4 rounded-xl border text-left transition-all duration-200 ${selected
-                ? 'border-[#4a90e2] bg-[#4a90e2]/4'
-                : 'border-slate-200 hover:border-slate-300 bg-white'
-                }`}
-            style={{ background: selected ? 'rgba(74,144,226,0.04)' : undefined }}
+        <button
+            onClick={onClick}
+            style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                gap: '10px', padding: '18px 16px',
+                borderRadius: '16px',
+                border: selected ? '1.5px solid rgba(74,144,226,0.7)' : '1.5px solid #e2e8f0',
+                background: selected ? 'rgba(74,144,226,0.06)' : '#fff',
+                cursor: 'pointer', textAlign: 'left',
+                boxShadow: selected ? '0 4px 18px rgba(74,144,226,0.12)' : '0 1px 4px rgba(14,42,85,0.04)',
+                transition: 'all 0.2s ease',
+                width: '100%',
+            }}
         >
-            {/* Top row: emoji + tick */}
-            <div className="flex items-center justify-between w-full mb-1">
-                <span className="text-xl">{emoji}</span>
-                {/* Minimalist tick indicator */}
-                <span className={`w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 transition-all duration-200 ${selected ? 'border-[#4a90e2] bg-[#4a90e2]' : 'border-slate-300'
-                    }`}>
-                    {selected && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
-                </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                <span style={{ fontSize: '22px', lineHeight: '1' }}>{emoji}</span>
+                <div style={{
+                    width: 20, height: 20, borderRadius: '50%',
+                    border: selected ? '2px solid #4a90e2' : '2px solid #cbd5e1',
+                    background: selected ? '#4a90e2' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.2s', flexShrink: 0,
+                }}>
+                    {selected && <Check style={{ width: 11, height: 11, color: '#fff', strokeWidth: 3 }} />}
+                </div>
             </div>
-            <p className={`font-semibold text-sm leading-tight ${selected ? 'text-[#2d6bbf]' : 'text-slate-800'
-                }`}>{label}</p>
-            <p className="text-xs text-slate-400 leading-relaxed">{desc}</p>
+            <p style={{ fontWeight: 600, fontSize: '14px', color: selected ? '#4a90e2' : '#1e293b', margin: 0, lineHeight: '1.3' }}>{label}</p>
+            <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, lineHeight: '1.5' }}>{desc}</p>
         </button>
     )
 }
+
 
 function DateField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
     return (
