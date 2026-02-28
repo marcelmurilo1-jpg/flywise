@@ -40,8 +40,14 @@ export default function Resultados() {
     const [showMobileFilters, setShowMobileFilters] = useState(false)
     const [activeTab, setActiveTab] = useState(0)
 
+    // Guard: prevent re-running load() when user ref changes (e.g. tab switch triggers auth refresh)
+    const hasLoaded = useRef(false)
+
     useEffect(() => {
         if (!user || !buscaId) { navigate('/home'); return }
+        // Only load once per buscaId — tab switches must NOT re-trigger
+        if (hasLoaded.current) return
+        hasLoaded.current = true
 
         // Read URL params at effect setup time
         const orig = searchParams.get('orig')

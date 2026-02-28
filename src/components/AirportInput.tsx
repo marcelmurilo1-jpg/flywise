@@ -87,15 +87,15 @@ export function AirportInput({ value, iataCode, onChange, placeholder = 'Cidade 
     const internalQuery = useRef(value) // tracks last value set by user typing
     const debQ = useDebounce(query, 300)
 
-    // Sync from parent ONLY when value changes externally (e.g. swap, reset)
-    // NOT when the user is typing (which would also update the prop via onChange)
+    // Sync from parent ONLY when value changes externally (not from the user's own typing)
     useEffect(() => {
-        // If the new value matches what we last set internally, it's our own update — ignore
         if (value === internalQuery.current) return
-        // It came from outside (swap, reset, etc.) — sync it
+        // External change (swap, Resultados setting origin etc.) — sync but NEVER open dropdown
         justSelected.current = true
         internalQuery.current = value
         setQuery(value)
+        setOpen(false)   // ← explicit close: no auto-open on parent injection
+        setList([])      // ← clear list so onFocus doesn't re-open
     }, [value])
 
     // Update dropdown position whenever it opens

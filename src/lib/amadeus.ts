@@ -156,7 +156,7 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
         departureDate: params.departureDate,
         adults: String(params.adults ?? 1),
         currencyCode: 'BRL',
-        max: String(params.max ?? 20),
+        max: String(params.max ?? 50),
     }
     if (params.returnDate) qp.returnDate = params.returnDate
     if (params.cabin) qp.travelClass = params.cabin
@@ -239,7 +239,7 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
                 numero: `${s.carrierCode}${s.number}`,
                 duracao_min: parseDuration(s.duration),
             })),
-            flight_key: `${carrier}-${first0.number}-${params.departureDate}-${first0.departure.iataCode}-${last0.arrival.iataCode}`,
+            flight_key: `${offer.id}-${carrier}-${first0.number}-${params.departureDate}-${first0.departure.iataCode}-${last0.arrival.iataCode}`,
             provider: 'amadeus',
             ...returnFields,
         }
