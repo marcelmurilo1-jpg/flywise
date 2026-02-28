@@ -29,11 +29,29 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
+
+  // Wait for Supabase session check before rendering any route.
+  // This prevents the white-screen flash caused by briefly showing Landing
+  // or bouncing to /auth before we know the auth state.
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#080a10' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 0.9s linear infinite' }}>
+            <circle cx="12" cy="12" r="10" stroke="#1e3a5f" strokeWidth="2" />
+            <path d="M12 2a10 10 0 0110 10" stroke="#4a90e2" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); }}`}</style>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <Routes>
       <Route path="/" element={user ? <Navigate to="/home" replace /> : <Landing />} />
-      <Route path="/auth" element={user ? <Navigate to="/auth" replace /> : <Auth />} />
+      <Route path="/auth" element={user ? <Navigate to="/home" replace /> : <Auth />} />
       <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
       <Route path="/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
       <Route path="/promotions" element={<ProtectedRoute><Promotions /></ProtectedRoute>} />
