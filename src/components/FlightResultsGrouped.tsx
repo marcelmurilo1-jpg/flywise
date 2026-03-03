@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plane, ArrowRight, SlidersHorizontal, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ResultadoVoo } from '@/lib/supabase'
@@ -6,6 +6,7 @@ import { StrategyPanel } from '@/components/StrategyPanel'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { airlineMatchesPrograms, TOP_PROGRAMS } from '@/lib/airlineMilesMapping'
+import type { FilterState } from '@/components/Sidebar'
 
 interface SearchInfo { origem: string; destino: string; data_ida: string; passageiros: number }
 interface FlightResultsGroupedProps {
@@ -13,6 +14,7 @@ interface FlightResultsGroupedProps {
     buscaId: number
     searchInfo?: SearchInfo
     onNewSearch: () => void
+    sidebarFilters?: FilterState
 }
 
 function formatTime(iso?: string) {
@@ -108,7 +110,7 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
     )
 }
 
-export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch }: FlightResultsGroupedProps) {
+export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch, sidebarFilters }: FlightResultsGroupedProps) {
     const [selFlight, setSelFlight] = useState<ResultadoVoo | null>(null)
     const [panelOpen, setPanelOpen] = useState(false)
     void setSelFlight
@@ -119,6 +121,25 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
     const [selStops, setSelStops] = useState<number | null>(null)   // null=all, 0=direct, 1=1stop, 2=2+
     const [selAirlines, setSelAirlines] = useState<string[]>([])
     const [maxPrice, setMaxPrice] = useState<number | null>(null)
+
+    // ── Sync sidebar filters → internal filter state ─────────────────────────
+    useEffect(() => {
+        if (!sidebarFilters) return
+
+        // Sync programs
+        setSelPrograms(sidebarFilters.programs)
+
+        // Sync stops: map string values to number
+        if (sidebarFilters.stops.length === 0) {
+            setSelStops(null)
+        } else if (sidebarFilters.stops.includes('direct')) {
+            setSelStops(0)
+        } else if (sidebarFilters.stops.includes('1stop')) {
+            setSelStops(1)
+        } else if (sidebarFilters.stops.includes('2plus')) {
+            setSelStops(2)
+        }
+    }, [sidebarFilters])
 
     // ── Derived values for filter UI ──────────────────────────────────────────
     const allAirlines = useMemo(() =>

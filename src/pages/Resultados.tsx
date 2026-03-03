@@ -291,6 +291,7 @@ export default function Resultados() {
                                 flights={flights} buscaId={buscaId}
                                 searchInfo={busca ? { origem: busca.origem, destino: busca.destino, data_ida: busca.data_ida, passageiros: busca.passageiros } : undefined}
                                 onNewSearch={() => { (document.querySelector('input[placeholder="De — GRU"]') as HTMLInputElement)?.focus() }}
+                                sidebarFilters={filters}
                             />
                         </motion.div>
                     )}
