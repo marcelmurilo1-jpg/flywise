@@ -502,61 +502,7 @@ export default function Landing() {
                 <SearchPill />
             </motion.div>
 
-            {/* ████ 2. DESTINOS ESTRATÉGICOS ████ */}
-            <section id="destinos" style={{ padding: '80px 60px 100px', maxWidth: '1280px', margin: '0 auto' }}>
-                <div style={{ marginBottom: '56px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-                    <div>
-                        <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '14px' }}>Destinos Populares</div>
-                        <h2 style={{ fontSize: 'clamp(30px, 4vw, 48px)', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em', lineHeight: 1.1, margin: 0 }}>
-                            Destinos<br /><span style={{ color: '#4A90E2' }}>Estratégicos</span>
-                        </h2>
-                    </div>
-                    <Link to="/auth" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2A60C2', fontWeight: 700, fontSize: '14px', textDecoration: 'none', letterSpacing: '0.01em' }}>
-                        Ver todos os destinos <ArrowRight size={16} />
-                    </Link>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '24px' }}>
-                    {DESTINATIONS.map((d, i) => (
-                        <motion.div
-                            key={d.name}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.08 * i, duration: 0.5 }}
-                            style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(14,42,85,0.07)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.2s ease, box-shadow 0.2s ease', border: '1px solid #E2EAF5' }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 40px rgba(14,42,85,0.13)' }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(14,42,85,0.07)' }}
-                        >
-                            {/* Imagem */}
-                            <div style={{ height: '200px', overflow: 'hidden', borderRadius: '16px 16px 0 0' }}>
-                                <img src={d.img} alt={d.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
-                                    onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
-                                    onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
-                                />
-                            </div>
-                            <div style={{ padding: '20px 20px 22px' }}>
-                                <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#6B7A99', fontSize: '11px', fontWeight: 600, borderRadius: '6px', padding: '3px 10px', marginBottom: '12px', letterSpacing: '0.02em' }}>{d.class}</div>
-                                <div style={{ fontSize: '20px', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em', marginBottom: '4px' }}>{d.name}</div>
-                                <div style={{ fontSize: '13px', color: '#6B7A99', marginBottom: '16px' }}>{d.route}</div>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <div>
-                                        <div style={{ fontSize: '22px', fontWeight: 800, color: '#2A60C2', letterSpacing: '-0.02em' }}>{d.miles} pts</div>
-                                        <div style={{ fontSize: '12px', color: '#A0AECB', marginTop: '2px' }}>ou {d.price}</div>
-                                    </div>
-                                    <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#EEF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'background 0.2s' }}
-                                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = '#2A60C2')}
-                                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '#EEF2F8')}
-                                    >
-                                        <ArrowRight size={16} color="#2A60C2" />
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    ))}
-                </div>
-            </section>
-
-            {/* ████ 3. POR QUE FLYWISE — TIPOGRAFIA MISTA SKYWINKS ████ */}
+            {/* ████ 2. FLYWISE NÃO É APENAS UM BUSCADOR ████ */}
             <section id="sobre" style={{ padding: '100px 60px', background: '#F7F9FC', overflow: 'hidden' }}>
                 <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
                     <div>
@@ -600,29 +546,7 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* ████ 3.5 PROMOÇÕES EM DESTAQUE ████ */}
-            <section style={{ padding: '100px 60px', maxWidth: '1280px', margin: '0 auto' }}>
-                <div style={{ marginBottom: '48px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-                    <div>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '14px' }}>
-                            <Flame size={13} /> Promoções em Destaque
-                        </div>
-                        <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em', lineHeight: 1.1, margin: 0 }}>
-                            Últimas promoções<br />
-                            <span style={{ color: '#4A90E2' }}>de milhas</span>
-                        </h2>
-                        <p style={{ color: '#6B7A99', fontSize: '15px', marginTop: '12px', maxWidth: '480px', lineHeight: 1.6 }}>
-                            Colhidas automaticamente do maior blog de milhas do Brasil. Crie sua conta para acessar todas.
-                        </p>
-                    </div>
-                    <Link to="/auth" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2A60C2', fontWeight: 700, fontSize: '14px', textDecoration: 'none', letterSpacing: '0.01em' }}>
-                        Ver todas as promoções <ArrowRight size={16} />
-                    </Link>
-                </div>
-                <PromotionsSection limit={3} landingMode />
-            </section>
-
-            {/* ████ 4. COMO FUNCIONA ████ */}
+            {/* ████ 3. COMO FUNCIONA — TRÊS PASSOS ████ */}
             <section id="como-funciona" style={{ padding: '100px 60px', maxWidth: '1280px', margin: '0 auto' }}>
                 <div style={{ textAlign: 'center', marginBottom: '64px' }}>
                     <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '16px' }}>Como Funciona</div>
@@ -645,7 +569,7 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* ████ 5. STATS — FAIXA NAVY ████ */}
+            {/* ████ 4. STATS — FAIXA NAVY ████ */}
             <section style={{ background: '#0E2A55', padding: '80px 60px' }}>
                 <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '40px', textAlign: 'center' }}>
                     {STATS.map((s, i) => (
@@ -657,8 +581,86 @@ export default function Landing() {
                 </div>
             </section>
 
-            {/* ████ 6. PLANOS ████ */}
-            <section id="planos" style={{ padding: '100px 60px', background: '#F7F9FC' }}>
+            {/* ████ 5. ÚLTIMAS PROMOÇÕES ████ */}
+            <section style={{ padding: '100px 60px', maxWidth: '1280px', margin: '0 auto' }}>
+                <div style={{ marginBottom: '48px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                    <div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '14px' }}>
+                            <Flame size={13} /> Promoções em Destaque
+                        </div>
+                        <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em', lineHeight: 1.1, margin: 0 }}>
+                            Últimas promoções<br />
+                            <span style={{ color: '#4A90E2' }}>de milhas</span>
+                        </h2>
+                        <p style={{ color: '#6B7A99', fontSize: '15px', marginTop: '12px', maxWidth: '480px', lineHeight: 1.6 }}>
+                            Colhidas automaticamente do maior blog de milhas do Brasil. Crie sua conta para acessar todas.
+                        </p>
+                    </div>
+                    <Link to="/auth" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2A60C2', fontWeight: 700, fontSize: '14px', textDecoration: 'none', letterSpacing: '0.01em' }}>
+                        Ver todas as promoções <ArrowRight size={16} />
+                    </Link>
+                </div>
+                <PromotionsSection limit={4} landingMode />
+            </section>
+
+            {/* ████ 6. DESTINOS ESTRATÉGICOS ████ */}
+            <section id="destinos" style={{ padding: '80px 60px 100px', background: '#F7F9FC', maxWidth: '100%' }}>
+                <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
+                    <div style={{ marginBottom: '56px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                        <div>
+                            <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '14px' }}>Destinos Populares</div>
+                            <h2 style={{ fontSize: 'clamp(30px, 4vw, 48px)', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em', lineHeight: 1.1, margin: 0 }}>
+                                Destinos<br /><span style={{ color: '#4A90E2' }}>Estratégicos</span>
+                            </h2>
+                        </div>
+                        <Link to="/auth" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2A60C2', fontWeight: 700, fontSize: '14px', textDecoration: 'none', letterSpacing: '0.01em' }}>
+                            Ver todos os destinos <ArrowRight size={16} />
+                        </Link>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '24px' }}>
+                        {DESTINATIONS.map((d, i) => (
+                            <motion.div
+                                key={d.name}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.08 * i, duration: 0.5 }}
+                                style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(14,42,85,0.07)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.2s ease, box-shadow 0.2s ease', border: '1px solid #E2EAF5' }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 40px rgba(14,42,85,0.13)' }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(14,42,85,0.07)' }}
+                            >
+                                {/* Imagem */}
+                                <div style={{ height: '200px', overflow: 'hidden', borderRadius: '16px 16px 0 0' }}>
+                                    <img src={d.img} alt={d.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
+                                        onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
+                                        onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+                                    />
+                                </div>
+                                <div style={{ padding: '20px 20px 22px' }}>
+                                    <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#6B7A99', fontSize: '11px', fontWeight: 600, borderRadius: '6px', padding: '3px 10px', marginBottom: '12px', letterSpacing: '0.02em' }}>{d.class}</div>
+                                    <div style={{ fontSize: '20px', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em', marginBottom: '4px' }}>{d.name}</div>
+                                    <div style={{ fontSize: '13px', color: '#6B7A99', marginBottom: '16px' }}>{d.route}</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <div>
+                                            <div style={{ fontSize: '22px', fontWeight: 800, color: '#2A60C2', letterSpacing: '-0.02em' }}>{d.miles} pts</div>
+                                            <div style={{ fontSize: '12px', color: '#A0AECB', marginTop: '2px' }}>ou {d.price}</div>
+                                        </div>
+                                        <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#EEF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'background 0.2s' }}
+                                            onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = '#2A60C2')}
+                                            onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '#EEF2F8')}
+                                        >
+                                            <ArrowRight size={16} color="#2A60C2" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ████ 7. PLANOS ████ */}
+            <section id="planos" style={{ padding: '100px 60px', background: '#fff' }}>
                 <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
                     <div style={{ textAlign: 'center', marginBottom: '64px' }}>
                         <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '16px' }}>Planos</div>
