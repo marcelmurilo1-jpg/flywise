@@ -3,16 +3,17 @@ import { Search, Tag, Wallet, Plane, User, Settings, LogOut } from 'lucide-react
 import { useAuth } from '@/contexts/AuthContext'
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ExpandableTabs } from '@/components/ui/expandable-tabs'
 
 interface HeaderProps {
     variant?: 'landing' | 'app'
 }
 
 const NAV_ITEMS = [
-    { id: 'search', to: '/home', icon: <Search size={18} strokeWidth={2.5} />, label: 'Buscar' },
-    { id: 'promotions', to: '/promotions', icon: <Tag size={18} strokeWidth={2.5} />, label: 'Promoções' },
-    { id: 'wallet', to: '/wallet', icon: <Wallet size={18} strokeWidth={2.5} />, label: 'Carteira' },
-    { id: 'saved', to: '/saved-strategies', icon: <Plane size={18} strokeWidth={2.5} />, label: 'Estratégias' },
+    { title: 'Buscar', icon: Search, to: '/home' },
+    { title: 'Promoções', icon: Tag, to: '/promotions' },
+    { title: 'Carteira', icon: Wallet, to: '/wallet' },
+    { title: 'Estratégias', icon: Plane, to: '/saved-strategies' },
 ]
 
 export function Header({ variant = 'app' }: HeaderProps) {
@@ -21,6 +22,10 @@ export function Header({ variant = 'app' }: HeaderProps) {
     const location = useLocation()
     const [userMenuOpen, setUserMenuOpen] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
+
+    const activeIndex = NAV_ITEMS.findIndex(item =>
+        location.pathname.startsWith(item.to)
+    )
 
     // Fechar menu ao clicar fora
     useEffect(() => {
@@ -53,43 +58,18 @@ export function Header({ variant = 'app' }: HeaderProps) {
                     <img src="/logo.png" alt="FlyWise" style={{ height: '96px', objectFit: 'contain' }} />
                 </Link>
 
+
                 {/* Center: Navigation Icons */}
                 {user && variant === 'app' ? (
-                    <nav style={{
-                        display: 'flex', alignItems: 'center', gap: '12px',
-                        justifySelf: 'center'
-                    }}>
-                        {NAV_ITEMS.map((item) => {
-                            const isActive = location.pathname.startsWith(item.to)
-                            return (
-                                <Link
-                                    key={item.id}
-                                    to={item.to}
-                                    title={item.label}
-                                    style={{
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        width: '42px', height: '42px', borderRadius: '12px',
-                                        textDecoration: 'none', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                        background: 'var(--bg-white)',
-                                        color: isActive ? 'var(--text-dark)' : 'var(--text-muted)',
-                                        boxShadow: '0 2px 8px rgba(14,42,85,0.06)',
-                                        border: isActive ? '1.5px solid var(--border-light)' : '1px solid var(--border-light)',
-                                    }}
-                                    onMouseEnter={e => {
-                                        e.currentTarget.style.color = 'var(--text-body)'
-                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(14,42,85,0.1)'
-                                    }}
-                                    onMouseLeave={e => {
-                                        e.currentTarget.style.color = isActive ? 'var(--text-dark)' : 'var(--text-muted)'
-                                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(14,42,85,0.06)'
-                                    }}
-                                >
-                                    {item.icon}
-                                </Link>
-                            )
-                        })}
-                    </nav>
+                    <div style={{ justifySelf: 'center' }}>
+                        <ExpandableTabs
+                            tabs={NAV_ITEMS}
+                            activeIndex={activeIndex}
+                            onSelect={(i) => navigate(NAV_ITEMS[i].to)}
+                        />
+                    </div>
                 ) : <div />}
+
 
                 {/* Right: User Menu */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
