@@ -11,6 +11,7 @@ import { AirportInput } from '@/components/AirportInput'
 import { DateRangePicker } from '@/components/DateRangePicker'
 import { InteractiveGlobe } from '@/components/ui/interactive-globe'
 import confetti from 'canvas-confetti'
+import NumberFlow from '@number-flow/react'
 
 
 // ─── Dados ───────────────────────────────────────────────────────────────────
@@ -36,17 +37,23 @@ const STATS = [
 
 const PLANS = [
     {
-        name: 'Básico', price: 'Grátis', priceAnual: 'Grátis', period: '', featured: false,
+        name: 'Básico', price: 'Grátis', priceAnual: 'Grátis',
+        priceVal: null as number | null, priceAnualVal: null as number | null,
+        period: '', featured: false,
         desc: 'Para começar sua jornada com milhas.',
         features: ['5 análises por mês', 'Comparador básico', 'Relatórios simples', 'Suporte por e-mail'],
     },
     {
-        name: 'Pro', price: 'R$ 49', priceAnual: 'R$ 32', period: '/mês', featured: true,
+        name: 'Pro', price: 'R$ 49', priceAnual: 'R$ 32',
+        priceVal: 49, priceAnualVal: 32,
+        period: '/mês', featured: true,
         desc: 'Para viajantes frequentes e estratégicos.',
         features: ['Análises ilimitadas', 'CPM em tempo real', 'Alertas de promoções', 'Relatórios avançados', 'Suporte prioritário'],
     },
     {
-        name: 'Elite', price: 'R$ 149', priceAnual: 'R$ 97', period: '/mês', featured: false,
+        name: 'Elite', price: 'R$ 149', priceAnual: 'R$ 97',
+        priceVal: 149, priceAnualVal: 97,
+        period: '/mês', featured: false,
         desc: 'Para agências e power users.',
         features: ['Tudo do Pro', 'Multi-usuário (5 contas)', 'API de acesso', 'Relatórios white-label', 'Gerente de conta'],
     },
@@ -304,48 +311,6 @@ function SearchPill() {
                 )}
             </AnimatePresence>
         </div>
-    )
-}
-
-
-
-// ─── Rolling Price ─────────────────────────────────────────────────────────────
-function RollingChar({ char, color, delay = 0 }: { char: string; color: string; delay?: number }) {
-    return (
-        <div style={{ overflow: 'hidden', display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>
-            <AnimatePresence mode="popLayout" initial={false}>
-                <motion.span
-                    key={char}
-                    initial={{ y: '-120%', opacity: 0, filter: 'blur(2px)' }}
-                    animate={{ y: '0%', opacity: 1, filter: 'blur(0px)' }}
-                    exit={{ y: '120%', opacity: 0, filter: 'blur(2px)' }}
-                    transition={{
-                        type: 'spring',
-                        stiffness: 80,
-                        damping: 14,
-                        delay,
-                    }}
-                    style={{ display: 'inline-block', color }}
-                >
-                    {char}
-                </motion.span>
-            </AnimatePresence>
-        </div>
-    )
-}
-
-function RollingPrice({ price, featured }: { price: string; featured: boolean }) {
-    const color = featured ? '#4A90E2' : '#0E2A55'
-    return (
-        <span style={{
-            fontSize: '42px', fontWeight: 900,
-            letterSpacing: '-0.04em', lineHeight: 1,
-            display: 'inline-flex', alignItems: 'baseline',
-        }}>
-            {price.split('').map((ch, i) => (
-                <RollingChar key={i} char={ch} color={color} delay={i * 0.04} />
-            ))}
-        </span>
     )
 }
 
@@ -773,7 +738,6 @@ export default function Landing() {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', alignItems: 'start' }}>
                         {PLANS.map((plan, i) => {
-                            const displayPrice = billing === 'anual' ? plan.priceAnual : plan.price
                             return (
                                 <motion.div key={plan.name} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.1 }}
                                     style={{
@@ -789,7 +753,25 @@ export default function Landing() {
                                     )}
                                     <div style={{ marginBottom: '8px', fontSize: '13px', fontWeight: 700, color: plan.featured ? 'rgba(255,255,255,0.6)' : '#6B7A99', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{plan.name}</div>
                                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '8px', minHeight: '52px' }}>
-                                        <RollingPrice price={displayPrice} featured={plan.featured} />
+                                        {plan.priceVal !== null ? (
+                                            <>
+                                                <span style={{ fontSize: '42px', fontWeight: 900, color: plan.featured ? '#4A90E2' : '#0E2A55', letterSpacing: '-0.04em', lineHeight: 1 }}>R$&nbsp;</span>
+                                                <NumberFlow
+                                                    value={billing === 'anual' ? plan.priceAnualVal! : plan.priceVal}
+                                                    transformTiming={{ duration: 700, easing: 'ease-out' }}
+                                                    spinTiming={{ duration: 700, easing: 'ease-out' }}
+                                                    opacityTiming={{ duration: 350, easing: 'ease-out' }}
+                                                    style={{
+                                                        fontSize: '42px', fontWeight: 900,
+                                                        color: plan.featured ? '#4A90E2' : '#0E2A55',
+                                                        letterSpacing: '-0.04em', lineHeight: 1,
+                                                        fontVariantNumeric: 'tabular-nums',
+                                                    }}
+                                                />
+                                            </>
+                                        ) : (
+                                            <span style={{ fontSize: '42px', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.04em', lineHeight: 1 }}>Grátis</span>
+                                        )}
                                         {plan.period && <span style={{ fontSize: '14px', color: plan.featured ? 'rgba(255,255,255,0.5)' : '#6B7A99' }}>{plan.period}</span>}
                                     </div>
                                     {billing === 'anual' && plan.price !== 'Grátis' && (
