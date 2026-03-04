@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -10,6 +10,7 @@ import { PromotionsSection } from '@/components/PromotionsSection'
 import { AirportInput } from '@/components/AirportInput'
 import { DateRangePicker } from '@/components/DateRangePicker'
 import { InteractiveGlobe } from '@/components/ui/interactive-globe'
+import confetti from 'canvas-confetti'
 
 
 // ─── Dados ───────────────────────────────────────────────────────────────────
@@ -35,17 +36,17 @@ const STATS = [
 
 const PLANS = [
     {
-        name: 'Básico', price: 'Grátis', period: '', featured: false,
+        name: 'Básico', price: 'Grátis', priceAnual: 'Grátis', period: '', featured: false,
         desc: 'Para começar sua jornada com milhas.',
         features: ['5 análises por mês', 'Comparador básico', 'Relatórios simples', 'Suporte por e-mail'],
     },
     {
-        name: 'Pro', price: 'R$ 49', period: '/mês', featured: true,
+        name: 'Pro', price: 'R$ 49', priceAnual: 'R$ 32', period: '/mês', featured: true,
         desc: 'Para viajantes frequentes e estratégicos.',
         features: ['Análises ilimitadas', 'CPM em tempo real', 'Alertas de promoções', 'Relatórios avançados', 'Suporte prioritário'],
     },
     {
-        name: 'Elite', price: 'R$ 149', period: '/mês', featured: false,
+        name: 'Elite', price: 'R$ 149', priceAnual: 'R$ 97', period: '/mês', featured: false,
         desc: 'Para agências e power users.',
         features: ['Tudo do Pro', 'Multi-usuário (5 contas)', 'API de acesso', 'Relatórios white-label', 'Gerente de conta'],
     },
@@ -307,6 +308,48 @@ function SearchPill() {
 }
 
 
+
+// ─── Rolling Price ─────────────────────────────────────────────────────────────
+function RollingChar({ char, color, delay = 0 }: { char: string; color: string; delay?: number }) {
+    return (
+        <div style={{ overflow: 'hidden', display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>
+            <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                    key={char}
+                    initial={{ y: '-120%', opacity: 0, filter: 'blur(2px)' }}
+                    animate={{ y: '0%', opacity: 1, filter: 'blur(0px)' }}
+                    exit={{ y: '120%', opacity: 0, filter: 'blur(2px)' }}
+                    transition={{
+                        type: 'spring',
+                        stiffness: 80,
+                        damping: 14,
+                        delay,
+                    }}
+                    style={{ display: 'inline-block', color }}
+                >
+                    {char}
+                </motion.span>
+            </AnimatePresence>
+        </div>
+    )
+}
+
+function RollingPrice({ price, featured }: { price: string; featured: boolean }) {
+    const color = featured ? '#4A90E2' : '#0E2A55'
+    return (
+        <span style={{
+            fontSize: '42px', fontWeight: 900,
+            letterSpacing: '-0.04em', lineHeight: 1,
+            display: 'inline-flex', alignItems: 'baseline',
+        }}>
+            {price.split('').map((ch, i) => (
+                <RollingChar key={i} char={ch} color={color} delay={i * 0.04} />
+            ))}
+        </span>
+    )
+}
+
+
 // ─── FAQ Item ─────────────────────────────────────────────────────────────────
 function FaqItem({ q, a }: { q: string; a: string }) {
     const [open, setOpen] = useState(false)
@@ -337,8 +380,24 @@ function FaqItem({ q, a }: { q: string; a: string }) {
     )
 }
 
+
 // ─── Landing Page Principal ───────────────────────────────────────────────────
 export default function Landing() {
+    const [billing, setBilling] = useState<'mensal' | 'anual'>('mensal')
+
+    const switchToAnual = useCallback(() => {
+        if (billing === 'mensal') {
+            setBilling('anual')
+            confetti({
+                particleCount: 120,
+                spread: 80,
+                origin: { y: 0.55 },
+                colors: ['#2A60C2', '#4A90E2', '#67e8f9', '#fff'],
+            })
+        } else {
+            setBilling('mensal')
+        }
+    }, [billing])
 
     return (
         <div style={{ minHeight: '100vh', background: '#fff', fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -662,51 +721,101 @@ export default function Landing() {
             {/* ████ 7. PLANOS ████ */}
             <section id="planos" style={{ padding: '100px 60px', background: '#fff' }}>
                 <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-                    <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+                    <div style={{ textAlign: 'center', marginBottom: '48px' }}>
                         <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '16px' }}>Planos</div>
                         <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em', margin: '0 0 14px' }}>Para Viajantes Estratégicos</h2>
-                        <p style={{ color: '#6B7A99', fontSize: '17px', maxWidth: '440px', margin: '0 auto', lineHeight: 1.65 }}>Escolha o plano que melhor se adapta ao seu ritmo de viagem.</p>
+                        <p style={{ color: '#6B7A99', fontSize: '17px', maxWidth: '440px', margin: '0 auto 32px', lineHeight: 1.65 }}>Escolha o plano que melhor se adapta ao seu ritmo de viagem.</p>
+
+                        {/* ── Billing toggle ── */}
+                        <div style={{ display: 'inline-flex', alignItems: 'center', background: '#F1F5F9', borderRadius: '999px', padding: '5px', gap: '2px', position: 'relative' }}>
+                            {(['mensal', 'anual'] as const).map(freq => (
+                                <button
+                                    key={freq}
+                                    onClick={freq === 'anual' ? switchToAnual : () => setBilling('mensal')}
+                                    style={{
+                                        position: 'relative', padding: '8px 20px', borderRadius: '999px',
+                                        border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                                        fontSize: '13px', fontWeight: 700, transition: 'color 0.2s',
+                                        background: 'transparent',
+                                        color: billing === freq ? '#0E2A55' : '#94A3B8',
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        zIndex: 1,
+                                    }}
+                                >
+                                    {billing === freq && (
+                                        <motion.span
+                                            layoutId="billing-pill"
+                                            transition={{ type: 'spring', duration: 0.4, bounce: 0.2 }}
+                                            style={{
+                                                position: 'absolute', inset: 0, borderRadius: '999px',
+                                                background: '#fff',
+                                                boxShadow: '0 1px 6px rgba(14,42,85,0.10)',
+                                                zIndex: -1,
+                                            }}
+                                        />
+                                    )}
+                                    <span style={{ position: 'relative', zIndex: 1, textTransform: 'capitalize' }}>{freq}</span>
+                                    {freq === 'anual' && (
+                                        <span style={{
+                                            position: 'relative', zIndex: 1,
+                                            background: billing === 'anual' ? '#EEF2F8' : '#2A60C2',
+                                            color: billing === 'anual' ? '#2A60C2' : '#fff',
+                                            fontSize: '10px', fontWeight: 800,
+                                            padding: '2px 8px', borderRadius: '999px',
+                                            letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                                            transition: 'background 0.3s, color 0.3s',
+                                        }}>Economize 35%</span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', alignItems: 'start' }}>
-                        {PLANS.map((plan, i) => (
-                            <motion.div key={plan.name} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.1 }}
-                                style={{
-                                    background: plan.featured ? '#0E2A55' : '#fff',
-                                    borderRadius: '20px',
-                                    padding: '36px 32px',
-                                    border: plan.featured ? '2px solid #4A90E2' : '1px solid #E2EAF5',
-                                    boxShadow: plan.featured ? '0 16px 48px rgba(14,42,85,0.25)' : '0 4px 16px rgba(14,42,85,0.06)',
-                                    position: 'relative',
-                                }}>
-                                {plan.featured && (
-                                    <div style={{ position: 'absolute', top: '-14px', left: '50%', transform: 'translateX(-50%)', background: '#2A60C2', color: '#fff', fontSize: '11px', fontWeight: 800, padding: '5px 16px', borderRadius: '999px', whiteSpace: 'nowrap', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Mais Popular</div>
-                                )}
-                                <div style={{ marginBottom: '8px', fontSize: '13px', fontWeight: 700, color: plan.featured ? 'rgba(255,255,255,0.6)' : '#6B7A99', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{plan.name}</div>
-                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '8px' }}>
-                                    <span style={{ fontSize: '42px', fontWeight: 900, color: plan.featured ? '#4A90E2' : '#0E2A55', letterSpacing: '-0.04em', lineHeight: 1 }}>{plan.price}</span>
-                                    {plan.period && <span style={{ fontSize: '14px', color: plan.featured ? 'rgba(255,255,255,0.5)' : '#6B7A99' }}>{plan.period}</span>}
-                                </div>
-                                <p style={{ fontSize: '14px', color: plan.featured ? 'rgba(255,255,255,0.65)' : '#6B7A99', marginBottom: '28px', lineHeight: 1.6 }}>{plan.desc}</p>
-                                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                    {plan.features.map(f => (
-                                        <li key={f} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: plan.featured ? 'rgba(255,255,255,0.85)' : '#2C3E6B', fontWeight: 500 }}>
-                                            <CheckCircle2 size={16} color={plan.featured ? '#4A90E2' : '#2A60C2'} />
-                                            {f}
-                                        </li>
-                                    ))}
-                                </ul>
-                                <Link to="/auth?tab=signup"
+                        {PLANS.map((plan, i) => {
+                            const displayPrice = billing === 'anual' ? plan.priceAnual : plan.price
+                            return (
+                                <motion.div key={plan.name} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.1 }}
                                     style={{
-                                        display: 'block', textAlign: 'center', padding: '14px', borderRadius: '12px', textDecoration: 'none', fontWeight: 700, fontSize: '14px', transition: 'all 0.2s',
-                                        background: plan.featured ? '#2A60C2' : 'transparent',
-                                        color: plan.featured ? '#fff' : '#2A60C2',
-                                        border: plan.featured ? 'none' : '2px solid #2A60C2',
-                                        boxShadow: plan.featured ? '0 4px 16px rgba(42,96,194,0.40)' : 'none',
-                                    }}
-                                >{plan.price === 'Grátis' ? 'Começar grátis' : 'Assinar agora'}</Link>
-                            </motion.div>
-                        ))}
+                                        background: plan.featured ? '#0E2A55' : '#fff',
+                                        borderRadius: '20px',
+                                        padding: '36px 32px',
+                                        border: plan.featured ? '2px solid #4A90E2' : '1px solid #E2EAF5',
+                                        boxShadow: plan.featured ? '0 16px 48px rgba(14,42,85,0.25)' : '0 4px 16px rgba(14,42,85,0.06)',
+                                        position: 'relative',
+                                    }}>
+                                    {plan.featured && (
+                                        <div style={{ position: 'absolute', top: '-14px', left: '50%', transform: 'translateX(-50%)', background: '#2A60C2', color: '#fff', fontSize: '11px', fontWeight: 800, padding: '5px 16px', borderRadius: '999px', whiteSpace: 'nowrap', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Mais Popular</div>
+                                    )}
+                                    <div style={{ marginBottom: '8px', fontSize: '13px', fontWeight: 700, color: plan.featured ? 'rgba(255,255,255,0.6)' : '#6B7A99', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{plan.name}</div>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '8px', minHeight: '52px' }}>
+                                        <RollingPrice price={displayPrice} featured={plan.featured} />
+                                        {plan.period && <span style={{ fontSize: '14px', color: plan.featured ? 'rgba(255,255,255,0.5)' : '#6B7A99' }}>{plan.period}</span>}
+                                    </div>
+                                    {billing === 'anual' && plan.price !== 'Grátis' && (
+                                        <div style={{ fontSize: '12px', color: plan.featured ? 'rgba(255,255,255,0.45)' : '#A0AECB', marginBottom: '4px', textDecoration: 'line-through' }}>{plan.price}/mês</div>
+                                    )}
+                                    <p style={{ fontSize: '14px', color: plan.featured ? 'rgba(255,255,255,0.65)' : '#6B7A99', marginBottom: '28px', lineHeight: 1.6 }}>{plan.desc}</p>
+                                    <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        {plan.features.map(f => (
+                                            <li key={f} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: plan.featured ? 'rgba(255,255,255,0.85)' : '#2C3E6B', fontWeight: 500 }}>
+                                                <CheckCircle2 size={16} color={plan.featured ? '#4A90E2' : '#2A60C2'} />
+                                                {f}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    <Link to="/auth?tab=signup"
+                                        style={{
+                                            display: 'block', textAlign: 'center', padding: '14px', borderRadius: '12px', textDecoration: 'none', fontWeight: 700, fontSize: '14px', transition: 'all 0.2s',
+                                            background: plan.featured ? '#2A60C2' : 'transparent',
+                                            color: plan.featured ? '#fff' : '#2A60C2',
+                                            border: plan.featured ? 'none' : '2px solid #2A60C2',
+                                            boxShadow: plan.featured ? '0 4px 16px rgba(42,96,194,0.40)' : 'none',
+                                        }}
+                                    >{plan.price === 'Grátis' ? 'Começar grátis' : 'Assinar agora'}</Link>
+                                </motion.div>
+                            )
+                        })}
                     </div>
                 </div>
             </section>
