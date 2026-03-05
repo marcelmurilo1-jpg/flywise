@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -347,6 +347,16 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 export default function Landing() {
     const [billing, setBilling] = useState<'mensal' | 'anual'>('mensal')
 
+    // ── Hero animated words ──
+    const heroTitles = useMemo(() => ['Inteligência.', 'Economia.', 'Estratégia.', 'Liberdade.'], [])
+    const [titleNumber, setTitleNumber] = useState(0)
+    useEffect(() => {
+        const id = setTimeout(() => {
+            setTitleNumber(n => (n === heroTitles.length - 1 ? 0 : n + 1))
+        }, 2500)
+        return () => clearTimeout(id)
+    }, [titleNumber, heroTitles])
+
     const switchToAnual = useCallback(() => {
         if (billing === 'mensal') {
             setBilling('anual')
@@ -453,8 +463,35 @@ export default function Landing() {
 
                         <h1 style={{ fontSize: 'clamp(36px, 4.5vw, 62px)', fontWeight: 900, color: '#fff', lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: '20px' }}>
                             Viaje com Mais<br />
-                            <span style={{ background: 'linear-gradient(90deg, #4A90E2, #67e8f9)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Inteligência.</span>
+                            <span style={{ position: 'relative', display: 'inline-block', overflow: 'hidden', paddingBottom: '14px', marginBottom: '-14px' }}>
+                                {/* Spacer invisível — define a largura do container */}
+                                <span style={{ visibility: 'hidden', pointerEvents: 'none', display: 'block' }}>
+                                    Inteligência.
+                                </span>
+                                <AnimatePresence mode="popLayout" initial={false}>
+                                    <motion.span
+                                        key={titleNumber}
+                                        initial={{ opacity: 0, y: 40 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -40 }}
+                                        transition={{ type: 'spring', stiffness: 220, damping: 20 }}
+                                        style={{
+                                            position: 'absolute',
+                                            left: 0,
+                                            bottom: 14,
+                                            background: 'linear-gradient(90deg, #4A90E2, #67e8f9)',
+                                            WebkitBackgroundClip: 'text',
+                                            WebkitTextFillColor: 'transparent',
+                                            whiteSpace: 'nowrap',
+                                        }}
+                                    >
+                                        {heroTitles[titleNumber]}
+                                    </motion.span>
+                                </AnimatePresence>
+                            </span>
                         </h1>
+
+
 
                         <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '16px', lineHeight: 1.65, marginBottom: '40px', maxWidth: '440px' }}>
                             Compare milhas e dinheiro em tempo real. Nossa IA gera sua estratégia de resgate passo a passo.
