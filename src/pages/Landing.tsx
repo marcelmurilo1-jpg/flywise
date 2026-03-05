@@ -459,22 +459,6 @@ export default function Landing() {
                             Compare milhas e dinheiro em tempo real. Nossa IA gera sua estratégia de resgate passo a passo.
                         </p>
 
-                        {/* Stats row */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-                            {[
-                                { val: '40+', label: 'Programas' },
-                                { val: '12k+', label: 'Usuários' },
-                                { val: '98%', label: 'Satisfação' },
-                            ].map((s, i) => (
-                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: i > 0 ? '32px' : '0' }}>
-                                    {i > 0 && <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.12)' }} />}
-                                    <div>
-                                        <div style={{ fontSize: '22px', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em' }}>{s.val}</div>
-                                        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>{s.label}</div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
                     </motion.div>
 
                     {/* Painel direito — Globo */}
@@ -491,24 +475,26 @@ export default function Landing() {
             </section>
 
             {/* SearchPill — floating between hero and destinos */}
-            <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.35 }}
-                style={{
-                    position: 'relative',
-                    zIndex: 20,
-                    width: 'calc(100% - 80px)',
-                    maxWidth: '960px',
-                    margin: '-100px auto 0',
-                    padding: '0',
-                }}
-            >
-                <SearchPill />
-            </motion.div>
+            <div style={{ background: '#F7F9FC' }}>
+                <motion.div
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.35 }}
+                    style={{
+                        position: 'relative',
+                        zIndex: 20,
+                        width: 'calc(100% - 80px)',
+                        maxWidth: '960px',
+                        margin: '-100px auto 0',
+                        padding: '0',
+                    }}
+                >
+                    <SearchPill />
+                </motion.div>
+            </div>
 
             {/* ████ 2. FLYWISE NÃO É APENAS UM BUSCADOR ████ */}
-            <section id="sobre" style={{ padding: '100px 60px', background: '#F7F9FC', overflow: 'hidden' }}>
+            <section id="sobre" style={{ padding: '180px 60px 100px', background: '#F7F9FC', overflow: 'hidden' }}>
                 <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
                     <div>
                         <h2 style={{ fontSize: 'clamp(36px, 5vw, 64px)', fontWeight: 900, lineHeight: 1.0, letterSpacing: '-0.04em', margin: '0 0 32px' }}>
@@ -817,13 +803,10 @@ export default function Landing() {
                 <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '48px', marginBottom: '60px' }}>
                         <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                                <svg width="30" height="30" viewBox="0 0 48 48" fill="none">
-                                    <rect x="2" y="2" width="44" height="44" rx="12" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
-                                    <path d="M12 30 Q18 18 24 24 Q30 30 36 18" stroke="#4A90E2" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-                                    <path d="M28 10 L38 6 L34 16" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                                </svg>
-                                <span style={{ fontWeight: 800, fontSize: '18px', color: '#fff', letterSpacing: '-0.04em' }}>FlyWise</span>
+                            <div style={{ marginBottom: '16px' }}>
+                                <a href="#" style={{ display: 'inline-block', textDecoration: 'none', marginLeft: '-8px' }}>
+                                    <img src="/logoLP.png" alt="FlyWise" style={{ height: '72px', display: 'block' }} />
+                                </a>
                             </div>
                             <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '14px', lineHeight: 1.7, maxWidth: '240px' }}>Inteligência estratégica para milhas e passagens aéreas.</p>
                             <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
@@ -855,9 +838,6 @@ export default function Landing() {
                     </div>
                     <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                         <span style={{ color: 'rgba(255,255,255,0.30)', fontSize: '13px' }}>© 2026 FlyWise. Todos os direitos reservados.</span>
-                        <a href="#" style={{ color: '#4A90E2', fontSize: '13px', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            Análise estratégica ✦
-                        </a>
                     </div>
                 </div>
             </footer>

@@ -14,28 +14,31 @@ interface GlobeProps {
 
 const DEFAULT_MARKERS = [
   { lat: -23.55, lng: -46.63, label: "São Paulo" },
-  { lat: -22.91, lng: -43.17, label: "Rio de Janeiro" },
-  { lat: 40.71, lng: -74.01, label: "New York" },
-  { lat: 51.51, lng: -0.13, label: "London" },
-  { lat: 48.85, lng: 2.35, label: "Paris" },
-  { lat: 35.68, lng: 139.69, label: "Tokyo" },
+  { lat: 40.71,  lng: -74.01, label: "New York" },
+  { lat: 34.05,  lng: -118.24, label: "Los Angeles" },
+  { lat: 51.51,  lng: -0.13,  label: "London" },
+  { lat: 25.20,  lng: 55.27,  label: "Dubai" },
+  { lat: 19.08,  lng: 72.88,  label: "Mumbai" },
+  { lat: 35.68,  lng: 139.69, label: "Tokyo" },
   { lat: -33.87, lng: 151.21, label: "Sydney" },
-  { lat: 1.35, lng: 103.82, label: "Singapore" },
-  { lat: 19.43, lng: -99.13, label: "Mexico City" },
-  { lat: 25.20, lng: 55.27, label: "Dubai" },
+  { lat: -33.92, lng: 18.42,  label: "Cape Town" },
+  { lat: -1.29,  lng: 36.82,  label: "Nairobi" },
 ];
 
 const DEFAULT_CONNECTIONS: { from: [number, number]; to: [number, number] }[] = [
-  { from: [-23.55, -46.63], to: [40.71, -74.01] },
-  { from: [-23.55, -46.63], to: [48.85, 2.35] },
-  { from: [-23.55, -46.63], to: [51.51, -0.13] },
-  { from: [-23.55, -46.63], to: [25.20, 55.27] },
-  { from: [40.71, -74.01], to: [51.51, -0.13] },
-  { from: [51.51, -0.13], to: [35.68, 139.69] },
-  { from: [51.51, -0.13], to: [25.20, 55.27] },
-  { from: [35.68, 139.69], to: [-33.87, 151.21] },
-  { from: [1.35, 103.82], to: [-33.87, 151.21] },
-  { from: [25.20, 55.27], to: [1.35, 103.82] },
+  { from: [-23.55, -46.63], to: [40.71,  -74.01] },  // SP → NY
+  { from: [-23.55, -46.63], to: [51.51,  -0.13]  },  // SP → London
+  { from: [-23.55, -46.63], to: [-33.92, 18.42]  },  // SP → Cape Town
+  { from: [40.71,  -74.01], to: [51.51,  -0.13]  },  // NY → London
+  { from: [34.05, -118.24], to: [40.71,  -74.01] },  // LA → NY
+  { from: [34.05, -118.24], to: [35.68,  139.69] },  // LA → Tokyo
+  { from: [51.51,  -0.13],  to: [25.20,  55.27]  },  // London → Dubai
+  { from: [51.51,  -0.13],  to: [-33.92, 18.42]  },  // London → Cape Town
+  { from: [25.20,  55.27],  to: [19.08,  72.88]  },  // Dubai → Mumbai
+  { from: [25.20,  55.27],  to: [-1.29,  36.82]  },  // Dubai → Nairobi
+  { from: [19.08,  72.88],  to: [35.68,  139.69] },  // Mumbai → Tokyo
+  { from: [35.68,  139.69], to: [-33.87, 151.21] },  // Tokyo → Sydney
+  { from: [-1.29,  36.82],  to: [-33.92, 18.42]  },  // Nairobi → Cape Town
 ];
 
 function latLngToXYZ(lat: number, lng: number, radius: number): [number, number, number] {
@@ -63,6 +66,22 @@ function rotateX(x: number, y: number, z: number, angle: number): [number, numbe
 function project(x: number, y: number, z: number, cx: number, cy: number, fov: number): [number, number, number] {
   const scale = fov / (fov + z);
   return [x * scale + cx, y * scale + cy, z];
+}
+
+function slerp(
+  p1: [number, number, number],
+  p2: [number, number, number],
+  t: number
+): [number, number, number] {
+  const dot = Math.max(-1, Math.min(1, p1[0]*p2[0] + p1[1]*p2[1] + p1[2]*p2[2]));
+  const omega = Math.acos(dot);
+  if (Math.abs(omega) < 0.001) {
+    return [p1[0] + t*(p2[0]-p1[0]), p1[1] + t*(p2[1]-p1[1]), p1[2] + t*(p2[2]-p1[2])];
+  }
+  const sinO = Math.sin(omega);
+  const s1 = Math.sin((1 - t) * omega) / sinO;
+  const s2 = Math.sin(t * omega) / sinO;
+  return [s1*p1[0] + s2*p2[0], s1*p1[1] + s2*p2[1], s1*p1[2] + s2*p2[2]];
 }
 
 export function InteractiveGlobe({
@@ -165,44 +184,56 @@ export function InteractiveGlobe({
       ctx.fill();
     }
 
-    // Arcs
+    // Arcs — great circle interpolation
+    const STEPS = 40;
     for (const conn of connections) {
       const [lat1, lng1] = conn.from;
       const [lat2, lng2] = conn.to;
-      let [x1, y1, z1] = latLngToXYZ(lat1, lng1, radius);
-      let [x2, y2, z2] = latLngToXYZ(lat2, lng2, radius);
-      [x1, y1, z1] = rotateX(x1, y1, z1, rx);
-      [x1, y1, z1] = rotateY(x1, y1, z1, ry);
-      [x2, y2, z2] = rotateX(x2, y2, z2, rx);
-      [x2, y2, z2] = rotateY(x2, y2, z2, ry);
-      if (z1 > radius * 0.3 && z2 > radius * 0.3) continue;
-      const [sx1, sy1] = project(x1, y1, z1, cx, cy, fov);
-      const [sx2, sy2] = project(x2, y2, z2, cx, cy, fov);
-      const midX = (x1 + x2) / 2;
-      const midY = (y1 + y2) / 2;
-      const midZ = (z1 + z2) / 2;
-      const midLen = Math.sqrt(midX * midX + midY * midY + midZ * midZ);
-      const arcHeight = radius * 1.25;
-      const [scx, scy] = project(
-        (midX / midLen) * arcHeight,
-        (midY / midLen) * arcHeight,
-        (midZ / midLen) * arcHeight,
-        cx, cy, fov
-      );
+      const r = radius;
+
+      // Unit vectors on sphere surface
+      const raw1 = latLngToXYZ(lat1, lng1, 1);
+      const raw2 = latLngToXYZ(lat2, lng2, 1);
+
+      // Build projected points along great circle
+      const pts: [number, number, number][] = [];
+      for (let i = 0; i <= STEPS; i++) {
+        const t = i / STEPS;
+        const [ux, uy, uz] = slerp(raw1, raw2, t);
+        let x = ux * r, y = uy * r, z = uz * r;
+        [x, y, z] = rotateX(x, y, z, rx);
+        [x, y, z] = rotateY(x, y, z, ry);
+        pts.push(project(x, y, z, cx, cy, fov));
+      }
+
+      // Only draw if at least one point is facing front
+      const anyVisible = pts.some(([,, z]) => z <= radius * 0.3);
+      if (!anyVisible) continue;
+
       ctx.beginPath();
-      ctx.moveTo(sx1, sy1);
-      ctx.quadraticCurveTo(scx, scy, sx2, sy2);
+      let started = false;
+      for (const [sx, sy, sz] of pts) {
+        if (sz > radius * 0.3) { started = false; continue; }
+        if (!started) { ctx.moveTo(sx, sy); started = true; }
+        else ctx.lineTo(sx, sy);
+      }
       ctx.strokeStyle = arcColor;
       ctx.lineWidth = 1.2;
       ctx.stroke();
-      // Traveling dot
+
+      // Traveling dot along great circle
       const t = (Math.sin(time * 1.2 + lat1 * 0.1) + 1) / 2;
-      const tx = (1 - t) * (1 - t) * sx1 + 2 * (1 - t) * t * scx + t * t * sx2;
-      const ty = (1 - t) * (1 - t) * sy1 + 2 * (1 - t) * t * scy + t * t * sy2;
-      ctx.beginPath();
-      ctx.arc(tx, ty, 2, 0, Math.PI * 2);
-      ctx.fillStyle = markerColor;
-      ctx.fill();
+      const [ux, uy, uz] = slerp(raw1, raw2, t);
+      let tx = ux * r, ty2 = uy * r, tz = uz * r;
+      [tx, ty2, tz] = rotateX(tx, ty2, tz, rx);
+      [tx, ty2, tz] = rotateY(tx, ty2, tz, ry);
+      if (tz <= radius * 0.3) {
+        const [dotX, dotY] = project(tx, ty2, tz, cx, cy, fov);
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, 2, 0, Math.PI * 2);
+        ctx.fillStyle = markerColor;
+        ctx.fill();
+      }
     }
 
     // Markers
@@ -252,8 +283,8 @@ export function InteractiveGlobe({
     if (!dragRef.current.active) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
-    rotYRef.current = dragRef.current.startRotY + dx * 0.005;
-    rotXRef.current = Math.max(-1, Math.min(1, dragRef.current.startRotX + dy * 0.005));
+    rotYRef.current = dragRef.current.startRotY - dx * 0.005;
+    rotXRef.current = Math.max(-1, Math.min(1, dragRef.current.startRotX - dy * 0.005));
   }, []);
 
   const onPointerUp = useCallback(() => {
