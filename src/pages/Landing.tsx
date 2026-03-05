@@ -8,6 +8,7 @@ import {
     Info, MapPin, CreditCard, BookOpen
 } from 'lucide-react'
 import { NavBar } from '@/components/ui/tubelight-navbar'
+import { FeaturesSectionWithHoverEffects } from '@/components/ui/feature-section-with-hover-effects'
 import { PromotionsSection } from '@/components/PromotionsSection'
 import { AirportInput } from '@/components/AirportInput'
 import { DateRangePicker } from '@/components/DateRangePicker'
@@ -544,20 +545,7 @@ export default function Landing() {
                     <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em', margin: '0 0 14px' }}>Três passos para voar melhor</h2>
                     <p style={{ color: '#6B7A99', fontSize: '17px', maxWidth: '480px', margin: '0 auto', lineHeight: 1.65 }}>Sem complexidade, sem achismo. Estratégia real baseada nos seus dados.</p>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
-                    {STEPS.map((s, i) => (
-                        <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 * i }}
-                            style={{ background: '#fff', borderRadius: '20px', padding: '36px 32px', border: '1px solid #E2EAF5', boxShadow: '0 4px 16px rgba(14,42,85,0.05)', position: 'relative', overflow: 'hidden' }}>
-                            {/* Número grande decorativo */}
-                            <div style={{ position: 'absolute', top: '16px', right: '24px', fontSize: '64px', fontWeight: 900, color: '#EEF2F8', lineHeight: 1, letterSpacing: '-0.06em', userSelect: 'none' }}>{s.num}</div>
-                            <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: '#EEF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
-                                {s.icon}
-                            </div>
-                            <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#0E2A55', marginBottom: '12px', letterSpacing: '-0.02em' }}>{s.title}</h3>
-                            <p style={{ color: '#6B7A99', fontSize: '15px', lineHeight: 1.7, margin: 0 }}>{s.desc}</p>
-                        </motion.div>
-                    ))}
-                </div>
+                <FeaturesSectionWithHoverEffects features={STEPS.map(s => ({ num: s.num, title: s.title, description: s.desc, icon: s.icon }))} />
             </section>
 
             {/* ████ 4. STATS — FAIXA NAVY ████ */}

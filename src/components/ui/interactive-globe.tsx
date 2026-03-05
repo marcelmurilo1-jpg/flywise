@@ -174,9 +174,8 @@ export function InteractiveGlobe({
       x *= radius; y *= radius; z *= radius;
       [x, y, z] = rotateX(x, y, z, rx);
       [x, y, z] = rotateY(x, y, z, ry);
-      if (z > 0) continue;
       const [sx, sy] = project(x, y, z, cx, cy, fov);
-      const depthAlpha = Math.max(0.1, 1 - (z + radius) / (2 * radius));
+      const depthAlpha = Math.max(0.04, (1 - z / radius) / 2);
       const dotSize = 1 + depthAlpha * 0.8;
       ctx.beginPath();
       ctx.arc(sx, sy, dotSize, 0, Math.PI * 2);
@@ -284,7 +283,7 @@ export function InteractiveGlobe({
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
     rotYRef.current = dragRef.current.startRotY - dx * 0.005;
-    rotXRef.current = Math.max(-1, Math.min(1, dragRef.current.startRotX - dy * 0.005));
+    rotXRef.current = Math.max(-1, Math.min(1, dragRef.current.startRotX + dy * 0.005));
   }, []);
 
   const onPointerUp = useCallback(() => {
