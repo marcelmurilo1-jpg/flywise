@@ -208,10 +208,9 @@ export default function Configuracoes() {
     const [savedSection, setSavedSection] = useState<SectionId | null>(null)
 
     // Password state
-    const [currentPassword, setCurrentPassword] = useState('')
     const [newPassword, setNewPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
-    const [showPasswords, setShowPasswords] = useState({ current: false, new: false, confirm: false })
+    const [showPasswords, setShowPasswords] = useState({ new: false, confirm: false })
     const [passwordError, setPasswordError] = useState('')
 
     // Delete account state
@@ -326,7 +325,6 @@ export default function Configuracoes() {
             setPasswordError(error.message)
             return
         }
-        setCurrentPassword('')
         setNewPassword('')
         setConfirmPassword('')
         markSaved('seguranca')
