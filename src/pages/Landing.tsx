@@ -4,8 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
     Search, ArrowRight, ArrowRightLeft, Users,
     ChevronDown, CheckCircle2, BarChart3, Globe, Zap, Shield,
-    Twitter, Instagram, Linkedin, Youtube, Flame, Lock, ChevronUp
+    Twitter, Instagram, Linkedin, Youtube, Flame, Lock, ChevronUp,
+    Info, MapPin, CreditCard, BookOpen
 } from 'lucide-react'
+import { NavBar } from '@/components/ui/tubelight-navbar'
 import { PromotionsSection } from '@/components/PromotionsSection'
 import { AirportInput } from '@/components/AirportInput'
 import { DateRangePicker } from '@/components/DateRangePicker'
@@ -67,12 +69,6 @@ const FAQS = [
     { q: 'Posso cancelar a assinatura a qualquer momento?', a: 'Sim. Sem fidelidade, sem multa. Você cancela quando quiser pelo painel de configurações.' },
 ]
 
-const NAV_LINKS = [
-    { label: 'Como Funciona', href: '#como-funciona' },
-    { label: 'Destinos', href: '#destinos' },
-    { label: 'Planos', href: '#planos' },
-    { label: 'Sobre', href: '#sobre' },
-]
 
 // ─── Miles Programs (for locked teaser) ─────────────────────────────────────
 const MILES_PROGRAMS = [
@@ -395,29 +391,14 @@ export default function Landing() {
                         </Link>
 
                         {/* Nav */}
-                        <nav style={{
-                            display: 'flex', alignItems: 'center', gap: '4px',
-                            background: 'rgba(255,255,255,0.06)',
-                            backdropFilter: 'blur(16px)',
-                            WebkitBackdropFilter: 'blur(16px)',
-                            border: '1px solid rgba(255,255,255,0.10)',
-                            borderRadius: '14px',
-                            padding: '5px',
-                            justifySelf: 'center',
-                        }}>
-                            {NAV_LINKS.map(l => (
-                                <a key={l.label} href={l.href}
-                                    style={{
-                                        color: 'rgba(255,255,255,0.65)', fontSize: '13.5px', fontWeight: 500,
-                                        textDecoration: 'none', padding: '7px 16px', borderRadius: '10px',
-                                        transition: 'background 0.18s ease, color 0.18s ease',
-                                        whiteSpace: 'nowrap',
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.10)'; e.currentTarget.style.color = '#fff' }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.65)' }}
-                                >{l.label}</a>
-                            ))}
-                        </nav>
+                        <div style={{ justifySelf: 'center' }}>
+                            <NavBar items={[
+                                { name: 'Como Funciona', url: '#como-funciona', icon: BookOpen },
+                                { name: 'Destinos', url: '#destinos', icon: MapPin },
+                                { name: 'Planos', url: '#planos', icon: CreditCard },
+                                { name: 'Sobre', url: '#sobre', icon: Info },
+                            ]} />
+                        </div>
 
                         {/* CTAs */}
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifySelf: 'end' }}>
