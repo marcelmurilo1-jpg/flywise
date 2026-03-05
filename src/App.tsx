@@ -8,6 +8,8 @@ import Promotions from '@/pages/Promotions'
 import Wallet from '@/pages/Wallet'
 import SavedStrategies from '@/pages/SavedStrategies'
 import SearchWizard from '@/pages/SearchWizard'
+import Roteiro from '@/pages/Roteiro'
+import Configuracoes from '@/pages/Configuracoes'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -58,6 +60,8 @@ function AppRoutes() {
       <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
       <Route path="/saved-strategies" element={<ProtectedRoute><SavedStrategies /></ProtectedRoute>} />
       <Route path="/busca-avancada" element={<ProtectedRoute><SearchWizard /></ProtectedRoute>} />
+      <Route path="/roteiro" element={<ProtectedRoute><Roteiro /></ProtectedRoute>} />
+      <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
