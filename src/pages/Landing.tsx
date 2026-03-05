@@ -31,11 +31,34 @@ const STEPS = [
     { num: '03', icon: <Zap size={22} color="#2A60C2" />, title: 'Gere sua Estratégia', desc: 'Um plano em português claro: qual programa usar, quando transferir, como emitir. Passo a passo.' },
 ]
 
-const STATS = [
-    { value: '12k+', label: 'Usuários ativos' },
-    { value: 'R$ 4M+', label: 'Em voos estratégicos' },
-    { value: '98%', label: 'Satisfação' },
-    { value: '40+', label: 'Companhias aéreas' },
+const PROGRAMS_ROW1 = [
+    { name: 'Smiles', iata: 'G3' },
+    { name: 'TudoAzul', iata: 'AD' },
+    { name: 'Latam Pass', iata: 'LA' },
+    { name: 'American AAdvantage', iata: 'AA' },
+    { name: 'Delta SkyMiles', iata: 'DL' },
+    { name: 'United MileagePlus', iata: 'UA' },
+    { name: 'Emirates Skywards', iata: 'EK' },
+    { name: 'Qatar Airways', iata: 'QR' },
+    { name: 'Singapore KrisFlyer', iata: 'SQ' },
+    { name: 'Turkish Miles&Smiles', iata: 'TK' },
+    { name: 'Lufthansa Miles & More', iata: 'LH' },
+    { name: 'Air France Flying Blue', iata: 'AF' },
+]
+
+const PROGRAMS_ROW2 = [
+    { name: 'Qantas Frequent Flyer', iata: 'QF' },
+    { name: 'Etihad Guest', iata: 'EY' },
+    { name: 'Air Canada Aeroplan', iata: 'AC' },
+    { name: 'JetBlue TrueBlue', iata: 'B6' },
+    { name: 'Alaska Mileage Plan', iata: 'AS' },
+    { name: 'Virgin Atlantic', iata: 'VS' },
+    { name: 'Copa ConnectMiles', iata: 'CM' },
+    { name: 'Finnair Plus', iata: 'AY' },
+    { name: 'Ethiopian ShebaMiles', iata: 'ET' },
+    { name: 'SAS EuroBonus', iata: 'SK' },
+    { name: 'Aeroméxico Club Premier', iata: 'AM' },
+    { name: 'Saudia AlFursan', iata: 'SV' },
 ]
 
 const PLANS = [
@@ -461,35 +484,37 @@ export default function Landing() {
                             <span style={{ color: 'rgba(255,255,255,0.80)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.02em' }}>Inteligência estratégica para milhas</span>
                         </div>
 
-                        <h1 style={{ fontSize: 'clamp(36px, 4.5vw, 62px)', fontWeight: 900, color: '#fff', lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: '20px' }}>
-                            Viaje com Mais<br />
-                            <span style={{ position: 'relative', display: 'inline-block', overflow: 'hidden', paddingBottom: '14px', marginBottom: '-14px' }}>
-                                {/* Spacer invisível — define a largura do container */}
-                                <span style={{ visibility: 'hidden', pointerEvents: 'none', display: 'block' }}>
-                                    Inteligência.
-                                </span>
-                                <AnimatePresence mode="popLayout" initial={false}>
-                                    <motion.span
-                                        key={titleNumber}
-                                        initial={{ opacity: 0, y: 40 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -40 }}
-                                        transition={{ type: 'spring', stiffness: 220, damping: 20 }}
-                                        style={{
-                                            position: 'absolute',
-                                            left: 0,
-                                            bottom: 14,
-                                            background: 'linear-gradient(90deg, #4A90E2, #67e8f9)',
-                                            WebkitBackgroundClip: 'text',
-                                            WebkitTextFillColor: 'transparent',
-                                            whiteSpace: 'nowrap',
-                                        }}
-                                    >
-                                        {heroTitles[titleNumber]}
-                                    </motion.span>
-                                </AnimatePresence>
-                            </span>
+                        <h1 style={{ fontSize: 'clamp(36px, 4.5vw, 62px)', fontWeight: 900, color: '#fff', lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: 0 }}>
+                            Viaje com Mais
                         </h1>
+                        {/* Palavra animada — fora do h1 para não sofrer com lineHeight: 1.08 */}
+                        <div style={{ fontSize: 'clamp(36px, 4.5vw, 62px)', fontWeight: 900, lineHeight: 1.3, letterSpacing: '-0.04em', marginBottom: '20px', position: 'relative', display: 'inline-block' }}>
+                            {/* Spacer — define a largura pelo texto mais largo */}
+                            <span style={{ visibility: 'hidden', pointerEvents: 'none' }}>Inteligência.</span>
+                            <AnimatePresence mode="popLayout" initial={false}>
+                                <motion.span
+                                    key={titleNumber}
+                                    initial={{ opacity: 0, y: 50 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -50 }}
+                                    transition={{ type: 'tween', duration: 0.6, ease: 'easeInOut' }}
+                                    style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        background: 'linear-gradient(90deg, #4A90E2, #67e8f9)',
+                                        WebkitBackgroundClip: 'text',
+                                        WebkitTextFillColor: 'transparent',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    {heroTitles[titleNumber]}
+                                </motion.span>
+                            </AnimatePresence>
+                        </div>
+
+
+
 
 
 
@@ -585,15 +610,57 @@ export default function Landing() {
                 <FeaturesSectionWithHoverEffects features={STEPS.map(s => ({ num: s.num, title: s.title, description: s.desc, icon: s.icon }))} />
             </section>
 
-            {/* ████ 4. STATS — FAIXA NAVY ████ */}
-            <section style={{ background: '#0E2A55', padding: '80px 60px' }}>
-                <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '40px', textAlign: 'center' }}>
-                    {STATS.map((s, i) => (
-                        <motion.div key={i} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 * i }}>
-                            <div style={{ fontSize: '52px', fontWeight: 900, color: '#4A90E2', letterSpacing: '-0.04em', lineHeight: 1 }}>{s.value}</div>
-                            <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '14px', fontWeight: 500, marginTop: '8px', letterSpacing: '0.02em' }}>{s.label}</div>
-                        </motion.div>
-                    ))}
+            {/* ████ 4. PROGRAMAS — FAIXA NAVY ████ */}
+            <section style={{ background: '#0E2A55', padding: '56px 0', overflow: 'hidden' }}>
+                <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.40)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '32px' }}>
+                    Programas de milhas suportados
+                </p>
+
+                {/* Linha 1 — scroll para esquerda */}
+                <div style={{ overflow: 'hidden', marginBottom: '20px' }}>
+                    <motion.div
+                        animate={{ x: '-50%' }}
+                        transition={{ duration: 40, repeat: Infinity, ease: 'linear' }}
+                        style={{ display: 'flex', gap: '0', width: 'max-content' }}
+                    >
+                        {[...PROGRAMS_ROW1, ...PROGRAMS_ROW1].map((prog, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 28px', flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.07)' }}>
+                                <img
+                                    src={`https://www.gstatic.com/flights/airline_logos/70px/${prog.iata}.png`}
+                                    alt={prog.name}
+                                    style={{ height: '22px', width: '22px', objectFit: 'contain', opacity: 0.85, borderRadius: '4px' }}
+                                    onError={e => (e.currentTarget.style.display = 'none')}
+                                />
+                                <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: '13.5px', fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '0.01em' }}>
+                                    {prog.name}
+                                </span>
+                            </div>
+                        ))}
+                    </motion.div>
+                </div>
+
+                {/* Linha 2 — scroll para direita (inverso) */}
+                <div style={{ overflow: 'hidden' }}>
+                    <motion.div
+                        animate={{ x: '0%' }}
+                        initial={{ x: '-50%' }}
+                        transition={{ duration: 40, repeat: Infinity, ease: 'linear' }}
+                        style={{ display: 'flex', gap: '0', width: 'max-content' }}
+                    >
+                        {[...PROGRAMS_ROW2, ...PROGRAMS_ROW2].map((prog, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 28px', flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.07)' }}>
+                                <img
+                                    src={`https://www.gstatic.com/flights/airline_logos/70px/${prog.iata}.png`}
+                                    alt={prog.name}
+                                    style={{ height: '22px', width: '22px', objectFit: 'contain', opacity: 0.85, borderRadius: '4px' }}
+                                    onError={e => (e.currentTarget.style.display = 'none')}
+                                />
+                                <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: '13.5px', fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '0.01em' }}>
+                                    {prog.name}
+                                </span>
+                            </div>
+                        ))}
+                    </motion.div>
                 </div>
             </section>
 
