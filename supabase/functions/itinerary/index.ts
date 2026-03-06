@@ -49,11 +49,19 @@ Deno.serve(async (req: Request) => {
             })
         }
 
-        const { destination, duration, traveler_type, travel_style } = itinerary
+        const { destination, duration, traveler_type, travel_style, budget } = itinerary
 
         const styleList = Array.isArray(travel_style) && travel_style.length > 0
             ? travel_style.join(', ')
             : 'Geral'
+
+        const budgetMap: Record<number, string> = {
+            1: 'Orçamento zero — apenas passeios, parques, museus com entrada gratuita e atividades sem nenhum custo',
+            2: 'Econômico — atividades muito baratas, comida de rua de alta qualidade, atrações com ingressos de baixo custo e restaurantes locais acessíveis',
+            3: 'Moderado — excelente custo-benefício, atrações pagas padrão, restaurantes de qualidade com preços justos e bistrôs casuais',
+            4: 'Premium — experiências de alto padrão, ingressos com fura-fila, restaurantes renomados e de alta gastronomia, tours privados ou semi-privados',
+        }
+        const budgetLabel = budgetMap[budget ?? 2] ?? budgetMap[2]
 
         const travelerMap: Record<string, string> = {
             solo: 'Solo (viajante individual)',
@@ -72,6 +80,7 @@ Responda SEMPRE em JSON válido, sem texto fora do JSON. Seja específico e prá
 - Duração: ${duration} dia${duration > 1 ? 's' : ''}
 - Perfil do viajante: ${travelerLabel}
 - Estilo de viagem: ${styleList}
+- Nível de orçamento: ${budgetLabel}
 
 Responda SOMENTE em JSON com exatamente esta estrutura:
 {
@@ -84,17 +93,23 @@ Responda SOMENTE em JSON com exatamente esta estrutura:
       "manha": {
         "atividade": "string — descrição clara do que fazer",
         "local": "string — nome do local ou bairro",
-        "dica": "string — dica prática curta"
+        "dica": "string — dica prática curta",
+        "lat": number,
+        "lng": number
       },
       "tarde": {
         "atividade": "string",
         "local": "string",
-        "dica": "string"
+        "dica": "string",
+        "lat": number,
+        "lng": number
       },
       "noite": {
         "atividade": "string",
         "local": "string",
-        "dica": "string"
+        "dica": "string",
+        "lat": number,
+        "lng": number
       }
     }
   ],
@@ -102,22 +117,24 @@ Responda SOMENTE em JSON com exatamente esta estrutura:
   "orcamento_estimado": "string — ex: 'R$ 250 a R$ 400 por pessoa por dia (sem hospedagem)'",
   "extras": {
     "gastronomia": [
-      { "nome": "string — nome do restaurante ou prato", "descricao": "string — o que é e por que vale", "dica": "string — dica prática" }
+      { "nome": "string — nome do restaurante ou prato", "descricao": "string — o que é e por que vale", "dica": "string — dica prática", "lat": number, "lng": number }
     ],
     "cultura": [
-      { "nome": "string — nome do museu, monumento ou evento cultural", "descricao": "string", "dica": "string" }
+      { "nome": "string — nome do museu, monumento ou evento cultural", "descricao": "string", "dica": "string", "lat": number, "lng": number }
     ],
     "natureza": [
-      { "nome": "string — parque, praia, trilha ou ponto natural", "descricao": "string", "dica": "string" }
+      { "nome": "string — parque, praia, trilha ou ponto natural", "descricao": "string", "dica": "string", "lat": number, "lng": number }
     ],
     "compras": [
-      { "nome": "string — mercado, rua comercial ou shopping", "descricao": "string", "dica": "string" }
+      { "nome": "string — mercado, rua comercial ou shopping", "descricao": "string", "dica": "string", "lat": number, "lng": number }
     ]
   }
 }
 
 Gere exatamente ${duration} objetos dentro do array "dias".
-Para "extras", gere entre 4 e 6 itens por categoria, diferentes das atividades já incluídas no roteiro.`
+Para cada período (manha, tarde, noite) de cada dia, preencha "lat" e "lng" com as coordenadas geográficas decimais reais do local principal da atividade (ex: "lat": 48.8584, "lng": 2.2945). Use coordenadas precisas do lugar específico.
+Para "extras", gere entre 4 e 6 itens por categoria, diferentes das atividades já incluídas no roteiro.
+Para cada item dos "extras", preencha "lat" e "lng" com as coordenadas geográficas decimais reais do local (ex: "lat": 48.8584, "lng": 2.2945). Use coordenadas precisas do lugar específico ou da área central onde ele se encontra.`
 
         const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -132,7 +149,7 @@ Para "extras", gere entre 4 e 6 itens por categoria, diferentes das atividades j
                     { role: 'user', content: userPrompt },
                 ],
                 response_format: { type: 'json_object' },
-                max_tokens: 4500,
+                max_tokens: 6500,
                 temperature: 0.7,
             }),
         })

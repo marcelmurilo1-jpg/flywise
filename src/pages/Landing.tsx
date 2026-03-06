@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useInView } from 'framer-motion'
+import { SlidingNumber } from '@/components/SlidingNumber'
 import {
     Search, ArrowRight, ArrowRightLeft, Users,
     ChevronDown, CheckCircle2, BarChart3, Globe, Zap, Shield,
@@ -366,6 +367,41 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 }
 
 
+// ─── Stats Grid ───────────────────────────────────────────────────────────────
+
+const STATS = [
+    { prefix: '', value: 2, suffix: 'k+', label: 'Usuários', color: '#0E2A55' },
+    { prefix: 'R$ ', value: 1, suffix: 'M', label: 'Em economias', color: '#2A60C2' },
+    { prefix: '', value: 95, suffix: '%', label: 'Satisfação', color: '#2A60C2' },
+    { prefix: '', value: 40, suffix: '+', label: 'Programas', color: '#0E2A55' },
+]
+
+function StatsGrid() {
+    const ref = useRef<HTMLDivElement>(null)
+    const inView = useInView(ref, { once: true, margin: '-80px' })
+    return (
+        <div ref={ref} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            {STATS.map((s, i) => (
+                <motion.div
+                    key={i}
+                    initial={{ opacity: 0, scale: 0.92 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.1 * i }}
+                    style={{ background: '#fff', borderRadius: '16px', padding: '28px 24px', boxShadow: '0 4px 16px rgba(14,42,85,0.07)', border: '1px solid #E2EAF5' }}
+                >
+                    <div style={{ fontSize: '36px', fontWeight: 900, color: s.color, letterSpacing: '-0.03em', lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+                        {s.prefix}
+                        <SlidingNumber value={inView ? s.value : 0} />
+                        {s.suffix}
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#6B7A99', marginTop: '6px', fontWeight: 500 }}>{s.label}</div>
+                </motion.div>
+            ))}
+        </div>
+    )
+}
+
 // ─── Landing Page Principal ───────────────────────────────────────────────────
 export default function Landing() {
     const [billing, setBilling] = useState<'mensal' | 'anual'>('mensal')
@@ -583,20 +619,7 @@ export default function Landing() {
                         </div>
                     </div>
                     {/* Visual lado direito */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        {[
-                            { val: '12k+', label: 'Usuários', color: '#0E2A55' },
-                            { val: 'R$ 4M+', label: 'Em voos', color: '#2A60C2' },
-                            { val: '98%', label: 'Satisfação', color: '#2A60C2' },
-                            { val: '40+', label: 'Programas', color: '#0E2A55' },
-                        ].map((s, i) => (
-                            <motion.div key={i} initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 * i }}
-                                style={{ background: '#fff', borderRadius: '16px', padding: '28px 24px', boxShadow: '0 4px 16px rgba(14,42,85,0.07)', border: '1px solid #E2EAF5' }}>
-                                <div style={{ fontSize: '36px', fontWeight: 900, color: s.color, letterSpacing: '-0.03em', lineHeight: 1 }}>{s.val}</div>
-                                <div style={{ fontSize: '13px', color: '#6B7A99', marginTop: '6px', fontWeight: 500 }}>{s.label}</div>
-                            </motion.div>
-                        ))}
-                    </div>
+                    <StatsGrid />
                 </div>
             </section>
 

@@ -1,9 +1,11 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Search, Tag, Wallet, Plane, User, Settings, LogOut, Map } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTheme } from '@/contexts/ThemeContext'
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ExpandableTabs } from '@/components/ui/expandable-tabs'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 interface HeaderProps {
     variant?: 'landing' | 'app'
@@ -19,6 +21,7 @@ const NAV_ITEMS = [
 
 export function Header({ variant = 'app' }: HeaderProps) {
     const { user, signOut } = useAuth()
+    const { isDark } = useTheme()
     const navigate = useNavigate()
     const location = useLocation()
     const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -48,9 +51,11 @@ export function Header({ variant = 'app' }: HeaderProps) {
 
     return (
         <header style={{
-            background: 'transparent',
-            borderBottom: '1px solid rgba(255,255,255,0.07)',
+            background: isDark ? 'rgba(15,17,23,0.95)' : 'rgba(255,255,255,0.95)',
+            borderBottom: isDark ? '1px solid #1e293b' : '1px solid rgba(14,42,85,0.08)',
             position: 'relative',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
         }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', height: '110px', padding: '0 8px', maxWidth: '880px', margin: '0 auto' }}>
 
@@ -72,8 +77,9 @@ export function Header({ variant = 'app' }: HeaderProps) {
                 ) : <div />}
 
 
-                {/* Right: User Menu */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                {/* Right: Theme Toggle + User Menu */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px' }}>
+                    <ThemeToggle />
                     {!user ? (
                         <div style={{ display: 'flex', gap: '8px' }}>
                             <Link to="/auth" className="btn btn-outline-white btn-sm">Entrar</Link>
