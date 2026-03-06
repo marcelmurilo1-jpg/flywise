@@ -7,6 +7,7 @@ export interface FilterState {
     cabin: string
     minMiles: string
     maxMiles: string
+    sortBy: 'best' | 'price' | 'duration'
 }
 
 const PROGRAMS = ['Smiles', 'LATAM Pass', 'TudoAzul']
@@ -70,8 +71,28 @@ export function Sidebar({ filters, setFilters }: { filters: FilterState, setFilt
                 Filtros
             </p>
 
+            {/* Sort By */}
+            <SectionHeader label="Ordenar por" k="programs" />
+            {sections.programs && (
+                <div style={{ padding: '8px 0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {[
+                        ['Melhor Estratégia', 'best'],
+                        ['Mais Econômico', 'price'],
+                        ['Mais Rápido', 'duration']
+                    ].map(([label, val]) => (
+                        <button key={val} onClick={() => setFilters({ ...filters, sortBy: val as any })} style={{
+                            padding: '7px 12px', borderRadius: '8px', border: `1px solid ${filters.sortBy === val ? '#2A60C2' : 'var(--border-light)'}`,
+                            background: filters.sortBy === val ? 'rgba(42,96,194,0.08)' : 'transparent',
+                            fontFamily: 'inherit', fontSize: '13px', fontWeight: 500,
+                            color: filters.sortBy === val ? '#2A60C2' : 'var(--text-body)',
+                            cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+                        }}>{label}</button>
+                    ))}
+                </div>
+            )}
+
             {/* Programs */}
-            <SectionHeader label="Programas de Milhas" k="programs" />
+            <SectionHeader label="Programas de Milhas" k="cabin" />
             {sections.programs && (
                 <div style={{ padding: '8px 0' }}>
                     {PROGRAMS.map(p => (
@@ -107,8 +128,8 @@ export function Sidebar({ filters, setFilters }: { filters: FilterState, setFilt
             )}
 
             {/* Clear */}
-            <button onClick={() => setFilters({ programs: [], stops: [], cabin: 'economy', minMiles: '', maxMiles: '' })}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '16px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '12px', fontFamily: 'inherit', fontWeight: 600 }}>
+            <button onClick={() => setFilters({ programs: [], stops: [], cabin: 'economy', minMiles: '', maxMiles: '', sortBy: 'best' })}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '16px', background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: '12px', fontFamily: 'inherit', fontWeight: 600 }}>
                 <X size={12} /> Limpar filtros
             </button>
         </aside>

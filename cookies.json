@@ -1,0 +1,12 @@
+[
+    {
+        "name": "session",
+        "value": "3AXr0fQo0T3Sxd7VqceephGQqsI",
+        "domain": ".seats.aero",
+        "path": "/",
+        "expires": -1,
+        "httpOnly": true,
+        "secure": true,
+        "sameSite": "Lax"
+    }
+]

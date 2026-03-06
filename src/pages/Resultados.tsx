@@ -11,10 +11,13 @@ import { Sidebar, type FilterState } from '@/components/Sidebar'
 import { SearchBarTop } from '@/components/SearchBarTop'
 import { motion } from 'framer-motion'
 
+// Global guard (multi-layer) to prevent infinite loops even if component remounts
+let GLOBAL_LAST_BUSCA_ID: number | null = null;
+
 export default function Resultados() {
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
-    const { user } = useAuth()
+    const { user, loading: authLoading } = useAuth()
     const buscaId = parseInt(searchParams.get('buscaId') ?? '0', 10)
 
     const [flights, setFlights] = useState<ResultadoVoo[]>([])
@@ -35,19 +38,49 @@ export default function Resultados() {
     const [searchError, setSearchError] = useState('')
     const searchStepTimers = useRef<ReturnType<typeof setTimeout>[]>([])
 
-    // Sidebar state
-    const [filters, setFilters] = useState<FilterState>({ programs: [], stops: [], cabin: 'economy', minMiles: '', maxMiles: '' })
-    const [showMobileFilters, setShowMobileFilters] = useState(false)
-    const [activeTab, setActiveTab] = useState(0)
+    // Seats.aero state
+    const [seatsFlights, setSeatsFlights] = useState<any[]>([])
+    const [seatsLoading, setSeatsLoading] = useState(false)
 
-    // Guard: prevent re-running load() when user ref changes (e.g. tab switch triggers auth refresh)
-    const hasLoaded = useRef(false)
+    // Sidebar state
+    const [filters, setFilters] = useState<FilterState>({
+        programs: [],
+        stops: [],
+        cabin: 'economy',
+        minMiles: '',
+        maxMiles: '',
+        sortBy: 'best'
+    })
+    const [showMobileFilters, setShowMobileFilters] = useState(false)
+
+    // Guard: prevent re-running load() for the same buscaId
+    const lastBuscaId = useRef<number | null>(null)
 
     useEffect(() => {
-        if (!user || !buscaId) { navigate('/home'); return }
-        // Only load once per buscaId — tab switches must NOT re-trigger
-        if (hasLoaded.current) return
-        hasLoaded.current = true
+        const userId = user?.id
+        if (!userId || !buscaId) {
+            if (!authLoading && !userId) {
+                console.log('[Resultados] Usuário não logado, enviando para home')
+                navigate('/home')
+            }
+            return
+        }
+
+        console.log('[Resultados] useEffect disparado. buscaId:', buscaId, 'last:', lastBuscaId.current)
+
+        // Check SessionStorage to prevent loop even across reloads or HMR
+        const storageKey = `busca_executada_${buscaId}`
+        const alreadyDone = sessionStorage.getItem(storageKey)
+
+        if (lastBuscaId.current === buscaId || GLOBAL_LAST_BUSCA_ID === buscaId || alreadyDone) {
+            console.log('[Resultados] 🛑 BLOQUEIO: Busca já processada ou em curso para este ID:', buscaId)
+            return
+        }
+
+        lastBuscaId.current = buscaId
+        GLOBAL_LAST_BUSCA_ID = buscaId
+        sessionStorage.setItem(storageKey, 'true')
+        console.log('[Resultados] 🚀 INICIANDO LOGICA DE CARREGAMENTO PARA ID:', buscaId)
 
         // Read URL params at effect setup time
         const orig = searchParams.get('orig')
@@ -61,6 +94,13 @@ export default function Resultados() {
         const load = async () => {
             setLoading(true)
             setError('')
+
+            // Fail-safe: force loading = false after 15s
+            const loadingTimeout = setTimeout(() => {
+                console.warn('[Resultados] FAIL-SAFE: Forçando carregamento = false após 15s')
+                setLoading(false)
+            }, 15000)
+
             try {
                 // 1. Load busca metadata
                 const buscaRes = await supabase.from('buscas').select('*')
@@ -102,6 +142,33 @@ export default function Resultados() {
                 }
 
                 console.log('[Resultados] Calling Amadeus:', orig, '→', destP, date, ret ? `return:${ret}` : 'one-way')
+
+                // 3.1 Fetch Seats.aero in parallel (non-blocking)
+                setSeatsLoading(true)
+                console.log('[Resultados] Iniciando fetch Seats.aero para:', orig, destP)
+                fetch('http://localhost:3001/api/search-flights', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        origem: orig,
+                        destino: destP,
+                        data_ida: date,
+                        data_volta: ret || undefined
+                    })
+                })
+                    .then(res => {
+                        console.log('[Resultados] Resposta Seats.aero recebida:', res.status)
+                        return res.json()
+                    })
+                    .then(data => {
+                        console.log('[Resultados] Dados Seats.aero:', data)
+                        if (data.voos) setSeatsFlights(data.voos)
+                    })
+                    .catch(err => console.error('[Resultados] Erro ao buscar seatsaero:', err))
+                    .finally(() => {
+                        console.log('[Resultados] Finalizado seatsLoading')
+                        setSeatsLoading(false)
+                    })
 
                 const [offers] = await Promise.all([
                     searchFlights({
@@ -173,6 +240,8 @@ export default function Resultados() {
                 setError(msg)
                 await new Promise<void>(r => setTimeout(r, MIN_ANIM_MS))
             } finally {
+                clearTimeout(loadingTimeout)
+                console.log('[Resultados] load() finalizado, removendo tela de loading')
                 setLoading(false)
             }
         }
@@ -180,7 +249,7 @@ export default function Resultados() {
         load()
         // searchParams is captured at render time — buscaId change triggers re-run with fresh params
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user, buscaId, navigate])
+    }, [user?.id, authLoading, buscaId, navigate])
 
     useEffect(() => () => { searchStepTimers.current.forEach(clearTimeout) }, [])
 
@@ -265,34 +334,89 @@ export default function Resultados() {
                         </motion.div>
                     ) : (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                            {/* Tabs */}
-                            <div style={{
-                                display: 'flex', background: '#fff',
-                                border: '1px solid var(--border-light)',
-                                borderRadius: '14px', padding: '6px', marginBottom: '20px',
-                                boxShadow: 'var(--shadow-xs)',
-                            }}>
-                                {[['Melhor Estratégia', '⚡'], ['Mais Econômico', '💰'], ['Mais Rápido', '🕐']].map(([label, icon], i) => (
-                                    <button key={label} onClick={() => setActiveTab(i)} style={{
-                                        flex: 1, padding: '10px 16px', borderRadius: '10px',
-                                        border: 'none', fontFamily: 'inherit', cursor: 'pointer',
-                                        fontSize: '13px', fontWeight: activeTab === i ? 700 : 500,
-                                        background: activeTab === i ? 'var(--petrol-deep)' : 'transparent',
-                                        color: activeTab === i ? '#fff' : 'var(--text-muted)',
-                                        boxShadow: activeTab === i ? '0 2px 8px rgba(15,47,58,0.2)' : 'none',
-                                        transition: 'all 0.18s',
-                                    }}>
-                                        {icon} {label}
-                                    </button>
-                                ))}
-                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                                {/* Section 1: Amadeus / BRL Results */}
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                                        <div style={{ width: '4px', height: '20px', background: 'var(--blue-medium)', borderRadius: '4px' }}></div>
+                                        <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0E2A55', margin: 0 }}>
+                                            Melhores Preços em Reais
+                                        </h2>
+                                    </div>
+                                    <FlightResultsGrouped
+                                        flights={flights}
+                                        buscaId={buscaId}
+                                        searchInfo={busca ? { origem: busca.origem, destino: busca.destino, data_ida: busca.data_ida, passageiros: busca.passageiros } : undefined}
+                                        onNewSearch={() => { (document.querySelector('input[placeholder="De — GRU"]') as HTMLInputElement)?.focus() }}
+                                        sidebarFilters={filters}
+                                    />
+                                </div>
 
-                            <FlightResultsGrouped
-                                flights={flights} buscaId={buscaId}
-                                searchInfo={busca ? { origem: busca.origem, destino: busca.destino, data_ida: busca.data_ida, passageiros: busca.passageiros } : undefined}
-                                onNewSearch={() => { (document.querySelector('input[placeholder="De — GRU"]') as HTMLInputElement)?.focus() }}
-                                sidebarFilters={filters}
-                            />
+                                {/* Divider */}
+                                <div style={{ height: '1px', background: 'var(--border-light)', margin: '8px 0' }}></div>
+
+                                {/* Section 2: Seats.aero / Miles Results */}
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                                        <div style={{ width: '4px', height: '20px', background: '#16A34A', borderRadius: '4px' }}></div>
+                                        <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0E2A55', margin: 0 }}>
+                                            Oportunidades em Milhas (Seats.aero)
+                                        </h2>
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        {seatsLoading ? (
+                                            <div style={{ padding: '40px', textAlign: 'center', background: '#fff', borderRadius: '16px', border: '1px solid var(--border-light)' }}>
+                                                <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Buscando passagens emissíveis por milhas na base Pro (Seats.aero)...</p>
+                                            </div>
+                                        ) : seatsFlights.length === 0 ? (
+                                            <div style={{ padding: '40px', textAlign: 'center', background: '#fff', borderRadius: '16px', border: '1px solid var(--border-light)' }}>
+                                                <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Nenhum voo encontrado no Seats.aero para esta rota.</p>
+                                            </div>
+                                        ) : (
+                                            seatsFlights.map((sf, idx) => (
+                                                <div key={idx} style={{
+                                                    background: '#fff', border: '1px solid #BBF7D0', borderRadius: '16px', padding: '16px 20px',
+                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                    boxShadow: 'var(--shadow-xs)'
+                                                }}>
+                                                    <div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                                            <span style={{ fontSize: '14px', fontWeight: 700, color: '#16A34A' }}>
+                                                                {sf.companhiaAerea}
+                                                            </span>
+                                                            {sf.tipo && (
+                                                                <span style={{
+                                                                    fontSize: '10px',
+                                                                    fontWeight: 800,
+                                                                    padding: '2px 6px',
+                                                                    borderRadius: '4px',
+                                                                    background: sf.tipo === 'ida' ? '#DBEAFE' : '#FED7AA',
+                                                                    color: sf.tipo === 'ida' ? '#1E40AF' : '#9A3412',
+                                                                    textTransform: 'uppercase'
+                                                                }}>
+                                                                    {sf.tipo}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                            Rota: {sf.rota} · Data: {sf.dataVoo}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0E2A55' }}>
+                                                            {sf.precoMilhas} pts
+                                                        </div>
+                                                        <div style={{ fontSize: '11px', color: '#94A3B8' }}>
+                                                            + {sf.taxas} de taxas
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </motion.div>
                     )}
                 </div>

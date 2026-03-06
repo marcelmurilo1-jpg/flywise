@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plane, ArrowRight, SlidersHorizontal, X } from 'lucide-react'
+import { Plane, SlidersHorizontal, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ResultadoVoo } from '@/lib/supabase'
 import { StrategyPanel } from '@/components/StrategyPanel'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { airlineMatchesPrograms, TOP_PROGRAMS } from '@/lib/airlineMilesMapping'
+import { airlineMatchesPrograms } from '@/lib/airlineMilesMapping'
 import type { FilterState } from '@/components/Sidebar'
 
 interface SearchInfo { origem: string; destino: string; data_ida: string; passageiros: number }
@@ -158,9 +158,6 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
         selAirlines.length +
         (maxPrice !== null ? 1 : 0)
 
-    function toggleProgram(p: string) {
-        setSelPrograms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
-    }
     function toggleAirline(a: string) {
         setSelAirlines(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a])
     }
@@ -171,31 +168,38 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
         setSelPrograms([]); setSelStops(null); setSelAirlines([]); setMaxPrice(null)
     }
 
-    // ── Filtering logic ───────────────────────────────────────────────────────
+    // ── Filtering and Sorting logic ───────────────────────────────────────────
     const sorted = useMemo(() => {
-        const base = [...flights].sort((a, b) => (a.preco_brl ?? 0) - (b.preco_brl ?? 0))
-        return base.filter(f => {
+        let base = [...flights]
+
+        // 1. Filter
+        base = base.filter(f => {
             const det = (f.detalhes as any) ?? {}
             const iata = extractIata(f.companhia)
 
-            // Program filter: use airline→program map
             if (selPrograms.length > 0 && !airlineMatchesPrograms(iata, selPrograms)) return false
-
-            // Stops filter
             if (selStops !== null) {
                 const stops = det.paradas ?? 0
                 if (selStops === 2 ? stops < 2 : stops !== selStops) return false
             }
-
-            // Airline filter
             if (selAirlines.length > 0 && !selAirlines.includes(f.companhia ?? '')) return false
-
-            // Price filter
             if (effectiveMaxPrice < priceMax && (f.preco_brl ?? 0) > effectiveMaxPrice) return false
-
             return true
         })
-    }, [flights, selPrograms, selStops, selAirlines, effectiveMaxPrice, priceMax])
+
+        // 2. Sort
+        const sortCriteria = sidebarFilters?.sortBy ?? 'best'
+        if (sortCriteria === 'price') {
+            base.sort((a, b) => (a.preco_brl ?? 0) - (b.preco_brl ?? 0))
+        } else if (sortCriteria === 'duration') {
+            base.sort((a, b) => (a.duracao_min ?? 0) - (b.duracao_min ?? 0))
+        } else {
+            // 'best' - current default (price) or some weight logic
+            base.sort((a, b) => (a.preco_brl ?? 0) - (b.preco_brl ?? 0))
+        }
+
+        return base
+    }, [flights, selPrograms, selStops, selAirlines, effectiveMaxPrice, priceMax, sidebarFilters?.sortBy])
 
     if (flights.length === 0) return (
         <motion.div
@@ -229,6 +233,12 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
         </motion.div>
     )
 
+    const labelMap: Record<string, string> = {
+        best: 'melhor custo-benefício',
+        price: 'menor preço',
+        duration: 'menor duração'
+    }
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {/* ── Header ───────────────────────────────────────────────────── */}
@@ -247,7 +257,7 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                         </p>
                     )}
                     <p style={{ fontSize: 12, color: '#94A3B8' }}>
-                        {sorted.length} de {flights.length} {flights.length === 1 ? 'opção' : 'opções'} · ordenadas por menor preço
+                        {sorted.length} de {flights.length} {flights.length === 1 ? 'opção' : 'opções'} · ordenadas por {labelMap[sidebarFilters?.sortBy ?? 'best']}
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -264,7 +274,7 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                         }}
                     >
                         <SlidersHorizontal size={12} />
-                        Filtros
+                        Filtros rápidos
                         {activeFilterCount > 0 && (
                             <span style={{
                                 background: filtersOpen ? 'rgba(255,255,255,0.25)' : '#2A60C2',
@@ -274,17 +284,6 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                 {activeFilterCount}
                             </span>
                         )}
-                    </button>
-                    <button
-                        onClick={onNewSearch}
-                        style={{
-                            background: 'none', border: '1px solid var(--border-light)',
-                            borderRadius: 10, padding: '7px 14px', fontFamily: 'inherit',
-                            fontSize: 12, fontWeight: 600, color: 'var(--text-muted)',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
-                        }}
-                    >
-                        <ArrowRight size={12} style={{ transform: 'rotate(180deg)' }} /> Nova busca
                     </button>
                 </div>
             </motion.div>
@@ -304,28 +303,6 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                             borderRadius: 14, padding: '16px 20px',
                             display: 'flex', flexDirection: 'column', gap: 16,
                         }}>
-                            {/* Row 1: Programs */}
-                            <div>
-                                <div style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                                    Programa de milhas
-                                </div>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                    {TOP_PROGRAMS.map(p => (
-                                        <FilterPill
-                                            key={p}
-                                            label={p}
-                                            active={selPrograms.includes(p)}
-                                            onClick={() => toggleProgram(p)}
-                                        />
-                                    ))}
-                                </div>
-                                {selPrograms.length > 0 && (
-                                    <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 6 }}>
-                                        Mostrando voos emitíveis por: {selPrograms.join(', ')}
-                                    </p>
-                                )}
-                            </div>
-
                             {/* Row 2: Stops + Airline */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                 {/* Stops */}
@@ -400,7 +377,7 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                         display: 'flex', alignItems: 'center', gap: 4, padding: 0,
                                     }}
                                 >
-                                    <X size={12} /> Limpar filtros
+                                    <X size={12} /> Limpar filtros rápidos
                                 </button>
                             )}
                         </div>
@@ -442,6 +419,7 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                 const segsRet = (det.returnSegmentos as any[]) ?? []
                 const hasReturn = !!det.returnPartida
                 const iata = extractIata(flight.companhia)
+                const estimatedMiles = Math.round(((flight.preco_brl ?? 0) * 55) / 1000) * 1000
 
                 return (
                     <motion.div
@@ -457,36 +435,38 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                             overflow: 'hidden',
                         }}
                     >
-                        {/* Top: airline + price */}
+                        {/* Top: airline + price unificado */}
                         <div style={{
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            padding: '14px 20px',
+                            padding: '16px 20px',
                             borderBottom: '1px solid #F1F5F9',
-                            background: idx === 0 ? '#FAFBFF' : '#fff',
+                            background: idx === 0 && sidebarFilters?.sortBy === 'price' ? '#FAFBFF' : '#fff',
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                 <div style={{
-                                    width: 4, height: 28, borderRadius: 4,
-                                    background: 'var(--blue-medium, #4A90E2)',
+                                    width: 4, height: 32, borderRadius: 4,
+                                    background: '#0E2A55',
                                 }} />
                                 <div>
-                                    <span style={{ fontSize: 14, fontWeight: 700, color: '#0E2A55' }}>
-                                        {flight.companhia}
-                                    </span>
-                                    {det.voo_numero && (
-                                        <span style={{ fontSize: 11, color: '#94A3B8', marginLeft: 8 }}>
-                                            {det.voo_numero}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ fontSize: 15, fontWeight: 700, color: '#0E2A55' }}>
+                                            {flight.companhia}
                                         </span>
-                                    )}
+                                        {det.voo_numero && (
+                                            <span style={{ fontSize: 11, color: '#94A3B8' }}>
+                                                {det.voo_numero}
+                                            </span>
+                                        )}
+                                    </div>
                                     {/* Program badges for this airline */}
                                     {iata && (
-                                        <div style={{ display: 'flex', gap: 4, marginTop: 3, flexWrap: 'wrap' }}>
+                                        <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
                                             {['Smiles', 'LATAM Pass', 'TudoAzul', 'Livelo'].filter(p =>
                                                 airlineMatchesPrograms(iata, [p])
                                             ).map(prog => (
                                                 <span key={prog} style={{
-                                                    fontSize: 9, fontWeight: 700, color: '#2A60C2',
-                                                    background: '#EEF4FF', padding: '1px 6px', borderRadius: 4,
+                                                    fontSize: 9, fontWeight: 700, color: '#64748B',
+                                                    background: '#F1F5F9', padding: '1px 6px', borderRadius: 4,
                                                 }}>
                                                     {prog}
                                                 </span>
@@ -494,42 +474,47 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                         </div>
                                     )}
                                 </div>
-                                {idx === 0 && (
-                                    <span style={{
-                                        fontSize: 10, fontWeight: 700, color: '#16A34A',
-                                        background: '#F0FDF4', padding: '2px 8px', borderRadius: 6,
-                                        border: '1px solid #BBF7D0',
-                                    }}>
-                                        Mais barato
-                                    </span>
-                                )}
                             </div>
-                            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'flex-end', gap: 16 }}>
-                                {/* Mock miles preview */}
-                                {flight.preco_brl && (
-                                    <div style={{
-                                        textAlign: 'right', padding: '6px 12px',
-                                        background: 'linear-gradient(135deg, #F0F4FF, #E8F0FF)',
-                                        borderRadius: 10, border: '1px solid #D4E2FA',
-                                    }}>
-                                        <div style={{ fontSize: 10, fontWeight: 700, color: '#2A60C2', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>
-                                            ✨ Milhas <span style={{ background: '#2A60C2', color: '#fff', padding: '1px 5px', borderRadius: 4, fontSize: 9 }}>estimado</span>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                                {/* Unified Price Section */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                    {/* Miles side */}
+                                    <div style={{ textAlign: 'center' }}>
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: '#2A60C2', textTransform: 'uppercase', marginBottom: 2 }}>
+                                            Milhas
                                         </div>
-                                        <div style={{ fontSize: 15, fontWeight: 800, color: '#1E3A7A', letterSpacing: '-0.01em' }}>
-                                            ~{(Math.round((flight.preco_brl * 55) / 1000) * 1000).toLocaleString('pt-BR')} pts
+                                        <div style={{ fontSize: 18, fontWeight: 800, color: '#1E3A7A', letterSpacing: '-0.01em' }}>
+                                            {estimatedMiles.toLocaleString('pt-BR')}
                                         </div>
-                                        <div style={{ fontSize: 10, color: '#64748B' }}>
-                                            + R$ {Math.round(flight.preco_brl * 0.15).toLocaleString('pt-BR')} taxas
-                                        </div>
+                                        <div style={{ fontSize: 9, color: '#94A3B8' }}>Pts estimados</div>
                                     </div>
-                                )}
-                                {/* Cash price */}
-                                <div>
-                                    <div style={{ fontSize: 22, fontWeight: 800, color: '#0E2A55', letterSpacing: '-0.02em' }}>
-                                        R$ {flight.preco_brl?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+
+                                    {/* Divider */}
+                                    <div style={{ width: 1, height: 30, background: '#E2EAF5' }} />
+
+                                    {/* Cash side */}
+                                    <div style={{ textAlign: 'center' }}>
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: '#0E2A55', textTransform: 'uppercase', marginBottom: 2 }}>
+                                            Dinheiro
+                                        </div>
+                                        <div style={{ fontSize: 18, fontWeight: 800, color: '#0E2A55', letterSpacing: '-0.01em' }}>
+                                            R$ {flight.preco_brl?.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                                        </div>
+                                        <div style={{ fontSize: 9, color: '#94A3B8' }}>preço final</div>
                                     </div>
-                                    <div style={{ fontSize: 11, color: '#94A3B8' }}>por pessoa</div>
                                 </div>
+
+                                <button
+                                    onClick={() => setPanelOpen(true)}
+                                    style={{
+                                        background: '#0E2A55', color: '#fff', border: 'none',
+                                        borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 700,
+                                        cursor: 'pointer', transition: 'all 0.15s'
+                                    }}
+                                >
+                                    Ver Detalhes
+                                </button>
                             </div>
                         </div>
 

@@ -146,8 +146,8 @@ export interface SearchFlightsParams {
     nonStop?: boolean
 }
 
-/** Search flight offers via Amadeus and return normalized results */
-export async function searchFlights(params: SearchFlightsParams): Promise<FlightOffer[]> {
+/** Performs the raw search with abort signal and timeout */
+async function rawSearchFlights(params: SearchFlightsParams): Promise<any> {
     const token = await getToken()
 
     const qp: Record<string, string> = {
@@ -162,20 +162,38 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
     if (params.cabin) qp.travelClass = params.cabin
     if (params.nonStop) qp.nonStop = 'true'
 
-    console.log('[Amadeus] searchFlights:', qp.toString())
-    const res = await fetch(
-        `${BASE_URL}/v2/shopping/flight-offers?${new URLSearchParams(qp)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-    )
+    console.log('[Amadeus] searchFlights:', qp)
 
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        const detail = err.errors?.[0]?.detail ?? err.errors?.[0]?.title ?? 'Erro ao buscar voos'
-        console.error('[Amadeus] Flight search error:', detail, err)
-        throw new Error(detail)
+    // 12s Timeout fail-safe for Amadeus
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 12000)
+
+    try {
+        const res = await fetch(
+            `${BASE_URL}/v2/shopping/flight-offers?${new URLSearchParams(qp)}`,
+            {
+                headers: { Authorization: `Bearer ${token}` },
+                signal: controller.signal
+            }
+        )
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}))
+            const detail = err.errors?.[0]?.detail ?? err.errors?.[0]?.title ?? 'Erro ao buscar voos'
+            console.error('[Amadeus] Flight search error:', detail, err)
+            throw new Error(detail)
+        }
+
+        const data = await res.json()
+        return data
+    } finally {
+        clearTimeout(timeoutId)
     }
+}
 
-    const data = await res.json()
+/** Search flight offers via Amadeus and return normalized results */
+export async function searchFlights(params: SearchFlightsParams): Promise<FlightOffer[]> {
+    const data = await rawSearchFlights(params)
     console.log('[Amadeus] Flight search result:', data.data?.length, 'offers')
     const offers: any[] = data.data ?? []
 
