@@ -38,7 +38,7 @@ async function fetchSeatsAeroAPI(origin, destination, date) {
     });
     const res = await fetch(`${SEATS_AERO_BASE}/search?${params}`, {
         headers: {
-            'Partner-Authorization': `Bearer ${SEATS_AERO_API_KEY}`,
+            'Partner-Authorization': SEATS_AERO_API_KEY,
             'Accept': 'application/json',
         },
         signal: AbortSignal.timeout(20000),
@@ -47,6 +47,7 @@ async function fetchSeatsAeroAPI(origin, destination, date) {
     if (res.status === 401) throw new Error('API Key do Seats.aero inválida ou sem permissão.');
     if (!res.ok) throw new Error(`Seats.aero API respondeu com status ${res.status}`);
     const data = await res.json();
+    console.log('[Seats.aero] Resposta completa:', JSON.stringify(data).slice(0, 500));
     return data.data ?? [];
 }
 
