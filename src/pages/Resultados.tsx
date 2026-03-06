@@ -142,7 +142,7 @@ export default function Resultados() {
                 // 3.1 Fetch Seats.aero in parallel (non-blocking)
                 setSeatsLoading(true)
                 console.log('[Resultados] Iniciando fetch Seats.aero para:', orig, destP)
-                fetch(`${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'}/api/search-flights`, {
+                fetch(`${import.meta.env.VITE_API_BASE_URL ?? ''}/api/search-flights`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
