@@ -385,6 +385,41 @@ export default function Resultados() {
                                             </div>
                                         ) : (
                                             seatsFlights.map((sf, idx) => {
+                                                const AIRLINE_FULL: Record<string, string> = {
+                                                    LA: 'LATAM Airlines', JJ: 'LATAM Airlines', G3: 'GOL', AD: 'Azul',
+                                                    AA: 'American Airlines', UA: 'United Airlines', DL: 'Delta Air Lines',
+                                                    AC: 'Air Canada', WS: 'WestJet',
+                                                    AF: 'Air France', KL: 'KLM', LH: 'Lufthansa', LX: 'Swiss',
+                                                    OS: 'Austrian Airlines', SN: 'Brussels Airlines', BA: 'British Airways',
+                                                    SK: 'SAS', AZ: 'ITA Airways', TP: 'TAP Portugal', IB: 'Iberia',
+                                                    AV: 'Avianca', CM: 'Copa Airlines', AM: 'Aeromexico', AR: 'Aerolíneas Argentinas',
+                                                    UX: 'Air Europa', ET: 'Ethiopian Airlines', TK: 'Turkish Airlines',
+                                                    EK: 'Emirates', QR: 'Qatar Airways', SQ: 'Singapore Airlines',
+                                                    JL: 'Japan Airlines', NH: 'ANA', CX: 'Cathay Pacific', MH: 'Malaysia Airlines',
+                                                    B6: 'JetBlue', AS: 'Alaska Airlines', WN: 'Southwest',
+                                                    VS: 'Virgin Atlantic', EI: 'Aer Lingus', FR: 'Ryanair',
+                                                }
+                                                const SOURCE_PROGRAM: Record<string, { name: string; color: string; bg: string }> = {
+                                                    smiles:         { name: 'Smiles',        color: '#F97316', bg: '#FFF7ED' },
+                                                    delta:          { name: 'SkyMiles',       color: '#003DA5', bg: '#EFF6FF' },
+                                                    american:       { name: 'AAdvantage',     color: '#B91C1C', bg: '#FEF2F2' },
+                                                    united:         { name: 'MileagePlus',    color: '#004B87', bg: '#EFF6FF' },
+                                                    aeroplan:       { name: 'Aeroplan',       color: '#CC0000', bg: '#FEF2F2' },
+                                                    flyingblue:     { name: 'Flying Blue',    color: '#003087', bg: '#EFF6FF' },
+                                                    lifemiles:      { name: 'Lifemiles',      color: '#E63946', bg: '#FEF2F2' },
+                                                    virginatlantic: { name: 'Virgin Points',  color: '#E10A0A', bg: '#FEF2F2' },
+                                                    alaska:         { name: 'Mileage Plan',   color: '#01426A', bg: '#EFF6FF' },
+                                                    latam:          { name: 'LATAM Pass',     color: '#E31837', bg: '#FEF2F2' },
+                                                    azul:           { name: 'TudoAzul',       color: '#003DA5', bg: '#EFF6FF' },
+                                                    emirates:       { name: 'Skywards',       color: '#C09846', bg: '#FFFBEB' },
+                                                    turkish:        { name: 'Miles&Smiles',   color: '#C8102E', bg: '#FEF2F2' },
+                                                    jetblue:        { name: 'TrueBlue',       color: '#003876', bg: '#EFF6FF' },
+                                                    iberia:         { name: 'Iberia Plus',    color: '#C41E3A', bg: '#FEF2F2' },
+                                                    singapore:      { name: 'KrisFlyer',      color: '#1A3C5E', bg: '#EFF6FF' },
+                                                    qatar:          { name: 'Avios (Qatar)',   color: '#5C0632', bg: '#FDF2F8' },
+                                                    british:        { name: 'Avios (BA)',      color: '#2B5FA5', bg: '#EFF6FF' },
+                                                    avianca:        { name: 'Lifemiles',      color: '#E63946', bg: '#FEF2F2' },
+                                                }
                                                 const fmtDur = (min?: number | null) => {
                                                     if (!min) return null
                                                     return `${Math.floor(min / 60)}h${min % 60 > 0 ? ` ${min % 60}min` : ''}`
@@ -399,6 +434,9 @@ export default function Resultados() {
                                                     'Business': '#0E2A55', 'First': '#92400E',
                                                 }
                                                 const activeCabin = sf.cabineEncontrada ?? 'Economy'
+                                                const airlineCode = sf.companhiaAerea ?? ''
+                                                const airlineName = AIRLINE_FULL[airlineCode] ?? airlineCode
+                                                const program = SOURCE_PROGRAM[sf.source?.toLowerCase() ?? '']
 
                                                 const isFirstVolta = sf.tipo === 'volta' && (idx === 0 || seatsFlights[idx - 1]?.tipo !== 'volta')
                                                 return (<>
@@ -415,12 +453,20 @@ export default function Resultados() {
                                                     }}>
                                                         {/* Cabeçalho */}
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #F0FDF4' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                                <div style={{ width: 4, height: 28, borderRadius: 4, background: '#16A34A' }} />
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                {/* Logo companhia */}
+                                                                {airlineCode && (
+                                                                    <img
+                                                                        src={`https://pics.avs.io/60/30/${airlineCode}.png`}
+                                                                        alt={airlineName}
+                                                                        style={{ height: 28, objectFit: 'contain', borderRadius: 4 }}
+                                                                        onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                                                                    />
+                                                                )}
                                                                 <div>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                        <span style={{ fontSize: '14px', fontWeight: 700, color: '#15803D' }}>
-                                                                            {sf.companhiaAerea}
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const }}>
+                                                                        <span style={{ fontSize: '14px', fontWeight: 700, color: '#0E2A55' }}>
+                                                                            {airlineName}
                                                                         </span>
                                                                         {sf.tipo && (
                                                                             <span style={{
@@ -435,6 +481,16 @@ export default function Resultados() {
                                                                         <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: cabinColor[activeCabin] ?? '#0E2A55', color: '#fff' }}>
                                                                             {activeCabin}
                                                                         </span>
+                                                                        {/* Badge do programa de milhas */}
+                                                                        {program && (
+                                                                            <span style={{
+                                                                                fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px',
+                                                                                background: program.bg, color: program.color,
+                                                                                border: `1px solid ${program.color}33`,
+                                                                            }}>
+                                                                                {program.name}
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                     <span style={{ fontSize: '11px', color: '#94A3B8' }}>{sf.dataVoo}</span>
                                                                 </div>
@@ -469,7 +525,7 @@ export default function Resultados() {
                                                                 <div style={{ position: 'relative', height: 1, background: '#BBF7D0', width: '100%' }}>
                                                                     <span style={{ position: 'absolute', right: -1, top: -5, fontSize: 11, color: '#16A34A' }}>✈</span>
                                                                 </div>
-                                                                <span style={{ fontSize: '10px', color: '#94A3B8' }}>
+                                                                <span style={{ fontSize: '10px', color: sf.paradas === 0 ? '#16A34A' : '#94A3B8', fontWeight: sf.paradas === 0 ? 700 : 400 }}>
                                                                     {stopLabel(sf.paradas ?? 0, sf.escalas)}
                                                                 </span>
                                                             </div>
