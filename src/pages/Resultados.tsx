@@ -41,6 +41,7 @@ export default function Resultados() {
     // Seats.aero state
     const [seatsFlights, setSeatsFlights] = useState<any[]>([])
     const [seatsLoading, setSeatsLoading] = useState(false)
+    const [activeView, setActiveView] = useState<'reais' | 'milhas'>('reais')
 
     // Sidebar state
     const [filters, setFilters] = useState<FilterState>({
@@ -329,7 +330,21 @@ export default function Resultados() {
                         </motion.div>
                     ) : (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                            {/* ── Toggle de view ──────────────────────────────── */}
+                            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                                {(['reais', 'milhas'] as const).map(v => (
+                                    <button key={v} onClick={() => setActiveView(v)} style={{
+                                        padding: '8px 20px', borderRadius: '10px', border: 'none',
+                                        fontFamily: 'inherit', fontSize: '13px', fontWeight: 700,
+                                        cursor: 'pointer', transition: 'all 0.15s',
+                                        background: activeView === v ? '#0E2A55' : '#F1F5F9',
+                                        color: activeView === v ? '#fff' : '#64748B',
+                                    }}>
+                                        {v === 'reais' ? 'Preços em Reais' : 'Preços em Milhas'}
+                                    </button>
+                                ))}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: activeView === 'milhas' ? 'column-reverse' : 'column', gap: '32px' }}>
                                 {/* Section 1: Amadeus / BRL Results */}
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
@@ -385,7 +400,15 @@ export default function Resultados() {
                                                 }
                                                 const activeCabin = sf.cabineEncontrada ?? 'Economy'
 
-                                                return (
+                                                const isFirstVolta = sf.tipo === 'volta' && (idx === 0 || seatsFlights[idx - 1]?.tipo !== 'volta')
+                                                return (<>
+                                                    {isFirstVolta && (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '8px 0' }}>
+                                                            <div style={{ flex: 1, height: '1px', background: '#BBF7D0' }} />
+                                                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>✈ Volta</span>
+                                                            <div style={{ flex: 1, height: '1px', background: '#BBF7D0' }} />
+                                                        </div>
+                                                    )}
                                                     <div key={`${sf.companhiaAerea}-${sf.rota}-${sf.dataVoo}-${idx}`} style={{
                                                         background: '#fff', border: '1px solid #BBF7D0', borderRadius: '16px',
                                                         overflow: 'hidden', boxShadow: 'var(--shadow-xs)'
@@ -463,7 +486,7 @@ export default function Resultados() {
                                                                     {[
                                                                         { label: 'Eco', val: sf.economy, color: '#2A60C2' },
                                                                         { label: 'Prem', val: sf.premiumEconomy, color: '#7C3AED' },
-                                                                        { label: 'Biz', val: sf.business, color: '#0E2A55' },
+                                                                        { label: 'Bus', val: sf.business, color: '#0E2A55' },
                                                                         { label: '1ª', val: sf.first, color: '#92400E' },
                                                                     ].filter(c => c.val != null).map(c => (
                                                                         <div key={c.label} style={{ textAlign: 'center', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '4px 8px' }}>
@@ -477,7 +500,7 @@ export default function Resultados() {
                                                             )}
                                                         </div>
                                                     </div>
-                                                )
+                                                </>)
                                             })
                                         )}
                                     </div>
