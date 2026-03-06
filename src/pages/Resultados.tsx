@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { AlertCircle, SlidersHorizontal } from 'lucide-react'
+import { AlertCircle, SlidersHorizontal, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react'
 import { supabase, type ResultadoVoo, type Busca } from '@/lib/supabase'
 import { searchFlights } from '@/lib/amadeus'
 import { useAuth } from '@/contexts/AuthContext'
@@ -9,7 +9,7 @@ import { FlightResultsGrouped } from '@/components/FlightResultsGrouped'
 import { PlaneWindowLoader } from '@/components/PlaneWindowLoader'
 import { Sidebar, type FilterState } from '@/components/Sidebar'
 import { SearchBarTop } from '@/components/SearchBarTop'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // Global guard (multi-layer) to prevent infinite loops even if component remounts
 let GLOBAL_LAST_BUSCA_ID: number | null = null;
@@ -42,6 +42,10 @@ export default function Resultados() {
     const [seatsFlights, setSeatsFlights] = useState<any[]>([])
     const [seatsLoading, setSeatsLoading] = useState(false)
     const [activeView, setActiveView] = useState<'reais' | 'milhas'>('reais')
+    const [seatsPhase, setSeatsPhase] = useState<'ida' | 'volta' | 'summary'>('ida')
+    const [seatsIdaSel, setSeatsIdaSel] = useState<any | null>(null)
+    const [seatsVoltaSel, setSeatsVoltaSel] = useState<any | null>(null)
+    const [seatsDetailOpen, setSeatsDetailOpen] = useState<Set<string>>(new Set())
 
     // Sidebar state
     const [filters, setFilters] = useState<FilterState>({
@@ -281,6 +285,66 @@ export default function Resultados() {
         }
     }
 
+    // Reset seat selection when new results arrive
+    useEffect(() => {
+        setSeatsPhase('ida')
+        setSeatsIdaSel(null)
+        setSeatsVoltaSel(null)
+        setSeatsDetailOpen(new Set())
+    }, [seatsFlights])
+
+    // Seats.aero helpers
+    const AIRLINE_FULL: Record<string, string> = {
+        LA: 'LATAM Airlines', JJ: 'LATAM Airlines', G3: 'GOL', AD: 'Azul',
+        AA: 'American Airlines', UA: 'United Airlines', DL: 'Delta Air Lines',
+        AC: 'Air Canada', WS: 'WestJet', AF: 'Air France', KL: 'KLM',
+        LH: 'Lufthansa', LX: 'Swiss', OS: 'Austrian Airlines', SN: 'Brussels Airlines',
+        BA: 'British Airways', SK: 'SAS', AZ: 'ITA Airways', TP: 'TAP Portugal',
+        IB: 'Iberia', AV: 'Avianca', CM: 'Copa Airlines', AM: 'Aeromexico',
+        AR: 'Aerolíneas Argentinas', UX: 'Air Europa', ET: 'Ethiopian Airlines',
+        TK: 'Turkish Airlines', EK: 'Emirates', QR: 'Qatar Airways',
+        SQ: 'Singapore Airlines', JL: 'Japan Airlines', NH: 'ANA',
+        CX: 'Cathay Pacific', MH: 'Malaysia Airlines', B6: 'JetBlue',
+        AS: 'Alaska Airlines', WN: 'Southwest', VS: 'Virgin Atlantic',
+        EI: 'Aer Lingus', FR: 'Ryanair',
+    }
+    const SOURCE_PROGRAM: Record<string, { name: string; color: string; bg: string }> = {
+        smiles:         { name: 'Smiles',        color: '#F97316', bg: '#FFF7ED' },
+        delta:          { name: 'SkyMiles',       color: '#003DA5', bg: '#EFF6FF' },
+        american:       { name: 'AAdvantage',     color: '#B91C1C', bg: '#FEF2F2' },
+        united:         { name: 'MileagePlus',    color: '#004B87', bg: '#EFF6FF' },
+        aeroplan:       { name: 'Aeroplan',       color: '#CC0000', bg: '#FEF2F2' },
+        flyingblue:     { name: 'Flying Blue',    color: '#003087', bg: '#EFF6FF' },
+        lifemiles:      { name: 'Lifemiles',      color: '#E63946', bg: '#FEF2F2' },
+        virginatlantic: { name: 'Virgin Points',  color: '#E10A0A', bg: '#FEF2F2' },
+        alaska:         { name: 'Mileage Plan',   color: '#01426A', bg: '#EFF6FF' },
+        latam:          { name: 'LATAM Pass',     color: '#E31837', bg: '#FEF2F2' },
+        azul:           { name: 'TudoAzul',       color: '#003DA5', bg: '#EFF6FF' },
+        emirates:       { name: 'Skywards',       color: '#C09846', bg: '#FFFBEB' },
+        turkish:        { name: 'Miles&Smiles',   color: '#C8102E', bg: '#FEF2F2' },
+        jetblue:        { name: 'TrueBlue',       color: '#003876', bg: '#EFF6FF' },
+        iberia:         { name: 'Iberia Plus',    color: '#C41E3A', bg: '#FEF2F2' },
+        singapore:      { name: 'KrisFlyer',      color: '#1A3C5E', bg: '#EFF6FF' },
+        qatar:          { name: 'Avios (Qatar)',   color: '#5C0632', bg: '#FDF2F8' },
+        british:        { name: 'Avios (BA)',      color: '#2B5FA5', bg: '#EFF6FF' },
+        avianca:        { name: 'Lifemiles',      color: '#E63946', bg: '#FEF2F2' },
+    }
+    const CABIN_COLOR: Record<string, string> = {
+        'Economy': '#2A60C2', 'Premium Economy': '#7C3AED',
+        'Business': '#0E2A55', 'First': '#92400E',
+    }
+    const fmtDurSeats = (min?: number | null) => {
+        if (!min) return null
+        return `${Math.floor(min / 60)}h${min % 60 > 0 ? ` ${min % 60}min` : ''}`
+    }
+    const stopLabelSeats = (n: number, escalas?: string[]) => {
+        if (n === 0) return 'Direto'
+        const via = escalas?.length ? ` via ${escalas.join(', ')}` : ''
+        return `${n} ${n === 1 ? 'conexão' : 'conexões'}${via}`
+    }
+    const idaFlights = seatsFlights.filter(sf => sf.tipo === 'ida')
+    const voltaFlights = seatsFlights.filter(sf => sf.tipo === 'volta')
+
     if (loading) return <PlaneWindowLoader />
 
     return (
@@ -384,180 +448,199 @@ export default function Resultados() {
                                                 <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Nenhum voo encontrado no Seats.aero para esta rota.</p>
                                             </div>
                                         ) : (
-                                            seatsFlights.map((sf, idx) => {
-                                                const AIRLINE_FULL: Record<string, string> = {
-                                                    LA: 'LATAM Airlines', JJ: 'LATAM Airlines', G3: 'GOL', AD: 'Azul',
-                                                    AA: 'American Airlines', UA: 'United Airlines', DL: 'Delta Air Lines',
-                                                    AC: 'Air Canada', WS: 'WestJet',
-                                                    AF: 'Air France', KL: 'KLM', LH: 'Lufthansa', LX: 'Swiss',
-                                                    OS: 'Austrian Airlines', SN: 'Brussels Airlines', BA: 'British Airways',
-                                                    SK: 'SAS', AZ: 'ITA Airways', TP: 'TAP Portugal', IB: 'Iberia',
-                                                    AV: 'Avianca', CM: 'Copa Airlines', AM: 'Aeromexico', AR: 'Aerolíneas Argentinas',
-                                                    UX: 'Air Europa', ET: 'Ethiopian Airlines', TK: 'Turkish Airlines',
-                                                    EK: 'Emirates', QR: 'Qatar Airways', SQ: 'Singapore Airlines',
-                                                    JL: 'Japan Airlines', NH: 'ANA', CX: 'Cathay Pacific', MH: 'Malaysia Airlines',
-                                                    B6: 'JetBlue', AS: 'Alaska Airlines', WN: 'Southwest',
-                                                    VS: 'Virgin Atlantic', EI: 'Aer Lingus', FR: 'Ryanair',
-                                                }
-                                                const SOURCE_PROGRAM: Record<string, { name: string; color: string; bg: string }> = {
-                                                    smiles:         { name: 'Smiles',        color: '#F97316', bg: '#FFF7ED' },
-                                                    delta:          { name: 'SkyMiles',       color: '#003DA5', bg: '#EFF6FF' },
-                                                    american:       { name: 'AAdvantage',     color: '#B91C1C', bg: '#FEF2F2' },
-                                                    united:         { name: 'MileagePlus',    color: '#004B87', bg: '#EFF6FF' },
-                                                    aeroplan:       { name: 'Aeroplan',       color: '#CC0000', bg: '#FEF2F2' },
-                                                    flyingblue:     { name: 'Flying Blue',    color: '#003087', bg: '#EFF6FF' },
-                                                    lifemiles:      { name: 'Lifemiles',      color: '#E63946', bg: '#FEF2F2' },
-                                                    virginatlantic: { name: 'Virgin Points',  color: '#E10A0A', bg: '#FEF2F2' },
-                                                    alaska:         { name: 'Mileage Plan',   color: '#01426A', bg: '#EFF6FF' },
-                                                    latam:          { name: 'LATAM Pass',     color: '#E31837', bg: '#FEF2F2' },
-                                                    azul:           { name: 'TudoAzul',       color: '#003DA5', bg: '#EFF6FF' },
-                                                    emirates:       { name: 'Skywards',       color: '#C09846', bg: '#FFFBEB' },
-                                                    turkish:        { name: 'Miles&Smiles',   color: '#C8102E', bg: '#FEF2F2' },
-                                                    jetblue:        { name: 'TrueBlue',       color: '#003876', bg: '#EFF6FF' },
-                                                    iberia:         { name: 'Iberia Plus',    color: '#C41E3A', bg: '#FEF2F2' },
-                                                    singapore:      { name: 'KrisFlyer',      color: '#1A3C5E', bg: '#EFF6FF' },
-                                                    qatar:          { name: 'Avios (Qatar)',   color: '#5C0632', bg: '#FDF2F8' },
-                                                    british:        { name: 'Avios (BA)',      color: '#2B5FA5', bg: '#EFF6FF' },
-                                                    avianca:        { name: 'Lifemiles',      color: '#E63946', bg: '#FEF2F2' },
-                                                }
-                                                const fmtDur = (min?: number | null) => {
-                                                    if (!min) return null
-                                                    return `${Math.floor(min / 60)}h${min % 60 > 0 ? ` ${min % 60}min` : ''}`
-                                                }
-                                                const stopLabel = (n: number, escalas?: string[]) => {
-                                                    if (n === 0) return 'Direto'
-                                                    const via = escalas?.length ? ` via ${escalas.join(', ')}` : ''
-                                                    return `${n} ${n === 1 ? 'conexão' : 'conexões'}${via}`
-                                                }
-                                                const cabinColor: Record<string, string> = {
-                                                    'Economy': '#2A60C2', 'Premium Economy': '#7C3AED',
-                                                    'Business': '#0E2A55', 'First': '#92400E',
-                                                }
-                                                const activeCabin = sf.cabineEncontrada ?? 'Economy'
-                                                const airlineCode = sf.companhiaAerea ?? ''
-                                                const airlineName = AIRLINE_FULL[airlineCode] ?? airlineCode
-                                                const program = SOURCE_PROGRAM[sf.source?.toLowerCase() ?? '']
+                                            <>
+                                            {seatsPhase === 'summary' ? (
+                                                /* ── Resumo da seleção ── */
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                                        <CheckCircle2 size={20} color="#16A34A" />
+                                                        <span style={{ fontSize: 15, fontWeight: 800, color: '#16A34A' }}>Viagem selecionada</span>
+                                                    </div>
+                                                    {[seatsIdaSel, seatsVoltaSel].filter(Boolean).map((sf, i) => {
+                                                        const ac = sf.companhiaAerea ?? ''
+                                                        return (
+                                                            <div key={i} style={{ background: '#fff', border: '2px solid #16A34A', borderRadius: 16, padding: '14px 20px' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                                        {ac && <img src={`https://pics.avs.io/60/30/${ac}.png`} alt="" style={{ height: 24, objectFit: 'contain' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />}
+                                                                        <div>
+                                                                            <div style={{ fontSize: 14, fontWeight: 700, color: '#0E2A55' }}>{AIRLINE_FULL[ac] ?? ac}</div>
+                                                                            <div style={{ fontSize: 11, color: '#94A3B8' }}>{sf.tipo === 'ida' ? 'Ida' : 'Volta'} · {sf.dataVoo} · {sf.origem} → {sf.destino}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div style={{ textAlign: 'right' }}>
+                                                                        <div style={{ fontSize: 11, color: sf.paradas === 0 ? '#16A34A' : '#64748B', fontWeight: 600, marginBottom: 2 }}>{stopLabelSeats(sf.paradas ?? 0, sf.escalas)}</div>
+                                                                        <div style={{ fontSize: 20, fontWeight: 900, color: '#0E2A55' }}>{typeof sf.precoMilhas === 'number' ? sf.precoMilhas.toLocaleString('pt-BR') : sf.precoMilhas} pts</div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                    {seatsVoltaSel && (
+                                                        <div style={{ background: '#0E2A55', borderRadius: 12, padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <span style={{ fontSize: 13, fontWeight: 700, color: '#BBF7D0' }}>Total (ida + volta)</span>
+                                                            <span style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>{((seatsIdaSel?.precoMilhas ?? 0) + (seatsVoltaSel?.precoMilhas ?? 0)).toLocaleString('pt-BR')} pts</span>
+                                                        </div>
+                                                    )}
+                                                    <button onClick={() => { setSeatsPhase('ida'); setSeatsIdaSel(null); setSeatsVoltaSel(null) }} style={{ alignSelf: 'flex-start', background: 'none', border: '1px solid #CBD5E1', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#64748B', cursor: 'pointer', fontFamily: 'inherit' }}>← Escolher novamente</button>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    {/* Ida selecionada compacta (na fase volta) */}
+                                                    {seatsPhase === 'volta' && seatsIdaSel && (
+                                                        <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 12, padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                <CheckCircle2 size={16} color="#16A34A" />
+                                                                <div>
+                                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#15803D' }}>Ida: {AIRLINE_FULL[seatsIdaSel.companhiaAerea] ?? seatsIdaSel.companhiaAerea}</div>
+                                                                    <div style={{ fontSize: 11, color: '#64748B' }}>{seatsIdaSel.origem} → {seatsIdaSel.destino} · {stopLabelSeats(seatsIdaSel.paradas ?? 0, seatsIdaSel.escalas)}</div>
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                                <span style={{ fontSize: 15, fontWeight: 900, color: '#0E2A55' }}>{typeof seatsIdaSel.precoMilhas === 'number' ? seatsIdaSel.precoMilhas.toLocaleString('pt-BR') : seatsIdaSel.precoMilhas} pts</span>
+                                                                <button onClick={() => { setSeatsPhase('ida'); setSeatsIdaSel(null) }} style={{ background: 'none', border: 'none', fontSize: 11, color: '#64748B', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>← Mudar</button>
+                                                            </div>
+                                                        </div>
+                                                    )}
 
-                                                const isFirstVolta = sf.tipo === 'volta' && (idx === 0 || seatsFlights[idx - 1]?.tipo !== 'volta')
-                                                return (<>
-                                                    {isFirstVolta && (
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '8px 0' }}>
+                                                    {/* Divider de volta */}
+                                                    {seatsPhase === 'volta' && (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0 12px' }}>
                                                             <div style={{ flex: 1, height: '1px', background: '#BBF7D0' }} />
-                                                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>✈ Volta</span>
+                                                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>✈ Selecione a volta</span>
                                                             <div style={{ flex: 1, height: '1px', background: '#BBF7D0' }} />
                                                         </div>
                                                     )}
-                                                    <div key={`${sf.companhiaAerea}-${sf.rota}-${sf.dataVoo}-${idx}`} style={{
-                                                        background: '#fff', border: '1px solid #BBF7D0', borderRadius: '16px',
-                                                        overflow: 'hidden', boxShadow: 'var(--shadow-xs)'
-                                                    }}>
-                                                        {/* Cabeçalho */}
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #F0FDF4' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                                {/* Logo companhia */}
-                                                                {airlineCode && (
-                                                                    <img
-                                                                        src={`https://pics.avs.io/60/30/${airlineCode}.png`}
-                                                                        alt={airlineName}
-                                                                        style={{ height: 28, objectFit: 'contain', borderRadius: 4 }}
-                                                                        onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-                                                                    />
-                                                                )}
-                                                                <div>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const }}>
-                                                                        <span style={{ fontSize: '14px', fontWeight: 700, color: '#0E2A55' }}>
-                                                                            {airlineName}
-                                                                        </span>
-                                                                        {sf.tipo && (
-                                                                            <span style={{
-                                                                                fontSize: '10px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px',
-                                                                                background: sf.tipo === 'ida' ? '#DBEAFE' : '#FED7AA',
-                                                                                color: sf.tipo === 'ida' ? '#1E40AF' : '#9A3412',
-                                                                                textTransform: 'uppercase' as const,
-                                                                            }}>
-                                                                                {sf.tipo}
-                                                                            </span>
-                                                                        )}
-                                                                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: cabinColor[activeCabin] ?? '#0E2A55', color: '#fff' }}>
-                                                                            {activeCabin}
-                                                                        </span>
-                                                                        {/* Badge do programa de milhas */}
-                                                                        {program && (
-                                                                            <span style={{
-                                                                                fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px',
-                                                                                background: program.bg, color: program.color,
-                                                                                border: `1px solid ${program.color}33`,
-                                                                            }}>
-                                                                                {program.name}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    <span style={{ fontSize: '11px', color: '#94A3B8' }}>{sf.dataVoo}</span>
-                                                                </div>
-                                                            </div>
 
-                                                            {/* Preço principal */}
-                                                            <div style={{ textAlign: 'right' }}>
-                                                                <div style={{ fontSize: '22px', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em' }}>
-                                                                    {typeof sf.precoMilhas === 'number'
-                                                                        ? sf.precoMilhas.toLocaleString('pt-BR')
-                                                                        : sf.precoMilhas} pts
-                                                                </div>
-                                                                {sf.taxas && sf.taxas !== '0' && (
-                                                                    <div style={{ fontSize: '11px', color: '#94A3B8' }}>+ {sf.taxas} taxas</div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Detalhe do voo */}
-                                                        <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                            {/* Origem */}
-                                                            <div style={{ textAlign: 'center', minWidth: 44 }}>
-                                                                {sf.partida && <div style={{ fontSize: '18px', fontWeight: 800, color: '#0E2A55', lineHeight: 1 }}>{sf.partida}</div>}
-                                                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', marginTop: 2 }}>{sf.origem || sf.rota?.split('→')[0]?.trim()}</div>
-                                                            </div>
-
-                                                            {/* Linha do meio */}
-                                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-                                                                {fmtDur(sf.duracaoMin) && (
-                                                                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B' }}>{fmtDur(sf.duracaoMin)}</span>
-                                                                )}
-                                                                <div style={{ position: 'relative', height: 1, background: '#BBF7D0', width: '100%' }}>
-                                                                    <span style={{ position: 'absolute', right: -1, top: -5, fontSize: 11, color: '#16A34A' }}>✈</span>
-                                                                </div>
-                                                                <span style={{ fontSize: '10px', color: sf.paradas === 0 ? '#16A34A' : '#94A3B8', fontWeight: sf.paradas === 0 ? 700 : 400 }}>
-                                                                    {stopLabel(sf.paradas ?? 0, sf.escalas)}
-                                                                </span>
-                                                            </div>
-
-                                                            {/* Destino */}
-                                                            <div style={{ textAlign: 'center', minWidth: 44 }}>
-                                                                {sf.chegada && <div style={{ fontSize: '18px', fontWeight: 800, color: '#0E2A55', lineHeight: 1 }}>{sf.chegada}</div>}
-                                                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', marginTop: 2 }}>{sf.destino || sf.rota?.split('→').at(-1)?.trim()}</div>
-                                                            </div>
-
-                                                            {/* Outras cabines disponíveis */}
-                                                            {(sf.economy || sf.premiumEconomy || sf.business || sf.first) && (
-                                                                <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
-                                                                    {[
-                                                                        { label: 'Eco', val: sf.economy, color: '#2A60C2' },
-                                                                        { label: 'Prem', val: sf.premiumEconomy, color: '#7C3AED' },
-                                                                        { label: 'Bus', val: sf.business, color: '#0E2A55' },
-                                                                        { label: '1ª', val: sf.first, color: '#92400E' },
-                                                                    ].filter(c => c.val != null).map(c => (
-                                                                        <div key={c.label} style={{ textAlign: 'center', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '4px 8px' }}>
-                                                                            <div style={{ fontSize: 9, fontWeight: 700, color: c.color, textTransform: 'uppercase' as const }}>{c.label}</div>
-                                                                            <div style={{ fontSize: 11, fontWeight: 800, color: '#0E2A55' }}>
-                                                                                {typeof c.val === 'number' ? `${(c.val / 1000).toFixed(0)}k` : c.val}
+                                                    {/* Cards de voo */}
+                                                    {(seatsPhase === 'ida' ? idaFlights : voltaFlights).map((sf, sfIdx) => {
+                                                        const cardKey = `${sf.companhiaAerea}-${sf.source}-${sf.dataVoo}-${sfIdx}`
+                                                        const isDetailOpen = seatsDetailOpen.has(cardKey)
+                                                        const toggleDetail = () => setSeatsDetailOpen(prev => {
+                                                            const next = new Set(prev)
+                                                            if (next.has(cardKey)) next.delete(cardKey)
+                                                            else next.add(cardKey)
+                                                            return next
+                                                        })
+                                                        const airlineCode = sf.companhiaAerea ?? ''
+                                                        const airlineName = AIRLINE_FULL[airlineCode] ?? airlineCode
+                                                        const program = SOURCE_PROGRAM[sf.source?.toLowerCase() ?? '']
+                                                        const activeCabin = sf.cabineEncontrada ?? 'Economy'
+                                                        return (
+                                                            <motion.div key={cardKey} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: sfIdx * 0.03 }}
+                                                                style={{ background: '#fff', border: '1px solid #BBF7D0', borderRadius: '16px', overflow: 'hidden', boxShadow: 'var(--shadow-xs)' }}>
+                                                                {/* Cabeçalho */}
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #F0FDF4' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                        {airlineCode && <img src={`https://pics.avs.io/60/30/${airlineCode}.png`} alt={airlineName} style={{ height: 28, objectFit: 'contain', borderRadius: 4 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />}
+                                                                        <div>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const }}>
+                                                                                <span style={{ fontSize: '14px', fontWeight: 700, color: '#0E2A55' }}>{airlineName}</span>
+                                                                                <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: CABIN_COLOR[activeCabin] ?? '#0E2A55', color: '#fff' }}>{activeCabin}</span>
+                                                                                {program && <span style={{ fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: program.bg, color: program.color, border: `1px solid ${program.color}33` }}>{program.name}</span>}
                                                                             </div>
+                                                                            <span style={{ fontSize: '11px', color: '#94A3B8' }}>{sf.dataVoo}</span>
                                                                         </div>
-                                                                    ))}
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                        <div style={{ textAlign: 'right' }}>
+                                                                            <div style={{ fontSize: '22px', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em' }}>{typeof sf.precoMilhas === 'number' ? sf.precoMilhas.toLocaleString('pt-BR') : sf.precoMilhas} pts</div>
+                                                                            {sf.taxas && sf.taxas !== '0' && <div style={{ fontSize: '11px', color: '#94A3B8' }}>+ {sf.taxas} taxas</div>}
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (seatsPhase === 'ida') {
+                                                                                    setSeatsIdaSel(sf)
+                                                                                    if (voltaFlights.length > 0) setSeatsPhase('volta')
+                                                                                    else setSeatsPhase('summary')
+                                                                                } else {
+                                                                                    setSeatsVoltaSel(sf)
+                                                                                    setSeatsPhase('summary')
+                                                                                }
+                                                                            }}
+                                                                            style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
+                                                                            Selecionar →
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </>)
-                                            })
+
+                                                                {/* Timeline do voo */}
+                                                                <div style={{ padding: '12px 20px 8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                    <div style={{ textAlign: 'center', minWidth: 44 }}>
+                                                                        {sf.partida && <div style={{ fontSize: '18px', fontWeight: 800, color: '#0E2A55', lineHeight: 1 }}>{sf.partida}</div>}
+                                                                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', marginTop: 2 }}>{sf.origem || sf.rota?.split('→')[0]?.trim()}</div>
+                                                                    </div>
+                                                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                                                                        {fmtDurSeats(sf.duracaoMin) && <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B' }}>{fmtDurSeats(sf.duracaoMin)}</span>}
+                                                                        <div style={{ position: 'relative', height: 1, background: '#BBF7D0', width: '100%' }}>
+                                                                            <span style={{ position: 'absolute', right: -1, top: -5, fontSize: 11, color: '#16A34A' }}>✈</span>
+                                                                        </div>
+                                                                        <span style={{ fontSize: '10px', color: sf.paradas === 0 ? '#16A34A' : '#94A3B8', fontWeight: sf.paradas === 0 ? 700 : 400 }}>
+                                                                            {stopLabelSeats(sf.paradas ?? 0, sf.escalas)}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div style={{ textAlign: 'center', minWidth: 44 }}>
+                                                                        {sf.chegada && <div style={{ fontSize: '18px', fontWeight: 800, color: '#0E2A55', lineHeight: 1 }}>{sf.chegada}</div>}
+                                                                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', marginTop: 2 }}>{sf.destino || sf.rota?.split('→').at(-1)?.trim()}</div>
+                                                                    </div>
+                                                                    {(sf.economy || sf.premiumEconomy || sf.business || sf.first) && (
+                                                                        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
+                                                                            {[
+                                                                                { label: 'Eco', val: sf.economy, color: '#2A60C2' },
+                                                                                { label: 'Prem', val: sf.premiumEconomy, color: '#7C3AED' },
+                                                                                { label: 'Bus', val: sf.business, color: '#0E2A55' },
+                                                                                { label: '1ª', val: sf.first, color: '#92400E' },
+                                                                            ].filter(c => c.val != null).map(c => (
+                                                                                <div key={c.label} style={{ textAlign: 'center', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '4px 8px' }}>
+                                                                                    <div style={{ fontSize: 9, fontWeight: 700, color: c.color, textTransform: 'uppercase' as const }}>{c.label}</div>
+                                                                                    <div style={{ fontSize: 11, fontWeight: 800, color: '#0E2A55' }}>{typeof c.val === 'number' ? `${(c.val / 1000).toFixed(0)}k` : c.val}</div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Botão de detalhes */}
+                                                                <div style={{ padding: '0 20px 10px' }}>
+                                                                    <button onClick={toggleDetail} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#64748B', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit', padding: 0 }}>
+                                                                        {isDetailOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                                                        {isDetailOpen ? 'Ocultar detalhes' : 'Ver detalhes do voo'}
+                                                                    </button>
+                                                                </div>
+
+                                                                {/* Painel de detalhes */}
+                                                                <AnimatePresence>
+                                                                    {isDetailOpen && (
+                                                                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                                                                            style={{ overflow: 'hidden', borderTop: '1px solid #F0FDF4', background: '#F8FFF8' }}>
+                                                                            <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                                                <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Detalhes do trajeto</div>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
+                                                                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>{sf.origem}</span>
+                                                                                    {sf.escalas && sf.escalas.length > 0 && sf.escalas.map((esc: string, i: number) => (
+                                                                                        <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                                                            <span style={{ fontSize: 11, color: '#94A3B8' }}>→</span>
+                                                                                            <span style={{ fontSize: 12, fontWeight: 600, color: '#F97316', background: '#FFF7ED', padding: '2px 8px', borderRadius: 6 }}>{esc} (conexão)</span>
+                                                                                        </span>
+                                                                                    ))}
+                                                                                    <span style={{ fontSize: 11, color: '#94A3B8' }}>→</span>
+                                                                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>{sf.destino}</span>
+                                                                                </div>
+                                                                                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' as const }}>
+                                                                                    <span style={{ fontSize: 12, color: '#64748B' }}><strong>Paradas:</strong> {sf.paradas === 0 ? 'Voo direto ✓' : `${sf.paradas} ${sf.paradas === 1 ? 'conexão' : 'conexões'}`}</span>
+                                                                                    {sf.duracaoMin && <span style={{ fontSize: 12, color: '#64748B' }}><strong>Duração:</strong> {fmtDurSeats(sf.duracaoMin)}</span>}
+                                                                                    <span style={{ fontSize: 12, color: '#64748B' }}><strong>Programa:</strong> {program?.name ?? sf.source}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </motion.div>
+                                                                    )}
+                                                                </AnimatePresence>
+                                                            </motion.div>
+                                                        )
+                                                    })}
+                                                </>
+                                            )}
+                                            </>
                                         )}
                                     </div>
                                 </div>
