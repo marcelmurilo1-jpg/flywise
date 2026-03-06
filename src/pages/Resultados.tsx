@@ -68,18 +68,13 @@ export default function Resultados() {
 
         console.log('[Resultados] useEffect disparado. buscaId:', buscaId, 'last:', lastBuscaId.current)
 
-        // Check SessionStorage to prevent loop even across reloads or HMR
-        const storageKey = `busca_executada_${buscaId}`
-        const alreadyDone = sessionStorage.getItem(storageKey)
-
-        if (lastBuscaId.current === buscaId || GLOBAL_LAST_BUSCA_ID === buscaId || alreadyDone) {
-            console.log('[Resultados] 🛑 BLOQUEIO: Busca já processada ou em curso para este ID:', buscaId)
+        if (lastBuscaId.current === buscaId || GLOBAL_LAST_BUSCA_ID === buscaId) {
+            console.log('[Resultados] 🛑 BLOQUEIO: Busca já em curso para este ID:', buscaId)
             return
         }
 
         lastBuscaId.current = buscaId
         GLOBAL_LAST_BUSCA_ID = buscaId
-        sessionStorage.setItem(storageKey, 'true')
         console.log('[Resultados] 🚀 INICIANDO LOGICA DE CARREGAMENTO PARA ID:', buscaId)
 
         // Read URL params at effect setup time
@@ -146,7 +141,7 @@ export default function Resultados() {
                 // 3.1 Fetch Seats.aero in parallel (non-blocking)
                 setSeatsLoading(true)
                 console.log('[Resultados] Iniciando fetch Seats.aero para:', orig, destP)
-                fetch('http://localhost:3001/api/search-flights', {
+                fetch(`${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'}/api/search-flights`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -374,45 +369,116 @@ export default function Resultados() {
                                                 <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Nenhum voo encontrado no Seats.aero para esta rota.</p>
                                             </div>
                                         ) : (
-                                            seatsFlights.map((sf, idx) => (
-                                                <div key={idx} style={{
-                                                    background: '#fff', border: '1px solid #BBF7D0', borderRadius: '16px', padding: '16px 20px',
-                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                    boxShadow: 'var(--shadow-xs)'
-                                                }}>
-                                                    <div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                                            <span style={{ fontSize: '14px', fontWeight: 700, color: '#16A34A' }}>
-                                                                {sf.companhiaAerea}
-                                                            </span>
-                                                            {sf.tipo && (
-                                                                <span style={{
-                                                                    fontSize: '10px',
-                                                                    fontWeight: 800,
-                                                                    padding: '2px 6px',
-                                                                    borderRadius: '4px',
-                                                                    background: sf.tipo === 'ida' ? '#DBEAFE' : '#FED7AA',
-                                                                    color: sf.tipo === 'ida' ? '#1E40AF' : '#9A3412',
-                                                                    textTransform: 'uppercase'
-                                                                }}>
-                                                                    {sf.tipo}
+                                            seatsFlights.map((sf, idx) => {
+                                                const fmtDur = (min?: number | null) => {
+                                                    if (!min) return null
+                                                    return `${Math.floor(min / 60)}h${min % 60 > 0 ? ` ${min % 60}min` : ''}`
+                                                }
+                                                const stopLabel = (n: number, escalas?: string[]) => {
+                                                    if (n === 0) return 'Direto'
+                                                    const via = escalas?.length ? ` via ${escalas.join(', ')}` : ''
+                                                    return `${n} ${n === 1 ? 'conexão' : 'conexões'}${via}`
+                                                }
+                                                const cabinColor: Record<string, string> = {
+                                                    'Economy': '#2A60C2', 'Premium Economy': '#7C3AED',
+                                                    'Business': '#0E2A55', 'First': '#92400E',
+                                                }
+                                                const activeCabin = sf.cabineEncontrada ?? 'Economy'
+
+                                                return (
+                                                    <div key={`${sf.companhiaAerea}-${sf.rota}-${sf.dataVoo}-${idx}`} style={{
+                                                        background: '#fff', border: '1px solid #BBF7D0', borderRadius: '16px',
+                                                        overflow: 'hidden', boxShadow: 'var(--shadow-xs)'
+                                                    }}>
+                                                        {/* Cabeçalho */}
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #F0FDF4' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                <div style={{ width: 4, height: 28, borderRadius: 4, background: '#16A34A' }} />
+                                                                <div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        <span style={{ fontSize: '14px', fontWeight: 700, color: '#15803D' }}>
+                                                                            {sf.companhiaAerea}
+                                                                        </span>
+                                                                        {sf.tipo && (
+                                                                            <span style={{
+                                                                                fontSize: '10px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px',
+                                                                                background: sf.tipo === 'ida' ? '#DBEAFE' : '#FED7AA',
+                                                                                color: sf.tipo === 'ida' ? '#1E40AF' : '#9A3412',
+                                                                                textTransform: 'uppercase' as const,
+                                                                            }}>
+                                                                                {sf.tipo}
+                                                                            </span>
+                                                                        )}
+                                                                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: cabinColor[activeCabin] ?? '#0E2A55', color: '#fff' }}>
+                                                                            {activeCabin}
+                                                                        </span>
+                                                                    </div>
+                                                                    <span style={{ fontSize: '11px', color: '#94A3B8' }}>{sf.dataVoo}</span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Preço principal */}
+                                                            <div style={{ textAlign: 'right' }}>
+                                                                <div style={{ fontSize: '22px', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em' }}>
+                                                                    {typeof sf.precoMilhas === 'number'
+                                                                        ? sf.precoMilhas.toLocaleString('pt-BR')
+                                                                        : sf.precoMilhas} pts
+                                                                </div>
+                                                                {sf.taxas && sf.taxas !== '0' && (
+                                                                    <div style={{ fontSize: '11px', color: '#94A3B8' }}>+ {sf.taxas} taxas</div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Detalhe do voo */}
+                                                        <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                            {/* Origem */}
+                                                            <div style={{ textAlign: 'center', minWidth: 44 }}>
+                                                                {sf.partida && <div style={{ fontSize: '18px', fontWeight: 800, color: '#0E2A55', lineHeight: 1 }}>{sf.partida}</div>}
+                                                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', marginTop: 2 }}>{sf.origem || sf.rota?.split('→')[0]?.trim()}</div>
+                                                            </div>
+
+                                                            {/* Linha do meio */}
+                                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                                                                {fmtDur(sf.duracaoMin) && (
+                                                                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B' }}>{fmtDur(sf.duracaoMin)}</span>
+                                                                )}
+                                                                <div style={{ position: 'relative', height: 1, background: '#BBF7D0', width: '100%' }}>
+                                                                    <span style={{ position: 'absolute', right: -1, top: -5, fontSize: 11, color: '#16A34A' }}>✈</span>
+                                                                </div>
+                                                                <span style={{ fontSize: '10px', color: '#94A3B8' }}>
+                                                                    {stopLabel(sf.paradas ?? 0, sf.escalas)}
                                                                 </span>
+                                                            </div>
+
+                                                            {/* Destino */}
+                                                            <div style={{ textAlign: 'center', minWidth: 44 }}>
+                                                                {sf.chegada && <div style={{ fontSize: '18px', fontWeight: 800, color: '#0E2A55', lineHeight: 1 }}>{sf.chegada}</div>}
+                                                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', marginTop: 2 }}>{sf.destino || sf.rota?.split('→').at(-1)?.trim()}</div>
+                                                            </div>
+
+                                                            {/* Outras cabines disponíveis */}
+                                                            {(sf.economy || sf.premiumEconomy || sf.business || sf.first) && (
+                                                                <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
+                                                                    {[
+                                                                        { label: 'Eco', val: sf.economy, color: '#2A60C2' },
+                                                                        { label: 'Prem', val: sf.premiumEconomy, color: '#7C3AED' },
+                                                                        { label: 'Biz', val: sf.business, color: '#0E2A55' },
+                                                                        { label: '1ª', val: sf.first, color: '#92400E' },
+                                                                    ].filter(c => c.val != null).map(c => (
+                                                                        <div key={c.label} style={{ textAlign: 'center', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '4px 8px' }}>
+                                                                            <div style={{ fontSize: 9, fontWeight: 700, color: c.color, textTransform: 'uppercase' as const }}>{c.label}</div>
+                                                                            <div style={{ fontSize: 11, fontWeight: 800, color: '#0E2A55' }}>
+                                                                                {typeof c.val === 'number' ? `${(c.val / 1000).toFixed(0)}k` : c.val}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
                                                             )}
                                                         </div>
-                                                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                                            Rota: {sf.rota} · Data: {sf.dataVoo}
-                                                        </span>
                                                     </div>
-                                                    <div style={{ textAlign: 'right' }}>
-                                                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#0E2A55' }}>
-                                                            {sf.precoMilhas} pts
-                                                        </div>
-                                                        <div style={{ fontSize: '11px', color: '#94A3B8' }}>
-                                                            + {sf.taxas} de taxas
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))
+                                                )
+                                            })
                                         )}
                                     </div>
                                 </div>

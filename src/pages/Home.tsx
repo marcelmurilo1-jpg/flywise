@@ -26,8 +26,6 @@ export default function Home() {
     const { user } = useAuth()
     const navigate = useNavigate()
 
-    useEffect(() => () => { }, [])
-
     useEffect(() => {
         if (!user) return
         supabase.from('buscas').select('*')

@@ -13,7 +13,7 @@ export interface FilterState {
 const PROGRAMS = ['Smiles', 'LATAM Pass', 'TudoAzul']
 
 export function Sidebar({ filters, setFilters }: { filters: FilterState, setFilters: (f: FilterState) => void }) {
-    const [sections, setSections] = useState({ programs: true, stops: true, cabin: true, miles: false })
+    const [sections, setSections] = useState({ sort: true, programs: true, stops: true, cabin: true, miles: false })
     const toggle = (k: keyof typeof sections) => setSections(s => ({ ...s, [k]: !s[k] }))
 
     const toggleProgram = (p: string) => {
@@ -72,8 +72,8 @@ export function Sidebar({ filters, setFilters }: { filters: FilterState, setFilt
             </p>
 
             {/* Sort By */}
-            <SectionHeader label="Ordenar por" k="programs" />
-            {sections.programs && (
+            <SectionHeader label="Ordenar por" k="sort" />
+            {sections.sort && (
                 <div style={{ padding: '8px 0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     {[
                         ['Melhor Estratégia', 'best'],
@@ -92,7 +92,7 @@ export function Sidebar({ filters, setFilters }: { filters: FilterState, setFilt
             )}
 
             {/* Programs */}
-            <SectionHeader label="Programas de Milhas" k="cabin" />
+            <SectionHeader label="Programas de Milhas" k="programs" />
             {sections.programs && (
                 <div style={{ padding: '8px 0' }}>
                     {PROGRAMS.map(p => (

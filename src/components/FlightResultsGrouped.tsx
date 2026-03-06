@@ -113,7 +113,6 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
 export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch, sidebarFilters }: FlightResultsGroupedProps) {
     const [selFlight, setSelFlight] = useState<ResultadoVoo | null>(null)
     const [panelOpen, setPanelOpen] = useState(false)
-    void setSelFlight
 
     // ── Filter state ──────────────────────────────────────────────────────────
     const [filtersOpen, setFiltersOpen] = useState(false)
@@ -506,7 +505,7 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                 </div>
 
                                 <button
-                                    onClick={() => setPanelOpen(true)}
+                                    onClick={() => { setSelFlight(flight); setPanelOpen(true) }}
                                     style={{
                                         background: '#0E2A55', color: '#fff', border: 'none',
                                         borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 700,

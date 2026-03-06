@@ -1,54 +1,20 @@
 /**
- * amadeus.ts — Client for Amadeus for Developers API
- * Docs: https://developers.amadeus.com
+ * amadeus.ts — Client para o proxy Amadeus rodando no servidor Express (server.js).
  *
- * Uses the TEST environment (test.api.amadeus.com).
- * To switch to production, change BASE_URL to https://api.amadeus.com
+ * As credenciais (CLIENT_ID / CLIENT_SECRET) ficam exclusivamente no servidor.
+ * O frontend apenas chama o proxy em /api/amadeus/*.
  */
 
-const BASE_URL = 'https://test.api.amadeus.com'
-const CLIENT_ID = import.meta.env.VITE_AMADEUS_CLIENT_ID as string
-const CLIENT_SECRET = import.meta.env.VITE_AMADEUS_CLIENT_SECRET as string
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
 
-// ─── Token cache (in-memory per session) ────────────────────────────────────
-let _token: string | null = null
-let _tokenExpiresAt = 0
-
-async function getToken(): Promise<string> {
-    const now = Date.now()
-    if (_token && _tokenExpiresAt > now + 60_000) return _token
-
-    if (!CLIENT_ID || !CLIENT_SECRET) {
-        console.error('[Amadeus] MISSING env vars: VITE_AMADEUS_CLIENT_ID / VITE_AMADEUS_CLIENT_SECRET')
-        throw new Error('Credenciais Amadeus não configuradas. Verifique as variáveis de ambiente na Vercel.')
-    }
-
-    console.log('[Amadeus] Requesting token...')
-    const res = await fetch(`${BASE_URL}/v1/security/oauth2/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grant_type: 'client_credentials',
-            client_id: CLIENT_ID,
-            client_secret: CLIENT_SECRET,
-        }),
-    })
-
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        const msg = err.error_description ?? 'Falha ao autenticar com Amadeus'
-        console.error('[Amadeus] Auth error:', msg)
-        throw new Error(msg)
-    }
-
-    const data = await res.json()
-    _token = data.access_token as string
-    _tokenExpiresAt = now + (data.expires_in as number) * 1000
-    console.log('[Amadeus] Token OK, expires in', data.expires_in, 's')
-    return _token
+// ─── Duration ISO8601 → minutes ───────────────────────────────────────────────
+function parseDuration(iso: string): number {
+    const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/)
+    if (!m) return 0
+    return (parseInt(m[1] ?? '0') * 60) + parseInt(m[2] ?? '0')
 }
 
-// ─── Airline code → name ─────────────────────────────────────────────────────
+// ─── Airline code → name ──────────────────────────────────────────────────────
 const AIRLINE_NAMES: Record<string, string> = {
     LA: 'LATAM Airlines', JJ: 'LATAM Airlines',
     G3: 'GOL Linhas Aéreas', AD: 'Azul Linhas Aéreas',
@@ -66,35 +32,21 @@ const CABIN_PT: Record<string, string> = {
     BUSINESS: 'business', FIRST: 'first',
 }
 
-// ─── Duration ISO8601 → minutes ──────────────────────────────────────────────
-function parseDuration(iso: string): number {
-    const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/)
-    if (!m) return 0
-    return (parseInt(m[1] ?? '0') * 60) + parseInt(m[2] ?? '0')
-}
-
 // ─── Airport / Location search ────────────────────────────────────────────────
 export interface Airport {
     iataCode: string
     name: string
     cityName: string
     countryCode: string
-    label: string  // display string
+    label: string
 }
 
-/** Search airports by keyword (city name or IATA code) */
+/** Busca aeroportos via proxy do servidor (sem expor credenciais no frontend) */
 export async function searchAirports(keyword: string): Promise<Airport[]> {
     if (!keyword || keyword.trim().length < 2) return []
-    const token = await getToken()
-    const url = `${BASE_URL}/v1/reference-data/locations?` + new URLSearchParams({
-        keyword: keyword.trim(),
-        subType: 'AIRPORT',
-        'page[limit]': '6',
-        sort: 'analytics.travelers.score',
-        view: 'LIGHT',
-    })
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    if (!res.ok) return []
+    const url = `${API_BASE}/api/amadeus/airports?` + new URLSearchParams({ keyword: keyword.trim() })
+    const res = await fetch(url).catch(() => null)
+    if (!res || !res.ok) return []
     const data = await res.json()
     return (data.data ?? []).map((loc: any): Airport => ({
         iataCode: loc.iataCode,
@@ -112,14 +64,12 @@ export interface FlightOffer {
     carrierCode: string
     preco_brl: number
     taxas_brl: number
-    // Outbound leg
     partida: string
     chegada: string
     origem: string
     destino: string
     duracao_min: number
     paradas: number
-    // Return leg (only for round-trips)
     returnPartida?: string
     returnChegada?: string
     returnOrigem?: string
@@ -127,7 +77,6 @@ export interface FlightOffer {
     returnDuracaoMin?: number
     returnParadas?: number
     returnSegmentos?: unknown
-    // Other
     cabin_class: string
     voo_numero: string
     segmentos: unknown
@@ -136,9 +85,9 @@ export interface FlightOffer {
 }
 
 export interface SearchFlightsParams {
-    origin: string          // IATA
-    destination: string     // IATA
-    departureDate: string   // YYYY-MM-DD
+    origin: string
+    destination: string
+    departureDate: string
     adults?: number
     returnDate?: string
     cabin?: 'ECONOMY' | 'PREMIUM_ECONOMY' | 'BUSINESS' | 'FIRST'
@@ -146,10 +95,8 @@ export interface SearchFlightsParams {
     nonStop?: boolean
 }
 
-/** Performs the raw search with abort signal and timeout */
-async function rawSearchFlights(params: SearchFlightsParams): Promise<any> {
-    const token = await getToken()
-
+/** Busca voos via proxy do servidor com timeout de 12s */
+export async function searchFlights(params: SearchFlightsParams): Promise<FlightOffer[]> {
     const qp: Record<string, string> = {
         originLocationCode: params.origin.trim().toUpperCase(),
         destinationLocationCode: params.destination.trim().toUpperCase(),
@@ -164,36 +111,27 @@ async function rawSearchFlights(params: SearchFlightsParams): Promise<any> {
 
     console.log('[Amadeus] searchFlights:', qp)
 
-    // 12s Timeout fail-safe for Amadeus
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 12000)
 
+    let data: any
     try {
         const res = await fetch(
-            `${BASE_URL}/v2/shopping/flight-offers?${new URLSearchParams(qp)}`,
-            {
-                headers: { Authorization: `Bearer ${token}` },
-                signal: controller.signal
-            }
-        )
-
+            `${API_BASE}/api/amadeus/flights?${new URLSearchParams(qp)}`,
+            { signal: controller.signal }
+        ).catch(() => {
+            throw new Error(`Servidor backend não está respondendo em ${API_BASE}. Certifique-se de que o servidor está rodando com: node server.js`)
+        })
+        data = await res.json()
         if (!res.ok) {
-            const err = await res.json().catch(() => ({}))
-            const detail = err.errors?.[0]?.detail ?? err.errors?.[0]?.title ?? 'Erro ao buscar voos'
-            console.error('[Amadeus] Flight search error:', detail, err)
+            const detail = data.errors?.[0]?.detail ?? data.errors?.[0]?.title ?? 'Erro ao buscar voos'
+            console.error('[Amadeus] Flight search error:', detail)
             throw new Error(detail)
         }
-
-        const data = await res.json()
-        return data
     } finally {
         clearTimeout(timeoutId)
     }
-}
 
-/** Search flight offers via Amadeus and return normalized results */
-export async function searchFlights(params: SearchFlightsParams): Promise<FlightOffer[]> {
-    const data = await rawSearchFlights(params)
     console.log('[Amadeus] Flight search result:', data.data?.length, 'offers')
     const offers: any[] = data.data ?? []
 
@@ -208,7 +146,6 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
         const taxas = Math.max(0, totalBrl - baseBrl)
         const cabin = (offer.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.cabin as string | undefined) ?? 'ECONOMY'
 
-        // Return leg (itineraries[1] exists for round-trips)
         const itin1 = offer.itineraries[1]
         let returnFields: Partial<FlightOffer> = {}
         if (itin1) {
