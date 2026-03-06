@@ -1,11 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
     Loader2, MapPin, RefreshCw, Lightbulb, Sunrise, Sun, Moon, Sparkles,
     BookmarkPlus, Bookmark, ChevronLeft, ChevronDown, CalendarDays, Users,
     Search, Pencil, Trash2, Plus, Check, UtensilsCrossed, Landmark, TreePine, ShoppingBag, Clock,
+    Maximize2, X,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Header } from '@/components/Header'
@@ -30,6 +34,8 @@ interface DayPeriod {
     local: string
     dica: string
     extras_atividades?: ActivityExtra[]
+    lat?: number
+    lng?: number
 }
 
 interface ItineraryDay {
@@ -44,6 +50,8 @@ interface ExtraItem {
     nome: string
     descricao: string
     dica: string
+    lat?: number
+    lng?: number
 }
 
 interface ItineraryExtras {
@@ -97,6 +105,7 @@ const EXTRA_TABS: { key: ExtraCategory; label: string; Icon: React.ElementType }
     { key: 'compras', label: 'Compras', Icon: ShoppingBag },
 ]
 
+
 const BLANK_PERIOD: DayPeriod = { horario: '', atividade: '', local: '', dica: '', extras_atividades: [] }
 const BLANK_EXTRA: ActivityExtra = { horario: '', atividade: '', local: '', dica: '' }
 const BLANK_DAY = (dia: number): ItineraryDay => ({
@@ -118,6 +127,7 @@ export default function Roteiro() {
     const [duration, setDuration] = useState(5)
     const [travelerType, setTravelerType] = useState<TravelerType>('casal')
     const [travelStyle, setTravelStyle] = useState<TravelStyle[]>(['Cultural'])
+    const [budget, setBudget] = useState<1 | 2 | 3 | 4>(2)
     const [error, setError] = useState('')
 
     // Result state
@@ -134,6 +144,15 @@ export default function Roteiro() {
 
     // Extras sidebar
     const [activeTab, setActiveTab] = useState<ExtraCategory>('gastronomia')
+
+    // Collapsed days state (index 0 = open, rest = closed by default)
+    const [collapsedDays, setCollapsedDays] = useState<boolean[]>([])
+    const [viewCollapsedDays, setViewCollapsedDays] = useState<boolean[]>([])
+
+    const toggleDay = (i: number) => setCollapsedDays(prev => prev.map((c, idx) => idx === i ? !c : c))
+    const expandDay = (i: number) => setCollapsedDays(prev => prev.map((c, idx) => idx === i ? false : c))
+    const toggleViewDay = (i: number) => setViewCollapsedDays(prev => prev.map((c, idx) => idx === i ? !c : c))
+    const expandViewDay = (i: number) => setViewCollapsedDays(prev => prev.map((c, idx) => idx === i ? false : c))
 
     // List state
     const [savedTrips, setSavedTrips] = useState<SavedItinerary[]>([])
@@ -165,6 +184,7 @@ export default function Roteiro() {
                     duration,
                     traveler_type: travelerType,
                     travel_style: travelStyle,
+                    budget,
                 })
                 .select()
                 .single()
@@ -182,6 +202,7 @@ export default function Roteiro() {
             const { result } = data
             setItinerary(result)
             setActiveTab('gastronomia')
+            setCollapsedDays((result.dias ?? []).map((_: unknown, i: number) => i !== 0))
             setStep('result')
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Erro inesperado.')
@@ -229,12 +250,14 @@ export default function Roteiro() {
         setIsEditing(false)
         setEditableItinerary(null)
         setSaveStatus('idle')
+        setCollapsedDays([])
         setStep('form')
     }
 
     const handleViewTrip = (trip: SavedItinerary) => {
         setViewingTrip(trip)
         setActiveTab('gastronomia')
+        setViewCollapsedDays((trip.result.dias ?? []).map((_, i) => i !== 0))
         setStep('view')
     }
 
@@ -317,6 +340,7 @@ export default function Roteiro() {
             const dias = prev.dias.filter((_, i) => i !== dayIdx).map((d, i) => ({ ...d, dia: i + 1 }))
             return { ...prev, dias }
         })
+        setCollapsedDays(prev => prev.filter((_, i) => i !== dayIdx))
     }
 
     const addDay = () => {
@@ -324,6 +348,7 @@ export default function Roteiro() {
             if (!prev) return prev
             return { ...prev, dias: [...prev.dias, BLANK_DAY(prev.dias.length + 1)] }
         })
+        setCollapsedDays(prev => [...prev, false])
     }
 
     const saveEdits = async () => {
@@ -483,6 +508,38 @@ export default function Roteiro() {
                                         </div>
                                     </div>
 
+                                    <div>
+                                        <label style={labelStyle}>Orçamento da viagem</label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                                            {([
+                                                { level: 1 as const, signs: '$', label: 'Gratuito', desc: 'Somente atividades sem custo' },
+                                                { level: 2 as const, signs: '$$', label: 'Econômico', desc: 'Comida de rua e ingressos baratos' },
+                                                { level: 3 as const, signs: '$$$', label: 'Moderado', desc: 'Ótimo custo-benefício' },
+                                                { level: 4 as const, signs: '$$$$', label: 'Premium', desc: 'Experiências de alto padrão' },
+                                            ]).map(({ level, signs, label, desc }) => {
+                                                const active = budget === level
+                                                return (
+                                                    <button
+                                                        key={level}
+                                                        type="button"
+                                                        onClick={() => setBudget(level)}
+                                                        style={{
+                                                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+                                                            padding: '14px 8px', borderRadius: '14px', cursor: 'pointer',
+                                                            border: `2px solid ${active ? 'var(--blue-vibrant)' : 'var(--border-light)'}`,
+                                                            background: active ? 'var(--blue-pale-mid)' : '#fff',
+                                                            fontFamily: 'inherit', transition: 'all 0.15s',
+                                                        }}
+                                                    >
+                                                        <span style={{ fontSize: '17px', fontWeight: 800, color: active ? 'var(--blue-vibrant)' : 'var(--text-muted)', letterSpacing: '-0.5px' }}>{signs}</span>
+                                                        <span style={{ fontSize: '11px', fontWeight: 800, color: active ? 'var(--blue-vibrant)' : 'var(--text-dark)' }}>{label}</span>
+                                                        <span style={{ fontSize: '10px', fontWeight: 500, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.3 }}>{desc}</span>
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+
                                     {error && (
                                         <p style={{ fontSize: '13px', color: '#f87171', textAlign: 'center', margin: 0 }}>{error}</p>
                                     )}
@@ -587,7 +644,7 @@ export default function Roteiro() {
                             </div>
 
                             {/* Two-column grid */}
-                            <div style={{ display: 'grid', gridTemplateColumns: itinerary?.extras ? 'minmax(0,1fr) 320px' : '1fr', gap: '28px', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '28px', alignItems: 'flex-start' }}>
 
                                 {/* LEFT — itinerary */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -617,6 +674,9 @@ export default function Roteiro() {
                                             day={day}
                                             index={i}
                                             isEditing={isEditing}
+                                            collapsed={collapsedDays[i] ?? false}
+                                            onToggle={() => toggleDay(i)}
+                                            onExpand={() => expandDay(i)}
                                             onUpdateTema={v => updateDayTema(i, v)}
                                             onUpdatePeriod={(p, f, v) => updatePeriod(i, p, f, v)}
                                             onRemove={() => removeDay(i)}
@@ -701,12 +761,21 @@ export default function Roteiro() {
                                     )}
                                 </div>
 
-                                {/* RIGHT — extras sidebar */}
-                                {itinerary?.extras && (
-                                    <div style={{ position: 'sticky', top: '24px' }}>
-                                        <ExtrasSidebar extras={itinerary.extras} activeTab={activeTab} onTabChange={setActiveTab} />
-                                    </div>
-                                )}
+                                {/* RIGHT — extras sidebar + day map */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    {itinerary?.extras && (
+                                        <ExtrasSidebar
+                                            extras={itinerary.extras}
+                                            activeTab={activeTab}
+                                            onTabChange={setActiveTab}
+                                            onRefresh={async () => {
+                                                const { data, error } = await supabase.functions.invoke('refresh-extras', { body: { itinerary_id: currentRowId } })
+                                                if (!error && data?.extras) setItinerary(prev => prev ? { ...prev, extras: data.extras } : prev)
+                                            }}
+                                        />
+                                    )}
+                                    <DaysMapSection dias={displayItinerary.dias} collapsedDays={collapsedDays} />
+                                </div>
                             </div>
                         </motion.div>
                     )}
@@ -799,7 +868,7 @@ export default function Roteiro() {
                                 <ChevronLeft size={16} /> Voltar para Minhas Viagens
                             </button>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: viewingTrip.result.extras ? 'minmax(0,1fr) 320px' : '1fr', gap: '28px', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '28px', alignItems: 'flex-start' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                     <div style={{ background: 'linear-gradient(135deg, #0E2A55 0%, #2A60C2 100%)', borderRadius: '24px', padding: '28px 32px', color: '#fff' }}>
                                         <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)', marginBottom: '8px' }}>Viagem Salva</p>
@@ -812,15 +881,24 @@ export default function Roteiro() {
                                         </div>
                                     </div>
                                     {viewingTrip.result.dias.map((day, i) => (
-                                        <EditableDayCard key={i} day={day} index={i} isEditing={false} onUpdateTema={() => {}} onUpdatePeriod={() => {}} onRemove={() => {}} onAddActivity={() => {}} onRemoveActivity={() => {}} onUpdateActivity={() => {}} />
+                                        <EditableDayCard key={i} day={day} index={i} isEditing={false} collapsed={viewCollapsedDays[i] ?? false} onToggle={() => toggleViewDay(i)} onExpand={() => expandViewDay(i)} onUpdateTema={() => {}} onUpdatePeriod={() => {}} onRemove={() => {}} onAddActivity={() => {}} onRemoveActivity={() => {}} onUpdateActivity={() => {}} />
                                     ))}
                                     <TipsBudgetCard itinerary={viewingTrip.result} delayBase={viewingTrip.result.dias.length} />
                                 </div>
-                                {viewingTrip.result.extras && (
-                                    <div style={{ position: 'sticky', top: '24px' }}>
-                                        <ExtrasSidebar extras={viewingTrip.result.extras} activeTab={activeTab} onTabChange={setActiveTab} />
-                                    </div>
-                                )}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    {viewingTrip.result.extras && (
+                                        <ExtrasSidebar
+                                            extras={viewingTrip.result.extras}
+                                            activeTab={activeTab}
+                                            onTabChange={setActiveTab}
+                                            onRefresh={async () => {
+                                                const { data, error } = await supabase.functions.invoke('refresh-extras', { body: { itinerary_id: viewingTrip.id } })
+                                                if (!error && data?.extras) setViewingTrip(prev => prev ? { ...prev, result: { ...prev.result, extras: data.extras } } : prev)
+                                            }}
+                                        />
+                                    )}
+                                    <DaysMapSection dias={viewingTrip.result.dias} collapsedDays={viewCollapsedDays} />
+                                </div>
                             </div>
                         </motion.div>
                     )}
@@ -837,6 +915,9 @@ interface EditableDayCardProps {
     day: ItineraryDay
     index: number
     isEditing: boolean
+    collapsed: boolean
+    onToggle: () => void
+    onExpand: () => void
     onUpdateTema: (v: string) => void
     onUpdatePeriod: (p: 'manha' | 'tarde' | 'noite', f: string, v: string) => void
     onRemove: () => void
@@ -845,16 +926,34 @@ interface EditableDayCardProps {
     onUpdateActivity: (p: 'manha' | 'tarde' | 'noite', extraIdx: number, f: keyof ActivityExtra, v: string) => void
 }
 
-function EditableDayCard({ day, index, isEditing, onUpdateTema, onUpdatePeriod, onRemove, onAddActivity, onRemoveActivity, onUpdateActivity }: EditableDayCardProps) {
+function EditableDayCard({ day, index, isEditing, collapsed, onToggle, onExpand, onUpdateTema, onUpdatePeriod, onRemove, onAddActivity, onRemoveActivity, onUpdateActivity }: EditableDayCardProps) {
+    useEffect(() => {
+        if (isEditing) onExpand()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isEditing])
+
+    const toggleCollapse = () => {
+        if (!isEditing) onToggle()
+    }
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.06 }}
-            style={{ background: '#fff', border: `1px solid ${isEditing ? 'var(--blue-medium)' : 'var(--border-light)'}`, borderRadius: '20px', overflow: 'hidden', boxShadow: '0 4px 16px rgba(14,42,85,0.05)' }}
+            style={{ background: 'var(--bg-white)', border: `1px solid ${isEditing ? 'var(--blue-medium)' : 'var(--border-light)'}`, borderRadius: '20px', overflow: 'hidden', boxShadow: '0 4px 16px rgba(14,42,85,0.05)' }}
         >
             {/* Day header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 24px', borderBottom: '1px solid var(--border-light)', background: isEditing ? 'rgba(74,144,226,0.03)' : 'transparent' }}>
+            <div
+                onClick={toggleCollapse}
+                style={{
+                    display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 24px',
+                    borderBottom: collapsed ? 'none' : '1px solid var(--border-light)',
+                    background: isEditing ? 'rgba(74,144,226,0.03)' : 'transparent',
+                    cursor: isEditing ? 'default' : 'pointer',
+                    userSelect: 'none',
+                }}
+            >
                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'var(--blue-pale-mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--blue-vibrant)' }}>{day.dia}</span>
                 </div>
@@ -864,6 +963,7 @@ function EditableDayCard({ day, index, isEditing, onUpdateTema, onUpdatePeriod, 
                         <input
                             value={day.tema}
                             onChange={e => onUpdateTema(e.target.value)}
+                            onClick={e => e.stopPropagation()}
                             placeholder="Tema do dia..."
                             style={{ width: '100%', fontSize: '15px', fontWeight: 700, color: 'var(--text-dark)', border: 'none', borderBottom: '1px solid var(--border-light)', outline: 'none', background: 'transparent', fontFamily: 'inherit', padding: '2px 0' }}
                         />
@@ -871,14 +971,35 @@ function EditableDayCard({ day, index, isEditing, onUpdateTema, onUpdatePeriod, 
                         <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-dark)', margin: 0 }}>{day.tema}</p>
                     )}
                 </div>
-                {isEditing && (
-                    <button onClick={onRemove} style={{ width: '30px', height: '30px', borderRadius: '8px', border: '1px solid #fca5a5', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-                        <Trash2 size={14} color="#ef4444" />
-                    </button>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    {isEditing && (
+                        <button onClick={e => { e.stopPropagation(); onRemove() }} style={{ width: '30px', height: '30px', borderRadius: '8px', border: '1px solid #fca5a5', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                            <Trash2 size={14} color="#ef4444" />
+                        </button>
+                    )}
+                    {!isEditing && (
+                        <motion.div
+                            animate={{ rotate: collapsed ? -90 : 0 }}
+                            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                            style={{ display: 'flex', alignItems: 'center' }}
+                        >
+                            <ChevronDown size={16} color="var(--text-muted)" />
+                        </motion.div>
+                    )}
+                </div>
             </div>
 
             {/* Periods */}
+            <AnimatePresence initial={false}>
+                {!collapsed && (
+                    <motion.div
+                        key="content"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                        style={{ overflow: 'hidden' }}
+                    >
             <div style={{ padding: '4px 0' }}>
                 {PERIOD_CONFIG.map(({ key, label, Icon, color, bg }) => {
                     const period = day[key]
@@ -952,6 +1073,9 @@ function EditableDayCard({ day, index, isEditing, onUpdateTema, onUpdatePeriod, 
                     )
                 })}
             </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </motion.div>
     )
 }
@@ -1045,17 +1169,253 @@ function ActivityViewBlock({ period }: { period: Pick<DayPeriod, 'horario' | 'at
     )
 }
 
-function ExtrasSidebar({ extras, activeTab, onTabChange }: { extras: ItineraryExtras; activeTab: ExtraCategory; onTabChange: (t: ExtraCategory) => void }) {
-    const items = extras[activeTab] ?? []
+function FitBounds({ positions }: { positions: [number, number][] }) {
+    const map = useMap()
+    useEffect(() => {
+        if (positions.length === 0) return
+        if (positions.length === 1) {
+            map.setView(positions[0], 15)
+        } else {
+            map.fitBounds(L.latLngBounds(positions), { padding: [32, 32], maxZoom: 15 })
+        }
+    }, [map])
+    return null
+}
+
+function buildPin(color: string, n: number, size = 26) {
+    return L.divIcon({
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-size:${size < 28 ? 11 : 13}px;font-weight:800;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.28);font-family:Inter,system-ui,sans-serif">${n}</div>`,
+        className: '',
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
+    })
+}
+
+interface DayPin {
+    lat: number
+    lng: number
+    color: string
+    dayNum: number
+    period: string
+    atividade: string
+    local: string
+}
+
+function DaysMapSection({ dias, collapsedDays }: { dias: ItineraryDay[]; collapsedDays: boolean[] }) {
+    const [expanded, setExpanded] = useState(false)
+
+    const pins: DayPin[] = []
+    dias.forEach((day, i) => {
+        if (collapsedDays[i]) return
+        PERIOD_CONFIG.forEach(({ key, color, label }) => {
+            const p = day[key]
+            if (p?.lat != null && p?.lng != null) {
+                pins.push({ lat: p.lat, lng: p.lng, color, dayNum: day.dia, period: label, atividade: p.atividade, local: p.local })
+            }
+        })
+    })
+
+    const mapKey = collapsedDays.join(',')
+    const positions = pins.map(p => [p.lat, p.lng] as [number, number])
+    const haspins = pins.length > 0
+
+    // Fallback center: any coordinate from the itinerary (ignores collapsed state)
+    const fallbackCenter = useMemo<[number, number]>(() => {
+        for (const day of dias) {
+            for (const { key } of PERIOD_CONFIG) {
+                const p = day[key]
+                if (p?.lat != null && p?.lng != null) return [p.lat, p.lng]
+            }
+        }
+        return [-15.793, -47.882] // Brasil
+    }, [dias])
+
+    const mapCenter = haspins ? positions[0] : fallbackCenter
 
     return (
-        <div style={{ background: '#fff', border: '1px solid var(--border-light)', borderRadius: '20px', boxShadow: '0 4px 16px rgba(14,42,85,0.05)' }}>
+        <>
+            {/* Preview card */}
+            <div
+                onClick={() => setExpanded(true)}
+                style={{
+                    background: 'var(--bg-white)', border: '1px solid var(--border-light)', borderRadius: '20px',
+                    overflow: 'hidden', boxShadow: '0 4px 16px rgba(14,42,85,0.05)',
+                    cursor: 'pointer',
+                }}
+            >
+                <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <MapPin size={13} color="var(--blue-medium)" />
+                        <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-dark)', margin: 0 }}>
+                            Mapa do Roteiro
+                        </p>
+                        {haspins && (
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                                ({pins.length} locais)
+                            </span>
+                        )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: 700, color: 'var(--blue-medium)' }}>
+                        <Maximize2 size={12} /> Expandir
+                    </div>
+                </div>
+
+                <div style={{ height: '160px', pointerEvents: 'none' }}>
+                    <MapContainer
+                        key={mapKey}
+                        center={mapCenter}
+                        zoom={13}
+                        style={{ height: '100%', width: '100%' }}
+                        zoomControl={false}
+                        scrollWheelZoom={false}
+                        dragging={false}
+                        touchZoom={false}
+                        doubleClickZoom={false}
+                        keyboard={false}
+                        attributionControl={false}
+                    >
+                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                        {haspins && <FitBounds positions={positions} />}
+                        {pins.map((pin, i) => (
+                            <Marker key={i} position={[pin.lat, pin.lng]} icon={buildPin(pin.color, i + 1)} />
+                        ))}
+                    </MapContainer>
+                </div>
+            </div>
+
+            {/* Full-screen modal */}
+            <AnimatePresence>
+                {expanded && (
+                    <motion.div
+                        key="day-map-modal"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                        onClick={() => setExpanded(false)}
+                        style={{
+                            position: 'fixed', inset: 0, zIndex: 2000,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)',
+                            WebkitBackdropFilter: 'blur(6px)',
+                            padding: '24px',
+                        }}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.92, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.92, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                                width: '100%', maxWidth: '860px',
+                                background: 'var(--bg-white)', borderRadius: '24px',
+                                overflow: 'hidden', boxShadow: '0 32px 80px rgba(0,0,0,0.4)',
+                            }}
+                        >
+                            <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <MapPin size={15} color="var(--blue-medium)" />
+                                    <p style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-dark)', margin: 0 }}>Mapa do Roteiro</p>
+                                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{pins.length} locais</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    {/* Period legend */}
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        {PERIOD_CONFIG.map(({ label, color }) => (
+                                            <span key={label} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, display: 'inline-block' }} />
+                                                {label}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <button
+                                        onClick={() => setExpanded(false)}
+                                        style={{ background: 'var(--snow)', border: '1px solid var(--border-light)', borderRadius: '10px', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center' }}
+                                    >
+                                        <X size={18} color="var(--text-muted)" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{ height: '520px' }}>
+                                <MapContainer
+                                    key={`${mapKey}-exp`}
+                                    center={mapCenter}
+                                    zoom={13}
+                                    style={{ height: '100%', width: '100%' }}
+                                    zoomControl={true}
+                                    scrollWheelZoom={true}
+                                >
+                                    <TileLayer
+                                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                    />
+                                    {haspins && <FitBounds positions={positions} />}
+                                    {pins.map((pin, i) => (
+                                        <Marker key={i} position={[pin.lat, pin.lng]} icon={buildPin(pin.color, i + 1, 32)}>
+                                            <Popup>
+                                                <div style={{ fontSize: '11px', fontWeight: 700, color: pin.color, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                                                    Dia {pin.dayNum} — {pin.period}
+                                                </div>
+                                                <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', marginBottom: '4px', maxWidth: '200px', lineHeight: 1.3 }}>{pin.atividade}</div>
+                                                {pin.local && (
+                                                    <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                        <span>📍</span> {pin.local}
+                                                    </div>
+                                                )}
+                                            </Popup>
+                                        </Marker>
+                                    ))}
+                                </MapContainer>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </>
+    )
+}
+
+function ExtrasSidebar({ extras, activeTab, onTabChange, onRefresh }: { extras: ItineraryExtras; activeTab: ExtraCategory; onTabChange: (t: ExtraCategory) => void; onRefresh?: () => Promise<void> }) {
+    const [refreshing, setRefreshing] = useState(false)
+    const items = extras[activeTab] ?? []
+
+    const handleRefresh = async () => {
+        if (!onRefresh || refreshing) return
+        setRefreshing(true)
+        try { await onRefresh() } finally { setRefreshing(false) }
+    }
+
+    return (
+        <div style={{ background: '#fff', border: '1px solid var(--border-light)', borderRadius: '20px', boxShadow: '0 4px 16px rgba(14,42,85,0.05)', overflow: 'hidden' }}>
             {/* Header */}
             <div style={{ padding: '18px 16px 14px', borderBottom: '1px solid var(--border-light)' }}>
-                <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-dark)', margin: '0 0 12px' }}>
-                    Mais para fazer
-                </p>
-                {/* Tabs — pill style, no overflow issue */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-dark)', margin: 0 }}>
+                        Mais para fazer
+                    </p>
+                    {onRefresh && (
+                        <button
+                            onClick={handleRefresh}
+                            disabled={refreshing}
+                            title="Gerar novas sugestões"
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '5px',
+                                padding: '5px 10px', borderRadius: '8px',
+                                border: '1.5px solid var(--border-light)',
+                                background: 'var(--snow)', cursor: refreshing ? 'wait' : 'pointer',
+                                fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)',
+                                fontFamily: 'inherit', transition: 'all 0.15s',
+                                opacity: refreshing ? 0.6 : 1,
+                            }}
+                        >
+                            <RefreshCw size={11} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
+                            {refreshing ? 'Atualizando…' : 'Atualizar'}
+                        </button>
+                    )}
+                </div>
+                {/* Tabs */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
                     {EXTRA_TABS.map(({ key, Icon }) => {
                         const active = activeTab === key
@@ -1084,7 +1444,7 @@ function ExtrasSidebar({ extras, activeTab, onTabChange }: { extras: ItineraryEx
             </div>
 
             {/* Items */}
-            <div style={{ maxHeight: '520px', overflowY: 'auto', padding: '12px', borderRadius: '0 0 20px 20px' }}>
+            <div style={{ maxHeight: '480px', overflowY: 'auto', padding: '12px' }}>
                 {items.length === 0 ? (
                     <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>Nenhuma sugestão disponível.</p>
                 ) : (
@@ -1093,7 +1453,9 @@ function ExtrasSidebar({ extras, activeTab, onTabChange }: { extras: ItineraryEx
                             key={i}
                             style={{ padding: '12px', borderRadius: '12px', marginBottom: '8px', background: 'var(--snow)', border: '1px solid var(--border-light)' }}
                         >
-                            <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-dark)', margin: '0 0 4px' }}>{item.nome}</p>
+                            <div style={{ marginBottom: '4px' }}>
+                                <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-dark)', margin: 0 }}>{item.nome}</p>
+                            </div>
                             <p style={{ fontSize: '12px', color: 'var(--text-body)', margin: '0 0 6px', lineHeight: 1.5 }}>{item.descricao}</p>
                             {item.dica && (
                                 <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, fontStyle: 'italic', display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
