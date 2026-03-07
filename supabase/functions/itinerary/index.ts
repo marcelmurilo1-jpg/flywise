@@ -56,10 +56,10 @@ Deno.serve(async (req: Request) => {
             : 'Geral'
 
         const budgetMap: Record<number, string> = {
-            1: 'Orçamento zero — apenas passeios, parques, museus com entrada gratuita e atividades sem nenhum custo',
-            2: 'Econômico — atividades muito baratas, comida de rua de alta qualidade, atrações com ingressos de baixo custo e restaurantes locais acessíveis',
-            3: 'Moderado — excelente custo-benefício, atrações pagas padrão, restaurantes de qualidade com preços justos e bistrôs casuais',
-            4: 'Premium — experiências de alto padrão, ingressos com fura-fila, restaurantes renomados e de alta gastronomia, tours privados ou semi-privados',
+            1: 'Nível 1 — Grátis [Grátis]: APENAS passeios, parques, museus com entrada gratuita e atividades sem nenhum custo. Não incluir restaurantes.',
+            2: 'Nível 2 — Econômico [$]: Atividades muito baratas, comida de rua de alta qualidade, atrações com ingressos de baixo custo e restaurantes locais acessíveis.',
+            3: 'Nível 3 — Moderado [$$]: Excelente custo-benefício. Atrações pagas padrão, restaurantes de qualidade com preços justos, bistrôs casuais.',
+            4: 'Nível 4 — Premium [$$$]: Experiências premium, ingressos com fura-fila, restaurantes renomados e de alta gastronomia, tours privados ou semi-privados.',
         }
         const budgetLabel = budgetMap[budget ?? 2] ?? budgetMap[2]
 
@@ -71,9 +71,31 @@ Deno.serve(async (req: Request) => {
         }
         const travelerLabel = travelerMap[traveler_type] ?? traveler_type
 
-        const systemPrompt = `Você é um especialista em turismo e roteiros de viagem.
-Sua função é criar roteiros detalhados, práticos e personalizados.
-Responda SEMPRE em JSON válido, sem texto fora do JSON. Seja específico e prático.`
+        const systemPrompt = `Você é um Especialista em Viagens e Planejador de Roteiros Personalizados. Seu objetivo é criar itinerários de viagem altamente detalhados, realistas e baseados em recomendações verificadas de alta qualidade. Você não sugere apenas "armadilhas para turistas", mas sim os melhores lugares, combinando pontos icônicos com joias ocultas.
+
+Sempre que receber um destino, datas, preferências e orçamento, siga rigorosamente o seguinte processo:
+
+**DIRETRIZ DE ORÇAMENTO (CRÍTICO):**
+O nível de custo selecionado deve ser respeitado em TODAS as recomendações:
+- Nível 1 — Grátis: Inclua APENAS passeios, parques, museus com entrada gratuita e atividades sem nenhum custo. Não sugira restaurantes (a menos que seja para piqueniques com comida de mercado).
+- Nível 2 — Econômico ($): Atividades muito baratas, comida de rua de alta qualidade, atrações com ingressos de baixo custo e restaurantes locais acessíveis.
+- Nível 3 — Moderado ($$): Excelente custo-benefício. Atrações pagas padrão, restaurantes de qualidade com preços justos, bistrôs casuais.
+- Nível 4 — Premium ($$$): Experiências premium, ingressos com fura-fila, restaurantes renomados e de alta gastronomia, tours privados ou semi-privados.
+- Nível 5 — Luxo ($$$$): O melhor do melhor. Estrelas Michelin, passeios de helicóptero, iates, acessos VIP, spas de luxo e experiências exclusivas.
+
+**SELEÇÃO RIGOROSA:**
+- Baseie escolhas em lugares com alta popularidade e excelentes avaliações (TripAdvisor, Google Reviews, guias Michelin, recomendações de especialistas locais).
+- Considere a logística de deslocamento entre pontos turísticos para criar dias lógicos e sem correria.
+
+**ESTRUTURA DO ROTEIRO:**
+- Forneça Manhã, Tarde e Noite para cada dia com sugestões apropriadas ao orçamento.
+- Identifique o "Dia de Pico" (dia com mais atividades ou o dia principal). Para este dia específico, para cada atividade inclua no campo "dica": custo estimado, por que recomendamos, vibe do ambiente, o que os reviews costumam elogiar e uma dica de especialista (melhor hora, o que evitar, melhor ângulo para foto).
+
+**TOM E ESTILO:**
+Seja entusiasmado, profissional, cativante e focado na melhor experiência possível. Combine pontos icônicos com joias ocultas locais.
+
+**FORMATO:**
+Responda SEMPRE em JSON válido, sem nenhum texto fora do JSON. O JSON deve seguir exatamente a estrutura especificada pelo usuário.`
 
         const userPrompt = `Crie um roteiro de viagem detalhado com as seguintes informações:
 - Destino: ${destination}
