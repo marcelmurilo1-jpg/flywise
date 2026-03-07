@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plane, SlidersHorizontal, X } from 'lucide-react'
+import { Plane, SlidersHorizontal, X, CheckCircle2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ResultadoVoo } from '@/lib/supabase'
 import { StrategyPanel } from '@/components/StrategyPanel'
@@ -113,7 +113,7 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
 export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch, sidebarFilters }: FlightResultsGroupedProps) {
     const [selFlight, setSelFlight] = useState<ResultadoVoo | null>(null)
     const [panelOpen, setPanelOpen] = useState(false)
-    const [amadPhase, setAmadPhase] = useState<'browsing' | 'selected'>('browsing')
+    const [amadPhase, setAmadPhase] = useState<'browsing' | 'ida-sel' | 'confirmed'>('browsing')
     const [amadSel, setAmadSel] = useState<ResultadoVoo | null>(null)
 
     // Reset selection when flights list changes (new search)
@@ -422,21 +422,11 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
             {/* ── Flight cards ─────────────────────────────────────────────── */}
             {(() => {
                 const isRoundTrip = sorted.some(f => !!(f.detalhes as any)?.returnPartida)
-                const displayFlights = amadPhase === 'selected' && amadSel
+                const displayFlights = (amadPhase === 'ida-sel' || amadPhase === 'confirmed') && amadSel
                     ? sorted.filter(f => f.id === amadSel.id)
                     : sorted
                 return (
-                    <>
-                        {amadPhase === 'selected' && amadSel && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '10px 16px', background: '#F0FDF4', borderRadius: 12, border: '1px solid #86EFAC' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span style={{ fontSize: 18 }}>✅</span>
-                                    <span style={{ fontSize: 14, fontWeight: 700, color: '#15803D' }}>Voo selecionado — ida e volta</span>
-                                </div>
-                                <button onClick={() => { setAmadPhase('browsing'); setAmadSel(null) }} style={{ background: 'none', border: '1px solid #CBD5E1', borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 600, color: '#64748B', cursor: 'pointer', fontFamily: 'inherit' }}>← Ver todas as opções</button>
-                            </div>
-                        )}
-                        <AnimatePresence>
+                    <AnimatePresence>
                         {displayFlights.map((flight, idx) => {
                             const det = (flight.detalhes as any) ?? {}
                             const segsOut = (flight.segmentos as any[]) ?? []
@@ -444,7 +434,8 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                             const hasReturn = !!det.returnPartida
                             const iata = extractIata(flight.companhia)
                             const estimatedMiles = Math.round(((flight.preco_brl ?? 0) * 55) / 1000) * 1000
-                            const isSelected = amadSel?.id === flight.id
+                            const isActive = amadSel?.id === flight.id && amadPhase !== 'browsing'
+                            const showReturn = hasReturn && (isActive || !isRoundTrip)
 
                             return (
                                 <motion.div
@@ -455,12 +446,40 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                     transition={{ delay: idx * 0.04 }}
                                     style={{
                                         background: '#fff',
-                                        border: `1px solid ${isSelected ? '#86EFAC' : 'var(--border-light)'}`,
+                                        border: `2px solid ${isActive ? '#16A34A' : 'var(--border-light)'}`,
                                         borderRadius: 16,
                                         marginBottom: 12,
                                         overflow: 'hidden',
                                     }}
                                 >
+                                    {/* Green banner when ida selected */}
+                                    {isActive && (
+                                        <div style={{ background: '#16A34A', padding: '6px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <CheckCircle2 size={13} color="#fff" />
+                                                <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: '0.05em' }}>
+                                                    {amadPhase === 'confirmed' ? 'VIAGEM CONFIRMADA' : 'IDA SELECIONADA'}
+                                                </span>
+                                            </div>
+                                            {amadPhase === 'ida-sel' && (
+                                                <button
+                                                    onClick={() => { setAmadPhase('browsing'); setAmadSel(null) }}
+                                                    style={{ background: 'none', border: 'none', fontSize: 11, color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontFamily: 'inherit', padding: 0, fontWeight: 600 }}
+                                                >
+                                                    ← Mudar ida
+                                                </button>
+                                            )}
+                                            {amadPhase === 'confirmed' && (
+                                                <button
+                                                    onClick={() => { setAmadPhase('browsing'); setAmadSel(null) }}
+                                                    style={{ background: 'none', border: 'none', fontSize: 11, color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontFamily: 'inherit', padding: 0, fontWeight: 600 }}
+                                                >
+                                                    ← Ver todas as opções
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+
                                     {/* Top: airline + price */}
                                     <div style={{
                                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -501,9 +520,9 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                                 {amadPhase === 'browsing' && isRoundTrip && (
-                                                    <button onClick={() => { setAmadSel(flight); setAmadPhase('selected') }}
+                                                    <button onClick={() => { setAmadSel(flight); setAmadPhase('ida-sel') }}
                                                         style={{ background: '#0E2A55', color: '#fff', border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
-                                                        Selecionar →
+                                                        Selecionar Ida →
                                                     </button>
                                                 )}
                                                 <button onClick={() => { setSelFlight(flight); setPanelOpen(true) }}
@@ -515,21 +534,32 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                     </div>
 
                                     {/* Outbound leg */}
-                                    <div style={{ padding: '16px 20px', borderBottom: hasReturn && (amadPhase === 'selected' || !isRoundTrip) ? '1px dashed #E2EAF5' : 'none' }}>
+                                    <div style={{ padding: '16px 20px', borderBottom: showReturn ? '1px dashed #E2EAF5' : 'none' }}>
                                         <FlightLeg label="Ida" from={flight.origem ?? ''} to={flight.destino ?? ''} departure={formatTime(flight.partida)} arrival={formatTime(flight.chegada)} duration={formatDur(flight.duracao_min)} stops={det.paradas ?? 0} stopStr={stopCodes(segsOut)} dateStr={formatDate(flight.partida)} />
                                     </div>
 
-                                    {/* Return leg — visível apenas quando selecionado ou one-way */}
-                                    {hasReturn && (amadPhase === 'selected' || !isRoundTrip) && (
+                                    {/* Return leg */}
+                                    {showReturn && (
                                         <div style={{ padding: '16px 20px', background: '#FAFBFF' }}>
                                             <FlightLeg label="Volta" from={det.returnOrigem ?? ''} to={det.returnDestino ?? ''} departure={formatTime(det.returnPartida)} arrival={formatTime(det.returnChegada)} duration={formatDur(det.returnDuracaoMin)} stops={det.returnParadas ?? 0} stopStr={stopCodes(segsRet)} dateStr={formatDate(det.returnPartida)} />
+                                        </div>
+                                    )}
+
+                                    {/* Confirm volta button */}
+                                    {amadPhase === 'ida-sel' && isActive && hasReturn && (
+                                        <div style={{ padding: '12px 20px', borderTop: '1px solid #E2EAF5', display: 'flex', justifyContent: 'flex-end' }}>
+                                            <button
+                                                onClick={() => setAmadPhase('confirmed')}
+                                                style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                                            >
+                                                Confirmar Volta →
+                                            </button>
                                         </div>
                                     )}
                                 </motion.div>
                             )
                         })}
-                        </AnimatePresence>
-                    </>
+                    </AnimatePresence>
                 )
             })()}
 

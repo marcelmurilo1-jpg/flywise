@@ -486,22 +486,54 @@ export default function Resultados() {
                                                 </div>
                                             ) : (
                                                 <>
-                                                    {/* Ida selecionada compacta (na fase volta) */}
-                                                    {seatsPhase === 'volta' && seatsIdaSel && (
-                                                        <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 12, padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                                <CheckCircle2 size={16} color="#16A34A" />
-                                                                <div>
-                                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#15803D' }}>Ida: {AIRLINE_FULL[seatsIdaSel.companhiaAerea] ?? seatsIdaSel.companhiaAerea}</div>
-                                                                    <div style={{ fontSize: 11, color: '#64748B' }}>{seatsIdaSel.origem} → {seatsIdaSel.destino} · {stopLabelSeats(seatsIdaSel.paradas ?? 0, seatsIdaSel.escalas)}</div>
+                                                    {/* Ida selecionada — card completo com badge verde */}
+                                                    {seatsPhase === 'volta' && seatsIdaSel && (() => {
+                                                        const sf = seatsIdaSel
+                                                        const ac = sf.companhiaAerea ?? ''
+                                                        const prog = SOURCE_PROGRAM[sf.source?.toLowerCase() ?? '']
+                                                        const cab = sf.cabineEncontrada ?? 'Economy'
+                                                        return (
+                                                            <div style={{ background: '#fff', border: '2px solid #16A34A', borderRadius: 16, overflow: 'hidden' }}>
+                                                                <div style={{ background: '#16A34A', padding: '6px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                                        <CheckCircle2 size={13} color="#fff" />
+                                                                        <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: '0.05em' }}>IDA SELECIONADA</span>
+                                                                    </div>
+                                                                    <button onClick={() => { setSeatsPhase('ida'); setSeatsIdaSel(null) }} style={{ background: 'none', border: 'none', fontSize: 11, color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontFamily: 'inherit', padding: 0, fontWeight: 600 }}>← Mudar ida</button>
+                                                                </div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #F0FDF4' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                                        {ac && <img src={`https://pics.avs.io/60/30/${ac}.png`} alt="" style={{ height: 24, objectFit: 'contain' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />}
+                                                                        <div>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const }}>
+                                                                                <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>{AIRLINE_FULL[ac] ?? ac}</span>
+                                                                                <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: CABIN_COLOR[cab] ?? '#0E2A55', color: '#fff' }}>{cab}</span>
+                                                                                {prog && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: prog.bg, color: prog.color }}>{prog.name}</span>}
+                                                                            </div>
+                                                                            <span style={{ fontSize: 10, color: '#94A3B8' }}>{sf.dataVoo}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <span style={{ fontSize: 18, fontWeight: 900, color: '#0E2A55' }}>{typeof sf.precoMilhas === 'number' ? sf.precoMilhas.toLocaleString('pt-BR') : sf.precoMilhas} pts</span>
+                                                                </div>
+                                                                <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                                    <div style={{ textAlign: 'center', minWidth: 40 }}>
+                                                                        {sf.partida && <div style={{ fontSize: 16, fontWeight: 800, color: '#0E2A55' }}>{sf.partida}</div>}
+                                                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>{sf.origem}</div>
+                                                                    </div>
+                                                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                                                        <div style={{ position: 'relative', height: 1, background: '#BBF7D0', width: '100%' }}>
+                                                                            <span style={{ position: 'absolute', right: -1, top: -5, fontSize: 10, color: '#16A34A' }}>✈</span>
+                                                                        </div>
+                                                                        <span style={{ fontSize: 9, color: sf.paradas === 0 ? '#16A34A' : '#94A3B8', fontWeight: sf.paradas === 0 ? 700 : 400 }}>{stopLabelSeats(sf.paradas ?? 0, sf.escalas)}</span>
+                                                                    </div>
+                                                                    <div style={{ textAlign: 'center', minWidth: 40 }}>
+                                                                        {sf.chegada && <div style={{ fontSize: 16, fontWeight: 800, color: '#0E2A55' }}>{sf.chegada}</div>}
+                                                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>{sf.destino}</div>
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                                <span style={{ fontSize: 15, fontWeight: 900, color: '#0E2A55' }}>{typeof seatsIdaSel.precoMilhas === 'number' ? seatsIdaSel.precoMilhas.toLocaleString('pt-BR') : seatsIdaSel.precoMilhas} pts</span>
-                                                                <button onClick={() => { setSeatsPhase('ida'); setSeatsIdaSel(null) }} style={{ background: 'none', border: 'none', fontSize: 11, color: '#64748B', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>← Mudar</button>
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                        )
+                                                    })()}
 
                                                     {/* Divider de volta */}
                                                     {seatsPhase === 'volta' && (
