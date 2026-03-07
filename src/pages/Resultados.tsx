@@ -349,6 +349,16 @@ export default function Resultados() {
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--snow)', fontFamily: 'Manrope, system-ui, sans-serif' }}>
+        <style>{`
+            @media (max-width: 768px) {
+                .fly-results-outer { padding: 16px 12px 100px !important; flex-direction: column !important; }
+                .fly-sidebar-col { display: none; }
+                .fly-sidebar-col.open { display: block; }
+                .fly-mobile-filters-btn { display: flex !important; }
+                .fly-results-header { padding: 0 12px 12px !important; }
+                .fly-searchbar-wrap { padding: 8px 12px 12px !important; }
+            }
+        `}</style>
 
             {/* ══════════════  HEADER + SEARCH BAR  ══════════════ */}
             <div style={{
@@ -356,10 +366,10 @@ export default function Resultados() {
                 borderBottom: '1px solid var(--border-light)',
                 position: 'sticky', top: 0, zIndex: 50,
             }}>
-                <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 28px' }}>
+                <div className="fly-results-header" style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 28px' }}>
                     <Header variant="app" />
                 </div>
-                <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '14px 28px 18px' }}>
+                <div className="fly-searchbar-wrap" style={{ maxWidth: '1280px', margin: '0 auto', padding: '14px 28px 18px' }}>
                     <SearchBarTop
                         origin={origin} setOrigin={setOrigin}
                         originIata={originIata} setOriginIata={setOriginIata}
@@ -376,14 +386,17 @@ export default function Resultados() {
             </div>
 
             {/* ══════════════  MAIN CONTENT — 2 COLUMNS  ══════════════ */}
-            <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 28px 80px', display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+            <div className="fly-results-outer" style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 28px 80px', display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
 
-                <Sidebar filters={filters} setFilters={setFilters} />
+                <div className={`fly-sidebar-col${showMobileFilters ? ' open' : ''}`}>
+                    <Sidebar filters={filters} setFilters={setFilters} />
+                </div>
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <button onClick={() => setShowMobileFilters(!showMobileFilters)}
-                        style={{ display: 'none', alignItems: 'center', gap: '8px', marginBottom: '16px', padding: '10px 16px', background: '#fff', border: '1px solid var(--border-light)', borderRadius: '10px', fontFamily: 'inherit', fontSize: '13px', fontWeight: 600, color: 'var(--graphite)', cursor: 'pointer' }}>
-                        <SlidersHorizontal size={14} /> Filtros
+                        className="fly-mobile-filters-btn"
+                        style={{ display: 'none', alignItems: 'center', gap: '8px', marginBottom: '16px', padding: '10px 16px', background: '#fff', border: '1px solid var(--border-light)', borderRadius: '10px', fontFamily: 'inherit', fontSize: '13px', fontWeight: 600, color: 'var(--graphite)', cursor: 'pointer', width: '100%' }}>
+                        <SlidersHorizontal size={14} /> {showMobileFilters ? 'Fechar Filtros' : 'Filtros'}
                     </button>
 
                     {error ? (

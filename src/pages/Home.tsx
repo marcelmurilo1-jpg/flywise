@@ -74,9 +74,17 @@ export default function Home() {
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--snow)', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'Manrope, system-ui, sans-serif' }}>
+            <style>{`
+                @media (max-width: 768px) {
+                    .fly-home-grid { grid-template-columns: 1fr !important; }
+                    .fly-home-grid > * { grid-column: 1 !important; }
+                    .fly-home-main { padding: 16px 16px 100px !important; }
+                    .fly-home-card { padding: 20px !important; border-radius: 16px !important; }
+                }
+            `}</style>
             <Header variant="app" />
 
-            <main style={{
+            <main className="fly-home-main" style={{
                 flex: 1, display: 'flex', flexDirection: 'column',
                 justifyContent: 'center', alignItems: 'center',
                 padding: '40px 24px', width: '100%', maxWidth: '840px', margin: '0 auto'
@@ -86,7 +94,7 @@ export default function Home() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
-                    className="card"
+                    className="card fly-home-card"
                     style={{ width: '100%', padding: '32px', borderRadius: '24px', boxShadow: '0 12px 48px rgba(14,42,85,0.08)' }}
                 >
                     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -106,7 +114,7 @@ export default function Home() {
                             ))}
                         </div>
                         {/* Inputs Row */}
-                        <div style={{ display: 'grid', gridTemplateColumns: tripType === 'round-trip' ? '1fr 1fr 1fr 1fr auto' : '1fr 1fr auto auto', gap: '12px', alignItems: 'start' }}>
+                        <div className="fly-home-grid" style={{ display: 'grid', gridTemplateColumns: tripType === 'round-trip' ? '1fr 1fr 1fr 1fr auto' : '1fr 1fr auto auto', gap: '12px', alignItems: 'start' }}>
                             {/* Origin */}
                             <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff', overflow: 'visible', position: 'relative' }}>
                                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Origem</label>

@@ -248,6 +248,25 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        <style>{`
+            @media (max-width: 768px) {
+                .fly-card-top {
+                    flex-direction: column !important;
+                    align-items: flex-start !important;
+                    gap: 12px !important;
+                }
+                .fly-card-right {
+                    width: 100% !important;
+                    flex-direction: row !important;
+                    justify-content: space-between !important;
+                    align-items: center !important;
+                }
+                .fly-card-actions {
+                    flex-direction: column !important;
+                }
+                .fly-card-actions button { width: 100%; }
+            }
+        `}</style>
             {/* ── Header ───────────────────────────────────────────────────── */}
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -481,7 +500,7 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                     )}
 
                                     {/* Top: airline + price */}
-                                    <div style={{
+                                    <div className="fly-card-top" style={{
                                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                         padding: '16px 20px',
                                         borderBottom: '1px solid #F1F5F9',
@@ -504,7 +523,7 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                             </div>
                                         </div>
 
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                        <div className="fly-card-right" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                                                 <div style={{ textAlign: 'center' }}>
                                                     <div style={{ fontSize: 10, fontWeight: 700, color: '#2A60C2', textTransform: 'uppercase', marginBottom: 2 }}>Milhas</div>
@@ -518,7 +537,7 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                                     <div style={{ fontSize: 9, color: '#94A3B8' }}>preço final</div>
                                                 </div>
                                             </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            <div className="fly-card-actions" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                                 {amadPhase === 'browsing' && isRoundTrip && (
                                                     <button onClick={() => { setAmadSel(flight); setAmadPhase('ida-sel') }}
                                                         style={{ background: '#0E2A55', color: '#fff', border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>

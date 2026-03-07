@@ -39,7 +39,32 @@ export function SearchBarTop({
     }
 
     return (
-        <form onSubmit={onSubmit}>
+        <form onSubmit={onSubmit} style={{ fontFamily: 'inherit' }}>
+        <style>{`
+            @media (max-width: 768px) {
+                .fly-searchbar-row {
+                    flex-direction: column !important;
+                    height: auto !important;
+                    border-radius: 12px !important;
+                }
+                .fly-searchbar-row > * {
+                    border-right: none !important;
+                    border-bottom: 1px solid var(--border-light) !important;
+                    min-width: unset !important;
+                    width: 100% !important;
+                    flex: none !important;
+                    padding: 10px 14px !important;
+                    min-height: 48px;
+                    justify-content: flex-start;
+                }
+                .fly-searchbar-row > *:last-child {
+                    border-bottom: none !important;
+                    border-radius: 0 0 12px 12px !important;
+                    padding: 12px 20px !important;
+                    justify-content: center !important;
+                }
+            }
+        `}</style>
             {/* Trip type selector */}
             {setTripType && (
                 <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
@@ -63,7 +88,7 @@ export function SearchBarTop({
                 </div>
             )}
 
-            <div style={{
+            <div className="fly-searchbar-row" style={{
                 display: 'flex', alignItems: 'stretch',
                 background: 'var(--bg-white)',
                 border: '1px solid var(--border-light)',

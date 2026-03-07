@@ -50,6 +50,7 @@ export function Header({ variant = 'app' }: HeaderProps) {
     if (variant === 'landing') return null
 
     return (
+        <>
         <header style={{
             background: isDark ? 'rgba(15,17,23,0.95)' : 'rgba(255,255,255,0.95)',
             borderBottom: isDark ? '1px solid #1e293b' : '1px solid rgba(14,42,85,0.08)',
@@ -57,17 +58,16 @@ export function Header({ variant = 'app' }: HeaderProps) {
             backdropFilter: 'blur(12px)',
             WebkitBackdropFilter: 'blur(12px)',
         }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', height: '110px', padding: '0 8px', maxWidth: '880px', margin: '0 auto' }}>
+            <div className="fly-header-grid" style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', height: '110px', padding: '0 8px', maxWidth: '880px', margin: '0 auto' }}>
 
                 {/* Left: Logo */}
                 <Link to={user ? '/home' : '/'} style={{ display: 'flex', alignItems: 'center', justifySelf: 'start' }}>
-                    <img src="/logo.png" alt="FlyWise" style={{ height: '96px', objectFit: 'contain' }} />
+                    <img src="/logo.png" alt="FlyWise" className="fly-logo" style={{ height: '96px', objectFit: 'contain' }} />
                 </Link>
-
 
                 {/* Center: Navigation Icons */}
                 {user && variant === 'app' ? (
-                    <div style={{ justifySelf: 'center' }}>
+                    <div className="fly-nav-tabs" style={{ justifySelf: 'center' }}>
                         <ExpandableTabs
                             tabs={NAV_ITEMS}
                             activeIndex={activeIndex}
@@ -76,13 +76,12 @@ export function Header({ variant = 'app' }: HeaderProps) {
                     </div>
                 ) : <div />}
 
-
                 {/* Right: Theme Toggle + User Menu */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px' }}>
                     <ThemeToggle />
                     {!user ? (
                         <div style={{ display: 'flex', gap: '8px' }}>
-                            <Link to="/auth" className="btn btn-outline-white btn-sm">Entrar</Link>
+                            <Link to="/auth" className="btn btn-outline-white btn-sm fly-hide-xs">Entrar</Link>
                             <Link to="/auth?tab=signup" className="btn btn-green btn-sm">Criar conta</Link>
                         </div>
                     ) : (
@@ -103,7 +102,6 @@ export function Header({ variant = 'app' }: HeaderProps) {
                                 <User size={18} strokeWidth={2.5} />
                             </button>
 
-                            {/* Dropdown Menu */}
                             <AnimatePresence>
                                 {userMenuOpen && (
                                     <motion.div
@@ -123,7 +121,6 @@ export function Header({ variant = 'app' }: HeaderProps) {
                                             <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Logado como</p>
                                             <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-dark)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</p>
                                         </div>
-
                                         <Link to="/configuracoes" onClick={() => setUserMenuOpen(false)} style={{
                                             display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px',
                                             borderRadius: '10px', textDecoration: 'none', color: 'var(--text-body)',
@@ -135,12 +132,10 @@ export function Header({ variant = 'app' }: HeaderProps) {
                                             <Settings size={16} color="var(--text-muted)" />
                                             Configurações Pessoais
                                         </Link>
-
                                         <button onClick={() => { setUserMenuOpen(false); handleSignOut(); }} style={{
                                             width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px',
                                             borderRadius: '10px', border: 'none', background: 'transparent', color: '#EF4444',
-                                            fontWeight: 600, fontSize: '14px', transition: 'background 0.2s', cursor: 'pointer',
-                                            marginTop: '4px',
+                                            fontWeight: 600, fontSize: '14px', transition: 'background 0.2s', cursor: 'pointer', marginTop: '4px',
                                         }}
                                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)' }}
                                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
@@ -156,5 +151,47 @@ export function Header({ variant = 'app' }: HeaderProps) {
                 </div>
             </div>
         </header>
+
+        {/* Mobile bottom navigation */}
+        {user && variant === 'app' && (
+            <nav className="fly-bottom-nav">
+                {NAV_ITEMS.map((item, i) => {
+                    const Icon = item.icon
+                    const isActive = activeIndex === i
+                    return (
+                        <button key={item.to} onClick={() => navigate(item.to)} style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
+                            padding: '6px 10px', background: 'none', border: 'none', cursor: 'pointer',
+                            fontFamily: 'inherit', fontSize: '10px', fontWeight: 600,
+                            color: isActive ? 'var(--blue-navy)' : 'var(--text-muted)',
+                            transition: 'color 0.15s', minWidth: 0, flex: 1,
+                        }}>
+                            <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{item.title}</span>
+                        </button>
+                    )
+                })}
+            </nav>
+        )}
+
+        <style>{`
+            @media (max-width: 768px) {
+                .fly-header-grid { height: 64px !important; padding: 0 16px !important; max-width: 100% !important; }
+                .fly-logo { height: 48px !important; }
+                .fly-nav-tabs { display: none !important; }
+                .fly-hide-xs { display: none !important; }
+                .fly-bottom-nav {
+                    display: flex !important;
+                    position: fixed; bottom: 0; left: 0; right: 0;
+                    background: var(--bg-white);
+                    border-top: 1px solid var(--border-light);
+                    z-index: 200;
+                    padding-bottom: env(safe-area-inset-bottom, 8px);
+                    justify-content: space-around;
+                }
+            }
+            .fly-bottom-nav { display: none; }
+        `}</style>
+        </>
     )
 }
