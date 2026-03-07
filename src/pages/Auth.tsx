@@ -182,7 +182,7 @@ export default function Auth() {
                         position: 'absolute', top: 0, width: '50%', height: '100%',
                         background: `linear-gradient(145deg, ${NAVY} 0%, ${BLUE} 100%)`,
                         zIndex: 10, display: 'flex', flexDirection: 'column',
-                        alignItems: 'center', justifyContent: 'space-between',
+                        alignItems: 'center', justifyContent: 'center', gap: '40px',
                         padding: '80px 60px 100px', overflow: 'hidden',
                     }}
                 >
@@ -190,8 +190,8 @@ export default function Auth() {
                     <div style={{ position: 'absolute', top: '-80px', right: '-80px', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(74,144,226,0.28) 0%, transparent 70%)', pointerEvents: 'none' }} />
                     <div style={{ position: 'absolute', bottom: '-60px', left: '-60px', width: '260px', height: '260px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-                    {/* Logo branca centralizada — maior */}
-                    <img src="/logo.png" alt="FlyWise" style={{ height: '130px', objectFit: 'contain', filter: 'brightness(0) invert(1)', position: 'relative', zIndex: 1 }} />
+                    {/* Logo centralizada */}
+                    <img src="/logo_login.png" alt="FlyWise" style={{ height: '130px', objectFit: 'contain', position: 'relative', zIndex: 1 }} />
 
                     {/* Texto + CTA dinâmicos — invertidos */}
                     <AnimatePresence mode="wait">
