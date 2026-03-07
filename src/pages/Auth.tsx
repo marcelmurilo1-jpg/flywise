@@ -182,28 +182,28 @@ export default function Auth() {
                         position: 'absolute', top: 0, width: '50%', height: '100%',
                         background: `linear-gradient(145deg, ${NAVY} 0%, ${BLUE} 100%)`,
                         zIndex: 10, display: 'flex', flexDirection: 'column',
-                        alignItems: 'center', justifyContent: 'center',
-                        gap: '40px', padding: '60px', overflow: 'hidden',
+                        alignItems: 'center', justifyContent: 'space-between',
+                        padding: '80px 60px 100px', overflow: 'hidden',
                     }}
                 >
                     {/* Decorative blobs */}
                     <div style={{ position: 'absolute', top: '-80px', right: '-80px', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(74,144,226,0.28) 0%, transparent 70%)', pointerEvents: 'none' }} />
                     <div style={{ position: 'absolute', bottom: '-60px', left: '-60px', width: '260px', height: '260px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-                    {/* Logo branca centralizada */}
-                    <img src="/logo.png" alt="FlyWise" style={{ height: '95px', objectFit: 'contain', filter: 'brightness(0) invert(1)', position: 'relative', zIndex: 1 }} />
+                    {/* Logo branca centralizada — maior */}
+                    <img src="/logo.png" alt="FlyWise" style={{ height: '130px', objectFit: 'contain', filter: 'brightness(0) invert(1)', position: 'relative', zIndex: 1 }} />
 
-                    {/* Texto + CTA dinâmicos */}
+                    {/* Texto + CTA dinâmicos — invertidos */}
                     <AnimatePresence mode="wait">
                         {tab === 'login' ? (
                             <motion.div key="panel-signup-cta"
                                 initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
                                 transition={{ duration: 0.28 }}
-                                style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}
+                                style={{ textAlign: 'center', position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}
                             >
-                                <h2 style={{ fontSize: '28px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: '0 0 12px' }}>Novo por aqui?</h2>
-                                <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '15px', lineHeight: 1.65, margin: '0 0 28px' }}>
-                                    Crie sua conta e comece a transformar milhas em viagens estratégicas.
+                                <h2 style={{ fontSize: '28px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: 0 }}>Bem-vindo de volta!</h2>
+                                <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '15px', lineHeight: 1.65, margin: 0 }}>
+                                    Continue sua jornada estratégica de viagens.
                                 </p>
                                 <button style={panelBtn} onClick={() => switchTab('signup')}
                                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
@@ -215,11 +215,11 @@ export default function Auth() {
                             <motion.div key="panel-login-cta"
                                 initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 40 }}
                                 transition={{ duration: 0.28 }}
-                                style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}
+                                style={{ textAlign: 'center', position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}
                             >
-                                <h2 style={{ fontSize: '28px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: '0 0 12px' }}>Bem-vindo de volta!</h2>
-                                <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '15px', lineHeight: 1.65, margin: '0 0 28px' }}>
-                                    Continue sua jornada estratégica de viagens.
+                                <h2 style={{ fontSize: '28px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: 0 }}>Novo por aqui?</h2>
+                                <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '15px', lineHeight: 1.65, margin: 0 }}>
+                                    Crie sua conta e comece a transformar milhas em viagens estratégicas.
                                 </p>
                                 <button style={panelBtn} onClick={() => switchTab('login')}
                                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
