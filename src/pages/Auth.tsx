@@ -134,10 +134,10 @@ export default function Auth() {
     }
 
     const panelBtn: React.CSSProperties = {
-        background: 'none', border: '2px solid rgba(255,255,255,0.65)',
-        borderRadius: '10px', padding: '10px 28px', color: '#fff',
-        fontSize: '14px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-        transition: 'background 0.2s',
+        background: 'transparent', border: '2px solid rgba(255,255,255,0.65)',
+        borderRadius: '11px', padding: '13px', width: '100%', color: '#fff',
+        fontSize: '14.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+        transition: 'all 0.2s ease',
     }
 
     return (
@@ -182,53 +182,67 @@ export default function Auth() {
                         position: 'absolute', top: 0, width: '50%', height: '100%',
                         background: `linear-gradient(145deg, ${NAVY} 0%, ${BLUE} 100%)`,
                         zIndex: 10, display: 'flex', flexDirection: 'column',
-                        alignItems: 'center', justifyContent: 'center', gap: '40px',
-                        padding: '80px 60px 100px', overflow: 'hidden',
+                        alignItems: 'center', justifyContent: 'center',
+                        padding: '40px 24px', overflow: 'hidden',
                     }}
                 >
                     {/* Decorative blobs */}
                     <div style={{ position: 'absolute', top: '-80px', right: '-80px', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(74,144,226,0.28) 0%, transparent 70%)', pointerEvents: 'none' }} />
                     <div style={{ position: 'absolute', bottom: '-60px', left: '-60px', width: '260px', height: '260px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-                    {/* Logo centralizada */}
-                    <img src="/logo_login.png" alt="FlyWise" style={{ height: '130px', objectFit: 'contain', position: 'relative', zIndex: 1 }} />
+                    {/* Logo centralizada abs top */}
+                    <div style={{ position: 'absolute', top: '50px', width: '100%', display: 'flex', justifyContent: 'center', zIndex: 1 }}>
+                        <img src="/logo_login_2.png" alt="FlyWise" style={{ maxHeight: '80px', maxWidth: '75%', objectFit: 'contain' }} />
+                    </div>
 
                     {/* Texto + CTA dinâmicos — invertidos */}
-                    <AnimatePresence mode="wait">
-                        {tab === 'login' ? (
-                            <motion.div key="panel-signup-cta"
-                                initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
-                                transition={{ duration: 0.28 }}
-                                style={{ textAlign: 'center', position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}
-                            >
-                                <h2 style={{ fontSize: '28px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: 0 }}>Bem-vindo de volta!</h2>
-                                <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '15px', lineHeight: 1.65, margin: 0 }}>
-                                    Continue sua jornada estratégica de viagens.
-                                </p>
-                                <button style={panelBtn} onClick={() => switchTab('signup')}
-                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
-                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                                    Criar conta →
-                                </button>
-                            </motion.div>
-                        ) : (
-                            <motion.div key="panel-login-cta"
-                                initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 40 }}
-                                transition={{ duration: 0.28 }}
-                                style={{ textAlign: 'center', position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}
-                            >
-                                <h2 style={{ fontSize: '28px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: 0 }}>Novo por aqui?</h2>
-                                <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '15px', lineHeight: 1.65, margin: 0 }}>
-                                    Crie sua conta e comece a transformar milhas em viagens estratégicas.
-                                </p>
-                                <button style={panelBtn} onClick={() => switchTab('login')}
-                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
-                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                                    ← Entrar
-                                </button>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                    <div style={{ width: '100%', maxWidth: '380px', zIndex: 1 }}>
+                        <AnimatePresence mode="wait">
+                            {tab === 'login' ? (
+                                <motion.div key="panel-signup-cta"
+                                    initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
+                                    transition={{ duration: 0.28 }}
+                                    style={{ textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column' }}
+                                >
+                                    <div style={{ height: '150px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                                        <h2 style={{ fontSize: '32px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: '0 0 12px' }}>Bem-vindo de volta!</h2>
+                                        <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '15px', lineHeight: 1.65, margin: 0 }}>
+                                            Continue sua jornada estratégica de viagens com as melhores ferramentas e dados.
+                                        </p>
+                                    </div>
+                                    <div style={{ marginTop: '20px' }}>
+                                        <button style={panelBtn} onClick={() => switchTab('signup')}
+                                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
+                                            Criar conta livremente →
+                                        </button>
+                                    </div>
+                                    <div style={{ height: '37px', marginTop: '24px' }}></div>
+                                </motion.div>
+                            ) : (
+                                <motion.div key="panel-login-cta"
+                                    initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 40 }}
+                                    transition={{ duration: 0.28 }}
+                                    style={{ textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column' }}
+                                >
+                                    <div style={{ height: '150px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                                        <h2 style={{ fontSize: '32px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: '0 0 12px' }}>Novo por aqui?</h2>
+                                        <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '15px', lineHeight: 1.65, margin: 0 }}>
+                                            Crie sua conta gratuitamente e comece a transformar milhas em viagens estratégicas incríveis.
+                                        </p>
+                                    </div>
+                                    <div style={{ marginTop: '20px' }}>
+                                        <button style={panelBtn} onClick={() => switchTab('login')}
+                                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
+                                            ← Entrar na sua conta
+                                        </button>
+                                    </div>
+                                    <div style={{ height: '37px', marginTop: '24px' }}></div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </motion.div>
             </div>
 
