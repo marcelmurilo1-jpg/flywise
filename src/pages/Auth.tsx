@@ -190,55 +190,69 @@ export default function Auth() {
                     <div style={{ position: 'absolute', top: '-80px', right: '-80px', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(74,144,226,0.28) 0%, transparent 70%)', pointerEvents: 'none' }} />
                     <div style={{ position: 'absolute', bottom: '-60px', left: '-60px', width: '260px', height: '260px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-                    {/* Logo centralizada abs top */}
-                    <div style={{ position: 'absolute', top: '50px', width: '100%', display: 'flex', justifyContent: 'center', zIndex: 1 }}>
-                        <img src="/logo_login_2.png" alt="FlyWise" style={{ maxHeight: '80px', maxWidth: '75%', objectFit: 'contain' }} />
-                    </div>
+                    {/* Content — mirrors form structure for button alignment */}
+                    <div style={{ width: '100%', maxWidth: '380px', zIndex: 1, display: 'flex', flexDirection: 'column' }}>
 
-                    {/* Texto + CTA dinâmicos — invertidos */}
-                    <div style={{ width: '100%', maxWidth: '380px', zIndex: 1 }}>
+                        {/* Logo — same slot as form heading */}
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '28px' }}>
+                            <img src="/logo_login_2.png" alt="FlyWise" style={{ maxHeight: '90px', maxWidth: '75%', objectFit: 'contain' }} />
+                        </div>
+
                         <AnimatePresence mode="wait">
                             {tab === 'login' ? (
                                 <motion.div key="panel-signup-cta"
                                     initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
                                     transition={{ duration: 0.28 }}
-                                    style={{ textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                                    style={{ display: 'flex', flexDirection: 'column' }}
                                 >
-                                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
-                                        <h2 style={{ fontSize: '28px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: '0' }}>Bem-vindo de volta!</h2>
-                                        <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '15px', lineHeight: 1.65, margin: 0 }}>
+                                    {/* Heading — aligns with form heading */}
+                                    <div style={{ marginBottom: '28px', textAlign: 'center' }}>
+                                        <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.2, margin: '0 0 4px' }}>Bem-vindo de volta!</h2>
+                                        <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '13.5px', lineHeight: 1.5, margin: 0 }}>
                                             Continue sua jornada estratégica de viagens.
                                         </p>
                                     </div>
-                                    <div style={{ width: '100%', marginTop: '35px' }}>
-                                        <button style={panelBtn} onClick={() => switchTab('signup')}
-                                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-                                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
-                                            Criar conta →
-                                        </button>
+                                    {/* Spacer — same height as 2 form fields (label + input + gap each) */}
+                                    <div style={{ height: '140px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '12px' }}>
+                                        {['Busca inteligente de voos e milhas', 'Estratégias personalizadas por IA', 'Roteiros gerados automaticamente'].map(item => (
+                                            <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+                                                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{item}</span>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <div style={{ height: '37px', marginTop: '24px' }}></div>
+                                    {/* Button — aligns with submit button (marginTop: 4px matches form) */}
+                                    <button style={{ ...panelBtn, marginTop: '4px' }} onClick={() => switchTab('signup')}
+                                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
+                                        Criar conta →
+                                    </button>
                                 </motion.div>
                             ) : (
                                 <motion.div key="panel-login-cta"
                                     initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 40 }}
                                     transition={{ duration: 0.28 }}
-                                    style={{ textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                                    style={{ display: 'flex', flexDirection: 'column' }}
                                 >
-                                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
-                                        <h2 style={{ fontSize: '28px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: '0' }}>Novo por aqui?</h2>
-                                        <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '15px', lineHeight: 1.65, margin: 0 }}>
+                                    <div style={{ marginBottom: '28px', textAlign: 'center' }}>
+                                        <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.2, margin: '0 0 4px' }}>Novo por aqui?</h2>
+                                        <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '13.5px', lineHeight: 1.5, margin: 0 }}>
                                             Crie sua conta e comece a transformar milhas em viagens estratégicas.
                                         </p>
                                     </div>
-                                    <div style={{ width: '100%', marginTop: '35px' }}>
-                                        <button style={panelBtn} onClick={() => switchTab('login')}
-                                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-                                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
-                                            ← Entrar
-                                        </button>
+                                    <div style={{ height: '140px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '12px' }}>
+                                        {['Acesse análises estratégicas de voos', 'Compare preços em reais e milhas', 'Salve e gerencie suas estratégias'].map(item => (
+                                            <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+                                                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{item}</span>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <div style={{ height: '37px', marginTop: '24px' }}></div>
+                                    <button style={{ ...panelBtn, marginTop: '4px' }} onClick={() => switchTab('login')}
+                                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
+                                        ← Entrar
+                                    </button>
                                 </motion.div>
                             )}
                         </AnimatePresence>

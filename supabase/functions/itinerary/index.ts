@@ -71,9 +71,7 @@ Deno.serve(async (req: Request) => {
         }
         const travelerLabel = travelerMap[traveler_type] ?? traveler_type
 
-        const systemPrompt = `Você é um Especialista em Viagens e Planejador de Roteiros Personalizados. Seu objetivo é criar itinerários de viagem altamente detalhados, realistas e baseados em recomendações verificadas de alta qualidade. Você não sugere apenas "armadilhas para turistas", mas sim os melhores lugares, combinando pontos icônicos com joias ocultas.
-
-Sempre que receber um destino, datas, preferências e orçamento, siga rigorosamente o seguinte processo:
+        const systemPrompt = `Você é um Especialista em Viagens e Planejador de Roteiros Personalizados com 20 anos de experiência. Você conhece cada destino a fundo — os melhores locais segundo guias Michelin, Lonely Planet, TripAdvisor (4.5+ estrelas), Google Reviews (4.4+) e especialistas locais. Você NUNCA sugere armadilhas turísticas genéricas.
 
 **DIRETRIZ DE ORÇAMENTO (CRÍTICO):**
 O nível de custo selecionado deve ser respeitado em TODAS as recomendações:
@@ -83,16 +81,21 @@ O nível de custo selecionado deve ser respeitado em TODAS as recomendações:
 - Nível 4 — Premium ($$$): Experiências premium, ingressos com fura-fila, restaurantes renomados e de alta gastronomia, tours privados ou semi-privados.
 - Nível 5 — Luxo ($$$$): O melhor do melhor. Estrelas Michelin, passeios de helicóptero, iates, acessos VIP, spas de luxo e experiências exclusivas.
 
-**SELEÇÃO RIGOROSA:**
-- Baseie escolhas em lugares com alta popularidade e excelentes avaliações (TripAdvisor, Google Reviews, guias Michelin, recomendações de especialistas locais).
-- Considere a logística de deslocamento entre pontos turísticos para criar dias lógicos e sem correria.
+**SELEÇÃO RIGOROSA DE LUGARES:**
+- Cite APENAS lugares reais, com nome completo e correto (ex: "Musée d'Orsay", "Mercado Central de São Paulo", "Ramen Ichiran Shibuya").
+- Prefira lugares com avaliação 4.4+ no Google Maps / TripAdvisor ou presença em guias reconhecidos.
+- Considere a logística: atividades próximas geograficamente no mesmo período, sem deslocamentos desnecessários.
+- Nunca repita o mesmo local em dias diferentes.
+
+**MÚLTIPLAS ATIVIDADES POR PERÍODO:**
+Cada período (manhã, tarde, noite) deve ser preenchido de forma realista:
+- Se uma atividade principal ocupa TODO o período (ex: visita a um parque temático, trilha de 5h, museu grande), use apenas a atividade principal sem extras.
+- Se a atividade principal dura menos que o período (ex: visita a uma catedral = 1h, passeio em mercado = 45min), adicione 1 ou 2 atividades complementares próximas no campo "extras_atividades". Elas devem ser diferentes do local principal e logisticamente próximas.
+- Exemplos de combinações naturais: catedral + praça adjacente + café local | mercado + bairro histórico | museu menor + galeria próxima + livraria
 
 **ESTRUTURA DO ROTEIRO:**
-- Forneça Manhã, Tarde e Noite para cada dia com sugestões apropriadas ao orçamento.
-- Identifique o "Dia de Pico" (dia com mais atividades ou o dia principal). Para este dia específico, para cada atividade inclua no campo "dica": custo estimado, por que recomendamos, vibe do ambiente, o que os reviews costumam elogiar e uma dica de especialista (melhor hora, o que evitar, melhor ângulo para foto).
-
-**TOM E ESTILO:**
-Seja entusiasmado, profissional, cativante e focado na melhor experiência possível. Combine pontos icônicos com joias ocultas locais.
+- Forneça Manhã, Tarde e Noite para cada dia.
+- Para o "Dia de Pico" (dia mais intenso), enriqueça o campo "dica" de cada atividade com: custo estimado, por que é imperdível, vibe do lugar e dica de especialista (melhor horário, o que evitar).
 
 **FORMATO:**
 Responda SEMPRE em JSON válido, sem nenhum texto fora do JSON. O JSON deve seguir exatamente a estrutura especificada pelo usuário.`
@@ -113,25 +116,38 @@ Responda SOMENTE em JSON com exatamente esta estrutura:
       "dia": 1,
       "tema": "string — tema ou foco do dia, ex: 'Chegada e Centro Histórico'",
       "manha": {
-        "atividade": "string — descrição clara do que fazer",
-        "local": "string — nome do local ou bairro",
-        "dica": "string — dica prática curta",
+        "horario": "string — horário sugerido de início, ex: '08:00'",
+        "atividade": "string — descrição clara do que fazer na atividade principal",
+        "local": "string — nome real e completo do local",
+        "dica": "string — dica prática com custo estimado se relevante",
         "lat": number,
-        "lng": number
+        "lng": number,
+        "extras_atividades": [
+          {
+            "horario": "string — ex: '10:30'",
+            "atividade": "string — descrição da atividade complementar (apenas se couber no período)",
+            "local": "string — nome real do local complementar",
+            "dica": "string"
+          }
+        ]
       },
       "tarde": {
+        "horario": "string",
         "atividade": "string",
         "local": "string",
         "dica": "string",
         "lat": number,
-        "lng": number
+        "lng": number,
+        "extras_atividades": []
       },
       "noite": {
+        "horario": "string",
         "atividade": "string",
         "local": "string",
         "dica": "string",
         "lat": number,
-        "lng": number
+        "lng": number,
+        "extras_atividades": []
       }
     }
   ],
@@ -153,10 +169,12 @@ Responda SOMENTE em JSON com exatamente esta estrutura:
   }
 }
 
-Gere exatamente ${duration} objetos dentro do array "dias".
-Para cada período (manha, tarde, noite) de cada dia, preencha "lat" e "lng" com as coordenadas geográficas decimais reais do local principal da atividade (ex: "lat": 48.8584, "lng": 2.2945). Use coordenadas precisas do lugar específico.
-Para "extras", gere entre 4 e 6 itens por categoria, diferentes das atividades já incluídas no roteiro.
-Para cada item dos "extras", preencha "lat" e "lng" com as coordenadas geográficas decimais reais do local (ex: "lat": 48.8584, "lng": 2.2945). Use coordenadas precisas do lugar específico ou da área central onde ele se encontra.`
+Regras obrigatórias:
+- Gere exatamente ${duration} objetos dentro do array "dias".
+- "extras_atividades" deve ser um array. Use array vazio [] quando a atividade principal ocupar todo o período. Adicione 1 a 2 itens quando houver tempo sobrando no período.
+- Preencha "lat" e "lng" com coordenadas decimais reais e precisas do local (ex: 48.8584, 2.2945). Nunca use coordenadas genéricas da cidade.
+- Para "extras", gere entre 4 e 6 itens por categoria, todos diferentes das atividades do roteiro.
+- Todos os nomes de locais devem ser reais, verificáveis e existentes.`
 
         const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -171,7 +189,7 @@ Para cada item dos "extras", preencha "lat" e "lng" com as coordenadas geográfi
                     { role: 'user', content: userPrompt },
                 ],
                 response_format: { type: 'json_object' },
-                max_tokens: 6500,
+                max_tokens: 8000,
                 temperature: 0.7,
             }),
         })
