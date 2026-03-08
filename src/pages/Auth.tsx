@@ -190,14 +190,13 @@ export default function Auth() {
                     <div style={{ position: 'absolute', top: '-80px', right: '-80px', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(74,144,226,0.28) 0%, transparent 70%)', pointerEvents: 'none' }} />
                     <div style={{ position: 'absolute', bottom: '-60px', left: '-60px', width: '260px', height: '260px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-                    {/* Content — mirrors form structure for button alignment */}
+                    {/* Logo — absolute, decorative, centered in upper portion */}
+                    <div style={{ position: 'absolute', top: '50px', width: '100%', display: 'flex', justifyContent: 'center', zIndex: 1, pointerEvents: 'none' }}>
+                        <img src="/logo_login_2.png" alt="FlyWise" style={{ maxHeight: '90px', maxWidth: '75%', objectFit: 'contain' }} />
+                    </div>
+
+                    {/* Content — mirrors form layout exactly (heading + fields spacer + button) */}
                     <div style={{ width: '100%', maxWidth: '380px', zIndex: 1, display: 'flex', flexDirection: 'column' }}>
-
-                        {/* Logo — same slot as form heading */}
-                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '28px' }}>
-                            <img src="/logo_login_2.png" alt="FlyWise" style={{ maxHeight: '90px', maxWidth: '75%', objectFit: 'contain' }} />
-                        </div>
-
                         <AnimatePresence mode="wait">
                             {tab === 'login' ? (
                                 <motion.div key="panel-signup-cta"
@@ -205,15 +204,15 @@ export default function Auth() {
                                     transition={{ duration: 0.28 }}
                                     style={{ display: 'flex', flexDirection: 'column' }}
                                 >
-                                    {/* Heading — aligns with form heading */}
+                                    {/* Mirrors form heading block */}
                                     <div style={{ marginBottom: '28px', textAlign: 'center' }}>
                                         <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.2, margin: '0 0 4px' }}>Bem-vindo de volta!</h2>
                                         <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '13.5px', lineHeight: 1.5, margin: 0 }}>
                                             Continue sua jornada estratégica de viagens.
                                         </p>
                                     </div>
-                                    <div style={{ height: '140px' }} />
-                                    {/* Button — aligns with submit button (marginTop: 4px matches form) */}
+                                    {/* Mirrors 2 form fields height: (label+input+gap) × 2 */}
+                                    <div style={{ height: '156px' }} />
                                     <button style={{ ...panelBtn, marginTop: '4px' }} onClick={() => switchTab('signup')}
                                         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
                                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
@@ -232,7 +231,7 @@ export default function Auth() {
                                             Crie sua conta e comece a transformar milhas em viagens estratégicas.
                                         </p>
                                     </div>
-                                    <div style={{ height: '140px' }} />
+                                    <div style={{ height: '156px' }} />
                                     <button style={{ ...panelBtn, marginTop: '4px' }} onClick={() => switchTab('login')}
                                         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
                                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
