@@ -212,15 +212,7 @@ export default function Auth() {
                                             Continue sua jornada estratégica de viagens.
                                         </p>
                                     </div>
-                                    {/* Spacer — same height as 2 form fields (label + input + gap each) */}
-                                    <div style={{ height: '140px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '12px' }}>
-                                        {['Busca inteligente de voos e milhas', 'Estratégias personalizadas por IA', 'Roteiros gerados automaticamente'].map(item => (
-                                            <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
-                                                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{item}</span>
-                                            </div>
-                                        ))}
-                                    </div>
+                                    <div style={{ height: '140px' }} />
                                     {/* Button — aligns with submit button (marginTop: 4px matches form) */}
                                     <button style={{ ...panelBtn, marginTop: '4px' }} onClick={() => switchTab('signup')}
                                         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
@@ -240,14 +232,7 @@ export default function Auth() {
                                             Crie sua conta e comece a transformar milhas em viagens estratégicas.
                                         </p>
                                     </div>
-                                    <div style={{ height: '140px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '12px' }}>
-                                        {['Acesse análises estratégicas de voos', 'Compare preços em reais e milhas', 'Salve e gerencie suas estratégias'].map(item => (
-                                            <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
-                                                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{item}</span>
-                                            </div>
-                                        ))}
-                                    </div>
+                                    <div style={{ height: '140px' }} />
                                     <button style={{ ...panelBtn, marginTop: '4px' }} onClick={() => switchTab('login')}
                                         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
                                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
