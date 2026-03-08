@@ -193,7 +193,7 @@ export default function Auth() {
                     {/* Content — logo + heading + spacer + button, all in flow and centered together */}
                     <div style={{ width: '100%', maxWidth: '380px', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         {/* Logo — in flow, above heading */}
-                        <img src="/logo_login_2.png" alt="FlyWise" style={{ maxHeight: '80px', maxWidth: '70%', objectFit: 'contain', marginBottom: '20px' }} />
+                        <img src="/logo_login_2.png" alt="FlyWise" style={{ maxHeight: '80px', maxWidth: '70%', objectFit: 'contain', marginBottom: '53px' }} />
 
                         <AnimatePresence mode="wait">
                             {tab === 'login' ? (
@@ -202,14 +202,14 @@ export default function Auth() {
                                     transition={{ duration: 0.28 }}
                                     style={{ display: 'flex', flexDirection: 'column', width: '100%' }}
                                 >
-                                    <div style={{ marginBottom: '28px', textAlign: 'center' }}>
+                                    <div style={{ marginBottom: 0, textAlign: 'center' }}>
                                         <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.2, margin: '0 0 4px' }}>Bem-vindo de volta!</h2>
                                         <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '13.5px', lineHeight: 1.5, margin: 0 }}>
                                             Continue sua jornada estratégica de viagens.
                                         </p>
                                     </div>
-                                    {/* Spacer = 156px (fields) - 80px (logo) - 20px (logo gap) = 56px */}
-                                    <div style={{ height: '56px' }} />
+                                    {/* Spacer: equal gap on both sides (53px logo→text = 49px spacer + 4px marginTop text→button) */}
+                                    <div style={{ height: '49px' }} />
                                     <button style={{ ...panelBtn, marginTop: '4px' }} onClick={() => switchTab('signup')}
                                         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
                                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
@@ -222,13 +222,13 @@ export default function Auth() {
                                     transition={{ duration: 0.28 }}
                                     style={{ display: 'flex', flexDirection: 'column', width: '100%' }}
                                 >
-                                    <div style={{ marginBottom: '28px', textAlign: 'center' }}>
+                                    <div style={{ marginBottom: 0, textAlign: 'center' }}>
                                         <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.2, margin: '0 0 4px' }}>Novo por aqui?</h2>
                                         <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '13.5px', lineHeight: 1.5, margin: 0 }}>
                                             Crie sua conta e comece a transformar milhas em viagens estratégicas.
                                         </p>
                                     </div>
-                                    <div style={{ height: '56px' }} />
+                                    <div style={{ height: '49px' }} />
                                     <button style={{ ...panelBtn, marginTop: '4px' }} onClick={() => switchTab('login')}
                                         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
                                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
