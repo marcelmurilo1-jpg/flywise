@@ -202,19 +202,19 @@ export default function Auth() {
                                 <motion.div key="panel-signup-cta"
                                     initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
                                     transition={{ duration: 0.28 }}
-                                    style={{ textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column' }}
+                                    style={{ textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
                                 >
-                                    <div style={{ height: '150px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                                        <h2 style={{ fontSize: '32px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: '0 0 12px' }}>Bem-vindo de volta!</h2>
-                                        <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '15px', lineHeight: 1.65, margin: 0 }}>
-                                            Continue sua jornada estratégica de viagens com as melhores ferramentas e dados.
+                                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
+                                        <h2 style={{ fontSize: '28px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: '0' }}>Bem-vindo de volta!</h2>
+                                        <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '15px', lineHeight: 1.65, margin: 0 }}>
+                                            Continue sua jornada estratégica de viagens.
                                         </p>
                                     </div>
-                                    <div style={{ marginTop: '20px' }}>
+                                    <div style={{ width: '100%', marginTop: '35px' }}>
                                         <button style={panelBtn} onClick={() => switchTab('signup')}
                                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
                                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
-                                            Criar conta livremente →
+                                            Criar conta →
                                         </button>
                                     </div>
                                     <div style={{ height: '37px', marginTop: '24px' }}></div>
@@ -223,19 +223,19 @@ export default function Auth() {
                                 <motion.div key="panel-login-cta"
                                     initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 40 }}
                                     transition={{ duration: 0.28 }}
-                                    style={{ textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column' }}
+                                    style={{ textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
                                 >
-                                    <div style={{ height: '150px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                                        <h2 style={{ fontSize: '32px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: '0 0 12px' }}>Novo por aqui?</h2>
-                                        <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '15px', lineHeight: 1.65, margin: 0 }}>
-                                            Crie sua conta gratuitamente e comece a transformar milhas em viagens estratégicas incríveis.
+                                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
+                                        <h2 style={{ fontSize: '28px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.2, margin: '0' }}>Novo por aqui?</h2>
+                                        <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '15px', lineHeight: 1.65, margin: 0 }}>
+                                            Crie sua conta e comece a transformar milhas em viagens estratégicas.
                                         </p>
                                     </div>
-                                    <div style={{ marginTop: '20px' }}>
+                                    <div style={{ width: '100%', marginTop: '35px' }}>
                                         <button style={panelBtn} onClick={() => switchTab('login')}
                                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
                                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
-                                            ← Entrar na sua conta
+                                            ← Entrar
                                         </button>
                                     </div>
                                     <div style={{ height: '37px', marginTop: '24px' }}></div>
