@@ -190,10 +190,10 @@ export default function Auth() {
                     <div style={{ position: 'absolute', top: '-80px', right: '-80px', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(74,144,226,0.28) 0%, transparent 70%)', pointerEvents: 'none' }} />
                     <div style={{ position: 'absolute', bottom: '-60px', left: '-60px', width: '260px', height: '260px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-                    {/* Content — logo + heading + spacer + button, all in flow and centered together */}
+                    {/* Content — logo + heading + spacer + button + bottom spacer, all in flow and centered together */}
                     <div style={{ width: '100%', maxWidth: '380px', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        {/* Logo — in flow, above heading */}
-                        <img src="/logo_login_2.png" alt="FlyWise" style={{ maxHeight: '80px', maxWidth: '70%', objectFit: 'contain', marginBottom: '53px' }} />
+                        {/* Logo — in flow. marginBottom 57px = equal to text→button gap (53+4) */}
+                        <img src="/logo_login_2.png" alt="FlyWise" style={{ maxHeight: '80px', maxWidth: '70%', objectFit: 'contain', marginBottom: '57px' }} />
 
                         <AnimatePresence mode="wait">
                             {tab === 'login' ? (
@@ -208,8 +208,8 @@ export default function Auth() {
                                             Continue sua jornada estratégica de viagens.
                                         </p>
                                     </div>
-                                    {/* Spacer: equal gap on both sides (53px logo→text = 49px spacer + 4px marginTop text→button) */}
-                                    <div style={{ height: '49px' }} />
+                                    {/* 53px spacer + 4px marginTop = 57px (equal to logo→text gap) */}
+                                    <div style={{ height: '53px' }} />
                                     <button style={{ ...panelBtn, marginTop: '4px' }} onClick={() => switchTab('signup')}
                                         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
                                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
@@ -228,7 +228,7 @@ export default function Auth() {
                                             Crie sua conta e comece a transformar milhas em viagens estratégicas.
                                         </p>
                                     </div>
-                                    <div style={{ height: '49px' }} />
+                                    <div style={{ height: '53px' }} />
                                     <button style={{ ...panelBtn, marginTop: '4px' }} onClick={() => switchTab('login')}
                                         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
                                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateY(0)' }}>
@@ -237,6 +237,8 @@ export default function Auth() {
                                 </motion.div>
                             )}
                         </AnimatePresence>
+                        {/* Bottom spacer: mirrors "← Voltar para início" link height on form side (42px) to equalize centering */}
+                        <div style={{ height: '38px' }} />
                     </div>
                 </motion.div>
             </div>
