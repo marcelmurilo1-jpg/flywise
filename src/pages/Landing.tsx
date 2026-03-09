@@ -409,7 +409,7 @@ function StatsGrid() {
 // ─── Destinations Carousel ────────────────────────────────────────────────────
 function DestinationsCarousel() {
     const trackRef = useRef<HTMLDivElement>(null)
-    const CARD_WIDTH = 284 // card width + gap
+    const CARD_WIDTH = 284
 
     function scroll(dir: 1 | -1) {
         trackRef.current?.scrollBy({ left: dir * CARD_WIDTH, behavior: 'smooth' })
@@ -417,22 +417,28 @@ function DestinationsCarousel() {
 
     return (
         <div style={{ position: 'relative' }}>
-            {/* Nav arrows */}
+            <style>{`
+                .dest-track::-webkit-scrollbar { display: none; }
+                .dest-arrow { background: #fff; border: 1px solid #E2EAF5; box-shadow: 0 2px 10px rgba(14,42,85,0.10); transition: box-shadow 0.18s, border-color 0.18s; }
+                .dest-arrow:hover { box-shadow: 0 4px 18px rgba(14,42,85,0.18); border-color: #C0CFEA; }
+                .dest-card-arrow { background: #EEF2F8; transition: background 0.18s; }
+                .dest-card-arrow:hover { background: #dce7f5; }
+                @media (max-width: 768px) { .dest-nav-btn { display: none !important; } }
+            `}</style>
+
+            {/* Nav arrows — hidden on mobile (swipe natively) */}
             {(['prev', 'next'] as const).map(side => (
                 <button
                     key={side}
+                    className="dest-arrow dest-nav-btn"
                     onClick={() => scroll(side === 'next' ? 1 : -1)}
                     style={{
                         position: 'absolute', top: '50%', transform: 'translateY(-50%)',
                         [side === 'prev' ? 'left' : 'right']: '-20px',
                         zIndex: 10, width: 40, height: 40, borderRadius: '50%',
-                        background: '#fff', border: '1px solid #E2EAF5',
-                        boxShadow: '0 4px 16px rgba(14,42,85,0.12)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', transition: 'background 0.15s, box-shadow 0.15s',
+                        cursor: 'pointer',
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#2A60C2'; (e.currentTarget.querySelector('svg') as SVGElement | null)?.setAttribute('color', '#fff') }}
-                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; (e.currentTarget.querySelector('svg') as SVGElement | null)?.setAttribute('color', '#2A60C2') }}
                 >
                     {side === 'prev'
                         ? <ChevronLeft size={18} color="#2A60C2" />
@@ -440,8 +446,7 @@ function DestinationsCarousel() {
                 </button>
             ))}
 
-            {/* Scrollable track */}
-            <style>{`.dest-track::-webkit-scrollbar { display: none; }`}</style>
+            {/* Scrollable track — snap to center */}
             <div
                 ref={trackRef}
                 className="dest-track"
@@ -449,27 +454,25 @@ function DestinationsCarousel() {
                     display: 'flex', gap: '24px',
                     overflowX: 'auto', scrollSnapType: 'x mandatory',
                     scrollbarWidth: 'none', paddingBottom: '8px',
+                    paddingLeft: '2px', paddingRight: '2px',
                 }}
             >
                 {DESTINATIONS.map((d) => (
                     <div
                         key={d.name}
                         style={{
-                            flex: '0 0 260px', scrollSnapAlign: 'start',
+                            flex: '0 0 260px', scrollSnapAlign: 'center',
                             background: '#fff', borderRadius: '20px',
                             boxShadow: '0 4px 20px rgba(14,42,85,0.07)',
                             overflow: 'hidden', border: '1px solid #E2EAF5',
-                            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                            transition: 'box-shadow 0.2s ease',
                             cursor: 'pointer',
                         }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 40px rgba(14,42,85,0.13)' }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(14,42,85,0.07)' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 32px rgba(14,42,85,0.12)' }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(14,42,85,0.07)' }}
                     >
                         <div style={{ height: '180px', overflow: 'hidden' }}>
-                            <img src={d.img} alt={d.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
-                                onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
-                                onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
-                            />
+                            <img src={d.img} alt={d.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
                         <div style={{ padding: '18px 18px 20px' }}>
                             <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#6B7A99', fontSize: '11px', fontWeight: 600, borderRadius: '6px', padding: '3px 10px', marginBottom: '10px', letterSpacing: '0.02em' }}>{d.class}</div>
@@ -480,10 +483,7 @@ function DestinationsCarousel() {
                                     <div style={{ fontSize: '20px', fontWeight: 800, color: '#2A60C2', letterSpacing: '-0.02em' }}>{d.miles} pts</div>
                                     <div style={{ fontSize: '11px', color: '#A0AECB', marginTop: '2px' }}>ou {d.price}</div>
                                 </div>
-                                <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: '#EEF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}
-                                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = '#2A60C2')}
-                                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '#EEF2F8')}
-                                >
+                                <div className="dest-card-arrow" style={{ width: '34px', height: '34px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <ArrowRight size={14} color="#2A60C2" />
                                 </div>
                             </div>
@@ -505,7 +505,7 @@ export default function Landing() {
     useEffect(() => {
         const id = setTimeout(() => {
             setTitleNumber(n => (n === heroTitles.length - 1 ? 0 : n + 1))
-        }, 2500)
+        }, 4000)
         return () => clearTimeout(id)
     }, [titleNumber, heroTitles])
 

@@ -4,9 +4,9 @@ import useMeasure from 'react-use-measure'
 
 const TRANSITION = {
     type: 'spring' as const,
-    stiffness: 60,
-    damping: 20,
-    mass: 1.2,
+    stiffness: 22,
+    damping: 14,
+    mass: 2.5,
 }
 
 function Number({ mv, number }: { mv: MotionValue<number>; number: number }) {

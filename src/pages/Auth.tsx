@@ -253,13 +253,23 @@ export default function Auth() {
                         <p style={{ color: '#6B7A99', fontSize: '14px', margin: 0 }}>Inteligência estratégica para milhas</p>
                     </div>
 
-                    <div style={{ marginBottom: '20px' }}>
-                        <h1 style={{ fontSize: '22px', fontWeight: 800, color: NAVY, letterSpacing: '-0.03em', margin: '0 0 4px' }}>
-                            {tab === 'login' ? 'Bem-vindo de volta' : 'Crie sua conta'}
-                        </h1>
-                        <p style={{ fontSize: '13.5px', color: '#6B7A99', margin: 0 }}>
-                            {tab === 'login' ? 'Entre para acessar suas análises estratégicas' : 'Comece grátis e viaje com mais inteligência'}
-                        </p>
+                    <div style={{ marginBottom: '20px', overflow: 'hidden' }}>
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={tab}
+                                initial={{ opacity: 0, y: 14 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -14 }}
+                                transition={{ duration: 0.22, ease: 'easeOut' }}
+                            >
+                                <h1 style={{ fontSize: '22px', fontWeight: 800, color: NAVY, letterSpacing: '-0.03em', margin: '0 0 4px' }}>
+                                    {tab === 'login' ? 'Bem-vindo de volta' : 'Crie sua conta'}
+                                </h1>
+                                <p style={{ fontSize: '13.5px', color: '#6B7A99', margin: 0 }}>
+                                    {tab === 'login' ? 'Entre para acessar suas análises estratégicas' : 'Comece grátis e viaje com mais inteligência'}
+                                </p>
+                            </motion.div>
+                        </AnimatePresence>
                     </div>
 
                     {/* Mobile tab toggle */}

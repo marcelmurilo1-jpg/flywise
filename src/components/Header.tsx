@@ -62,7 +62,7 @@ export function Header({ variant = 'app' }: HeaderProps) {
             <div className="fly-header-grid" style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', height: '110px', padding: '0 8px', maxWidth: '880px', margin: '0 auto' }}>
 
                 {/* Left: Logo */}
-                <Link to={user ? '/home' : '/'} style={{ display: 'flex', alignItems: 'center', justifySelf: 'start' }}>
+                <Link to={user ? '/home' : '/'} className="fly-logo-link" style={{ display: 'flex', alignItems: 'center', justifySelf: 'start' }}>
                     <img src="/logo.png" alt="FlyWise" className="fly-logo" style={{ height: '96px', objectFit: 'contain' }} />
                 </Link>
 
@@ -78,7 +78,7 @@ export function Header({ variant = 'app' }: HeaderProps) {
                 ) : <div />}
 
                 {/* Right: Theme Toggle + User Menu */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px' }}>
+                <div className="fly-right-slot" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px' }}>
                     <span className="flywise-header-theme-toggle"><ThemeToggle /></span>
                     {!user ? (
                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -89,6 +89,7 @@ export function Header({ variant = 'app' }: HeaderProps) {
                         <div ref={menuRef} style={{ position: 'relative' }}>
                             <button
                                 onClick={() => setUserMenuOpen(!userMenuOpen)}
+                                className="fly-user-btn"
                                 style={{
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     width: '42px', height: '42px', borderRadius: '50%',
@@ -177,10 +178,27 @@ export function Header({ variant = 'app' }: HeaderProps) {
 
         <style>{`
             @media (max-width: 768px) {
-                .fly-header-grid { height: auto !important; padding: 10px 16px !important; max-width: 100% !important; }
-                .fly-logo { height: 48px !important; }
+                .fly-header-grid {
+                    height: auto !important;
+                    padding: 10px 16px !important;
+                    max-width: 100% !important;
+                    display: flex !important;
+                    justify-content: center !important;
+                    position: relative !important;
+                }
+                .fly-logo { height: 64px !important; }
+                .fly-logo-link { position: static !important; justify-self: unset !important; }
                 .fly-hide-xs { display: none !important; }
                 .fly-nav-tabs { display: none !important; }
+                .fly-user-btn {
+                    position: absolute !important;
+                    right: 16px !important;
+                    top: 50% !important;
+                    transform: translateY(-50%) !important;
+                    width: 34px !important;
+                    height: 34px !important;
+                }
+                .fly-right-slot { position: absolute !important; right: 16px !important; top: 50% !important; transform: translateY(-50%) !important; }
                 .fly-bottom-nav {
                     display: flex !important;
                     position: fixed;

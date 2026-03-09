@@ -340,6 +340,7 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
         gap: '14px',
     }
 
+
     if (loading) return (
         <div style={gridStyle}>
             {Array.from({ length: limit > 3 ? 6 : 3 }).map((_, i) => (
@@ -411,15 +412,39 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
                 </div>
             )}
 
-            {/* Landing mode — simple grid, click → /auth */}
+            {/* Landing mode — grid on desktop, horizontal carousel on mobile */}
             {landingMode && (
-                <div style={gridStyle}>
-                    {displayPromos.map((promo, idx) => (
-                        <Link key={promo.id} to="/auth" style={{ textDecoration: 'none', display: 'block' }}>
-                            <PromoCard promo={promo} idx={idx} onClick={() => { }} dark={false} />
-                        </Link>
-                    ))}
-                </div>
+                <>
+                    <style>{`
+                        .promo-landing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
+                        .promo-landing-grid .promo-card-link { display: block; text-decoration: none; }
+                        @media (max-width: 768px) {
+                            .promo-landing-grid {
+                                display: flex !important;
+                                overflow-x: auto;
+                                scroll-snap-type: x mandatory;
+                                scrollbar-width: none;
+                                padding-bottom: 8px;
+                                -webkit-overflow-scrolling: touch;
+                                gap: 12px;
+                                padding-right: 16px;
+                            }
+                            .promo-landing-grid::-webkit-scrollbar { display: none; }
+                            .promo-landing-grid .promo-card-link {
+                                flex: 0 0 78vw;
+                                max-width: 300px;
+                                scroll-snap-align: center;
+                            }
+                        }
+                    `}</style>
+                    <div className="promo-landing-grid">
+                        {displayPromos.map((promo, idx) => (
+                            <Link key={promo.id} to="/auth" className="promo-card-link">
+                                <PromoCard promo={promo} idx={idx} onClick={() => { }} dark={false} />
+                            </Link>
+                        ))}
+                    </div>
+                </>
             )}
 
             {/* Dashboard mode — grouped by date */}
