@@ -1,13 +1,6 @@
 import { useEffect, useId } from 'react'
-import { MotionValue, motion, useSpring, useTransform, motionValue } from 'framer-motion'
+import { MotionValue, motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import useMeasure from 'react-use-measure'
-
-const TRANSITION = {
-    type: 'spring' as const,
-    stiffness: 22,
-    damping: 14,
-    mass: 2.5,
-}
 
 function Number({ mv, number }: { mv: MotionValue<number>; number: number }) {
     const uniqueId = useId()
@@ -35,7 +28,6 @@ function Number({ mv, number }: { mv: MotionValue<number>; number: number }) {
             ref={ref}
             style={{ y, position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             layoutId={`${uniqueId}-${number}`}
-            transition={TRANSITION}
         >
             {number}
         </motion.span>
@@ -44,12 +36,11 @@ function Number({ mv, number }: { mv: MotionValue<number>; number: number }) {
 
 function Digit({ value, place }: { value: number; place: number }) {
     const valueRoundedToPlace = Math.floor(value / place) % 10
-    const initial = motionValue(valueRoundedToPlace)
-    const animatedValue = useSpring(initial, TRANSITION)
+    const mv = useMotionValue(0)
 
     useEffect(() => {
-        animatedValue.set(valueRoundedToPlace)
-    }, [animatedValue, valueRoundedToPlace])
+        animate(mv, valueRoundedToPlace, { duration: 2.0, ease: 'easeOut' })
+    }, [mv, valueRoundedToPlace])
 
     return (
         <div style={{
@@ -62,7 +53,7 @@ function Digit({ value, place }: { value: number; place: number }) {
         }}>
             <div style={{ visibility: 'hidden' }}>0</div>
             {Array.from({ length: 10 }, (_, i) => (
-                <Number key={i} mv={animatedValue} number={i} />
+                <Number key={i} mv={mv} number={i} />
             ))}
         </div>
     )

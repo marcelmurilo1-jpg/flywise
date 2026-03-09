@@ -319,20 +319,22 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
                     onDayHover={setHoverDate}
                     onPrev={() => setViewLeft(v => subMonths(v, 1))}
                     onNext={() => setViewLeft(v => addMonths(v, 1))}
-                    showNav="prev"
+                    showNav={tripType === 'one-way' ? 'both' : 'prev'}
                 />
-                <div style={{ width: 1, background: '#E2EAF5' }} />
-                <Calendar
-                    viewDate={viewRight}
-                    selectedStart={tempStart}
-                    selectedEnd={tripType !== 'one-way' ? tempEnd : null}
-                    hoverDate={tripType !== 'one-way' ? hoverDate : null}
-                    onDayClick={handleDayClick}
-                    onDayHover={setHoverDate}
-                    onPrev={() => setViewLeft(v => subMonths(v, 1))}
-                    onNext={() => setViewLeft(v => addMonths(v, 1))}
-                    showNav="next"
-                />
+                <div className="drp-second-cal">
+                    <div style={{ width: 1, background: '#E2EAF5', height: '100%' }} />
+                    <Calendar
+                        viewDate={viewRight}
+                        selectedStart={tempStart}
+                        selectedEnd={tripType !== 'one-way' ? tempEnd : null}
+                        hoverDate={tripType !== 'one-way' ? hoverDate : null}
+                        onDayClick={handleDayClick}
+                        onDayHover={setHoverDate}
+                        onPrev={() => setViewLeft(v => subMonths(v, 1))}
+                        onNext={() => setViewLeft(v => addMonths(v, 1))}
+                        showNav="next"
+                    />
+                </div>
             </div>
 
             {/* Footer hint */}
@@ -348,9 +350,9 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
                 {/* Ida field */}
                 <div style={{
                     border: `1.5px solid ${open && selecting === 'start' ? '#2A60C2' : 'var(--border-light)'}`,
-                    borderRadius: '12px 0 0 12px',
+                    borderRadius: tripType === 'one-way' ? '12px' : '12px 0 0 12px',
                     padding: '10px 14px', background: '#fff',
-                    borderRight: 'none',
+                    ...(tripType !== 'one-way' ? { borderRight: 'none' } : {}),
                     transition: 'border-color 0.15s',
                     minWidth: 120,
                 }}>

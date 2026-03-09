@@ -267,22 +267,15 @@ function SearchPill() {
                 </div>
             </div>{/* end white card */}
 
-            {/* Programs panel — floats BELOW card absolutely, zero impact on wrapper height */}
+            {/* Programs panel — in-flow, pushes content below */}
             <AnimatePresence>
                 {milesOpen && (
                     <motion.div
-                        initial={{ opacity: 0, y: -8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -8 }}
-                        transition={{ duration: 0.2 }}
-                        style={{
-                            position: 'absolute',
-                            top: '100%',
-                            left: 0,
-                            right: 0,
-                            marginTop: 8,
-                            zIndex: 50,
-                        }}
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.28, ease: 'easeInOut' }}
+                        style={{ overflow: 'hidden', marginTop: 8 }}
                     >
                         <div className="search-pill-miles-grid" style={{
                             background: '#fff',

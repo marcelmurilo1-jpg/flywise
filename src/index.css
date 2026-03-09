@@ -867,7 +867,10 @@ body {
   }
 
   .landing-hero-logo {
-    height: 52px !important;
+    height: 88px !important;
+  }
+  .fly-logo {
+    height: 72px !important;
   }
 
   /* CTA buttons — slightly smaller */
@@ -977,6 +980,11 @@ body {
   }
 }
 
+/* DateRangePicker second calendar wrapper */
+.drp-second-cal {
+  display: contents;
+}
+
 /* ══════════════════════════════════════════════════════════
    APP PAGES — Mobile Refinements
 ══════════════════════════════════════════════════════════ */
@@ -1038,5 +1046,18 @@ body {
   /* Prevent iOS auto-zoom on input focus (font-size must be >= 16px) */
   input, select, textarea {
     font-size: 16px !important;
+  }
+
+  /* DateRangePicker panel — full width, single calendar on mobile */
+  [data-drp-panel] {
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 16px !important;
+  }
+
+  .drp-second-cal {
+    display: none !important;
   }
 }
