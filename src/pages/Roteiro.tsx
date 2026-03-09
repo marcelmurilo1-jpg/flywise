@@ -370,9 +370,18 @@ export default function Roteiro() {
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--snow)', display: 'flex', flexDirection: 'column', fontFamily: 'Inter, system-ui, sans-serif' }}>
+            <style>{`
+                @media (max-width: 768px) {
+                    .roteiro-main { padding: 20px 16px 100px !important; }
+                    .roteiro-result-grid { grid-template-columns: 1fr !important; }
+                    .roteiro-form-row { grid-template-columns: 1fr !important; }
+                    .roteiro-budget-grid { grid-template-columns: 1fr 1fr !important; }
+                    .roteiro-actions { flex-direction: column !important; }
+                }
+            `}</style>
             <Header variant="app" />
 
-            <main style={{
+            <main className="roteiro-main" style={{
                 flex: 1, width: '100%',
                 maxWidth: isWideStep ? '1200px' : '720px',
                 margin: '0 auto',
@@ -447,7 +456,7 @@ export default function Roteiro() {
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                    <div className="roteiro-form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                                         <div>
                                             <label style={labelStyle}>Duração da viagem</label>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff' }}>
@@ -510,7 +519,7 @@ export default function Roteiro() {
 
                                     <div>
                                         <label style={labelStyle}>Orçamento da viagem</label>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                                        <div className="roteiro-budget-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
                                             {([
                                                 { level: 1 as const, signs: '$', label: 'Gratuito', desc: 'Somente atividades sem custo' },
                                                 { level: 2 as const, signs: '$$', label: 'Econômico', desc: 'Comida de rua e ingressos baratos' },
@@ -644,7 +653,7 @@ export default function Roteiro() {
                             </div>
 
                             {/* Two-column grid */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '28px', alignItems: 'flex-start' }}>
+                            <div className="roteiro-result-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '28px', alignItems: 'flex-start' }}>
 
                                 {/* LEFT — itinerary */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -712,7 +721,7 @@ export default function Roteiro() {
                                         <p style={{ fontSize: '13px', color: '#f87171', textAlign: 'center', margin: 0 }}>{error}</p>
                                     )}
                                     {!isEditing && (
-                                        <div style={{ display: 'flex', gap: '12px' }}>
+                                        <div className="roteiro-actions" style={{ display: 'flex', gap: '12px' }}>
                                             <button
                                                 onClick={handleAddTrip}
                                                 disabled={isSaved || savingTrip}

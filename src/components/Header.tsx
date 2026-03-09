@@ -63,7 +63,7 @@ export function Header({ variant = 'app' }: HeaderProps) {
 
                 {/* Left: Logo */}
                 <Link to={user ? '/home' : '/'} className="fly-logo-link" style={{ display: 'flex', alignItems: 'center', justifySelf: 'start' }}>
-                    <img src="/logo.png" alt="FlyWise" className="fly-logo" style={{ height: '96px', objectFit: 'contain' }} />
+                    <img src="/logo.png" alt="FlyWise" className="fly-logo" style={{ height: '104px', objectFit: 'contain' }} />
                 </Link>
 
                 {/* Center: Navigation Icons */}
@@ -154,28 +154,6 @@ export function Header({ variant = 'app' }: HeaderProps) {
             </div>
         </header>
 
-        {/* Mobile bottom navigation */}
-        {user && variant === 'app' && (
-            <nav className="fly-bottom-nav">
-                {NAV_ITEMS.map((item, i) => {
-                    const Icon = item.icon
-                    const isActive = activeIndex === i
-                    return (
-                        <button key={item.to} onClick={() => navigate(item.to)} style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
-                            padding: '6px 10px', background: 'none', border: 'none', cursor: 'pointer',
-                            fontFamily: 'inherit', fontSize: '10px', fontWeight: 600,
-                            color: isActive ? 'var(--blue-navy)' : 'var(--text-muted)',
-                            transition: 'color 0.15s', minWidth: 0, flex: 1,
-                        }}>
-                            <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{item.title}</span>
-                        </button>
-                    )
-                })}
-            </nav>
-        )}
-
         <style>{`
             @media (max-width: 768px) {
                 .fly-header-grid {
@@ -186,7 +164,7 @@ export function Header({ variant = 'app' }: HeaderProps) {
                     justify-content: center !important;
                     position: relative !important;
                 }
-                .fly-logo { height: 64px !important; }
+                .fly-logo { height: 72px !important; }
                 .fly-logo-link { position: static !important; justify-self: unset !important; }
                 .fly-hide-xs { display: none !important; }
                 .fly-nav-tabs { display: none !important; }
@@ -199,19 +177,7 @@ export function Header({ variant = 'app' }: HeaderProps) {
                     height: 34px !important;
                 }
                 .fly-right-slot { position: absolute !important; right: 16px !important; top: 50% !important; transform: translateY(-50%) !important; }
-                .fly-bottom-nav {
-                    display: flex !important;
-                    position: fixed;
-                    bottom: 0; left: 0; right: 0;
-                    background: rgba(255,255,255,0.97);
-                    border-top: 1px solid rgba(14,42,85,0.08);
-                    padding: 8px 0 max(8px, env(safe-area-inset-bottom));
-                    z-index: 50;
-                    backdrop-filter: blur(12px);
-                    -webkit-backdrop-filter: blur(12px);
-                }
             }
-            .fly-bottom-nav { display: none; }
         `}</style>
         </>
     )

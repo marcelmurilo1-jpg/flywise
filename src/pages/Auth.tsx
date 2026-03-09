@@ -192,8 +192,8 @@ export default function Auth() {
 
                     {/* Content — logo + heading + spacer + button + bottom spacer, all in flow and centered together */}
                     <div style={{ width: '100%', maxWidth: '380px', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        {/* Logo — in flow. marginBottom 57px = equal to text→button gap (53+4) */}
-                        <img src="/logo_login_2.png" alt="FlyWise" style={{ maxHeight: '80px', maxWidth: '70%', objectFit: 'contain', marginBottom: '57px' }} />
+                        {/* Logo — in flow. marginBottom 37px = equal to text→button gap (53+4) minus 20px for larger logo */}
+                        <img src="/logo_login_2.png" alt="FlyWise" style={{ maxHeight: '100px', maxWidth: '70%', objectFit: 'contain', marginBottom: '37px' }} />
 
                         <AnimatePresence mode="wait">
                             {tab === 'login' ? (
@@ -248,7 +248,7 @@ export default function Auth() {
                 <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: 'easeOut' }} style={{ width: '100%', maxWidth: '420px' }}>
                     <div style={{ marginBottom: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                         <Link to="/" style={{ textDecoration: 'none' }}>
-                            <img src="/logo.png" alt="FlyWise" style={{ height: '80px', objectFit: 'contain' }} />
+                            <img src="/logo.png" alt="FlyWise" style={{ height: '96px', objectFit: 'contain' }} />
                         </Link>
                         <p style={{ color: '#6B7A99', fontSize: '14px', margin: 0 }}>Inteligência estratégica para milhas</p>
                     </div>

@@ -367,10 +367,10 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 // ─── Stats Grid ───────────────────────────────────────────────────────────────
 
 const STATS = [
-    { prefix: '', value: 2, suffix: 'k+', label: 'Usuários', color: '#0E2A55' },
-    { prefix: 'R$ ', value: 1, suffix: 'M', label: 'Em economias', color: '#2A60C2' },
-    { prefix: '', value: 95, suffix: '%', label: 'Satisfação', color: '#2A60C2' },
-    { prefix: '', value: 40, suffix: '+', label: 'Programas', color: '#0E2A55' },
+    { prefix: '', value: 2, startFrom: 1, suffix: 'k+', label: 'Usuários', color: '#0E2A55' },
+    { prefix: 'R$ ', value: 1, startFrom: 0, suffix: 'M', label: 'Em economias', color: '#2A60C2' },
+    { prefix: '', value: 95, startFrom: 55, suffix: '%', label: 'Satisfação', color: '#2A60C2' },
+    { prefix: '', value: 40, startFrom: 22, suffix: '+', label: 'Programas', color: '#0E2A55' },
 ]
 
 function StatsGrid() {
@@ -389,7 +389,7 @@ function StatsGrid() {
                 >
                     <div style={{ fontSize: '36px', fontWeight: 900, color: s.color, letterSpacing: '-0.03em', lineHeight: 1, display: 'flex', alignItems: 'center' }}>
                         {s.prefix}
-                        <SlidingNumber value={inView ? s.value : 0} />
+                        <SlidingNumber value={inView ? s.value : s.startFrom} />
                         {s.suffix}
                     </div>
                     <div style={{ fontSize: '13px', color: '#6B7A99', marginTop: '6px', fontWeight: 500 }}>{s.label}</div>

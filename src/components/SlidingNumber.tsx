@@ -36,10 +36,10 @@ function Number({ mv, number }: { mv: MotionValue<number>; number: number }) {
 
 function Digit({ value, place }: { value: number; place: number }) {
     const valueRoundedToPlace = Math.floor(value / place) % 10
-    const mv = useMotionValue(0)
+    const mv = useMotionValue(valueRoundedToPlace)
 
     useEffect(() => {
-        animate(mv, valueRoundedToPlace, { duration: 2.0, ease: 'easeOut' })
+        animate(mv, valueRoundedToPlace, { duration: 2.5, ease: 'easeOut' })
     }, [mv, valueRoundedToPlace])
 
     return (

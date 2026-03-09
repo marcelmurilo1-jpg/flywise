@@ -154,6 +154,13 @@ export default function SearchWizard() {
 
     return (
         <div className="min-h-screen bg-white text-slate-900 flex flex-col font-sans relative overflow-hidden">
+            <style>{`
+                @media (max-width: 768px) {
+                    .sw-nav { display: none !important; }
+                    .sw-header-grid { grid-template-columns: auto 1fr auto !important; height: 60px !important; }
+                    .sw-main { padding-top: 24px !important; padding-bottom: 100px !important; }
+                }
+            `}</style>
             {/* Subtle background blobs */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
                 <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-[#4a90e2]/6 blur-[140px] rounded-full" />
@@ -169,7 +176,7 @@ export default function SearchWizard() {
                 top: 0,
                 zIndex: 30,
             }}>
-                <div style={{
+                <div className="sw-header-grid" style={{
                     display: 'grid',
                     gridTemplateColumns: '1fr auto 1fr',
                     alignItems: 'center',
@@ -185,7 +192,7 @@ export default function SearchWizard() {
 
                     {/* Nav icons */}
                     {user && (
-                        <nav style={{ display: 'flex', alignItems: 'center', gap: '8px', justifySelf: 'center' }}>
+                        <nav className="sw-nav" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifySelf: 'center' }}>
                             {NAV_ITEMS.map(item => {
                                 const isActive = location.pathname.startsWith(item.to)
                                 return (
@@ -229,7 +236,7 @@ export default function SearchWizard() {
             </header>
 
             {/* ─── MAIN ─── */}
-            <main className="flex-1 flex flex-col items-center justify-center p-6 z-10" style={{ paddingTop: '40px', paddingBottom: '60px' }}>
+            <main className="sw-main flex-1 flex flex-col items-center justify-center p-6 z-10" style={{ paddingTop: '40px', paddingBottom: '60px' }}>
                 <div className="w-full max-w-xl">
                     <AnimatePresence mode="wait">
 
