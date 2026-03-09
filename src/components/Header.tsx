@@ -55,6 +55,7 @@ export function Header({ variant = 'app' }: HeaderProps) {
             background: isDark ? 'rgba(15,17,23,0.95)' : 'rgba(255,255,255,0.95)',
             borderBottom: isDark ? '1px solid #1e293b' : '1px solid rgba(14,42,85,0.08)',
             position: 'relative',
+            zIndex: 30,
             backdropFilter: 'blur(12px)',
             WebkitBackdropFilter: 'blur(12px)',
         }}>
@@ -176,18 +177,20 @@ export function Header({ variant = 'app' }: HeaderProps) {
 
         <style>{`
             @media (max-width: 768px) {
-                .fly-header-grid { height: 64px !important; padding: 0 16px !important; max-width: 100% !important; }
+                .fly-header-grid { height: auto !important; padding: 10px 16px !important; max-width: 100% !important; }
                 .fly-logo { height: 48px !important; }
-                .fly-nav-tabs { display: none !important; }
                 .fly-hide-xs { display: none !important; }
+                .fly-nav-tabs { display: none !important; }
                 .fly-bottom-nav {
                     display: flex !important;
-                    position: fixed; bottom: 0; left: 0; right: 0;
-                    background: var(--bg-white);
-                    border-top: 1px solid var(--border-light);
-                    z-index: 200;
-                    padding-bottom: env(safe-area-inset-bottom, 8px);
-                    justify-content: space-around;
+                    position: fixed;
+                    bottom: 0; left: 0; right: 0;
+                    background: rgba(255,255,255,0.97);
+                    border-top: 1px solid rgba(14,42,85,0.08);
+                    padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+                    z-index: 50;
+                    backdrop-filter: blur(12px);
+                    -webkit-backdrop-filter: blur(12px);
                 }
             }
             .fly-bottom-nav { display: none; }

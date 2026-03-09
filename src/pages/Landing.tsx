@@ -6,7 +6,7 @@ import {
     Search, ArrowRight, ArrowRightLeft, Users,
     ChevronDown, CheckCircle2, BarChart3, Globe, Zap, Shield,
     Twitter, Instagram, Linkedin, Youtube, Flame, Lock, ChevronUp,
-    Info, MapPin, CreditCard, BookOpen
+    Info, MapPin, CreditCard, BookOpen, ChevronLeft
 } from 'lucide-react'
 import { NavBar } from '@/components/ui/tubelight-navbar'
 import { FeaturesSectionWithHoverEffects } from '@/components/ui/feature-section-with-hover-effects'
@@ -127,11 +127,11 @@ function SearchPill() {
                 background: '#fff',
                 borderRadius: '20px',
                 boxShadow: '0 20px 70px rgba(14,42,85,0.22)',
-                padding: '20px 24px 16px',
+                padding: '14px 18px 12px',
                 border: '1px solid rgba(14,42,85,0.06)',
             }}>
                 {/* Trip type toggle */}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                     {(['round-trip', 'one-way'] as const).map(t => (
                         <button
                             key={t}
@@ -152,11 +152,11 @@ function SearchPill() {
                 </div>
 
                 {/* Inputs row */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <div className="search-pill-inputs" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     {/* Origin */}
                     <div style={{
-                        flex: '1 1 150px', border: '1.5px solid #E2EAF5', borderRadius: 12,
-                        padding: '10px 14px', background: '#FAFBFF', minWidth: 140,
+                        flex: '1 1 130px', border: '1.5px solid #E2EAF5', borderRadius: 12,
+                        padding: '8px 12px', background: '#FAFBFF', minWidth: 120,
                     }}>
                         <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Origem</div>
                         <AirportInput
@@ -170,6 +170,7 @@ function SearchPill() {
                     {/* Swap */}
                     <button
                         type="button"
+                        className="search-pill-swap"
                         onClick={handleSwap}
                         style={{
                             width: 34, height: 34, borderRadius: '50%',
@@ -183,8 +184,8 @@ function SearchPill() {
 
                     {/* Destination */}
                     <div style={{
-                        flex: '1 1 150px', border: '1.5px solid #E2EAF5', borderRadius: 12,
-                        padding: '10px 14px', background: '#FAFBFF', minWidth: 140,
+                        flex: '1 1 130px', border: '1.5px solid #E2EAF5', borderRadius: 12,
+                        padding: '8px 12px', background: '#FAFBFF', minWidth: 120,
                     }}>
                         <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Destino</div>
                         <AirportInput
@@ -206,39 +207,42 @@ function SearchPill() {
                         />
                     </div>
 
-                    {/* Passengers */}
-                    <div style={{
-                        border: '1.5px solid #E2EAF5', borderRadius: 12,
-                        padding: '10px 14px', background: '#FAFBFF', flexShrink: 0,
-                    }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Pax</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Users size={13} color="#94A3B8" />
-                            <button type="button" onClick={() => setPax(p => Math.max(1, p - 1))} style={{ width: 18, height: 18, borderRadius: '50%', background: '#E2EAF5', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: '18px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', color: '#0E2A55' }}>−</button>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55', minWidth: 12, textAlign: 'center' }}>{pax}</span>
-                            <button type="button" onClick={() => setPax(p => Math.min(9, p + 1))} style={{ width: 18, height: 18, borderRadius: '50%', background: '#E2EAF5', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: '18px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', color: '#0E2A55' }}>+</button>
+                    {/* Pax + Analisar group */}
+                    <div style={{ display: 'flex', alignItems: 'stretch', gap: 8, flexShrink: 0 }}>
+                        {/* Passengers */}
+                        <div style={{
+                            border: '1.5px solid #E2EAF5', borderRadius: 12,
+                            padding: '8px 12px', background: '#FAFBFF',
+                        }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Pax</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Users size={12} color="#94A3B8" />
+                                <button type="button" onClick={() => setPax(p => Math.max(1, p - 1))} style={{ width: 18, height: 18, borderRadius: '50%', background: '#E2EAF5', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: '18px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', color: '#0E2A55' }}>−</button>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55', minWidth: 12, textAlign: 'center' }}>{pax}</span>
+                                <button type="button" onClick={() => setPax(p => Math.min(9, p + 1))} style={{ width: 18, height: 18, borderRadius: '50%', background: '#E2EAF5', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: '18px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', color: '#0E2A55' }}>+</button>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* CTA → goes to auth, never executes search */}
-                    <button
-                        type="button"
-                        onClick={() => navigate('/auth')}
-                        style={{
-                            background: '#2A60C2', color: '#fff',
-                            borderRadius: 14, padding: '14px 24px',
-                            border: 'none', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            fontFamily: 'inherit', fontWeight: 800, fontSize: 14,
-                            whiteSpace: 'nowrap', flexShrink: 0,
-                            boxShadow: '0 4px 16px rgba(42,96,194,0.35)',
-                            transition: 'background 0.18s, transform 0.18s',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#1A4EA8'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = '#2A60C2'; e.currentTarget.style.transform = 'translateY(0)' }}
-                    >
-                        <Search size={15} /> Analisar
-                    </button>
+                        {/* CTA → goes to auth, never executes search */}
+                        <button
+                            type="button"
+                            onClick={() => navigate('/auth')}
+                            style={{
+                                background: '#2A60C2', color: '#fff',
+                                borderRadius: 12, padding: '10px 20px',
+                                border: 'none', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 6,
+                                fontFamily: 'inherit', fontWeight: 800, fontSize: 13,
+                                whiteSpace: 'nowrap',
+                                boxShadow: '0 4px 16px rgba(42,96,194,0.35)',
+                                transition: 'background 0.18s, transform 0.18s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#1A4EA8'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '#2A60C2'; e.currentTarget.style.transform = 'translateY(0)' }}
+                        >
+                            <Search size={14} /> Analisar
+                        </button>
+                    </div>
                 </div>
 
                 {/* ─── Toggle "Busca avançada" at bottom of white card ─── */}
@@ -402,6 +406,95 @@ function StatsGrid() {
     )
 }
 
+// ─── Destinations Carousel ────────────────────────────────────────────────────
+function DestinationsCarousel() {
+    const trackRef = useRef<HTMLDivElement>(null)
+    const CARD_WIDTH = 284 // card width + gap
+
+    function scroll(dir: 1 | -1) {
+        trackRef.current?.scrollBy({ left: dir * CARD_WIDTH, behavior: 'smooth' })
+    }
+
+    return (
+        <div style={{ position: 'relative' }}>
+            {/* Nav arrows */}
+            {(['prev', 'next'] as const).map(side => (
+                <button
+                    key={side}
+                    onClick={() => scroll(side === 'next' ? 1 : -1)}
+                    style={{
+                        position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+                        [side === 'prev' ? 'left' : 'right']: '-20px',
+                        zIndex: 10, width: 40, height: 40, borderRadius: '50%',
+                        background: '#fff', border: '1px solid #E2EAF5',
+                        boxShadow: '0 4px 16px rgba(14,42,85,0.12)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', transition: 'background 0.15s, box-shadow 0.15s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#2A60C2'; (e.currentTarget.querySelector('svg') as SVGElement | null)?.setAttribute('color', '#fff') }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; (e.currentTarget.querySelector('svg') as SVGElement | null)?.setAttribute('color', '#2A60C2') }}
+                >
+                    {side === 'prev'
+                        ? <ChevronLeft size={18} color="#2A60C2" />
+                        : <ArrowRight size={18} color="#2A60C2" />}
+                </button>
+            ))}
+
+            {/* Scrollable track */}
+            <style>{`.dest-track::-webkit-scrollbar { display: none; }`}</style>
+            <div
+                ref={trackRef}
+                className="dest-track"
+                style={{
+                    display: 'flex', gap: '24px',
+                    overflowX: 'auto', scrollSnapType: 'x mandatory',
+                    scrollbarWidth: 'none', paddingBottom: '8px',
+                }}
+            >
+                {DESTINATIONS.map((d) => (
+                    <div
+                        key={d.name}
+                        style={{
+                            flex: '0 0 260px', scrollSnapAlign: 'start',
+                            background: '#fff', borderRadius: '20px',
+                            boxShadow: '0 4px 20px rgba(14,42,85,0.07)',
+                            overflow: 'hidden', border: '1px solid #E2EAF5',
+                            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                            cursor: 'pointer',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 40px rgba(14,42,85,0.13)' }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(14,42,85,0.07)' }}
+                    >
+                        <div style={{ height: '180px', overflow: 'hidden' }}>
+                            <img src={d.img} alt={d.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
+                                onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
+                                onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+                            />
+                        </div>
+                        <div style={{ padding: '18px 18px 20px' }}>
+                            <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#6B7A99', fontSize: '11px', fontWeight: 600, borderRadius: '6px', padding: '3px 10px', marginBottom: '10px', letterSpacing: '0.02em' }}>{d.class}</div>
+                            <div style={{ fontSize: '18px', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em', marginBottom: '3px' }}>{d.name}</div>
+                            <div style={{ fontSize: '12px', color: '#6B7A99', marginBottom: '14px' }}>{d.route}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div>
+                                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#2A60C2', letterSpacing: '-0.02em' }}>{d.miles} pts</div>
+                                    <div style={{ fontSize: '11px', color: '#A0AECB', marginTop: '2px' }}>ou {d.price}</div>
+                                </div>
+                                <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: '#EEF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}
+                                    onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = '#2A60C2')}
+                                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '#EEF2F8')}
+                                >
+                                    <ArrowRight size={14} color="#2A60C2" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}
+
 // ─── Landing Page Principal ───────────────────────────────────────────────────
 export default function Landing() {
     const [billing, setBilling] = useState<'mensal' | 'anual'>('mensal')
@@ -434,7 +527,7 @@ export default function Landing() {
         <div style={{ minHeight: '100vh', background: '#fff', fontFamily: 'Inter, system-ui, sans-serif' }}>
 
             {/* ████ 1. HERO ████ */}
-            <section style={{ position: 'relative', background: '#060F1F', overflow: 'hidden' }}>
+            <section style={{ position: 'relative', background: '#060F1F', overflow: 'hidden', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
 
                 {/* Ambient glow */}
                 <div style={{ position: 'absolute', top: 0, right: '25%', width: '500px', height: '500px', borderRadius: '50%', background: 'rgba(74,144,226,0.05)', filter: 'blur(80px)', pointerEvents: 'none' }} />
@@ -456,7 +549,7 @@ export default function Landing() {
                         maxWidth: '1200px',
                     }}>
                         {/* Logo */}
-                        <Link to="/" style={{ textDecoration: 'none', justifySelf: 'start' }}>
+                        <Link to="/" className="landing-hero-logo-link" style={{ textDecoration: 'none', justifySelf: 'start' }}>
                             <img src="/logoLP.png" alt="FlyWise" className="landing-hero-logo" style={{ height: '100px', objectFit: 'contain' }} />
                         </Link>
 
@@ -692,7 +785,7 @@ export default function Landing() {
             </section>
 
             {/* ████ 5. ÚLTIMAS PROMOÇÕES ████ */}
-            <section style={{ padding: '100px 60px', maxWidth: '1280px', margin: '0 auto' }}>
+            <section className="landing-section" style={{ padding: '100px 60px', maxWidth: '1280px', margin: '0 auto' }}>
                 <div style={{ marginBottom: '48px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
                     <div>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '14px' }}>
@@ -714,7 +807,7 @@ export default function Landing() {
             </section>
 
             {/* ████ 6. DESTINOS ESTRATÉGICOS ████ */}
-            <section id="destinos" style={{ padding: '80px 60px 100px', background: '#F7F9FC', maxWidth: '100%' }}>
+            <section id="destinos" className="landing-section" style={{ padding: '80px 60px 100px', background: '#F7F9FC', maxWidth: '100%' }}>
                 <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
                     <div style={{ marginBottom: '56px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
                         <div>
@@ -728,49 +821,12 @@ export default function Landing() {
                         </Link>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '24px' }}>
-                        {DESTINATIONS.map((d, i) => (
-                            <motion.div
-                                key={d.name}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.08 * i, duration: 0.5 }}
-                                style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(14,42,85,0.07)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.2s ease, box-shadow 0.2s ease', border: '1px solid #E2EAF5' }}
-                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 40px rgba(14,42,85,0.13)' }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(14,42,85,0.07)' }}
-                            >
-                                {/* Imagem */}
-                                <div style={{ height: '200px', overflow: 'hidden', borderRadius: '16px 16px 0 0' }}>
-                                    <img src={d.img} alt={d.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
-                                        onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
-                                        onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
-                                    />
-                                </div>
-                                <div style={{ padding: '20px 20px 22px' }}>
-                                    <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#6B7A99', fontSize: '11px', fontWeight: 600, borderRadius: '6px', padding: '3px 10px', marginBottom: '12px', letterSpacing: '0.02em' }}>{d.class}</div>
-                                    <div style={{ fontSize: '20px', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em', marginBottom: '4px' }}>{d.name}</div>
-                                    <div style={{ fontSize: '13px', color: '#6B7A99', marginBottom: '16px' }}>{d.route}</div>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <div>
-                                            <div style={{ fontSize: '22px', fontWeight: 800, color: '#2A60C2', letterSpacing: '-0.02em' }}>{d.miles} pts</div>
-                                            <div style={{ fontSize: '12px', color: '#A0AECB', marginTop: '2px' }}>ou {d.price}</div>
-                                        </div>
-                                        <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#EEF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'background 0.2s' }}
-                                            onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = '#2A60C2')}
-                                            onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '#EEF2F8')}
-                                        >
-                                            <ArrowRight size={16} color="#2A60C2" />
-                                        </div>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        ))}
-                    </div>
+                    <DestinationsCarousel />
                 </div>
             </section>
 
             {/* ████ 7. PLANOS ████ */}
-            <section id="planos" style={{ padding: '100px 60px', background: '#fff' }}>
+            <section id="planos" className="landing-section" style={{ padding: '100px 60px', background: '#fff' }}>
                 <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
                     <div style={{ textAlign: 'center', marginBottom: '48px' }}>
                         <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '16px' }}>Planos</div>
@@ -889,7 +945,7 @@ export default function Landing() {
             </section>
 
             {/* ████ 7. FAQ ████ */}
-            <section style={{ padding: '100px 60px', maxWidth: '860px', margin: '0 auto' }}>
+            <section className="landing-section" style={{ padding: '100px 60px', maxWidth: '860px', margin: '0 auto' }}>
                 <div style={{ textAlign: 'center', marginBottom: '56px' }}>
                     <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '16px' }}>Dúvidas Frequentes</div>
                     <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em', margin: 0 }}>Tudo que você precisa saber</h2>
@@ -898,7 +954,7 @@ export default function Landing() {
             </section>
 
             {/* ████ 8. CTA FINAL ████ */}
-            <section style={{ background: '#0E2A55', padding: '100px 60px', textAlign: 'center' }}>
+            <section className="landing-section" style={{ background: '#0E2A55', padding: '100px 60px', textAlign: 'center' }}>
                 <div style={{ maxWidth: '680px', margin: '0 auto' }}>
                     <h2 style={{ fontSize: 'clamp(32px, 5vw, 56px)', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.1, marginBottom: '20px' }}>
                         Pronto para voar com<br /><span style={{ color: '#4A90E2' }}>estratégia real?</span>
@@ -918,10 +974,10 @@ export default function Landing() {
             </section>
 
             {/* ████ FOOTER ████ */}
-            <footer style={{ background: '#060F1F', padding: '72px 60px 40px' }}>
+            <footer className="landing-footer" style={{ background: '#060F1F', padding: '72px 60px 40px' }}>
                 <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '48px', marginBottom: '60px' }}>
-                        <div>
+                    <div className="landing-footer-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '48px', marginBottom: '60px' }}>
+                        <div className="landing-footer-brand">
                             <div style={{ marginBottom: '16px' }}>
                                 <a href="#" style={{ display: 'inline-block', textDecoration: 'none', marginLeft: '-8px' }}>
                                     <img src="/logoLP.png" alt="FlyWise" style={{ height: '72px', display: 'block' }} />

@@ -845,9 +845,9 @@ body {
 
 @media (max-width: 768px) {
 
-  /* Header */
+  /* ── Issue 2: header background extends into safe area (status bar) ── */
   .landing-hero-header {
-    padding: 16px 0 !important;
+    padding: 16px 0 0 !important;
   }
 
   .landing-hero-header-inner {
@@ -857,23 +857,23 @@ body {
     justify-content: space-between !important;
   }
 
-  .landing-hero-logo {
-    height: 52px !important;
+  .landing-hero-ctas {
+    gap: 6px !important;
   }
 
+  /* Nav oculta na landing em mobile */
   .landing-hero-nav {
     display: none !important;
   }
 
-  /* Both CTA buttons visible on mobile, slightly smaller */
+  .landing-hero-logo {
+    height: 52px !important;
+  }
+
+  /* CTA buttons — slightly smaller */
   .landing-hero-cta-enter {
     font-size: 12px !important;
     padding: 7px 12px !important;
-  }
-
-  .landing-hero-ctas {
-    justify-self: end !important;
-    gap: 6px !important;
   }
 
   .landing-hero-ctas a:last-child {
@@ -905,10 +905,28 @@ body {
     flex: none !important;
   }
 
-  /* SearchPill — margem positiva no mobile */
+  /* SearchPill wrapper */
   .landing-search-pill-wrapper {
     width: calc(100% - 32px) !important;
     margin: 24px auto 0 !important;
+  }
+
+  /* SearchPill inputs — stack vertically */
+  .search-pill-inputs {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .search-pill-inputs > * {
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Hide swap button in vertical layout */
+  .search-pill-swap {
+    display: none !important;
   }
 
   /* Miles panel: 3 cols → 1 col */
@@ -917,18 +935,18 @@ body {
   }
 }
 
-/* ── Landing sections below hero — also need mobile treatment ── */
+/* ── Landing sections below hero ── */
 @media (max-width: 768px) {
 
   /* Section 2: "Não é apenas um buscador" */
-  #sobre>div {
+  #sobre > div {
     grid-template-columns: 1fr !important;
     gap: 40px !important;
     padding: 0 !important;
   }
 
   section#sobre {
-    padding: 60px 20px 60px !important;
+    padding: 60px 20px !important;
   }
 
   /* Section 3: Como funciona */
@@ -936,9 +954,26 @@ body {
     padding: 60px 20px !important;
   }
 
-  /* Section 5: Promoções */
-  section:has(> div > div > .promotions-header) {
-    padding: 60px 20px !important;
+  /* Generic landing section padding */
+  .landing-section {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    padding-top: 60px !important;
+    padding-bottom: 60px !important;
+  }
+
+  /* Footer */
+  .landing-footer {
+    padding: 48px 20px 28px !important;
+  }
+
+  .landing-footer-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 32px 20px !important;
+  }
+
+  .landing-footer-brand {
+    grid-column: 1 / -1 !important;
   }
 }
 
