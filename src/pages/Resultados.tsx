@@ -366,17 +366,10 @@ export default function Resultados() {
                 borderBottom: '1px solid var(--border-light)',
                 position: 'sticky', top: 0, zIndex: 50,
             }}>
-<<<<<<< HEAD
                 <div className="fly-results-header" style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 28px' }}>
                     <Header variant="app" />
                 </div>
                 <div className="fly-searchbar-wrap" style={{ maxWidth: '1280px', margin: '0 auto', padding: '14px 28px 18px' }}>
-=======
-                <div className="resultados-header-padding" style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 28px' }}>
-                    <Header variant="app" />
-                </div>
-                <div className="resultados-search-bar-padding" style={{ maxWidth: '1280px', margin: '0 auto', padding: '14px 28px 18px' }}>
->>>>>>> 26740e5 (mobile)
                     <SearchBarTop
                         origin={origin} setOrigin={setOrigin}
                         originIata={originIata} setOriginIata={setOriginIata}
@@ -392,7 +385,6 @@ export default function Resultados() {
                 </div>
             </div>
 
-<<<<<<< HEAD
             {/* ══════════════  MAIN CONTENT — 2 COLUMNS  ══════════════ */}
             <div className="fly-results-outer" style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 28px 80px', display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
 
@@ -405,48 +397,6 @@ export default function Resultados() {
                         className="fly-mobile-filters-btn"
                         style={{ display: 'none', alignItems: 'center', gap: '8px', marginBottom: '16px', padding: '10px 16px', background: '#fff', border: '1px solid var(--border-light)', borderRadius: '10px', fontFamily: 'inherit', fontSize: '13px', fontWeight: 600, color: 'var(--graphite)', cursor: 'pointer', width: '100%' }}>
                         <SlidersHorizontal size={14} /> {showMobileFilters ? 'Fechar Filtros' : 'Filtros'}
-=======
-            {/* ══════════════  MOBILE SIDEBAR OVERLAY  ══════════════ */}
-            {showMobileFilters && (
-                <div style={{
-                    position: 'fixed', inset: 0, zIndex: 200,
-                    background: 'rgba(14,42,85,0.4)', backdropFilter: 'blur(2px)',
-                }} onClick={() => setShowMobileFilters(false)} />
-            )}
-
-            {/* ══════════════  MAIN CONTENT — 2 COLUMNS  ══════════════ */}
-            <div className="resultados-layout" style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 28px 80px', display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
-
-                <div className={`resultados-sidebar${showMobileFilters ? ' resultados-sidebar-open' : ''}`}>
-                    {showMobileFilters && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <p style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-dark)', margin: 0 }}>Filtros</p>
-                            <button onClick={() => setShowMobileFilters(false)} style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: 'var(--text-muted)', padding: '8px', borderRadius: '8px',
-                                fontSize: '20px', lineHeight: 1,
-                            }}>✕</button>
-                        </div>
-                    )}
-                    <Sidebar filters={filters} setFilters={setFilters} />
-                    {showMobileFilters && (
-                        <button onClick={() => setShowMobileFilters(false)} style={{
-                            position: 'sticky', bottom: '16px', width: '100%',
-                            padding: '14px', background: 'var(--blue-medium)', color: '#fff',
-                            border: 'none', borderRadius: '12px', fontFamily: 'inherit',
-                            fontSize: '15px', fontWeight: 700, cursor: 'pointer', marginTop: '20px',
-                        }}>
-                            Ver resultados
-                        </button>
-                    )}
-                </div>
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <button onClick={() => setShowMobileFilters(true)}
-                        className="resultados-filter-btn"
-                        style={{ alignItems: 'center', gap: '8px', marginBottom: '16px', padding: '10px 16px', background: '#fff', border: '1px solid var(--border-light)', borderRadius: '10px', fontFamily: 'inherit', fontSize: '13px', fontWeight: 600, color: 'var(--graphite)', cursor: 'pointer' }}>
-                        <SlidersHorizontal size={14} /> Filtros
->>>>>>> 26740e5 (mobile)
                     </button>
 
                     {error ? (

@@ -58,7 +58,6 @@ export function Header({ variant = 'app' }: HeaderProps) {
             backdropFilter: 'blur(12px)',
             WebkitBackdropFilter: 'blur(12px)',
         }}>
-<<<<<<< HEAD
             <div className="fly-header-grid" style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', height: '110px', padding: '0 8px', maxWidth: '880px', margin: '0 auto' }}>
 
                 {/* Left: Logo */}
@@ -69,19 +68,6 @@ export function Header({ variant = 'app' }: HeaderProps) {
                 {/* Center: Navigation Icons */}
                 {user && variant === 'app' ? (
                     <div className="fly-nav-tabs" style={{ justifySelf: 'center' }}>
-=======
-            <div className="flywise-header-inner" style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', height: '110px', padding: '0 8px', maxWidth: '880px', margin: '0 auto' }}>
-
-                {/* Left: Logo */}
-                <Link to={user ? '/home' : '/'} style={{ display: 'flex', alignItems: 'center', justifySelf: 'start' }}>
-                    <img src="/logo.png" alt="FlyWise" className="flywise-header-logo" style={{ height: '96px', objectFit: 'contain' }} />
-                </Link>
-
-
-                {/* Center: Navigation Icons — hidden on mobile (BottomNav takes over) */}
-                {user && variant === 'app' ? (
-                    <div className="flywise-header-nav" style={{ justifySelf: 'center' }}>
->>>>>>> 26740e5 (mobile)
                         <ExpandableTabs
                             tabs={NAV_ITEMS}
                             activeIndex={activeIndex}

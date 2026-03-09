@@ -95,14 +95,8 @@ export function SearchBarTop({
                 </div>
             )}
 
-<<<<<<< HEAD
             <div className="fly-searchbar-row" style={{
                 display: 'flex', alignItems: 'stretch',
-=======
-            {/* ── DESKTOP: horizontal bar ── */}
-            <div className="search-bar-desktop" style={{
-                alignItems: 'stretch',
->>>>>>> 26740e5 (mobile)
                 background: 'var(--bg-white)',
                 border: '1px solid var(--border-light)',
                 borderRadius: '14px',

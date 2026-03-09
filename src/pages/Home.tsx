@@ -84,11 +84,7 @@ export default function Home() {
             `}</style>
             <Header variant="app" />
 
-<<<<<<< HEAD
             <main className="fly-home-main" style={{
-=======
-            <main className="home-main" style={{
->>>>>>> 26740e5 (mobile)
                 flex: 1, display: 'flex', flexDirection: 'column',
                 justifyContent: 'center', alignItems: 'center',
                 padding: '40px 24px', width: '100%', maxWidth: '840px', margin: '0 auto'
@@ -98,11 +94,7 @@ export default function Home() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
-<<<<<<< HEAD
                     className="card fly-home-card"
-=======
-                    className="card home-search-card"
->>>>>>> 26740e5 (mobile)
                     style={{ width: '100%', padding: '32px', borderRadius: '24px', boxShadow: '0 12px 48px rgba(14,42,85,0.08)' }}
                 >
                     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -122,11 +114,7 @@ export default function Home() {
                             ))}
                         </div>
                         {/* Inputs Row */}
-<<<<<<< HEAD
                         <div className="fly-home-grid" style={{ display: 'grid', gridTemplateColumns: tripType === 'round-trip' ? '1fr 1fr 1fr 1fr auto' : '1fr 1fr auto auto', gap: '12px', alignItems: 'start' }}>
-=======
-                        <div className="home-search-grid" style={{ display: 'grid', gridTemplateColumns: tripType === 'round-trip' ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr', gap: '12px', alignItems: 'start' }}>
->>>>>>> 26740e5 (mobile)
                             {/* Origin */}
                             <div style={{ border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px 14px', background: '#fff', overflow: 'visible', position: 'relative' }}>
                                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Origem</label>

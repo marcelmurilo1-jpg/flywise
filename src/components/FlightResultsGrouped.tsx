@@ -445,7 +445,6 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                     ? sorted.filter(f => f.id === amadSel.id)
                     : sorted
                 return (
-<<<<<<< HEAD
                     <AnimatePresence>
                         {displayFlights.map((flight, idx) => {
                             const det = (flight.detalhes as any) ?? {}
@@ -470,99 +469,6 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                         borderRadius: 16,
                                         marginBottom: 12,
                                         overflow: 'hidden',
-=======
-                    <motion.div
-                        key={flight.id ?? idx}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.04 }}
-                        style={{
-                            background: '#fff',
-                            border: '1px solid var(--border-light)',
-                            borderRadius: 16,
-                            marginBottom: 12,
-                            overflow: 'hidden',
-                        }}
-                    >
-                        {/* Top: airline + price unificado */}
-                        <div className="flight-card-header" style={{
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            padding: '16px 20px',
-                            borderBottom: '1px solid #F1F5F9',
-                            background: idx === 0 && sidebarFilters?.sortBy === 'price' ? '#FAFBFF' : '#fff',
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <div style={{
-                                    width: 4, height: 32, borderRadius: 4,
-                                    background: '#0E2A55',
-                                }} />
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ fontSize: 15, fontWeight: 700, color: '#0E2A55' }}>
-                                            {flight.companhia}
-                                        </span>
-                                        {det.voo_numero && (
-                                            <span style={{ fontSize: 11, color: '#94A3B8' }}>
-                                                {det.voo_numero}
-                                            </span>
-                                        )}
-                                    </div>
-                                    {/* Program badges for this airline */}
-                                    {iata && (
-                                        <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
-                                            {['Smiles', 'LATAM Pass', 'TudoAzul', 'Livelo'].filter(p =>
-                                                airlineMatchesPrograms(iata, [p])
-                                            ).map(prog => (
-                                                <span key={prog} style={{
-                                                    fontSize: 9, fontWeight: 700, color: '#64748B',
-                                                    background: '#F1F5F9', padding: '1px 6px', borderRadius: 4,
-                                                }}>
-                                                    {prog}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="flight-card-right" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                                {/* Unified Price Section */}
-                                <div className="flight-card-prices" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                                    {/* Miles side */}
-                                    <div style={{ textAlign: 'center' }}>
-                                        <div style={{ fontSize: 10, fontWeight: 700, color: '#2A60C2', textTransform: 'uppercase', marginBottom: 2 }}>
-                                            Milhas
-                                        </div>
-                                        <div style={{ fontSize: 18, fontWeight: 800, color: '#1E3A7A', letterSpacing: '-0.01em' }}>
-                                            {estimatedMiles.toLocaleString('pt-BR')}
-                                        </div>
-                                        <div style={{ fontSize: 9, color: '#94A3B8' }}>Pts estimados</div>
-                                    </div>
-
-                                    {/* Divider */}
-                                    <div style={{ width: 1, height: 30, background: '#E2EAF5' }} />
-
-                                    {/* Cash side */}
-                                    <div style={{ textAlign: 'center' }}>
-                                        <div style={{ fontSize: 10, fontWeight: 700, color: '#0E2A55', textTransform: 'uppercase', marginBottom: 2 }}>
-                                            Dinheiro
-                                        </div>
-                                        <div style={{ fontSize: 18, fontWeight: 800, color: '#0E2A55', letterSpacing: '-0.01em' }}>
-                                            R$ {flight.preco_brl?.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
-                                        </div>
-                                        <div style={{ fontSize: 9, color: '#94A3B8' }}>preço final</div>
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={() => { setSelFlight(flight); setPanelOpen(true) }}
-                                    className="flight-card-btn"
-                                    style={{
-                                        background: '#0E2A55', color: '#fff', border: 'none',
-                                        borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 700,
-                                        cursor: 'pointer', transition: 'all 0.15s',
-                                        minHeight: '36px', whiteSpace: 'nowrap',
->>>>>>> 26740e5 (mobile)
                                     }}
                                 >
                                     {/* Green banner when ida selected */}
