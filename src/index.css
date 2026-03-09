@@ -1048,13 +1048,22 @@ body {
     font-size: 16px !important;
   }
 
-  /* DateRangePicker panel — full width, single calendar on mobile */
+  /* DateRangePicker — bottom-sheet on mobile */
+  .drp-backdrop {
+    display: block !important;
+  }
+
   [data-drp-panel] {
-    left: 8px !important;
-    right: 8px !important;
-    width: auto !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
     min-width: 0 !important;
-    padding: 16px !important;
+    border-radius: 20px 20px 0 0 !important;
+    max-height: 85vh !important;
+    overflow-y: auto !important;
+    padding: 20px 16px 32px !important;
   }
 
   .drp-second-cal {

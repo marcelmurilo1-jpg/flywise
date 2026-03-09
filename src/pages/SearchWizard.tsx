@@ -153,12 +153,14 @@ export default function SearchWizard() {
         (step === 3 && data.dateMode === 'month' && data.selectedMonths.length === 0)
 
     return (
-        <div className="min-h-screen bg-white text-slate-900 flex flex-col font-sans relative overflow-hidden">
+        <div className="min-h-screen bg-white text-slate-900 flex flex-col font-sans relative overflow-hidden" style={{ overflowX: 'hidden' }}>
             <style>{`
                 @media (max-width: 768px) {
                     .sw-nav { display: none !important; }
                     .sw-header-grid { grid-template-columns: auto 1fr auto !important; height: 60px !important; }
                     .sw-main { padding-top: 24px !important; padding-bottom: 100px !important; }
+                    .sw-finish-actions { flex-direction: column-reverse !important; gap: 10px !important; }
+                    .sw-finish-actions button { width: 100% !important; justify-content: center !important; }
                 }
             `}</style>
             {/* Subtle background blobs */}
@@ -478,7 +480,7 @@ export default function SearchWizard() {
                                 {submitError && (
                                     <p className="text-sm text-red-500 font-medium">{submitError}</p>
                                 )}
-                                <div className="flex justify-between items-center mt-4">
+                                <div className="sw-finish-actions flex justify-between items-center mt-4">
                                     <button onClick={prevStep} className="text-slate-400 hover:text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:bg-slate-100 transition-all">
                                         ← Voltar
                                     </button>

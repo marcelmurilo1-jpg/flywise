@@ -379,7 +379,17 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
                 )}
             </div>
 
-            {panel && createPortal(panel, document.body)}
+            {open && dropRect && createPortal(
+                <>
+                    <div
+                        className="drp-backdrop"
+                        onClick={() => setOpen(false)}
+                        style={{ position: 'fixed', inset: 0, zIndex: 999997, background: 'rgba(0,0,0,0.45)', display: 'none' }}
+                    />
+                    {panel}
+                </>,
+                document.body
+            )}
         </>
     )
 }

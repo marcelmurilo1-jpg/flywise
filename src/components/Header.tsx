@@ -59,11 +59,11 @@ export function Header({ variant = 'app' }: HeaderProps) {
             backdropFilter: 'blur(12px)',
             WebkitBackdropFilter: 'blur(12px)',
         }}>
-            <div className="fly-header-grid" style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', height: '110px', padding: '0 8px', maxWidth: '880px', margin: '0 auto' }}>
+            <div className="fly-header-grid" style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', height: '120px', padding: '0 8px', maxWidth: '880px', margin: '0 auto' }}>
 
                 {/* Left: Logo */}
                 <Link to={user ? '/home' : '/'} className="fly-logo-link" style={{ display: 'flex', alignItems: 'center', justifySelf: 'start' }}>
-                    <img src="/logo.png" alt="FlyWise" className="fly-logo" style={{ height: '104px', objectFit: 'contain' }} />
+                    <img src="/logo.png" alt="FlyWise" className="fly-logo" style={{ height: '116px', objectFit: 'contain' }} />
                 </Link>
 
                 {/* Center: Navigation Icons */}
@@ -164,7 +164,7 @@ export function Header({ variant = 'app' }: HeaderProps) {
                     justify-content: center !important;
                     position: relative !important;
                 }
-                .fly-logo { height: 72px !important; }
+                .fly-logo { height: 80px !important; }
                 .fly-logo-link { position: static !important; justify-self: unset !important; }
                 .fly-hide-xs { display: none !important; }
                 .fly-nav-tabs { display: none !important; }

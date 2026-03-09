@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
-import { SlidingNumber } from '@/components/SlidingNumber'
 import {
     Search, ArrowRight, ArrowRightLeft, Users,
     ChevronDown, CheckCircle2, BarChart3, Globe, Zap, Shield,
@@ -389,7 +388,12 @@ function StatsGrid() {
                 >
                     <div style={{ fontSize: '36px', fontWeight: 900, color: s.color, letterSpacing: '-0.03em', lineHeight: 1, display: 'flex', alignItems: 'center' }}>
                         {s.prefix}
-                        <SlidingNumber value={inView ? s.value : s.startFrom} />
+                        <NumberFlow
+                            value={inView ? s.value : s.startFrom}
+                            transformTiming={{ duration: 2000, easing: 'ease-out' }}
+                            spinTiming={{ duration: 600, easing: 'ease-out' }}
+                            opacityTiming={{ duration: 400, easing: 'ease-out' }}
+                        />
                         {s.suffix}
                     </div>
                     <div style={{ fontSize: '13px', color: '#6B7A99', marginTop: '6px', fontWeight: 500 }}>{s.label}</div>
