@@ -367,7 +367,7 @@ export default function Configuracoes() {
                 .settings-input:focus { border-color: var(--blue-medium) !important; }
             `}</style>
 
-            <main style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px 80px' }}>
+            <main className="config-page-padding" style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px 80px' }}>
 
                 {/* Back button + Title */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
@@ -391,10 +391,10 @@ export default function Configuracoes() {
                     </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: '32px', alignItems: 'flex-start' }}>
+                <div className="config-layout" style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: '32px', alignItems: 'flex-start' }}>
 
-                    {/* ── Left nav (sticky) ─────────────────────────────────── */}
-                    <div style={{ position: 'sticky', top: '24px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {/* ── Left nav (sticky on desktop, horizontal scroll on mobile) ── */}
+                    <div className="config-sidenav" style={{ position: 'sticky', top: '24px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         {/* Avatar card */}
                         <div style={{
                             background: '#fff', borderRadius: '16px',
@@ -431,16 +431,18 @@ export default function Configuracoes() {
                                 <button
                                     key={id}
                                     onClick={() => scrollTo(id)}
+                                    className="config-sidenav-btn"
                                     style={{
                                         display: 'flex', alignItems: 'center', gap: '10px',
                                         padding: '10px 14px', borderRadius: '12px',
-                                        border: 'none', textAlign: 'left',
+                                        border: isActive ? '1px solid var(--blue-medium)' : '1px solid transparent', textAlign: 'left',
                                         background: isActive ? 'var(--blue-pale)' : 'transparent',
                                         color: isActive ? 'var(--blue-medium)' : 'var(--text-muted)',
                                         fontWeight: isActive ? 700 : 500,
                                         fontSize: '13px', cursor: 'pointer',
                                         transition: 'all 0.15s',
                                         fontFamily: 'inherit',
+                                        minHeight: '44px',
                                     }}
                                 >
                                     <Icon size={15} />

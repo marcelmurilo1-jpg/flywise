@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import Landing from '@/pages/Landing'
@@ -11,6 +11,7 @@ import SavedStrategies from '@/pages/SavedStrategies'
 import SearchWizard from '@/pages/SearchWizard'
 import Roteiro from '@/pages/Roteiro'
 import Configuracoes from '@/pages/Configuracoes'
+import { BottomNav } from '@/components/BottomNav'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -29,6 +30,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
   if (!user) return <Navigate to="/" replace />
   return <>{children}</>
+}
+
+// Pages that should show BottomNav (authenticated app pages)
+const APP_ROUTES = ['/home', '/resultados', '/promotions', '/wallet', '/saved-strategies', '/roteiro', '/configuracoes', '/busca-avancada']
+
+function AppRoutesInner() {
+  const { user } = useAuth()
+  const location = useLocation()
+  const showBottomNav = user && APP_ROUTES.some(r => location.pathname.startsWith(r))
+  return showBottomNav ? <BottomNav /> : null
 }
 
 function AppRoutes() {
@@ -52,19 +63,22 @@ function AppRoutes() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={user ? <Navigate to="/home" replace /> : <Landing />} />
-      <Route path="/auth" element={user ? <Navigate to="/home" replace /> : <Auth />} />
-      <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-      <Route path="/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
-      <Route path="/promotions" element={<ProtectedRoute><Promotions /></ProtectedRoute>} />
-      <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
-      <Route path="/saved-strategies" element={<ProtectedRoute><SavedStrategies /></ProtectedRoute>} />
-      <Route path="/busca-avancada" element={<ProtectedRoute><SearchWizard /></ProtectedRoute>} />
-      <Route path="/roteiro" element={<ProtectedRoute><Roteiro /></ProtectedRoute>} />
-      <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={user ? <Navigate to="/home" replace /> : <Landing />} />
+        <Route path="/auth" element={user ? <Navigate to="/home" replace /> : <Auth />} />
+        <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+        <Route path="/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
+        <Route path="/promotions" element={<ProtectedRoute><Promotions /></ProtectedRoute>} />
+        <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
+        <Route path="/saved-strategies" element={<ProtectedRoute><SavedStrategies /></ProtectedRoute>} />
+        <Route path="/busca-avancada" element={<ProtectedRoute><SearchWizard /></ProtectedRoute>} />
+        <Route path="/roteiro" element={<ProtectedRoute><Roteiro /></ProtectedRoute>} />
+        <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <AppRoutesInner />
+    </>
   )
 }
 

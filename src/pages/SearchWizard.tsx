@@ -304,7 +304,7 @@ export default function SearchWizard() {
                                     <p className="text-slate-400 text-base">Datas flexíveis podem economizar até 70% no valor das passagens.</p>
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className="grid grid-cols-3 gap-2 sm:gap-3">
                                     {[
                                         { id: 'exact', label: 'Datas Exatas', emoji: '📅', desc: 'Férias definidas' },
                                         { id: 'month', label: 'Mês Específico', emoji: '🗓️', desc: 'Tenho preferência' },
@@ -336,7 +336,7 @@ export default function SearchWizard() {
                                             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}
                                             className="flex flex-col gap-3">
                                             <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Selecione um ou mais meses</p>
-                                            <div className="grid grid-cols-4 gap-2">
+                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                                                 {MONTHS.map((m, idx) => {
                                                     const sel = data.selectedMonths.includes(idx)
                                                     return (

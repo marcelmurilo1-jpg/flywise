@@ -280,7 +280,7 @@ function SearchPill() {
                             zIndex: 50,
                         }}
                     >
-                        <div style={{
+                        <div className="search-pill-miles-grid" style={{
                             background: '#fff',
                             borderRadius: 16,
                             border: '1px solid #E2EAF5',
@@ -440,14 +440,14 @@ export default function Landing() {
                 <div style={{ position: 'absolute', top: 0, right: '25%', width: '500px', height: '500px', borderRadius: '50%', background: 'rgba(74,144,226,0.05)', filter: 'blur(80px)', pointerEvents: 'none' }} />
 
                 {/* HEADER */}
-                <header style={{
+                <header className="landing-hero-header" style={{
                     position: 'relative', zIndex: 20,
                     width: '100%',
                     display: 'flex',
                     justifyContent: 'center',
                     padding: '24px 0',
                 }}>
-                    <div style={{
+                    <div className="landing-hero-header-inner" style={{
                         display: 'grid',
                         gridTemplateColumns: 'auto 1fr auto',
                         alignItems: 'center',
@@ -457,11 +457,11 @@ export default function Landing() {
                     }}>
                         {/* Logo */}
                         <Link to="/" style={{ textDecoration: 'none', justifySelf: 'start' }}>
-                            <img src="/logoLP.png" alt="FlyWise" style={{ height: '100px', objectFit: 'contain' }} />
+                            <img src="/logoLP.png" alt="FlyWise" className="landing-hero-logo" style={{ height: '100px', objectFit: 'contain' }} />
                         </Link>
 
-                        {/* Nav */}
-                        <div style={{ justifySelf: 'center' }}>
+                        {/* Nav — oculto em mobile */}
+                        <div className="landing-hero-nav" style={{ justifySelf: 'center' }}>
                             <NavBar items={[
                                 { name: 'Como Funciona', url: '#como-funciona', icon: BookOpen },
                                 { name: 'Destinos', url: '#destinos', icon: MapPin },
@@ -470,9 +470,9 @@ export default function Landing() {
                             ]} />
                         </div>
 
-                        {/* CTAs */}
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifySelf: 'end' }}>
-                            <Link to="/auth" style={{
+                        {/* CTAs — link "Entrar" oculto em mobile (botões ficam no hero text) */}
+                        <div className="landing-hero-ctas" style={{ display: 'flex', gap: '8px', alignItems: 'center', justifySelf: 'end' }}>
+                            <Link to="/auth" className="landing-hero-cta-enter" style={{
                                 color: 'rgba(255,255,255,0.75)', fontSize: '13.5px', fontWeight: 600,
                                 textDecoration: 'none', padding: '8px 18px', borderRadius: '10px',
                                 border: '1px solid rgba(255,255,255,0.15)',
@@ -487,6 +487,7 @@ export default function Landing() {
                                 textDecoration: 'none', padding: '8px 20px', borderRadius: '10px',
                                 boxShadow: '0 4px 14px rgba(42,96,194,0.45)',
                                 transition: 'background 0.18s ease, transform 0.18s ease',
+                                whiteSpace: 'nowrap',
                             }}
                                 onMouseEnter={e => { e.currentTarget.style.background = '#1A4EA8'; e.currentTarget.style.transform = 'translateY(-1px)' }}
                                 onMouseLeave={e => { e.currentTarget.style.background = '#2A60C2'; e.currentTarget.style.transform = 'translateY(0)' }}
@@ -495,8 +496,8 @@ export default function Landing() {
                     </div>
                 </header>
 
-                {/* HERO CONTENT — dois painéis lado a lado */}
-                <div style={{
+                {/* HERO CONTENT — dois painéis lado a lado (desktop) / texto com globo ao fundo (mobile) */}
+                <div className="landing-hero-content" style={{
                     position: 'relative', zIndex: 10,
                     display: 'flex',
                     flexDirection: 'row',
@@ -513,18 +514,19 @@ export default function Landing() {
                         initial={{ opacity: 0, y: 24 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.7, ease: 'easeOut' }}
-                        style={{ flex: '1 1 0', minWidth: 0 }}
+                        className="landing-hero-text"
+                        style={{ flex: '1 1 0', minWidth: 0, position: 'relative', zIndex: 2 }}
                     >
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '999px', padding: '6px 16px', marginBottom: '28px' }}>
                             <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
                             <span style={{ color: 'rgba(255,255,255,0.80)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.02em' }}>Inteligência estratégica para milhas</span>
                         </div>
 
-                        <h1 style={{ fontSize: 'clamp(36px, 4.5vw, 62px)', fontWeight: 900, color: '#fff', lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: 0 }}>
+                        <h1 style={{ fontSize: 'clamp(32px, 4.5vw, 62px)', fontWeight: 900, color: '#fff', lineHeight: 1.08, letterSpacing: '-0.04em', marginBottom: 0 }}>
                             Viaje com Mais
                         </h1>
-                        {/* Palavra animada — fora do h1 para não sofrer com lineHeight: 1.08 */}
-                        <div style={{ fontSize: 'clamp(36px, 4.5vw, 62px)', fontWeight: 900, lineHeight: 1.3, letterSpacing: '-0.04em', marginBottom: '20px', position: 'relative', display: 'inline-block' }}>
+                        {/* Palavra animada */}
+                        <div style={{ fontSize: 'clamp(32px, 4.5vw, 62px)', fontWeight: 900, lineHeight: 1.3, letterSpacing: '-0.04em', marginBottom: '20px', position: 'relative', display: 'inline-block' }}>
                             {/* Spacer — define a largura pelo texto mais largo */}
                             <span style={{ visibility: 'hidden', pointerEvents: 'none' }}>Inteligência.</span>
                             <AnimatePresence mode="popLayout" initial={false}>
@@ -554,14 +556,15 @@ export default function Landing() {
 
 
 
-                        <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '16px', lineHeight: 1.65, marginBottom: '40px', maxWidth: '440px' }}>
+                        <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '16px', lineHeight: 1.65, marginBottom: '32px', maxWidth: '440px' }}>
                             Compare milhas e dinheiro em tempo real. Nossa IA gera sua estratégia de resgate passo a passo.
                         </p>
 
                     </motion.div>
 
-                    {/* Painel direito — Globo */}
+                    {/* Painel direito — Globo (oculto em mobile) */}
                     <motion.div
+                        className="landing-hero-globe"
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.8, delay: 0.2, ease: 'easeOut' }}
@@ -579,6 +582,7 @@ export default function Landing() {
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.35 }}
+                    className="landing-search-pill-wrapper"
                     style={{
                         position: 'relative',
                         zIndex: 20,
