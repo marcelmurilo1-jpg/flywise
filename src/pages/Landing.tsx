@@ -19,10 +19,21 @@ import NumberFlow from '@number-flow/react'
 
 // ─── Dados ───────────────────────────────────────────────────────────────────
 const DESTINATIONS = [
-    { emoji: '🗽', name: 'NOVA YORK', country: 'Estados Unidos', route: 'GRU → JFK', miles: '40.000', price: 'R$ 1.680', class: 'Executiva · Ida e Volta', img: 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=400&q=80' },
-    { emoji: '🗼', name: 'PARIS', country: 'França', route: 'GRU → CDG', miles: '55.000', price: 'R$ 2.100', class: 'Executiva · Ida e Volta', img: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=400&q=80' },
-    { emoji: '🏯', name: 'TÓQUIO', country: 'Japão', route: 'GRU → NRT', miles: '70.000', price: 'R$ 2.890', class: 'Business · Ida', img: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&q=80' },
-    { emoji: '🏰', name: 'LISBOA', country: 'Portugal', route: 'GRU → LIS', miles: '28.000', price: 'R$ 980', class: 'Economy · Ida e Volta', img: 'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=400&q=80' },
+    { name: 'NOVA YORK',  country: 'Estados Unidos', route: 'GRU → JFK', miles: '40.000',  price: 'R$ 1.680', class: 'Executiva · Ida e Volta',      classKey: 'business', img: 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=600&q=80' },
+    { name: 'PARIS',      country: 'França',          route: 'GRU → CDG', miles: '55.000',  price: 'R$ 2.100', class: 'Executiva · Ida e Volta',      classKey: 'business', img: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&q=80' },
+    { name: 'TÓQUIO',    country: 'Japão',            route: 'GRU → NRT', miles: '70.000',  price: 'R$ 2.890', class: 'Executiva · Ida',              classKey: 'business', img: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=600&q=80' },
+    { name: 'LISBOA',     country: 'Portugal',         route: 'GRU → LIS', miles: '28.000',  price: 'R$ 980',   class: 'Econômica · Ida e Volta',     classKey: 'economy',  img: 'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=600&q=80' },
+    { name: 'MIAMI',      country: 'Estados Unidos',   route: 'GRU → MIA', miles: '22.000',  price: 'R$ 840',   class: 'Econômica · Ida e Volta',     classKey: 'economy',  img: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80' },
+    { name: 'CANCÚN',    country: 'México',            route: 'GRU → CUN', miles: '18.000',  price: 'R$ 720',   class: 'Econômica · Ida e Volta',     classKey: 'economy',  img: 'https://images.unsplash.com/photo-1552074284-5e88ef1aef18?w=600&q=80' },
+    { name: 'DUBAI',      country: 'Emirados Árabes',  route: 'GRU → DXB', miles: '120.000', price: 'R$ 6.200', class: 'Primeira Classe · Ida',       classKey: 'first',    img: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=600&q=80' },
+    { name: 'LONDRES',    country: 'Reino Unido',       route: 'GRU → LHR', miles: '48.000',  price: 'R$ 1.900', class: 'Executiva · Ida e Volta',     classKey: 'business', img: 'https://images.unsplash.com/photo-1529655683826-aba9b3e77383?w=600&q=80' },
+]
+
+const CABIN_FILTERS = [
+    { label: 'Todos',           value: 'all' },
+    { label: 'Econômica',       value: 'economy' },
+    { label: 'Executiva',       value: 'business' },
+    { label: 'Primeira Classe', value: 'first' },
 ]
 
 const STEPS = [
@@ -405,88 +416,178 @@ function StatsGrid() {
 
 // ─── Destinations Carousel ────────────────────────────────────────────────────
 function DestinationsCarousel() {
+    const navigate = useNavigate()
     const trackRef = useRef<HTMLDivElement>(null)
-    const CARD_WIDTH = 284
+    const [filter, setFilter] = useState('all')
+    const [activeId, setActiveId] = useState<string | null>(null)
+
+    const filtered = filter === 'all' ? DESTINATIONS : DESTINATIONS.filter(d => d.classKey === filter)
 
     function scroll(dir: 1 | -1) {
-        trackRef.current?.scrollBy({ left: dir * CARD_WIDTH, behavior: 'smooth' })
+        trackRef.current?.scrollBy({ left: dir * 280, behavior: 'smooth' })
     }
 
     return (
-        <div style={{ position: 'relative' }}>
+        <div>
             <style>{`
                 .dest-track::-webkit-scrollbar { display: none; }
-                .dest-arrow { background: #fff; border: 1px solid #E2EAF5; box-shadow: 0 2px 10px rgba(14,42,85,0.10); transition: box-shadow 0.18s, border-color 0.18s; }
-                .dest-arrow:hover { box-shadow: 0 4px 18px rgba(14,42,85,0.18); border-color: #C0CFEA; }
-                .dest-card-arrow { background: #EEF2F8; transition: background 0.18s; }
-                .dest-card-arrow:hover { background: #dce7f5; }
+                .dest-filter-bar::-webkit-scrollbar { display: none; }
+                .dest-nav-btn { background: #fff; border: 1px solid #E2EAF5; box-shadow: 0 4px 16px rgba(14,42,85,0.10); transition: all 0.18s; }
+                .dest-nav-btn:hover { box-shadow: 0 6px 20px rgba(14,42,85,0.18); border-color: #C0CFEA; }
                 @media (max-width: 768px) { .dest-nav-btn { display: none !important; } }
             `}</style>
 
-            {/* Nav arrows — hidden on mobile (swipe natively) */}
-            {(['prev', 'next'] as const).map(side => (
-                <button
-                    key={side}
-                    className="dest-arrow dest-nav-btn"
-                    onClick={() => scroll(side === 'next' ? 1 : -1)}
-                    style={{
-                        position: 'absolute', top: '50%', transform: 'translateY(-50%)',
-                        [side === 'prev' ? 'left' : 'right']: '-20px',
-                        zIndex: 10, width: 40, height: 40, borderRadius: '50%',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer',
-                    }}
-                >
-                    {side === 'prev'
-                        ? <ChevronLeft size={18} color="#2A60C2" />
-                        : <ArrowRight size={18} color="#2A60C2" />}
-                </button>
-            ))}
-
-            {/* Scrollable track — snap to center */}
-            <div
-                ref={trackRef}
-                className="dest-track"
-                style={{
-                    display: 'flex', gap: '24px',
-                    overflowX: 'auto', scrollSnapType: 'x mandatory',
-                    scrollbarWidth: 'none', paddingBottom: '8px',
-                    paddingLeft: '2px', paddingRight: '2px',
-                }}
-            >
-                {DESTINATIONS.map((d) => (
-                    <div
-                        key={d.name}
+            {/* Filter tabs */}
+            <div className="dest-filter-bar" style={{
+                display: 'flex', gap: 8, overflowX: 'auto', scrollbarWidth: 'none',
+                marginBottom: 28, paddingBottom: 2,
+            }}>
+                {CABIN_FILTERS.map(f => (
+                    <button
+                        key={f.value}
+                        onClick={() => { setFilter(f.value); setActiveId(null) }}
                         style={{
-                            flex: '0 0 260px', scrollSnapAlign: 'center',
-                            background: '#fff', borderRadius: '20px',
-                            boxShadow: '0 4px 20px rgba(14,42,85,0.07)',
-                            overflow: 'hidden', border: '1px solid #E2EAF5',
-                            transition: 'box-shadow 0.2s ease',
+                            padding: '9px 20px', borderRadius: 24, border: 'none', cursor: 'pointer',
+                            background: filter === f.value ? '#0E2A55' : '#EEF2F8',
+                            color: filter === f.value ? '#fff' : '#6B7A99',
+                            fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', flexShrink: 0,
+                            transition: 'all 0.2s', fontFamily: 'inherit',
+                            boxShadow: filter === f.value ? '0 4px 14px rgba(14,42,85,0.25)' : 'none',
+                        }}
+                    >{f.label}</button>
+                ))}
+            </div>
+
+            {/* Carousel wrapper */}
+            <div style={{ position: 'relative' }}>
+
+                {/* Nav arrows — desktop only */}
+                {(['prev', 'next'] as const).map(side => (
+                    <button
+                        key={side}
+                        className="dest-nav-btn"
+                        onClick={() => scroll(side === 'next' ? 1 : -1)}
+                        style={{
+                            position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+                            [side === 'prev' ? 'left' : 'right']: '-20px',
+                            zIndex: 10, width: 40, height: 40, borderRadius: '50%',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
                             cursor: 'pointer',
                         }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 32px rgba(14,42,85,0.12)' }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(14,42,85,0.07)' }}
                     >
-                        <div style={{ height: '180px', overflow: 'hidden' }}>
-                            <img src={d.img} alt={d.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        </div>
-                        <div style={{ padding: '18px 18px 20px' }}>
-                            <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#6B7A99', fontSize: '11px', fontWeight: 600, borderRadius: '6px', padding: '3px 10px', marginBottom: '10px', letterSpacing: '0.02em' }}>{d.class}</div>
-                            <div style={{ fontSize: '18px', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em', marginBottom: '3px' }}>{d.name}</div>
-                            <div style={{ fontSize: '12px', color: '#6B7A99', marginBottom: '14px' }}>{d.route}</div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <div>
-                                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#2A60C2', letterSpacing: '-0.02em' }}>{d.miles} pts</div>
-                                    <div style={{ fontSize: '11px', color: '#A0AECB', marginTop: '2px' }}>ou {d.price}</div>
-                                </div>
-                                <div className="dest-card-arrow" style={{ width: '34px', height: '34px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <ArrowRight size={14} color="#2A60C2" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                        {side === 'prev'
+                            ? <ChevronLeft size={18} color="#2A60C2" />
+                            : <ArrowRight size={18} color="#2A60C2" />}
+                    </button>
                 ))}
+
+                {/* Scrollable track */}
+                <div
+                    ref={trackRef}
+                    className="dest-track"
+                    style={{
+                        display: 'flex', gap: '20px',
+                        overflowX: 'auto', scrollSnapType: 'x mandatory',
+                        scrollbarWidth: 'none', paddingBottom: '8px',
+                        paddingLeft: '2px', paddingRight: '2px',
+                    }}
+                >
+                    <AnimatePresence mode="popLayout">
+                        {filtered.map(d => {
+                            const isActive = activeId === d.name
+                            return (
+                                <motion.div
+                                    key={d.name}
+                                    layout
+                                    initial={{ opacity: 0, scale: 0.93 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.93 }}
+                                    transition={{ duration: 0.22 }}
+                                    style={{
+                                        flex: '0 0 260px', scrollSnapAlign: 'start',
+                                        borderRadius: 22, overflow: 'hidden',
+                                        position: 'relative', cursor: 'pointer',
+                                        height: 340,
+                                    }}
+                                    onMouseEnter={() => setActiveId(d.name)}
+                                    onMouseLeave={() => setActiveId(null)}
+                                    onClick={() => setActiveId(prev => prev === d.name ? null : d.name)}
+                                >
+                                    {/* Background image */}
+                                    <img
+                                        src={d.img}
+                                        alt={d.name}
+                                        style={{
+                                            width: '100%', height: '100%', objectFit: 'cover',
+                                            display: 'block',
+                                            transition: 'transform 0.5s ease',
+                                            transform: isActive ? 'scale(1.07)' : 'scale(1)',
+                                        }}
+                                    />
+
+                                    {/* Default overlay: name + miles always visible */}
+                                    <motion.div
+                                        animate={{ opacity: isActive ? 0 : 1 }}
+                                        transition={{ duration: 0.2 }}
+                                        style={{
+                                            position: 'absolute', bottom: 0, left: 0, right: 0,
+                                            background: 'linear-gradient(to top, rgba(6,15,31,0.88) 0%, rgba(6,15,31,0.3) 60%, transparent 100%)',
+                                            padding: '64px 20px 20px',
+                                            pointerEvents: 'none',
+                                        }}
+                                    >
+                                        <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', letterSpacing: '-0.01em' }}>{d.name}</div>
+                                        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.72)', marginTop: 4 }}>
+                                            {d.miles} pts · {d.country}
+                                        </div>
+                                    </motion.div>
+
+                                    {/* Reveal panel: slides up on hover/tap */}
+                                    <motion.div
+                                        initial={false}
+                                        animate={{ y: isActive ? 0 : '100%' }}
+                                        transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+                                        style={{
+                                            position: 'absolute', bottom: 0, left: 0, right: 0,
+                                            background: 'linear-gradient(to top, rgba(6,15,31,0.97) 0%, rgba(6,15,31,0.88) 100%)',
+                                            padding: '24px 20px 22px',
+                                            backdropFilter: 'blur(8px)',
+                                            WebkitBackdropFilter: 'blur(8px)',
+                                        }}
+                                    >
+                                        <div style={{
+                                            display: 'inline-block',
+                                            background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.9)',
+                                            fontSize: 11, fontWeight: 700, borderRadius: 8,
+                                            padding: '4px 10px', marginBottom: 12, letterSpacing: '0.04em',
+                                        }}>{d.class}</div>
+                                        <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginBottom: 4, letterSpacing: '-0.01em' }}>{d.name}</div>
+                                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 18 }}>{d.route}</div>
+                                        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+                                            <div>
+                                                <div style={{ fontSize: 24, fontWeight: 900, color: '#60A5FA', letterSpacing: '-0.02em', lineHeight: 1 }}>{d.miles}</div>
+                                                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 5 }}>pontos · ou {d.price}</div>
+                                            </div>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); navigate('/auth') }}
+                                                style={{
+                                                    background: '#2A60C2', color: '#fff',
+                                                    border: 'none', borderRadius: 12, padding: '10px 16px',
+                                                    fontWeight: 800, fontSize: 13, cursor: 'pointer',
+                                                    display: 'flex', alignItems: 'center', gap: 6,
+                                                    fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0,
+                                                    boxShadow: '0 4px 14px rgba(42,96,194,0.45)',
+                                                }}
+                                            >
+                                                <ArrowRight size={13} /> Analisar
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                </motion.div>
+                            )
+                        })}
+                    </AnimatePresence>
+                </div>
             </div>
         </div>
     )
