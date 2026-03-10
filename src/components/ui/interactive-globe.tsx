@@ -71,6 +71,40 @@ const DEFAULT_CONNECTIONS: { from: [number, number]; to: [number, number] }[] = 
   { from: [35.68,  139.69], to: [-33.87, 151.21] },   // Tóquio → Sydney
 ];
 
+/** Approximate land mask — multiple bounding boxes per continent */
+function isLand(lat: number, lng: number): boolean {
+  // North America
+  if (lat >= 24 && lat <= 70 && lng >= -128 && lng <= -52) return true;
+  if (lat >=  7 && lat <= 24 && lng >=  -92 && lng <= -77) return true;  // Central America
+  if (lat >= 59 && lat <= 83 && lng >=  -55 && lng <= -14) return true;  // Greenland
+  // South America
+  if (lat >= -55 && lat <= 12 && lng >= -82 && lng <= -34) return true;
+  // Europe
+  if (lat >= 35 && lat <= 71 && lng >= -10 && lng <= 32) return true;
+  if (lat >= 55 && lat <= 71 && lng >=  15 && lng <= 32) return true;   // Scandinavia east
+  if (lat >= 36 && lat <= 42 && lng >=  28 && lng <= 37) return true;   // Turkey west
+  // Africa
+  if (lat >= -35 && lat <= 37 && lng >= -17 && lng <= 52) return true;
+  if (lat >= -25 && lat <= -12 && lng >=  43 && lng <= 50) return true; // Madagascar
+  // Middle East / Arabian Peninsula
+  if (lat >= 12 && lat <= 42 && lng >= 26 && lng <= 63) return true;
+  // Russia / Central Asia
+  if (lat >= 48 && lat <= 77 && lng >=  26 && lng <= 180) return true;
+  if (lat >= 50 && lat <= 70 && lng >= -180 && lng <= -160) return true; // far east Russia
+  // South Asia
+  if (lat >=  5 && lat <= 37 && lng >=  60 && lng <= 100) return true;
+  // Southeast Asia mainland + islands
+  if (lat >=  0 && lat <= 28 && lng >=  92 && lng <= 110) return true;
+  if (lat >= -8 && lat <= 22 && lng >= 100 && lng <= 142) return true;
+  // East Asia
+  if (lat >= 18 && lat <= 53 && lng >= 100 && lng <= 135) return true;
+  if (lat >= 30 && lat <= 46 && lng >= 129 && lng <= 146) return true;  // Japan
+  // Australia + New Zealand
+  if (lat >= -43 && lat <= -10 && lng >= 113 && lng <= 154) return true;
+  if (lat >= -47 && lat <= -34 && lng >= 166 && lng <= 178) return true;
+  return false;
+}
+
 function latLngToXYZ(lat: number, lng: number, radius: number): [number, number, number] {
   const phi = ((90 - lat) * Math.PI) / 180;
   const theta = ((lng + 180) * Math.PI) / 180;
@@ -144,16 +178,24 @@ export function InteractiveGlobe({
 
   useEffect(() => {
     const dots: [number, number, number][] = [];
-    const numDots = 1400;
+    const numCandidates = 3500;
     const goldenRatio = (1 + Math.sqrt(5)) / 2;
-    for (let i = 0; i < numDots; i++) {
+    for (let i = 0; i < numCandidates; i++) {
       const theta = (2 * Math.PI * i) / goldenRatio;
-      const phi = Math.acos(1 - (2 * (i + 0.5)) / numDots);
-      dots.push([
-        Math.cos(theta) * Math.sin(phi),
-        Math.cos(phi),
-        Math.sin(theta) * Math.sin(phi),
-      ]);
+      const phi = Math.acos(1 - (2 * (i + 0.5)) / numCandidates);
+      const x = Math.cos(theta) * Math.sin(phi);
+      const y = Math.cos(phi);
+      const z = Math.sin(theta) * Math.sin(phi);
+      // Convert back to lat/lng for land check
+      const lat = Math.asin(Math.max(-1, Math.min(1, y))) * 180 / Math.PI;
+      const thetaLng = Math.atan2(z, -x);
+      let lng = thetaLng * 180 / Math.PI - 180;
+      if (lng > 180) lng -= 360;
+      if (lng < -180) lng += 360;
+      // Keep land dots; keep ~6% of ocean dots for a faint ocean texture
+      if (isLand(lat, lng) || Math.random() < 0.06) {
+        dots.push([x, y, z]);
+      }
     }
     dotsRef.current = dots;
   }, []);
