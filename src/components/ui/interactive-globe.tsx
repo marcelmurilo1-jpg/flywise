@@ -41,26 +41,6 @@ const DEFAULT_CONNECTIONS: { from: [number, number]; to: [number, number] }[] = 
   { from: [-1.29,  36.82],  to: [-33.92, 18.42]  },  // Nairobi → Cape Town
 ];
 
-function isLand(lat: number, lng: number): boolean {
-  if (lat >= 24  && lat <= 70  && lng >= -128 && lng <= -52)  return true; // North America
-  if (lat >=  7  && lat <= 24  && lng >=  -92 && lng <= -77)  return true; // Central America
-  if (lat >= 59  && lat <= 83  && lng >=  -55 && lng <= -14)  return true; // Greenland
-  if (lat >= -55 && lat <= 12  && lng >=  -82 && lng <= -34)  return true; // South America
-  if (lat >= 35  && lat <= 71  && lng >=  -10 && lng <=  32)  return true; // Europe
-  if (lat >= -35 && lat <= 37  && lng >=  -17 && lng <=  52)  return true; // Africa
-  if (lat >= -25 && lat <= -12 && lng >=   43 && lng <=  50)  return true; // Madagascar
-  if (lat >= 12  && lat <= 42  && lng >=   26 && lng <=  63)  return true; // Middle East
-  if (lat >= 48  && lat <= 77  && lng >=   26 && lng <= 180)  return true; // Russia
-  if (lat >= 50  && lat <= 70  && lng >= -180 && lng <= -160) return true; // Russia far east
-  if (lat >=  5  && lat <= 37  && lng >=   60 && lng <= 100)  return true; // South Asia
-  if (lat >=  0  && lat <= 28  && lng >=   92 && lng <= 110)  return true; // SE Asia mainland
-  if (lat >= -8  && lat <= 22  && lng >=  100 && lng <= 142)  return true; // SE Asia islands
-  if (lat >= 18  && lat <= 53  && lng >=  100 && lng <= 135)  return true; // East Asia
-  if (lat >= 30  && lat <= 46  && lng >=  129 && lng <= 146)  return true; // Japan
-  if (lat >= -43 && lat <= -10 && lng >=  113 && lng <= 154)  return true; // Australia
-  if (lat >= -47 && lat <= -34 && lng >=  166 && lng <= 178)  return true; // New Zealand
-  return false;
-}
 
 function latLngToXYZ(lat: number, lng: number, radius: number): [number, number, number] {
   const phi = ((90 - lat) * Math.PI) / 180;
@@ -131,20 +111,16 @@ export function InteractiveGlobe({
 
   useEffect(() => {
     const dots: [number, number, number][] = [];
-    const numCandidates = 6000;
+    const numCandidates = 2000;
     const goldenRatio = (1 + Math.sqrt(5)) / 2;
     for (let i = 0; i < numCandidates; i++) {
       const theta = (2 * Math.PI * i) / goldenRatio;
       const phi = Math.acos(1 - (2 * (i + 0.5)) / numCandidates);
-      const x = Math.cos(theta) * Math.sin(phi);
-      const y = Math.cos(phi);
-      const z = Math.sin(theta) * Math.sin(phi);
-      const lat = Math.asin(Math.max(-1, Math.min(1, y))) * 180 / Math.PI;
-      let lng = Math.atan2(z, -x) * 180 / Math.PI - 180;
-      if (lng > 180) lng -= 360;
-      if (lng < -180) lng += 360;
-      // Land: keep all dots; ocean: keep 18% for sphere completeness
-      if (isLand(lat, lng) || Math.random() < 0.18) dots.push([x, y, z]);
+      dots.push([
+        Math.cos(theta) * Math.sin(phi),
+        Math.cos(phi),
+        Math.sin(theta) * Math.sin(phi),
+      ]);
     }
     dotsRef.current = dots;
   }, []);
