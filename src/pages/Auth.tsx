@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle, User } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -10,13 +10,15 @@ const BLUE = '#2A60C2'
 export default function Auth() {
     const [searchParams] = useSearchParams()
     const [tab, setTab] = useState<'login' | 'signup'>(searchParams.get('tab') === 'signup' ? 'signup' : 'login')
+    const [name, setName] = useState('')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [showPass, setShowPass] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [googleLoading, setGoogleLoading] = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
-    const { signIn, signUp, user } = useAuth()
+    const { signIn, signUp, signInWithGoogle, user } = useAuth()
     const navigate = useNavigate()
 
     useEffect(() => { if (user) navigate('/home') }, [user, navigate])
@@ -33,7 +35,7 @@ export default function Auth() {
                 if (error) setError(error.message || 'Credenciais inválidas.')
                 else navigate('/home')
             } else {
-                const { error } = await signUp(email, password)
+                const { error } = await signUp(email, password, name)
                 if (error) setError(error.message || 'Erro ao criar conta.')
                 else setSuccess('Conta criada! Verifique seu email ou faça login.')
             }
@@ -47,89 +49,152 @@ export default function Auth() {
         transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
     }
 
+    const handleGoogleSignIn = async () => {
+        setGoogleLoading(true)
+        setError('')
+        const { error } = await signInWithGoogle()
+        if (error) { setError(error.message || 'Erro ao conectar com Google.'); setGoogleLoading(false) }
+    }
+
     const renderForm = (formType: 'login' | 'signup') => {
         const isActive = tab === formType
+        const isSubmitting = loading && isActive
         return (
-            <form onSubmit={(e) => handleSubmit(e, formType)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* Email */}
-                <div>
-                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#6B7A99', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>Email</label>
-                    <div style={{ position: 'relative' }}>
-                        <Mail size={14} style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', color: '#A0AECB' }} />
-                        <input
-                            type="email" placeholder="seu@email.com" value={email}
-                            onChange={e => setEmail(e.target.value)} required
-                            tabIndex={isActive ? 0 : -1}
-                            style={{ ...inputBase, padding: '11px 14px 11px 38px' }}
-                            onFocus={e => { e.target.style.borderColor = BLUE; e.target.style.boxShadow = '0 0 0 3px rgba(42,96,194,0.12)' }}
-                            onBlur={e => { e.target.style.borderColor = '#E2EAF5'; e.target.style.boxShadow = 'none' }}
-                        />
-                    </div>
-                </div>
-
-                {/* Senha */}
-                <div>
-                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#6B7A99', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>Senha</label>
-                    <div style={{ position: 'relative' }}>
-                        <Lock size={14} style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', color: '#A0AECB' }} />
-                        <input
-                            type={showPass ? 'text' : 'password'} placeholder="••••••••"
-                            value={password} onChange={e => setPassword(e.target.value)}
-                            required minLength={6}
-                            tabIndex={isActive ? 0 : -1}
-                            style={{ ...inputBase, padding: '11px 42px 11px 38px' }}
-                            onFocus={e => { e.target.style.borderColor = BLUE; e.target.style.boxShadow = '0 0 0 3px rgba(42,96,194,0.12)' }}
-                            onBlur={e => { e.target.style.borderColor = '#E2EAF5'; e.target.style.boxShadow = 'none' }}
-                        />
-                        <button type="button" onClick={() => setShowPass(!showPass)} tabIndex={isActive ? 0 : -1}
-                            style={{ position: 'absolute', right: '11px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#A0AECB', padding: '4px', display: 'flex' }}>
-                            {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                    </div>
-                </div>
-
-                {/* Feedback */}
-                <AnimatePresence>
-                    {error && isActive && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                            style={{ display: 'flex', gap: '8px', padding: '11px 13px', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.20)', borderRadius: '10px', color: '#dc2626', fontSize: '13px', alignItems: 'flex-start', overflow: 'hidden' }}>
-                            <AlertCircle size={14} style={{ flexShrink: 0, marginTop: '1px' }} /> {error}
-                        </motion.div>
-                    )}
-                    {success && isActive && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                            style={{ display: 'flex', gap: '8px', padding: '11px 13px', background: 'rgba(42,96,194,0.08)', border: '1px solid rgba(42,96,194,0.22)', borderRadius: '10px', color: BLUE, fontSize: '13px', alignItems: 'flex-start', overflow: 'hidden' }}>
-                            <CheckCircle size={14} style={{ flexShrink: 0, marginTop: '1px' }} /> {success}
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Submit */}
-                <button type="submit" disabled={loading && isActive} tabIndex={isActive ? 0 : -1}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Google button */}
+                <button type="button" onClick={handleGoogleSignIn} disabled={googleLoading} tabIndex={isActive ? 0 : -1}
                     style={{
-                        width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        gap: '8px', padding: '13px', fontSize: '14.5px', marginTop: '4px',
-                        background: (loading && isActive) ? 'rgba(42,96,194,0.55)' : BLUE,
-                        color: '#fff', border: 'none', borderRadius: '11px',
-                        cursor: (loading && isActive) ? 'not-allowed' : 'pointer',
-                        fontWeight: 700, fontFamily: 'inherit', letterSpacing: '-0.01em',
-                        boxShadow: (loading && isActive) ? 'none' : '0 4px 18px rgba(42,96,194,0.35)',
-                        transition: 'all 0.2s ease',
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                        padding: '11px 14px', background: '#fff', border: '1.5px solid #E2EAF5', borderRadius: '11px',
+                        fontSize: '14px', fontWeight: 600, color: NAVY, cursor: googleLoading ? 'not-allowed' : 'pointer',
+                        fontFamily: 'inherit', transition: 'all 0.2s ease', opacity: googleLoading ? 0.6 : 1,
+                        boxShadow: '0 1px 4px rgba(14,42,85,0.07)',
                     }}
-                    onMouseEnter={e => { if (!(loading && isActive)) { e.currentTarget.style.background = '#1A4EA8'; e.currentTarget.style.transform = 'translateY(-1px)' } }}
-                    onMouseLeave={e => { e.currentTarget.style.background = (loading && isActive) ? 'rgba(42,96,194,0.55)' : BLUE; e.currentTarget.style.transform = 'translateY(0)' }}
+                    onMouseEnter={e => { if (!googleLoading) { e.currentTarget.style.borderColor = '#A0AECB'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(14,42,85,0.12)' } }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2EAF5'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(14,42,85,0.07)' }}
                 >
-                    {loading && isActive ? (
-                        <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="spin">
-                                <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="3" strokeOpacity="0.3" />
-                                <path d="M12 2a10 10 0 0110 10" stroke="white" strokeWidth="3" strokeLinecap="round" />
-                            </svg>
-                            {formType === 'login' ? 'Entrando...' : 'Criando conta...'}
-                        </span>
-                    ) : formType === 'login' ? 'Entrar na Plataforma' : 'Criar conta grátis'}
+                    {googleLoading ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="spin">
+                            <circle cx="12" cy="12" r="10" stroke={NAVY} strokeWidth="3" strokeOpacity="0.3" />
+                            <path d="M12 2a10 10 0 0110 10" stroke={NAVY} strokeWidth="3" strokeLinecap="round" />
+                        </svg>
+                    ) : (
+                        <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
+                            <path d="M43.6 20.5H42V20H24v8h11.3C33.7 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.4 6.8 29.4 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 20-9 20-20 0-1.2-.1-2.3-.4-3.5z" fill="#FFC107"/>
+                            <path d="M6.3 14.7l6.6 4.8C14.7 16.3 19 13 24 13c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.4 6.8 29.4 4 24 4c-7.7 0-14.3 4.4-17.7 10.7z" fill="#FF3D00"/>
+                            <path d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.5 26.7 36 24 36c-5.3 0-9.7-3.4-11.3-8H6.1c3.4 7.3 10.7 12 17.9 12z" fill="#4CAF50"/>
+                            <path d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.5l6.2 5.2C37.2 39.4 44 34 44 24c0-1.2-.1-2.3-.4-3.5z" fill="#1976D2"/>
+                        </svg>
+                    )}
+                    {formType === 'login' ? 'Entrar com Google' : 'Cadastrar com Google'}
                 </button>
-            </form>
+
+                {/* Divider */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ flex: 1, height: '1px', background: '#E2EAF5' }} />
+                    <span style={{ fontSize: '11px', color: '#A0AECB', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>ou</span>
+                    <div style={{ flex: 1, height: '1px', background: '#E2EAF5' }} />
+                </div>
+
+                <form onSubmit={(e) => handleSubmit(e, formType)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* Nome — apenas no cadastro */}
+                    {formType === 'signup' && (
+                        <div>
+                            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#6B7A99', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>Nome</label>
+                            <div style={{ position: 'relative' }}>
+                                <User size={14} style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', color: '#A0AECB' }} />
+                                <input
+                                    type="text" placeholder="Seu nome completo" value={name}
+                                    onChange={e => setName(e.target.value)} required
+                                    tabIndex={isActive ? 0 : -1}
+                                    style={{ ...inputBase, padding: '11px 14px 11px 38px' }}
+                                    onFocus={e => { e.target.style.borderColor = BLUE; e.target.style.boxShadow = '0 0 0 3px rgba(42,96,194,0.12)' }}
+                                    onBlur={e => { e.target.style.borderColor = '#E2EAF5'; e.target.style.boxShadow = 'none' }}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Email */}
+                    <div>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#6B7A99', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>Email</label>
+                        <div style={{ position: 'relative' }}>
+                            <Mail size={14} style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', color: '#A0AECB' }} />
+                            <input
+                                type="email" placeholder="seu@email.com" value={email}
+                                onChange={e => setEmail(e.target.value)} required
+                                tabIndex={isActive ? 0 : -1}
+                                style={{ ...inputBase, padding: '11px 14px 11px 38px' }}
+                                onFocus={e => { e.target.style.borderColor = BLUE; e.target.style.boxShadow = '0 0 0 3px rgba(42,96,194,0.12)' }}
+                                onBlur={e => { e.target.style.borderColor = '#E2EAF5'; e.target.style.boxShadow = 'none' }}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Senha */}
+                    <div>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#6B7A99', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>Senha</label>
+                        <div style={{ position: 'relative' }}>
+                            <Lock size={14} style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', color: '#A0AECB' }} />
+                            <input
+                                type={showPass ? 'text' : 'password'} placeholder="••••••••"
+                                value={password} onChange={e => setPassword(e.target.value)}
+                                required minLength={6}
+                                tabIndex={isActive ? 0 : -1}
+                                style={{ ...inputBase, padding: '11px 42px 11px 38px' }}
+                                onFocus={e => { e.target.style.borderColor = BLUE; e.target.style.boxShadow = '0 0 0 3px rgba(42,96,194,0.12)' }}
+                                onBlur={e => { e.target.style.borderColor = '#E2EAF5'; e.target.style.boxShadow = 'none' }}
+                            />
+                            <button type="button" onClick={() => setShowPass(!showPass)} tabIndex={isActive ? 0 : -1}
+                                style={{ position: 'absolute', right: '11px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#A0AECB', padding: '4px', display: 'flex' }}>
+                                {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Feedback */}
+                    <AnimatePresence>
+                        {error && isActive && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                                style={{ display: 'flex', gap: '8px', padding: '11px 13px', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.20)', borderRadius: '10px', color: '#dc2626', fontSize: '13px', alignItems: 'flex-start', overflow: 'hidden' }}>
+                                <AlertCircle size={14} style={{ flexShrink: 0, marginTop: '1px' }} /> {error}
+                            </motion.div>
+                        )}
+                        {success && isActive && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                                style={{ display: 'flex', gap: '8px', padding: '11px 13px', background: 'rgba(42,96,194,0.08)', border: '1px solid rgba(42,96,194,0.22)', borderRadius: '10px', color: BLUE, fontSize: '13px', alignItems: 'flex-start', overflow: 'hidden' }}>
+                                <CheckCircle size={14} style={{ flexShrink: 0, marginTop: '1px' }} /> {success}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Submit */}
+                    <button type="submit" disabled={isSubmitting} tabIndex={isActive ? 0 : -1}
+                        style={{
+                            width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            gap: '8px', padding: '13px', fontSize: '14.5px', marginTop: '4px',
+                            background: isSubmitting ? 'rgba(42,96,194,0.55)' : BLUE,
+                            color: '#fff', border: 'none', borderRadius: '11px',
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                            fontWeight: 700, fontFamily: 'inherit', letterSpacing: '-0.01em',
+                            boxShadow: isSubmitting ? 'none' : '0 4px 18px rgba(42,96,194,0.35)',
+                            transition: 'all 0.2s ease',
+                        }}
+                        onMouseEnter={e => { if (!isSubmitting) { e.currentTarget.style.background = '#1A4EA8'; e.currentTarget.style.transform = 'translateY(-1px)' } }}
+                        onMouseLeave={e => { e.currentTarget.style.background = isSubmitting ? 'rgba(42,96,194,0.55)' : BLUE; e.currentTarget.style.transform = 'translateY(0)' }}
+                    >
+                        {isSubmitting ? (
+                            <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="spin">
+                                    <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="3" strokeOpacity="0.3" />
+                                    <path d="M12 2a10 10 0 0110 10" stroke="white" strokeWidth="3" strokeLinecap="round" />
+                                </svg>
+                                {formType === 'login' ? 'Entrando...' : 'Criando conta...'}
+                            </span>
+                        ) : formType === 'login' ? 'Entrar na Plataforma' : 'Criar conta grátis'}
+                    </button>
+                </form>
+            </div>
         )
     }
 
