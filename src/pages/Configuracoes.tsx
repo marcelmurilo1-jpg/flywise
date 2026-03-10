@@ -15,6 +15,15 @@ type TravelerType = 'solo' | 'casal' | 'familia' | 'amigos'
 type TravelStyle = 'Econômico' | 'Cultural' | 'Gastronômico' | 'Aventura' | 'Compras'
 type SectionId = 'perfil' | 'seguranca' | 'viagem' | 'notificacoes' | 'conta'
 
+interface NotifPrefs {
+    notificacoes_ativas: boolean
+    passagens: boolean
+    milhas: boolean
+    programas: string[]
+    alerta_promocao: boolean
+    alerta_award_space: boolean
+}
+
 interface UserProfile {
     full_name: string
     phone: string
@@ -37,6 +46,20 @@ const TRAVELER_OPTIONS: { value: TravelerType; label: string; desc: string }[] =
 ]
 
 const STYLE_OPTIONS: TravelStyle[] = ['Econômico', 'Cultural', 'Gastronômico', 'Aventura', 'Compras']
+
+const PROGRAMAS_MILHAS = [
+    'Smiles', 'TudoAzul', 'LATAM Pass', 'Livelo',
+    'Esfera', 'Flying Blue', 'AAdvantage', 'MileagePlus', 'Outro',
+]
+
+const DEFAULT_NOTIF_PREFS: NotifPrefs = {
+    notificacoes_ativas: false,
+    passagens: false,
+    milhas: false,
+    programas: [],
+    alerta_promocao: true,
+    alerta_award_space: true,
+}
 
 const CURRENCY_OPTIONS = [
     { value: 'BRL', label: 'Real Brasileiro (R$)' },
@@ -203,6 +226,11 @@ export default function Configuracoes() {
     const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE)
     const [loadingProfile, setLoadingProfile] = useState(true)
 
+    // Notification preferences state
+    const [notifPrefs, setNotifPrefs] = useState<NotifPrefs>(DEFAULT_NOTIF_PREFS)
+    const [savingNotif, setSavingNotif] = useState(false)
+    const [savedNotif, setSavedNotif] = useState(false)
+
     // Section save states
     const [savingSection, setSavingSection] = useState<SectionId | null>(null)
     const [savedSection, setSavedSection] = useState<SectionId | null>(null)
@@ -226,28 +254,37 @@ export default function Configuracoes() {
 
     useEffect(() => {
         if (!user) return
-        const fetchProfile = async () => {
-            const { data } = await supabase
-                .from('user_profiles')
-                .select('*')
-                .eq('id', user.id)
-                .single()
-            if (data) {
+        const fetchAll = async () => {
+            const [{ data: profileData }, { data: notifData }] = await Promise.all([
+                supabase.from('user_profiles').select('*').eq('id', user.id).single(),
+                supabase.from('notification_preferences').select('*').eq('user_id', user.id).single(),
+            ])
+            if (profileData) {
                 setProfile({
-                    full_name: data.full_name ?? '',
-                    phone: data.phone ?? '',
-                    birth_date: data.birth_date ?? '',
-                    nationality: data.nationality ?? '',
-                    default_traveler_type: data.default_traveler_type ?? 'casal',
-                    preferred_styles: data.preferred_styles ?? ['Cultural'],
-                    preferred_currency: data.preferred_currency ?? 'BRL',
-                    notifications_email: data.notifications_email ?? true,
-                    notifications_promotions: data.notifications_promotions ?? true,
+                    full_name: profileData.full_name ?? '',
+                    phone: profileData.phone ?? '',
+                    birth_date: profileData.birth_date ?? '',
+                    nationality: profileData.nationality ?? '',
+                    default_traveler_type: profileData.default_traveler_type ?? 'casal',
+                    preferred_styles: profileData.preferred_styles ?? ['Cultural'],
+                    preferred_currency: profileData.preferred_currency ?? 'BRL',
+                    notifications_email: profileData.notifications_email ?? true,
+                    notifications_promotions: profileData.notifications_promotions ?? true,
+                })
+            }
+            if (notifData) {
+                setNotifPrefs({
+                    notificacoes_ativas: notifData.notificacoes_ativas ?? false,
+                    passagens: notifData.passagens ?? false,
+                    milhas: notifData.milhas ?? false,
+                    programas: notifData.programas ?? [],
+                    alerta_promocao: notifData.alerta_promocao ?? true,
+                    alerta_award_space: notifData.alerta_award_space ?? true,
                 })
             }
             setLoadingProfile(false)
         }
-        fetchProfile()
+        fetchAll()
     }, [user])
 
     // ── Section intersection observer ─────────────────────────────────────────
@@ -341,13 +378,38 @@ export default function Configuracoes() {
         navigate('/')
     }
 
-    // ── Notification toggle (auto-save) ───────────────────────────────────────
+    // ── Notification toggle (auto-save, user_profiles) ────────────────────────
 
     const toggleNotification = async (field: 'notifications_email' | 'notifications_promotions') => {
         const newValue = !profile[field]
         setProfile(p => ({ ...p, [field]: newValue }))
         await upsertProfile({ [field]: newValue })
         markSaved('notificacoes')
+    }
+
+    // ── Notification preferences (notification_preferences table) ─────────────
+
+    const togglePrograma = (programa: string) => {
+        setNotifPrefs(p => ({
+            ...p,
+            programas: p.programas.includes(programa)
+                ? p.programas.filter(x => x !== programa)
+                : [...p.programas, programa],
+        }))
+    }
+
+    const saveNotifPrefs = async () => {
+        if (!user) return
+        setSavingNotif(true)
+        const prefs = {
+            ...notifPrefs,
+            notificacoes_ativas: notifPrefs.passagens || notifPrefs.milhas,
+        }
+        setNotifPrefs(prefs)
+        await supabase.from('notification_preferences').upsert({ user_id: user.id, ...prefs })
+        setSavingNotif(false)
+        setSavedNotif(true)
+        setTimeout(() => setSavedNotif(false), 2000)
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -667,7 +729,9 @@ export default function Configuracoes() {
 
                             {/* ── Notificações ───────────────────────────────── */}
                             <SectionCard id="notificacoes" title="Notificações" description="Controle quais alertas você recebe" Icon={Bell}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+
+                                {/* — Canais gerais (user_profiles, auto-save) — */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0', marginBottom: '24px' }}>
                                     {[
                                         {
                                             field: 'notifications_email' as const,
@@ -676,7 +740,7 @@ export default function Configuracoes() {
                                         },
                                         {
                                             field: 'notifications_promotions' as const,
-                                            label: 'Alertas de promoções',
+                                            label: 'Alertas de promoções gerais',
                                             desc: 'Seja o primeiro a saber sobre passagens em promoção.',
                                         },
                                     ].map(({ field, label, desc }, i) => (
@@ -700,21 +764,165 @@ export default function Configuracoes() {
                                     ))}
                                 </div>
 
-                                <AnimatePresence>
-                                    {savedSection === 'notificacoes' && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: 4 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0 }}
+                                {/* — Alertas personalizados (notification_preferences) — */}
+                                <div style={{
+                                    borderTop: '1.5px solid var(--border-light)',
+                                    paddingTop: '24px',
+                                    display: 'flex', flexDirection: 'column', gap: '20px',
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-dark)', marginBottom: '4px' }}>
+                                            Alertas personalizados
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                            Configure para quais destinos e programas deseja receber alertas.
+                                        </div>
+                                    </div>
+
+                                    {/* Passagens toggle */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                                        <div>
+                                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)' }}>Passagens em dinheiro</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                                Aviso quando o preço cair nas rotas que você pesquisar.
+                                            </div>
+                                        </div>
+                                        <Toggle
+                                            value={notifPrefs.passagens}
+                                            onChange={() => setNotifPrefs(p => ({ ...p, passagens: !p.passagens }))}
+                                        />
+                                    </div>
+
+                                    {/* Milhas toggle */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                                        <div>
+                                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)' }}>Milhas</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                                Promoções de transferência e espaço em award.
+                                            </div>
+                                        </div>
+                                        <Toggle
+                                            value={notifPrefs.milhas}
+                                            onChange={() => setNotifPrefs(p => ({ ...p, milhas: !p.milhas }))}
+                                        />
+                                    </div>
+
+                                    {/* Programas — só aparece se milhas está ativo */}
+                                    <AnimatePresence>
+                                        {notifPrefs.milhas && (
+                                            <motion.div
+                                                key="milhas-config"
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                style={{ overflow: 'hidden' }}
+                                            >
+                                                <div style={{
+                                                    background: 'var(--snow)', borderRadius: '14px',
+                                                    border: '1.5px solid var(--border-light)',
+                                                    padding: '16px 18px',
+                                                    display: 'flex', flexDirection: 'column', gap: '16px',
+                                                }}>
+                                                    {/* Programas */}
+                                                    <div>
+                                                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-dark)', marginBottom: '10px' }}>
+                                                            Programas monitorados
+                                                        </div>
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                                            {PROGRAMAS_MILHAS.map(p => {
+                                                                const selected = notifPrefs.programas.includes(p)
+                                                                return (
+                                                                    <button
+                                                                        key={p}
+                                                                        type="button"
+                                                                        onClick={() => togglePrograma(p)}
+                                                                        style={{
+                                                                            padding: '7px 14px', borderRadius: '999px', cursor: 'pointer',
+                                                                            fontSize: '13px', fontWeight: 600,
+                                                                            border: selected ? '1.5px solid var(--blue-medium)' : '1.5px solid var(--border-light)',
+                                                                            background: selected ? 'rgba(74,144,226,0.1)' : '#fff',
+                                                                            color: selected ? 'var(--blue-medium)' : 'var(--text-muted)',
+                                                                            transition: 'all 0.15s',
+                                                                        }}
+                                                                    >
+                                                                        {selected ? '✓ ' : ''}{p}
+                                                                    </button>
+                                                                )
+                                                            })}
+                                                        </div>
+                                                        {notifPrefs.programas.length === 0 && (
+                                                            <div style={{ fontSize: '12px', color: 'var(--text-faint)', marginTop: '8px' }}>
+                                                                Selecione ao menos um programa para receber alertas de milhas.
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Tipos de alerta */}
+                                                    <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '14px' }}>
+                                                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-dark)', marginBottom: '12px' }}>
+                                                            Tipos de alerta
+                                                        </div>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                            {[
+                                                                {
+                                                                    key: 'alerta_promocao' as const,
+                                                                    label: 'Promoções de transferência',
+                                                                    desc: 'Bônus para turbinar seus pontos (ex: Smiles 80%).',
+                                                                },
+                                                                {
+                                                                    key: 'alerta_award_space' as const,
+                                                                    label: 'Espaço em milhas (award space)',
+                                                                    desc: 'Quando abrir assento em milhas nas suas rotas.',
+                                                                },
+                                                            ].map(({ key, label, desc }) => (
+                                                                <div
+                                                                    key={key}
+                                                                    style={{
+                                                                        display: 'flex', alignItems: 'flex-start',
+                                                                        justifyContent: 'space-between', gap: '12px',
+                                                                    }}
+                                                                >
+                                                                    <div>
+                                                                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)' }}>{label}</div>
+                                                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{desc}</div>
+                                                                    </div>
+                                                                    <Toggle
+                                                                        value={notifPrefs[key]}
+                                                                        onChange={() => setNotifPrefs(p => ({ ...p, [key]: !p[key] }))}
+                                                                    />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+
+                                    {/* Save button */}
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                        <button
+                                            onClick={saveNotifPrefs}
+                                            disabled={savingNotif}
                                             style={{
-                                                display: 'flex', alignItems: 'center', gap: '6px',
-                                                fontSize: '12px', color: '#16a34a', marginTop: '12px',
+                                                display: 'flex', alignItems: 'center', gap: '8px',
+                                                padding: '11px 24px', borderRadius: '12px',
+                                                background: savedNotif ? 'rgba(34,197,94,0.1)' : 'var(--blue-medium)',
+                                                color: savedNotif ? '#16a34a' : '#fff',
+                                                border: savedNotif ? '1.5px solid #86efac' : '1.5px solid transparent',
+                                                fontSize: '14px', fontWeight: 700,
+                                                cursor: savingNotif ? 'wait' : 'pointer',
+                                                transition: 'all 0.2s',
                                             }}
                                         >
-                                            <Check size={13} /> Preferências salvas
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
+                                            {savingNotif
+                                                ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Salvando…</>
+                                                : savedNotif
+                                                    ? <><Check size={15} /> Salvo</>
+                                                    : 'Salvar alertas'}
+                                        </button>
+                                    </div>
+                                </div>
                             </SectionCard>
 
                             {/* ── Conta ──────────────────────────────────────── */}

@@ -7,6 +7,8 @@ import { motion } from 'framer-motion'
 import { Header } from '@/components/Header'
 import { AirportInput } from '@/components/AirportInput'
 import { DateRangePicker } from '@/components/DateRangePicker'
+import { NotificationSurvey } from '@/components/NotificationSurvey'
+import { useNotificationSurvey } from '@/hooks/useNotificationSurvey'
 import type { Busca } from '@/lib/supabase'
 
 export default function Home() {
@@ -25,6 +27,7 @@ export default function Home() {
 
     const { user } = useAuth()
     const navigate = useNavigate()
+    const { shouldShow, dismiss } = useNotificationSurvey()
 
     useEffect(() => {
         if (!user) return
@@ -233,6 +236,8 @@ export default function Home() {
                     </div>
                 )}
             </main>
+
+            {shouldShow && <NotificationSurvey onClose={dismiss} />}
         </div>
     )
 }
