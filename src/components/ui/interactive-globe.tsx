@@ -12,33 +12,63 @@ interface GlobeProps {
   markers?: { lat: number; lng: number; label?: string }[];
 }
 
+// Well-distributed markers — no two too close, cover all continents + Pacific
 const DEFAULT_MARKERS = [
+  // Americas
   { lat: -23.55, lng: -46.63, label: "São Paulo" },
-  { lat: 40.71,  lng: -74.01, label: "New York" },
-  { lat: 34.05,  lng: -118.24, label: "Los Angeles" },
-  { lat: 51.51,  lng: -0.13,  label: "London" },
-  { lat: 25.20,  lng: 55.27,  label: "Dubai" },
-  { lat: 19.08,  lng: 72.88,  label: "Mumbai" },
-  { lat: 35.68,  lng: 139.69, label: "Tokyo" },
+  { lat: -12.05, lng: -77.04, label: "Lima" },
+  { lat:  40.71, lng: -74.01, label: "Nova York" },
+  { lat:  34.05, lng: -118.24, label: "Los Angeles" },
+  { lat:  19.43, lng: -99.13, label: "Cidade do México" },
+  { lat:  49.19, lng: -123.18, label: "Vancouver" },
+  // Europe
+  { lat:  51.51, lng:  -0.13, label: "Londres" },
+  { lat:  41.90, lng:  12.49, label: "Roma" },
+  { lat:  55.75, lng:  37.62, label: "Moscou" },
+  // Africa / Middle East
+  { lat:  25.20, lng:  55.27, label: "Dubai" },
+  { lat:  -1.29, lng:  36.82, label: "Nairóbi" },
+  { lat: -33.92, lng:  18.42, label: "Cidade do Cabo" },
+  { lat:  41.01, lng:  28.98, label: "Istambul" },
+  // Asia
+  { lat:  28.61, lng:  77.21, label: "Delhi" },
+  { lat:   1.36, lng: 103.82, label: "Singapura" },
+  { lat:  35.68, lng: 139.69, label: "Tóquio" },
+  // Oceania / Pacific
   { lat: -33.87, lng: 151.21, label: "Sydney" },
-  { lat: -33.92, lng: 18.42,  label: "Cape Town" },
-  { lat: -1.29,  lng: 36.82,  label: "Nairobi" },
+  { lat:  21.31, lng: -157.85, label: "Honolulu" },
 ];
 
 const DEFAULT_CONNECTIONS: { from: [number, number]; to: [number, number] }[] = [
-  { from: [-23.55, -46.63], to: [40.71,  -74.01] },  // SP → NY
-  { from: [-23.55, -46.63], to: [51.51,  -0.13]  },  // SP → London
-  { from: [-23.55, -46.63], to: [-33.92, 18.42]  },  // SP → Cape Town
-  { from: [40.71,  -74.01], to: [51.51,  -0.13]  },  // NY → London
-  { from: [34.05, -118.24], to: [40.71,  -74.01] },  // LA → NY
-  { from: [34.05, -118.24], to: [35.68,  139.69] },  // LA → Tokyo
-  { from: [51.51,  -0.13],  to: [25.20,  55.27]  },  // London → Dubai
-  { from: [51.51,  -0.13],  to: [-33.92, 18.42]  },  // London → Cape Town
-  { from: [25.20,  55.27],  to: [19.08,  72.88]  },  // Dubai → Mumbai
-  { from: [25.20,  55.27],  to: [-1.29,  36.82]  },  // Dubai → Nairobi
-  { from: [19.08,  72.88],  to: [35.68,  139.69] },  // Mumbai → Tokyo
-  { from: [35.68,  139.69], to: [-33.87, 151.21] },  // Tokyo → Sydney
-  { from: [-1.29,  36.82],  to: [-33.92, 18.42]  },  // Nairobi → Cape Town
+  // São Paulo hub
+  { from: [-23.55, -46.63], to: [40.71,  -74.01] },   // SP → Nova York
+  { from: [-23.55, -46.63], to: [51.51,   -0.13] },   // SP → Londres
+  { from: [-23.55, -46.63], to: [-12.05, -77.04] },   // SP → Lima
+  { from: [-23.55, -46.63], to: [-33.92,  18.42] },   // SP → Cidade do Cabo
+  // North America
+  { from: [40.71,  -74.01], to: [51.51,   -0.13] },   // NY → Londres
+  { from: [34.05, -118.24], to: [40.71,  -74.01] },   // LA → NY
+  { from: [34.05, -118.24], to: [35.68,  139.69] },   // LA → Tóquio
+  { from: [34.05, -118.24], to: [21.31, -157.85] },   // LA → Honolulu
+  { from: [49.19, -123.18], to: [34.05, -118.24] },   // Vancouver → LA
+  { from: [19.43,  -99.13], to: [40.71,  -74.01] },   // México → NY
+  { from: [21.31, -157.85], to: [35.68,  139.69] },   // Honolulu → Tóquio
+  // Europe
+  { from: [51.51,   -0.13], to: [41.01,   28.98] },   // Londres → Istambul
+  { from: [51.51,   -0.13], to: [55.75,   37.62] },   // Londres → Moscou
+  { from: [41.90,   12.49], to: [51.51,   -0.13] },   // Roma → Londres
+  { from: [41.01,   28.98], to: [55.75,   37.62] },   // Istambul → Moscou
+  // Middle East / Africa
+  { from: [41.01,   28.98], to: [25.20,   55.27] },   // Istambul → Dubai
+  { from: [25.20,   55.27], to: [28.61,   77.21] },   // Dubai → Delhi
+  { from: [25.20,   55.27], to: [-1.29,   36.82] },   // Dubai → Nairóbi
+  { from: [-1.29,   36.82], to: [-33.92,  18.42] },   // Nairóbi → Cidade do Cabo
+  // Asia / Oceania
+  { from: [28.61,   77.21], to: [1.36,   103.82] },   // Delhi → Singapura
+  { from: [55.75,   37.62], to: [35.68,  139.69] },   // Moscou → Tóquio
+  { from: [1.36,   103.82], to: [35.68,  139.69] },   // Singapura → Tóquio
+  { from: [1.36,   103.82], to: [-33.87, 151.21] },   // Singapura → Sydney
+  { from: [35.68,  139.69], to: [-33.87, 151.21] },   // Tóquio → Sydney
 ];
 
 function latLngToXYZ(lat: number, lng: number, radius: number): [number, number, number] {
@@ -95,22 +125,26 @@ export function InteractiveGlobe({
   markers = DEFAULT_MARKERS,
 }: GlobeProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rotYRef = useRef(0.4);
-  const rotXRef = useRef(0.3);
+  const rotYRef = useRef(0.3);
+  const rotXRef = useRef(0.15);
   const dragRef = useRef<{
     active: boolean;
     startX: number;
     startY: number;
     startRotY: number;
     startRotX: number;
-  }>({ active: false, startX: 0, startY: 0, startRotY: 0, startRotX: 0 });
+    prevX: number;
+    prevY: number;
+  }>({ active: false, startX: 0, startY: 0, startRotY: 0, startRotX: 0, prevX: 0, prevY: 0 });
+  const velYRef = useRef(0);
+  const velXRef = useRef(0);
   const animRef = useRef<number>(0);
   const timeRef = useRef(0);
   const dotsRef = useRef<[number, number, number][]>([]);
 
   useEffect(() => {
     const dots: [number, number, number][] = [];
-    const numDots = 1200;
+    const numDots = 1400;
     const goldenRatio = (1 + Math.sqrt(5)) / 2;
     for (let i = 0; i < numDots; i++) {
       const theta = (2 * Math.PI * i) / goldenRatio;
@@ -143,7 +177,14 @@ export function InteractiveGlobe({
     const fov = 600;
 
     if (!dragRef.current.active) {
-      rotYRef.current += autoRotateSpeed;
+      // Auto-rotate + inertia decay
+      rotYRef.current += autoRotateSpeed + velYRef.current;
+      const newRx = rotXRef.current + velXRef.current;
+      rotXRef.current = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, newRx));
+      velYRef.current *= 0.92;
+      velXRef.current *= 0.92;
+      if (Math.abs(velYRef.current) < 0.00005) velYRef.current = 0;
+      if (Math.abs(velXRef.current) < 0.00005) velXRef.current = 0;
     }
 
     timeRef.current += 0.015;
@@ -184,17 +225,15 @@ export function InteractiveGlobe({
     }
 
     // Arcs — great circle interpolation
-    const STEPS = 40;
+    const STEPS = 48;
     for (const conn of connections) {
       const [lat1, lng1] = conn.from;
       const [lat2, lng2] = conn.to;
       const r = radius;
 
-      // Unit vectors on sphere surface
       const raw1 = latLngToXYZ(lat1, lng1, 1);
       const raw2 = latLngToXYZ(lat2, lng2, 1);
 
-      // Build projected points along great circle
       const pts: [number, number, number][] = [];
       for (let i = 0; i <= STEPS; i++) {
         const t = i / STEPS;
@@ -205,7 +244,6 @@ export function InteractiveGlobe({
         pts.push(project(x, y, z, cx, cy, fov));
       }
 
-      // Only draw if at least one point is facing front
       const anyVisible = pts.some(([,, z]) => z <= radius * 0.3);
       if (!anyVisible) continue;
 
@@ -220,7 +258,7 @@ export function InteractiveGlobe({
       ctx.lineWidth = 1.2;
       ctx.stroke();
 
-      // Traveling dot along great circle
+      // Traveling dot
       const t = (Math.sin(time * 1.2 + lat1 * 0.1) + 1) / 2;
       const [ux, uy, uz] = slerp(raw1, raw2, t);
       let tx = ux * r, ty2 = uy * r, tz = uz * r;
@@ -243,19 +281,21 @@ export function InteractiveGlobe({
       if (z > radius * 0.1) continue;
       const [sx, sy] = project(x, y, z, cx, cy, fov);
       const pulse = Math.sin(time * 2 + marker.lat) * 0.5 + 0.5;
+      // Outer pulse ring
       ctx.beginPath();
-      ctx.arc(sx, sy, 4 + pulse * 4, 0, Math.PI * 2);
-      ctx.strokeStyle = markerColor.replace("1)", `${0.2 + pulse * 0.15})`);
+      ctx.arc(sx, sy, 4 + pulse * 5, 0, Math.PI * 2);
+      ctx.strokeStyle = markerColor.replace("1)", `${0.18 + pulse * 0.14})`);
       ctx.lineWidth = 1;
       ctx.stroke();
+      // Core dot
       ctx.beginPath();
       ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
       ctx.fillStyle = markerColor;
       ctx.fill();
       if (marker.label) {
-        ctx.font = "10px system-ui, sans-serif";
-        ctx.fillStyle = markerColor.replace("1)", "0.6)");
-        ctx.fillText(marker.label, sx + 8, sy + 3);
+        ctx.font = "bold 9px system-ui, sans-serif";
+        ctx.fillStyle = markerColor.replace("1)", "0.65)");
+        ctx.fillText(marker.label, sx + 9, sy + 3);
       }
     }
 
@@ -274,7 +314,11 @@ export function InteractiveGlobe({
       startY: e.clientY,
       startRotY: rotYRef.current,
       startRotX: rotXRef.current,
+      prevX: e.clientX,
+      prevY: e.clientY,
     };
+    velYRef.current = 0;
+    velXRef.current = 0;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, []);
 
@@ -282,22 +326,35 @@ export function InteractiveGlobe({
     if (!dragRef.current.active) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
-    rotYRef.current = dragRef.current.startRotY - dx * 0.005;
-    rotXRef.current = Math.max(-1, Math.min(1, dragRef.current.startRotX + dy * 0.005));
+    const newRotY = dragRef.current.startRotY - dx * 0.006;
+    const newRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2,
+      dragRef.current.startRotX + dy * 0.006
+    ));
+    // Track velocity (incremental delta, exponential smoothing)
+    const dvY = -(e.clientX - dragRef.current.prevX) * 0.006;
+    const dvX = (e.clientY - dragRef.current.prevY) * 0.006;
+    velYRef.current = velYRef.current * 0.5 + dvY * 0.5;
+    velXRef.current = velXRef.current * 0.5 + dvX * 0.5;
+    dragRef.current.prevX = e.clientX;
+    dragRef.current.prevY = e.clientY;
+    rotYRef.current = newRotY;
+    rotXRef.current = newRotX;
   }, []);
 
   const onPointerUp = useCallback(() => {
     dragRef.current.active = false;
+    // Velocity already set — inertia kicks in via draw loop
   }, []);
 
   return (
     <canvas
       ref={canvasRef}
-      className={cn("w-full h-full cursor-grab active:cursor-grabbing", className)}
+      className={cn("w-full h-full cursor-grab active:cursor-grabbing touch-none", className)}
       style={{ width: size, height: size }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerLeave={onPointerUp}
     />
   );
 }
