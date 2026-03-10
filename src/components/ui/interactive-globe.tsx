@@ -131,7 +131,7 @@ export function InteractiveGlobe({
 
   useEffect(() => {
     const dots: [number, number, number][] = [];
-    const numCandidates = 3500;
+    const numCandidates = 6000;
     const goldenRatio = (1 + Math.sqrt(5)) / 2;
     for (let i = 0; i < numCandidates; i++) {
       const theta = (2 * Math.PI * i) / goldenRatio;
@@ -143,7 +143,8 @@ export function InteractiveGlobe({
       let lng = Math.atan2(z, -x) * 180 / Math.PI - 180;
       if (lng > 180) lng -= 360;
       if (lng < -180) lng += 360;
-      if (isLand(lat, lng) || Math.random() < 0.06) dots.push([x, y, z]);
+      // Land: keep all dots; ocean: keep 18% for sphere completeness
+      if (isLand(lat, lng) || Math.random() < 0.18) dots.push([x, y, z]);
     }
     dotsRef.current = dots;
   }, []);
