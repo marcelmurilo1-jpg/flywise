@@ -14,7 +14,6 @@ const PROGRAMAS = [
   'Flying Blue',
   'AAdvantage',
   'MileagePlus',
-  'Outro',
 ]
 
 type Step = 'intro' | 'tipos' | 'milhas' | 'done'
@@ -32,6 +31,9 @@ export function NotificationSurvey({ onClose }: Props) {
   const [alertaPromocao, setAlertaPromocao] = useState(true)
   const [alertaAwardSpace, setAlertaAwardSpace] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  const allSelected = PROGRAMAS.every(p => programas.includes(p))
 
   const togglePrograma = (p: string) => {
     setProgramas(prev =>
@@ -39,30 +41,22 @@ export function NotificationSurvey({ onClose }: Props) {
     )
   }
 
-  const saveToSupabase = async (opts: {
-    notificacoes_ativas: boolean
-    passagens: boolean
-    milhas: boolean
-    programas: string[]
-    alerta_promocao: boolean
-    alerta_award_space: boolean
-  }) => {
-    if (!user) return
-    await supabase.from('notification_preferences').upsert({
-      user_id: user.id,
-      ...opts,
-    })
+  const toggleTodos = () => {
+    setProgramas(allSelected ? [] : [...PROGRAMAS])
   }
 
   const handleDismiss = async () => {
-    await saveToSupabase({
-      notificacoes_ativas: false,
-      passagens: false,
-      milhas: false,
-      programas: [],
-      alerta_promocao: false,
-      alerta_award_space: false,
-    })
+    if (user) {
+      await supabase.from('notification_preferences').upsert({
+        user_id: user.id,
+        notificacoes_ativas: false,
+        passagens: false,
+        milhas: false,
+        programas: [],
+        alerta_promocao: false,
+        alerta_award_space: false,
+      })
+    }
     onClose()
   }
 
@@ -71,21 +65,31 @@ export function NotificationSurvey({ onClose }: Props) {
     if (milhas) {
       setStep('milhas')
     } else {
-      handleSave()
+      void handleSave()
     }
   }
 
   const handleSave = async () => {
     setSaving(true)
-    await saveToSupabase({
-      notificacoes_ativas: passagens || milhas,
-      passagens,
-      milhas,
-      programas: milhas ? programas : [],
-      alerta_promocao: alertaPromocao,
-      alerta_award_space: alertaAwardSpace,
-    })
+    setSaveError('')
+    const { error } = await (async () => {
+      if (!user) return { error: new Error('Usuário não autenticado') }
+      const { error } = await supabase.from('notification_preferences').upsert({
+        user_id: user.id,
+        notificacoes_ativas: passagens || milhas,
+        passagens,
+        milhas,
+        programas: milhas ? programas : [],
+        alerta_promocao: alertaPromocao,
+        alerta_award_space: alertaAwardSpace,
+      })
+      return { error }
+    })()
     setSaving(false)
+    if (error) {
+      setSaveError('Erro ao salvar. Tente novamente.')
+      return
+    }
     setStep('done')
     setTimeout(onClose, 2200)
   }
@@ -207,7 +211,7 @@ export function NotificationSurvey({ onClose }: Props) {
                   <TipoCard
                     icon={<Coins size={20} color={milhas ? '#fff' : 'var(--blue-medium, #4a90e2)'} />}
                     title="Milhas"
-                    description="Promoções de transferência, espaço em award e vencimento."
+                    description="Promoções de transferência, clubes de assinatura e award space."
                     selected={milhas}
                     onToggle={() => setMilhas(v => !v)}
                   />
@@ -247,6 +251,11 @@ export function NotificationSurvey({ onClose }: Props) {
                 </p>
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 28 }}>
+                  <ProgramaChip
+                    label="Todos"
+                    selected={allSelected}
+                    onToggle={toggleTodos}
+                  />
                   {PROGRAMAS.map(p => (
                     <ProgramaChip
                       key={p}
@@ -272,16 +281,19 @@ export function NotificationSurvey({ onClose }: Props) {
                       onChange={setAlertaPromocao}
                     />
                     <AlertaToggle
-                      label="Espaço em milhas (award space)"
-                      description="Quando abrir assento em milhas nas suas rotas monitoradas."
+                      label="Promoções de clubes de assinatura"
+                      description="Ofertas de clubes como Club Smiles, TudoAzul Família e similares."
                       value={alertaAwardSpace}
                       onChange={setAlertaAwardSpace}
                     />
                   </div>
                 </div>
 
+                {saveError && (
+                  <p style={{ fontSize: 13, color: '#ef4444', marginBottom: 8, textAlign: 'center' }}>{saveError}</p>
+                )}
                 <button
-                  onClick={handleSave}
+                  onClick={() => void handleSave()}
                   disabled={saving}
                   style={{
                     width: '100%', padding: '15px', borderRadius: 14,

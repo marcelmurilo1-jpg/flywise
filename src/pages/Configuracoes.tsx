@@ -49,7 +49,7 @@ const STYLE_OPTIONS: TravelStyle[] = ['Econômico', 'Cultural', 'Gastronômico',
 
 const PROGRAMAS_MILHAS = [
     'Smiles', 'TudoAzul', 'LATAM Pass', 'Livelo',
-    'Esfera', 'Flying Blue', 'AAdvantage', 'MileagePlus', 'Outro',
+    'Esfera', 'Flying Blue', 'AAdvantage', 'MileagePlus',
 ]
 
 const DEFAULT_NOTIF_PREFS: NotifPrefs = {
@@ -389,7 +389,13 @@ export default function Configuracoes() {
 
     // ── Notification preferences (notification_preferences table) ─────────────
 
+    const allProgramasSelected = PROGRAMAS_MILHAS.every(p => notifPrefs.programas.includes(p))
+
     const togglePrograma = (programa: string) => {
+        if (programa === 'Todos') {
+            setNotifPrefs(p => ({ ...p, programas: allProgramasSelected ? [] : [...PROGRAMAS_MILHAS] }))
+            return
+        }
         setNotifPrefs(p => ({
             ...p,
             programas: p.programas.includes(programa)
@@ -829,8 +835,8 @@ export default function Configuracoes() {
                                                             Programas monitorados
                                                         </div>
                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                                            {PROGRAMAS_MILHAS.map(p => {
-                                                                const selected = notifPrefs.programas.includes(p)
+                                                            {['Todos', ...PROGRAMAS_MILHAS].map(p => {
+                                                                const selected = p === 'Todos' ? allProgramasSelected : notifPrefs.programas.includes(p)
                                                                 return (
                                                                     <button
                                                                         key={p}
@@ -871,8 +877,8 @@ export default function Configuracoes() {
                                                                 },
                                                                 {
                                                                     key: 'alerta_award_space' as const,
-                                                                    label: 'Espaço em milhas (award space)',
-                                                                    desc: 'Quando abrir assento em milhas nas suas rotas.',
+                                                                    label: 'Promoções de clubes de assinatura',
+                                                                    desc: 'Ofertas de clubes como Club Smiles, TudoAzul Família e similares.',
                                                                 },
                                                             ].map(({ key, label, desc }) => (
                                                                 <div

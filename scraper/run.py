@@ -3,18 +3,18 @@
 run.py — Entry point do scraper FlyWise
 Roda o scrape_passageiro.py e usa a tabela 'promocoes' do Supabase.
 
-A tabela no Supabase já existe com a seguinte estrutura:
+Schema da tabela 'promocoes':
   id BIGSERIAL PRIMARY KEY
   titulo TEXT
   conteudo TEXT
   url TEXT UNIQUE
   fonte TEXT
   valid_until TIMESTAMPTZ
+  categoria TEXT          -- 'passagens' | 'milhas' (classificado automaticamente)
+  programas_tags TEXT[]   -- ['Smiles','TudoAzul', ...]
+  notificado_em TIMESTAMPTZ  -- NULL = ainda não notificado
   created_at TIMESTAMPTZ
   updated_at TIMESTAMPTZ
-
-O scrape_passageiro.py usa a tabela com colunas legacy (title, content_text, etc.)
-Este wrapper faz a ponte entre as duas.
 """
 import os
 import time
@@ -69,10 +69,61 @@ def delete_expired(conn):
     return len(removed)
 
 
+# ─── Classifier ───────────────────────────────────────────────────────────────
+
+_PROGRAMAS_KEYWORDS: dict[str, list[str]] = {
+    "Smiles":      ["smiles", "gol"],
+    "TudoAzul":    ["tudoazul", "tudo azul", "azul"],
+    "LATAM Pass":  ["latam pass", "latam"],
+    "Livelo":      ["livelo"],
+    "Esfera":      ["esfera", "santander"],
+    "Flying Blue": ["flying blue", "air france", "klm"],
+    "AAdvantage":  ["aadvantage", "american airlines", "aa miles"],
+    "MileagePlus": ["mileageplus", "united"],
+}
+
+_MILHAS_KEYWORDS = [
+    "milhas", "pontos", "transferência", "transferencia", "bônus", "bonus",
+    "clube", "assinatura", "award", "resgate", "acúmulo", "acumulo",
+    "programa de fidelidade", "cartão de crédito", "cartao de credito",
+] + [kw for kws in _PROGRAMAS_KEYWORDS.values() for kw in kws]
+
+_PASSAGENS_KEYWORDS = [
+    "passagem", "passagens", "voo", "voos", "flight", "tarifa", "tarifas",
+    "bilhete", "bilhetes", "promoção aérea", "promocao aerea",
+    "viagem", "destino", "ida e volta", "só ida", "so ida",
+]
+
+
+def classificar(titulo: str, conteudo: str) -> tuple[str | None, list[str]]:
+    """Retorna (categoria, programas_tags) a partir do texto da promoção."""
+    texto = (titulo + " " + (conteudo or "")).lower()
+
+    programas_tags = [
+        prog for prog, kws in _PROGRAMAS_KEYWORDS.items()
+        if any(kw in texto for kw in kws)
+    ]
+
+    milhas_score = sum(1 for kw in _MILHAS_KEYWORDS if kw in texto)
+    passagens_score = sum(1 for kw in _PASSAGENS_KEYWORDS if kw in texto)
+
+    if milhas_score == 0 and passagens_score == 0:
+        categoria = None
+    elif milhas_score >= passagens_score:
+        categoria = "milhas"
+    else:
+        categoria = "passagens"
+        programas_tags = []  # passagens não têm programas de milhas
+
+    return categoria, programas_tags
+
+
+# ─── Upsert ───────────────────────────────────────────────────────────────────
+
 def upsert_promocao(conn, data: dict):
     """
     Insere ou atualiza uma promoção na tabela 'promocoes' do Supabase.
-    Mapeia os campos do scraper para o schema do Supabase.
+    Mapeia os campos do scraper para o schema do Supabase e classifica automaticamente.
     """
     cur = conn.cursor()
     now = datetime.now(TZ)
@@ -80,25 +131,32 @@ def upsert_promocao(conn, data: dict):
     # Monta o conteúdo: usa content_html (HTML formatado) como principal
     conteudo = data.get("content_html") or data.get("content_text") or ""
 
+    titulo = data.get("title") or "Sem título"
+    categoria, programas_tags = classificar(titulo, conteudo)
+
     cur.execute(
         """
         INSERT INTO promocoes
-            (titulo, conteudo, url, fonte, valid_until, created_at, updated_at)
+            (titulo, conteudo, url, fonte, valid_until, categoria, programas_tags, created_at, updated_at)
         VALUES
-            (%s, %s, %s, %s, %s, %s, %s)
+            (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (url) DO UPDATE SET
-            titulo     = EXCLUDED.titulo,
-            conteudo   = EXCLUDED.conteudo,
-            fonte      = EXCLUDED.fonte,
-            valid_until = EXCLUDED.valid_until,
-            updated_at = EXCLUDED.updated_at
+            titulo        = EXCLUDED.titulo,
+            conteudo      = EXCLUDED.conteudo,
+            fonte         = EXCLUDED.fonte,
+            valid_until   = EXCLUDED.valid_until,
+            categoria     = EXCLUDED.categoria,
+            programas_tags = EXCLUDED.programas_tags,
+            updated_at    = EXCLUDED.updated_at
         """,
         (
-            data.get("title") or "Sem título",
-            conteudo[:50000] if conteudo else None,   # limita tamanho
+            titulo,
+            conteudo[:50000] if conteudo else None,
             data.get("url"),
             "passageirodeprimeira.com",
             data.get("valid_until"),
+            categoria,
+            programas_tags if programas_tags else None,
             now,
             now,
         ),
@@ -142,7 +200,9 @@ def main():
             upsert_promocao(conn, data)
             saved += 1
             titulo = (data.get("title") or "")[:60]
+            cat, tags = classificar(titulo, data.get("content_text") or "")
             print(f"   ✅ Salvo: {titulo}")
+            print(f"   ↳  Categoria: {cat or '?'}  |  Tags: {tags or '—'}")
             if data.get("valid_until"):
                 print(f"   ↳  Expira: {data['valid_until'].strftime('%d/%m/%Y %H:%M')}")
         except Exception as e:
