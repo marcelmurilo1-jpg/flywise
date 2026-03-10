@@ -81,7 +81,7 @@ export interface FlightOffer {
     voo_numero: string
     segmentos: unknown
     flight_key: string
-    provider: 'amadeus'
+    provider: 'amadeus' | 'google'
 }
 
 export interface SearchFlightsParams {
@@ -134,6 +134,11 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
 
     console.log('[Amadeus] Flight search result:', data.data?.length, 'offers')
     const offers: any[] = data.data ?? []
+
+    // Se o backend já retornou dados mapeados (Google Flights scraper), devolve direto
+    if (data.meta?.source === 'google-flights-scraper') {
+        return offers as FlightOffer[]
+    }
 
     return offers.map((offer): FlightOffer => {
         const itin0 = offer.itineraries[0]

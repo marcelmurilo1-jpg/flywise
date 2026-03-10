@@ -1,6 +1,11 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { chromium as chromiumExtra } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import pLimit from 'p-limit';
+
+chromiumExtra.use(StealthPlugin());
 import { createClient } from '@supabase/supabase-js';
 
 // Carrega variáveis do ambiente (tenta .env.local e .env globalmente)
@@ -188,8 +193,7 @@ app.post('/api/search-flights', async (req, res) => {
     }
 });
 
-// ─── Amadeus Proxy ────────────────────────────────────────────────────────────
-// Credenciais ficam APENAS no servidor, nunca expostas no bundle do frontend.
+// ─── Amadeus Proxy (apenas aeroportos) ───────────────────────────────────────
 const AMADEUS_BASE = 'https://test.api.amadeus.com';
 const AMADEUS_CLIENT_ID = process.env.AMADEUS_CLIENT_ID || process.env.VITE_AMADEUS_CLIENT_ID;
 const AMADEUS_CLIENT_SECRET = process.env.AMADEUS_CLIENT_SECRET || process.env.VITE_AMADEUS_CLIENT_SECRET;
@@ -244,18 +248,196 @@ app.get('/api/amadeus/airports', async (req, res) => {
     }
 });
 
-app.get('/api/amadeus/flights', async (req, res) => {
-    try {
-        const token = await getAmadeusToken();
-        const params = new URLSearchParams(req.query);
-        const r = await fetch(`${AMADEUS_BASE}/v2/shopping/flight-offers?${params}`, {
-            headers: { Authorization: `Bearer ${token}` },
+// ─── Google Flights Scraper ───────────────────────────────────────────────────
+// Navegador compartilhado: criado uma vez, reutilizado em todas as requisições.
+const scrapeLimit = pLimit(4); // máx. 4 abas simultâneas
+let _browser = null;
+
+async function getBrowser() {
+    if (_browser && _browser.isConnected()) return _browser;
+    const opts = {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-blink-features=AutomationControlled',
+        ],
+    };
+    if (process.env.PROXY_URL) opts.proxy = { server: process.env.PROXY_URL };
+    _browser = await chromiumExtra.launch(opts);
+    console.log('[GFlights] Navegador iniciado.');
+    return _browser;
+}
+
+// Encerra o navegador no shutdown gracioso
+process.on('SIGTERM', async () => { if (_browser) await _browser.close(); process.exit(0); });
+process.on('SIGINT',  async () => { if (_browser) await _browser.close(); process.exit(0); });
+
+async function scrapeGoogleFlights(origin, destination, date, returnDate = null) {
+    return scrapeLimit(async () => {
+        const browser = await getBrowser();
+        const context = await browser.newContext({
+            viewport: { width: 1440, height: 900 },
+            locale: 'pt-BR',
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            extraHTTPHeaders: { 'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8' },
         });
-        const data = await r.json();
-        if (!r.ok) console.error('[Amadeus] flights API error:', r.status, JSON.stringify(data).slice(0, 300));
-        res.status(r.status).json(data);
+        const page = await context.newPage();
+
+        // Intercepta respostas com dados de voos (JSON com ofertas)
+        const captured = [];
+        page.on('response', async (response) => {
+            const url = response.url();
+            if (!url.includes('travel/flights') && !url.includes('tfs=')) return;
+            const ct = response.headers()['content-type'] ?? '';
+            if (!ct.includes('json')) return;
+            try {
+                const json = await response.json().catch(() => null);
+                if (json) captured.push(json);
+            } catch {}
+        });
+
+        try {
+            const tripParam = returnDate ? '' : '+one+way';
+            const returnParam = returnDate ? `+return+${returnDate}` : '';
+            const query = encodeURIComponent(`Flights from ${origin} to ${destination} on ${date}${returnParam}${tripParam}`);
+            const url = `https://www.google.com/travel/flights?q=${query}&curr=BRL&hl=pt-BR`;
+
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+
+            // Aguarda resultados aparecerem (vários seletores possíveis)
+            await Promise.race([
+                page.waitForSelector('li.pIav2d', { timeout: 20000 }),
+                page.waitForSelector('[data-travelport-identifier]', { timeout: 20000 }),
+                page.waitForSelector('ul[role="list"] li', { timeout: 20000 }),
+            ]).catch(() => console.log('[GFlights] Timeout aguardando seletor — tentando extrair mesmo assim'));
+
+            // Pequena pausa para garantir que os dados de rede foram capturados
+            await page.waitForTimeout(1500);
+
+            // Extrai dados do DOM como fallback
+            const domFlights = await page.evaluate(() => {
+                const results = [];
+
+                // Seletores em ordem de preferência
+                const selectors = ['li.pIav2d', 'li[data-id]', 'ul[jsname] > li'];
+                let items = [];
+                for (const sel of selectors) {
+                    items = [...document.querySelectorAll(sel)];
+                    if (items.length > 0) break;
+                }
+
+                items.forEach((node, idx) => {
+                    const text = node.innerText ?? '';
+                    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+                    if (lines.length < 4) return;
+
+                    // Preço: linha contendo R$ ou apenas dígitos/vírgula após "R"
+                    const priceLine = lines.find(l => /R\$|BRL/.test(l) || /^\d[\d.,]+$/.test(l));
+                    const priceRaw = priceLine ? priceLine.replace(/[^\d]/g, '') : '0';
+                    const price = parseInt(priceRaw, 10) || 0;
+
+                    // Horários: padrão HH:MM
+                    const times = lines.filter(l => /^\d{1,2}:\d{2}$/.test(l));
+                    const departure = times[0] ?? '';
+                    const arrival   = times[1] ?? '';
+
+                    // Duração: padrão "Xh Ymin" ou "X h Y min"
+                    const durationLine = lines.find(l => /\d+\s*h/.test(l) && !/R\$/.test(l));
+
+                    // Companhia aérea: heurística — linha sem números, após os horários
+                    const airlineGuess = lines.find(l =>
+                        !/\d{1,2}:\d{2}/.test(l) &&
+                        !/R\$/.test(l) &&
+                        !/\d+\s*h/.test(l) &&
+                        l.length > 2 && l.length < 60
+                    ) ?? '';
+
+                    // Paradas
+                    const stopsLine = lines.find(l => /direto|sem escala|parada|stop/i.test(l)) ?? '';
+                    const stops = /direto|sem escala|nonstop/i.test(stopsLine) ? 0 : 1;
+
+                    results.push({
+                        idx,
+                        companhia: airlineGuess,
+                        partida: departure,
+                        chegada: arrival,
+                        duracao: durationLine ?? '',
+                        paradas: stops,
+                        preco_brl: price,
+                        raw_lines: lines.slice(0, 10),
+                    });
+                });
+
+                return results;
+            });
+
+            await context.close();
+            return domFlights;
+        } catch (err) {
+            console.error('[GFlights] Erro ao fazer scraping:', err.message);
+            await context.close();
+            return [];
+        }
+    });
+}
+
+// Converte resultado do scraper para o formato FlightOffer usado no frontend
+function mapToFlightOffer(item, origin, destination, date, idx) {
+    const dateStr = date + 'T' + (item.partida || '00:00') + ':00';
+    const arrivalStr = date + 'T' + (item.chegada || '00:00') + ':00';
+    return {
+        id: `gf-${idx}-${Date.now()}`,
+        companhia: item.companhia || 'Companhia não identificada',
+        carrierCode: item.companhia?.slice(0, 2).toUpperCase() || 'XX',
+        preco_brl: item.preco_brl,
+        taxas_brl: 0,
+        partida: dateStr,
+        chegada: arrivalStr,
+        origem: origin.toUpperCase(),
+        destino: destination.toUpperCase(),
+        duracao_min: 0,
+        paradas: item.paradas ?? 0,
+        cabin_class: 'economy',
+        voo_numero: `${item.companhia?.slice(0, 2).toUpperCase() ?? 'XX'}${idx + 1}`,
+        segmentos: [],
+        flight_key: `gf-${origin}-${destination}-${date}-${idx}`,
+        provider: 'google',
+        raw_lines: item.raw_lines,
+    };
+}
+
+// GET /api/amadeus/flights — agora usa o scraper do Google Flights
+app.get('/api/amadeus/flights', async (req, res) => {
+    const {
+        originLocationCode: origin,
+        destinationLocationCode: destination,
+        departureDate: date,
+        returnDate,
+    } = req.query;
+
+    if (!origin || !destination || !date) {
+        return res.status(400).json({ errors: [{ detail: 'origin, destination e departureDate são obrigatórios' }] });
+    }
+
+    console.log(`[GFlights] Buscando ${origin} → ${destination} em ${date}${returnDate ? ` (volta: ${returnDate})` : ''}`);
+
+    try {
+        const raw = await scrapeGoogleFlights(origin, destination, date, returnDate || null);
+
+        if (raw.length === 0) {
+            console.warn('[GFlights] Nenhum voo extraído — possível bloqueio ou mudança de seletor.');
+        }
+
+        const offers = raw
+            .filter(item => item.preco_brl > 0)
+            .map((item, idx) => mapToFlightOffer(item, origin, destination, date, idx));
+
+        console.log(`[GFlights] ${offers.length} voos mapeados.`);
+        // Retorna no mesmo formato que o Amadeus para compatibilidade com o frontend
+        res.json({ data: offers, meta: { count: offers.length, source: 'google-flights-scraper' } });
     } catch (err) {
-        console.error('[Amadeus] flights error:', err.message);
+        console.error('[GFlights] Erro:', err.message);
         res.status(500).json({ errors: [{ detail: err.message }] });
     }
 });
@@ -267,9 +449,9 @@ if (process.env.VERCEL !== '1') {
     app.listen(PORT, () => {
         console.log(`\n======================================================`);
         console.log(`Servidor FlyWise Backend rodando na porta ${PORT}`);
-        console.log(`POST http://localhost:${PORT}/api/search-flights`);
-        console.log(`GET  http://localhost:${PORT}/api/amadeus/airports`);
-        console.log(`GET  http://localhost:${PORT}/api/amadeus/flights`);
+        console.log(`POST http://localhost:${PORT}/api/search-flights   (Seats.aero)`);
+        console.log(`GET  http://localhost:${PORT}/api/amadeus/airports  (Amadeus)`);
+        console.log(`GET  http://localhost:${PORT}/api/amadeus/flights   (Google Flights scraper)`);
         console.log(`======================================================\n`);
     });
 }
