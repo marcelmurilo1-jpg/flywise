@@ -16,6 +16,7 @@ interface FlightResultsGroupedProps {
     searchInfo?: SearchInfo
     onNewSearch: () => void
     sidebarFilters?: FilterState
+    returnDate?: string
 }
 
 function formatTime(iso?: string) {
@@ -111,7 +112,7 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
     )
 }
 
-export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, searchInfo, onNewSearch, sidebarFilters }: FlightResultsGroupedProps) {
+export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, searchInfo, onNewSearch, sidebarFilters, returnDate }: FlightResultsGroupedProps) {
     const [selFlight, setSelFlight] = useState<ResultadoVoo | null>(null)
     const [panelOpen, setPanelOpen] = useState(false)
     const [amadPhase, setAmadPhase] = useState<'browsing' | 'ida-sel' | 'confirmed'>('browsing')
@@ -452,9 +453,9 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
             {/* ── Flight cards ─────────────────────────────────────────────── */}
             {(() => {
                 const hasInbound = inboundFlights.length > 0
-                const isRoundTrip = sorted.some(f => !!(f.detalhes as any)?.returnPartida) || hasInbound
+                const isRoundTrip = !!returnDate || sorted.some(f => !!(f.detalhes as any)?.returnPartida) || hasInbound
                 const displayFlights = (amadPhase === 'ida-sel' || amadPhase === 'confirmed') && amadSel
-                    ? sorted.filter(f => f.id === amadSel.id)
+                    ? sorted.filter(f => f.flight_key === amadSel.flight_key)
                     : sorted
 
                 function FlightCard({ flight, idx, isReturn = false }: { flight: ResultadoVoo; idx: number; isReturn?: boolean }) {
@@ -464,7 +465,7 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
                     const hasReturn = !!det.returnPartida
                     const iata = extractIata(flight.companhia)
                     const estimatedMiles = Math.round(((flight.preco_brl ?? 0) * 55) / 1000) * 1000
-                    const isActive = !isReturn && amadSel?.id === flight.id && amadPhase !== 'browsing'
+                    const isActive = !isReturn && amadSel?.flight_key === flight.flight_key && amadPhase !== 'browsing'
                     const showReturn = hasReturn && (isActive || !isRoundTrip) && !hasInbound
                     const cardId = flight.flight_key ?? `${idx}`
                     const isExpanded = expandedCards.has(cardId)
@@ -596,31 +597,63 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
                             {isExpanded && (
                                 <div style={{ padding: '12px 20px', background: '#F8FAFC', borderBottom: '1px dashed #E2EAF5' }}>
                                     {segsOut.length > 0 ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                            {segsOut.map((seg: any, si: number) => (
-                                                <div key={si}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                                                        <span style={{ fontWeight: 700, color: '#0E2A55' }}>{seg.origem}</span>
-                                                        <span style={{ color: '#64748B' }}>{seg.partida?.slice(11, 16) ?? seg.partida}</span>
-                                                        <span style={{ color: '#94A3B8' }}>→</span>
-                                                        <span style={{ fontWeight: 700, color: '#0E2A55' }}>{seg.destino}</span>
-                                                        <span style={{ color: '#64748B' }}>{seg.chegada?.slice(11, 16) ?? seg.chegada}</span>
-                                                        {seg.duracao_min > 0 && <span style={{ color: '#94A3B8', fontSize: 11 }}>· {formatDur(seg.duracao_min)}</span>}
-                                                    </div>
-                                                    {si < segsOut.length - 1 && layoverCity && (
-                                                        <div style={{ fontSize: 11, color: '#64748B', paddingLeft: 8, marginTop: 4 }}>
-                                                            ↳ Conexão em {layoverCity}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                                            {segsOut.map((seg: any, si: number) => {
+                                                const segDep = seg.partida?.includes('T') ? seg.partida.slice(11, 16) : (seg.partida?.slice(0, 5) || '')
+                                                const segArr = seg.chegada?.includes('T') ? seg.chegada.slice(11, 16) : (seg.chegada?.slice(0, 5) || '')
+                                                const connDur = det.layoverDurations?.[si]
+                                                return (
+                                                    <div key={si}>
+                                                        {/* Segment row */}
+                                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0' }}>
+                                                            {/* Times column */}
+                                                            <div style={{ minWidth: 40, textAlign: 'right' }}>
+                                                                {segDep && <div style={{ fontSize: 14, fontWeight: 800, color: '#0E2A55' }}>{segDep}</div>}
+                                                                {seg.duracao_min > 0 && <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 14 }}>{formatDur(seg.duracao_min)}</div>}
+                                                                {segArr && <div style={{ fontSize: 14, fontWeight: 800, color: '#0E2A55', marginTop: seg.duracao_min > 0 ? 0 : 28 }}>{segArr}</div>}
+                                                            </div>
+                                                            {/* Line */}
+                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 4 }}>
+                                                                <div style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #2A60C2', background: '#fff' }} />
+                                                                <div style={{ width: 2, flex: 1, background: '#E2EAF5', margin: '3px 0' }} />
+                                                                <div style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #2A60C2', background: '#fff' }} />
+                                                            </div>
+                                                            {/* Info column */}
+                                                            <div style={{ flex: 1 }}>
+                                                                <div style={{ fontSize: 12, fontWeight: 700, color: '#0E2A55' }}>{seg.origem}</div>
+                                                                <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 6 }}>
+                                                                    {[seg.companhia_seg || flight.companhia, seg.numero, seg.aeronave].filter(Boolean).join(' · ')}
+                                                                </div>
+                                                                <div style={{ fontSize: 12, fontWeight: 700, color: '#0E2A55' }}>{seg.destino}</div>
+                                                            </div>
                                                         </div>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                        {/* Layover between segments */}
+                                                        {si < segsOut.length - 1 && (
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0 6px 58px', borderTop: '1px dashed #E2EAF5', borderBottom: '1px dashed #E2EAF5', margin: '2px 0' }}>
+                                                                <span style={{ fontSize: 11, fontWeight: 700, color: '#F97316', background: '#FFF7ED', padding: '2px 8px', borderRadius: 6 }}>
+                                                                    Conexão{layoverCity ? ` em ${layoverCity}` : ''}{connDur ? ` · ${formatDur(connDur)}` : ''}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
                                         </div>
-                                    ) : (det.paradas ?? 0) > 0 && layoverCity ? (
+                                    ) : (det.paradas ?? 0) > 0 ? (
                                         <div style={{ fontSize: 12, color: '#64748B' }}>
-                                            <span style={{ fontWeight: 600 }}>Conexão:</span> {layoverCity}
+                                            {layoverCity
+                                                ? <><span style={{ fontWeight: 600 }}>Conexão em</span> {layoverCity}{det.layoverDurations?.[0] ? ` · ${formatDur(det.layoverDurations[0])}` : ''}</>
+                                                : `${det.paradas} ${det.paradas === 1 ? 'conexão' : 'conexões'}`
+                                            }
                                         </div>
                                     ) : (
-                                        <div style={{ fontSize: 12, color: '#94A3B8' }}>Voo direto</div>
+                                        <div style={{ fontSize: 12, color: '#16A34A', fontWeight: 600 }}>✓ Voo direto</div>
+                                    )}
+                                    {/* Flight numbers + aircraft (fallback when no segments extracted) */}
+                                    {segsOut.length === 0 && (det.numeroVoos?.length > 0 || det.aeronaves?.length > 0) && (
+                                        <div style={{ marginTop: 8, fontSize: 11, color: '#64748B' }}>
+                                            {det.numeroVoos?.join(' · ')}{det.aeronaves?.length > 0 ? ` · ${det.aeronaves.join(', ')}` : ''}
+                                        </div>
                                     )}
                                 </div>
                             )}
@@ -659,6 +692,12 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
                         </AnimatePresence>
 
                         {/* ── Voos de volta (Google scraper round-trip) ─────── */}
+                        {amadPhase === 'ida-sel' && isRoundTrip && !hasInbound && (
+                            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                                style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 12, padding: '14px 20px', marginBottom: 12, fontSize: 13, color: '#92400E' }}>
+                                Nenhum voo de volta encontrado para a data selecionada. Tente buscar novamente com outra data de volta.
+                            </motion.div>
+                        )}
                         {amadPhase === 'ida-sel' && hasInbound && (
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 12px' }}>

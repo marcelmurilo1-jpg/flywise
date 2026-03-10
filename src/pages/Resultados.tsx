@@ -218,6 +218,10 @@ export default function Resultados() {
                     detalhes: {
                         paradas: o.paradas,
                         voo_numero: o.voo_numero,
+                        layoverCity: (o as any).layoverCity,
+                        layoverDurations: (o as any).layoverDurations,
+                        numeroVoos: (o as any).numeroVoos,
+                        aeronaves: (o as any).aeronaves,
                         returnPartida: o.returnPartida,
                         returnChegada: o.returnChegada,
                         returnOrigem: o.returnOrigem,
@@ -250,7 +254,14 @@ export default function Resultados() {
                     estrategia_disponivel: false,
                     moeda: 'BRL',
                     segmentos: o.segmentos,
-                    detalhes: { paradas: o.paradas, voo_numero: o.voo_numero, layoverCity: (o as any).layoverCity },
+                    detalhes: {
+                        paradas: o.paradas,
+                        voo_numero: o.voo_numero,
+                        layoverCity: (o as any).layoverCity,
+                        layoverDurations: (o as any).layoverDurations,
+                        numeroVoos: (o as any).numeroVoos,
+                        aeronaves: (o as any).aeronaves,
+                    },
                     created_at: new Date().toISOString(),
                 } as unknown as ResultadoVoo))
 
@@ -467,6 +478,7 @@ export default function Resultados() {
                                         searchInfo={busca ? { origem: busca.origem, destino: busca.destino, data_ida: busca.data_ida, passageiros: busca.passageiros } : undefined}
                                         onNewSearch={() => { (document.querySelector('input[placeholder="De — GRU"]') as HTMLInputElement)?.focus() }}
                                         sidebarFilters={filters}
+                                        returnDate={dateBack || undefined}
                                     />
                                 </div>
 

@@ -329,20 +329,23 @@ async function scrapeOneway(origin, destination, date) {
                     let departure = '', arrival = '', arrivalOffset = 0;
                     const rangeMatch = lines.find(l => /\d{1,2}:\d{2}\s*[–\-]\s*\d{1,2}:\d{2}/.test(l));
                     if (rangeMatch) {
-                        const m = rangeMatch.match(/(\d{1,2}:\d{2})\s*[–\-]\s*(\d{1,2}:\d{2})(\+(\d+))?/);
-                        if (m) { departure = m[1]; arrival = m[2]; arrivalOffset = m[4] ? parseInt(m[4]) : 0; }
+                        // Allow optional space between time and +N (e.g. "10:30 – 05:55 +1")
+                        const m = rangeMatch.match(/(\d{1,2}:\d{2})\s*[–\-]\s*(\d{1,2}:\d{2})\s*(?:\+(\d+))?/);
+                        if (m) { departure = m[1]; arrival = m[2]; arrivalOffset = m[3] ? parseInt(m[3]) : 0; }
                     } else {
                         const parsedTimes = [];
                         for (let i = 0; i < lines.length; i++) {
                             const l = lines[i];
                             // "HH:MM" exato
                             if (/^\d{1,2}:\d{2}$/.test(l)) {
-                                const offset = (lines[i + 1] ?? '').match(/^\+(\d+)$/) ? parseInt(lines[i + 1].slice(1)) : 0;
+                                // Check next line for "+N" or "dia seguinte" style indicators
+                                const nextLine = (lines[i + 1] ?? '').trim();
+                                const offset = nextLine.match(/^\+(\d+)$/) ? parseInt(nextLine.slice(1)) : 0;
                                 parsedTimes.push({ time: l, offset });
                             }
-                            // "HH:MM+1" concatenado
-                            else if (/^\d{1,2}:\d{2}\+\d+$/.test(l)) {
-                                const m = l.match(/^(\d{1,2}:\d{2})\+(\d+)$/);
+                            // "HH:MM+1" ou "HH:MM +1" concatenado
+                            else if (/^\d{1,2}:\d{2}\s*\+\d+$/.test(l)) {
+                                const m = l.match(/^(\d{1,2}:\d{2})\s*\+(\d+)$/);
                                 if (m) parsedTimes.push({ time: m[1], offset: parseInt(m[2]) });
                             }
                         }
@@ -390,25 +393,77 @@ async function scrapeOneway(origin, destination, date) {
                         l.length > 2 && l.length < 60
                     ) ?? '';
 
-                    // ─ Segmentos (se botão expandido funcionou) ─
+                    // ─ Segmentos (detalhes expandidos) ─
                     const segments = [];
-                    node.querySelectorAll('[data-leg-index], [jsname="PkNyj"], .P2UJoe').forEach(segEl => {
-                        const segLines = (segEl.innerText ?? '').split('\n').map(l => l.trim()).filter(Boolean);
-                        const segTimes = segLines.filter(l => /^\d{1,2}:\d{2}$/.test(l));
-                        const segIatas = segLines.filter(l => /^[A-Z]{3}$/.test(l));
-                        if (segTimes.length >= 2) {
-                            const durEl = segLines.find(l => /\d+\s*h/.test(l) && !/R\$/.test(l));
-                            let segDur = 0;
-                            if (durEl) { const dm = durEl.match(/(\d+)\s*h(?:\s*(\d+))?/); if (dm) segDur = parseInt(dm[1]) * 60 + (dm[2] ? parseInt(dm[2]) : 0); }
-                            segments.push({
-                                partida: segTimes[0], chegada: segTimes[1],
-                                origem: segIatas[0] ?? '', destino: segIatas[1] ?? '',
-                                duracao_min: segDur,
-                            });
+                    const legEls = node.querySelectorAll(
+                        '[data-leg-index], [jsname="PkNyj"], .P2UJoe, .nX2jk, .PPt8uc, [jscontroller="cNtv4b"]'
+                    );
+                    // Fallback: parse from full node text when no leg elements found
+                    const fullText = (node.innerText ?? '').split('\n').map(l => l.trim()).filter(Boolean);
+                    if (legEls.length > 0) {
+                        legEls.forEach(segEl => {
+                            const segLines = (segEl.innerText ?? '').split('\n').map(l => l.trim()).filter(Boolean);
+                            const segTimes = segLines.filter(l => /^\d{1,2}:\d{2}(\s*\+\d+)?$/.test(l));
+                            const segIatas = segLines.filter(l => /^[A-Z]{3}$/.test(l));
+                            if (segTimes.length >= 2) {
+                                const rawDep = segTimes[0].replace(/\s*\+\d+$/, '');
+                                const rawArr = segTimes[1].replace(/\s*\+\d+$/, '');
+                                const durEl = segLines.find(l => /\d+\s*h(\s*\d+\s*min)?/.test(l) && !/R\$/.test(l));
+                                let segDur = 0;
+                                if (durEl) { const dm = durEl.match(/(\d+)\s*h(?:\s*(\d+)\s*min)?/); if (dm) segDur = parseInt(dm[1]) * 60 + (dm[2] ? parseInt(dm[2]) : 0); }
+                                // Flight number: e.g. "AV 86", "LA 500"
+                                const flightNumEl = segLines.find(l => /^[A-Z]{1,3}\s?\d{1,5}$/.test(l));
+                                // Aircraft: "Boeing 787", "Airbus A320neo"
+                                const aircraftEl = segLines.find(l => /boeing|airbus|embraer|crj|atr/i.test(l) && l.length < 40);
+                                // Airline for this segment
+                                const airlineEl = segLines.find(l => l.length > 3 && l.length < 50 && !/\d{1,2}:\d{2}/.test(l) && !/^[A-Z]{3}$/.test(l) && !/boeing|airbus|embraer|crj|atr/i.test(l) && !/h\s*(min)?/.test(l));
+                                segments.push({
+                                    partida: rawDep,
+                                    chegada: rawArr,
+                                    origem: segIatas[0] ?? '',
+                                    destino: segIatas[1] ?? '',
+                                    duracao_min: segDur,
+                                    numero: flightNumEl ?? '',
+                                    aeronave: aircraftEl ?? '',
+                                    companhia_seg: airlineEl ?? '',
+                                });
+                            }
+                        });
+                    }
+                    // Extract connection durations from full text
+                    const connectionDurations = [];
+                    fullText.forEach(l => {
+                        const connMatch = l.match(/[Pp]arada\s+de\s+(\d+)\s*h(?:\s*(\d+)\s*min)?/);
+                        if (connMatch) {
+                            const connMin = parseInt(connMatch[1]) * 60 + (connMatch[2] ? parseInt(connMatch[2]) : 0);
+                            connectionDurations.push(connMin);
                         }
                     });
+                    // Flight numbers from full text (fallback)
+                    const flightNumbers = [];
+                    fullText.forEach(l => {
+                        if (/^[A-Z]{1,3}\s?\d{1,5}$/.test(l) && !flightNumbers.includes(l)) flightNumbers.push(l);
+                    });
+                    // Aircraft from full text (fallback)
+                    const aircraftTypes = [];
+                    fullText.forEach(l => {
+                        if (/boeing|airbus|embraer|crj|atr/i.test(l) && l.length < 40 && !aircraftTypes.includes(l)) aircraftTypes.push(l);
+                    });
 
-                    results.push({ companhia: airlineLine, partida: departure, chegada: arrival, chegadaOffset: arrivalOffset, duracao_min: durationMin, paradas: stops, layoverCity, preco_brl: price, segmentos: segments });
+                    results.push({
+                        companhia: airlineLine,
+                        partida: departure,
+                        chegada: arrival,
+                        chegadaOffset: arrivalOffset,
+                        duracao_min: durationMin,
+                        paradas: stops,
+                        layoverCity,
+                        layoverDurations: connectionDurations,
+                        preco_brl: price,
+                        segmentos: segments,
+                        numeroVoos: flightNumbers,
+                        aeronaves: aircraftTypes,
+                    });
                 });
 
                 return results;
@@ -425,6 +480,13 @@ async function scrapeOneway(origin, destination, date) {
 }
 
 // Converte resultado do scraper para o formato FlightOffer usado no frontend
+function normalizeTime(t) {
+    if (!t) return '12:00';
+    const m = t.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return '12:00';
+    return m[1].padStart(2, '0') + ':' + m[2];
+}
+
 function mapToFlightOffer(item, origin, destination, date, idx) {
     const arrivalDate = addDaysToDate(date, item.chegadaOffset || 0);
     return {
@@ -433,8 +495,8 @@ function mapToFlightOffer(item, origin, destination, date, idx) {
         carrierCode: (item.companhia ?? '').slice(0, 2).toUpperCase() || 'XX',
         preco_brl: item.preco_brl,
         taxas_brl: 0,
-        partida: date + 'T' + (item.partida || '12:00') + ':00',
-        chegada: arrivalDate + 'T' + (item.chegada || '12:00') + ':00',
+        partida: date + 'T' + normalizeTime(item.partida) + ':00',
+        chegada: arrivalDate + 'T' + normalizeTime(item.chegada) + ':00',
         origem: origin.toUpperCase(),
         destino: destination.toUpperCase(),
         duracao_min: item.duracao_min || 0,
@@ -443,6 +505,9 @@ function mapToFlightOffer(item, origin, destination, date, idx) {
         voo_numero: '',
         segmentos: item.segmentos || [],
         layoverCity: item.layoverCity || '',
+        layoverDurations: item.layoverDurations || [],
+        numeroVoos: item.numeroVoos || [],
+        aeronaves: item.aeronaves || [],
         flight_key: `gf-${origin}-${destination}-${date}-${idx}`,
         provider: 'google',
     };

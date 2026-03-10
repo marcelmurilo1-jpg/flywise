@@ -110,75 +110,17 @@ export function InteractiveGlobe({
   const dotsRef = useRef<[number, number, number][]>([]);
 
   useEffect(() => {
-    // lat/lng bounding boxes for major land masses
-    const landBoxes: [number, number, number, number][] = [
-      // [latMin, latMax, lngMin, lngMax]
-      // North America
-      [25, 72, -168, -52],
-      // Alaska
-      [55, 72, -170, -130],
-      // Central America
-      [7, 25, -92, -60],
-      // Caribbean islands (rough)
-      [10, 24, -85, -59],
-      // South America
-      [-56, 13, -82, -34],
-      // Europe (mainland)
-      [36, 72, -12, 40],
-      // UK & Ireland
-      [49, 61, -11, 2],
-      // Iceland
-      [63, 67, -25, -13],
-      // Greenland
-      [59, 84, -57, -17],
-      // Africa
-      [-35, 38, -18, 52],
-      // Middle East / Arabian Peninsula
-      [14, 42, 25, 63],
-      // Central Asia / Russia (west)
-      [40, 78, 40, 90],
-      // Siberia / Russia (east)
-      [50, 78, 90, 180],
-      // South Asia
-      [5, 37, 60, 98],
-      // Southeast Asia (mainland)
-      [0, 29, 92, 122],
-      // Southeast Asia (islands)
-      [-10, 18, 95, 141],
-      // East Asia
-      [18, 54, 100, 145],
-      // Japan
-      [30, 46, 129, 146],
-      // Australia
-      [-40, -10, 113, 155],
-      // New Zealand
-      [-47, -34, 166, 179],
-      // Papua New Guinea
-      [-10, -1, 140, 152],
-    ];
-
-    function isLand(lat: number, lng: number): boolean {
-      for (const [latMin, latMax, lngMin, lngMax] of landBoxes) {
-        if (lat >= latMin && lat <= latMax && lng >= lngMin && lng <= lngMax) return true;
-      }
-      return false;
-    }
-
     const dots: [number, number, number][] = [];
-    const numCandidates = 8000;
+    const numCandidates = 2000;
     const goldenRatio = (1 + Math.sqrt(5)) / 2;
     for (let i = 0; i < numCandidates; i++) {
       const theta = (2 * Math.PI * i) / goldenRatio;
       const phi = Math.acos(1 - (2 * (i + 0.5)) / numCandidates);
-      const lat = 90 - (phi * 180) / Math.PI;
-      const lng = ((theta * 180) / Math.PI) % 360 - 180;
-      if (isLand(lat, lng)) {
-        dots.push([
-          Math.cos(theta) * Math.sin(phi),
-          Math.cos(phi),
-          Math.sin(theta) * Math.sin(phi),
-        ]);
-      }
+      dots.push([
+        Math.cos(theta) * Math.sin(phi),
+        Math.cos(phi),
+        Math.sin(theta) * Math.sin(phi),
+      ]);
     }
     dotsRef.current = dots;
   }, []);
