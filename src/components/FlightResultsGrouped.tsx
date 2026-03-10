@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plane, SlidersHorizontal, X, CheckCircle2 } from 'lucide-react'
+import { Plane, SlidersHorizontal, X, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ResultadoVoo } from '@/lib/supabase'
 import { StrategyPanel } from '@/components/StrategyPanel'
@@ -11,6 +11,7 @@ import type { FilterState } from '@/components/Sidebar'
 interface SearchInfo { origem: string; destino: string; data_ida: string; passageiros: number }
 interface FlightResultsGroupedProps {
     flights: ResultadoVoo[]
+    inboundFlights?: ResultadoVoo[]
     buscaId: number
     searchInfo?: SearchInfo
     onNewSearch: () => void
@@ -110,11 +111,21 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
     )
 }
 
-export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch, sidebarFilters }: FlightResultsGroupedProps) {
+export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, searchInfo, onNewSearch, sidebarFilters }: FlightResultsGroupedProps) {
     const [selFlight, setSelFlight] = useState<ResultadoVoo | null>(null)
     const [panelOpen, setPanelOpen] = useState(false)
     const [amadPhase, setAmadPhase] = useState<'browsing' | 'ida-sel' | 'confirmed'>('browsing')
     const [amadSel, setAmadSel] = useState<ResultadoVoo | null>(null)
+    const [amadReturnSel, setAmadReturnSel] = useState<ResultadoVoo | null>(null)
+    const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
+
+    function toggleExpand(id: string) {
+        setExpandedCards(prev => {
+            const next = new Set(prev)
+            next.has(id) ? next.delete(id) : next.add(id)
+            return next
+        })
+    }
 
     // Reset selection when flights list changes (new search)
     useEffect(() => {
@@ -440,104 +451,111 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
 
             {/* ── Flight cards ─────────────────────────────────────────────── */}
             {(() => {
-                const isRoundTrip = sorted.some(f => !!(f.detalhes as any)?.returnPartida)
+                const hasInbound = inboundFlights.length > 0
+                const isRoundTrip = sorted.some(f => !!(f.detalhes as any)?.returnPartida) || hasInbound
                 const displayFlights = (amadPhase === 'ida-sel' || amadPhase === 'confirmed') && amadSel
                     ? sorted.filter(f => f.id === amadSel.id)
                     : sorted
-                return (
-                    <AnimatePresence>
-                        {displayFlights.map((flight, idx) => {
-                            const det = (flight.detalhes as any) ?? {}
-                            const segsOut = (flight.segmentos as any[]) ?? []
-                            const segsRet = (det.returnSegmentos as any[]) ?? []
-                            const hasReturn = !!det.returnPartida
-                            const iata = extractIata(flight.companhia)
-                            const estimatedMiles = Math.round(((flight.preco_brl ?? 0) * 55) / 1000) * 1000
-                            const isActive = amadSel?.id === flight.id && amadPhase !== 'browsing'
-                            const showReturn = hasReturn && (isActive || !isRoundTrip)
 
-                            return (
-                                <motion.div
-                                    key={flight.id ?? idx}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                                    transition={{ delay: idx * 0.04 }}
-                                    style={{
-                                        background: '#fff',
-                                        border: `2px solid ${isActive ? '#16A34A' : 'var(--border-light)'}`,
-                                        borderRadius: 16,
-                                        marginBottom: 12,
-                                        overflow: 'hidden',
-                                    }}
-                                >
-                                    {/* Green banner when ida selected */}
-                                    {isActive && (
-                                        <div style={{ background: '#16A34A', padding: '6px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <CheckCircle2 size={13} color="#fff" />
-                                                <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: '0.05em' }}>
-                                                    {amadPhase === 'confirmed' ? 'VIAGEM CONFIRMADA' : 'IDA SELECIONADA'}
-                                                </span>
-                                            </div>
-                                            {amadPhase === 'ida-sel' && (
-                                                <button
-                                                    onClick={() => { setAmadPhase('browsing'); setAmadSel(null) }}
-                                                    style={{ background: 'none', border: 'none', fontSize: 11, color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontFamily: 'inherit', padding: 0, fontWeight: 600 }}
-                                                >
-                                                    ← Mudar ida
-                                                </button>
-                                            )}
-                                            {amadPhase === 'confirmed' && (
-                                                <button
-                                                    onClick={() => { setAmadPhase('browsing'); setAmadSel(null) }}
-                                                    style={{ background: 'none', border: 'none', fontSize: 11, color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontFamily: 'inherit', padding: 0, fontWeight: 600 }}
-                                                >
-                                                    ← Ver todas as opções
-                                                </button>
-                                            )}
-                                        </div>
+                function FlightCard({ flight, idx, isReturn = false }: { flight: ResultadoVoo; idx: number; isReturn?: boolean }) {
+                    const det = (flight.detalhes as any) ?? {}
+                    const segsOut = (flight.segmentos as any[]) ?? []
+                    const segsRet = (det.returnSegmentos as any[]) ?? []
+                    const hasReturn = !!det.returnPartida
+                    const iata = extractIata(flight.companhia)
+                    const estimatedMiles = Math.round(((flight.preco_brl ?? 0) * 55) / 1000) * 1000
+                    const isActive = !isReturn && amadSel?.id === flight.id && amadPhase !== 'browsing'
+                    const showReturn = hasReturn && (isActive || !isRoundTrip) && !hasInbound
+                    const cardId = flight.flight_key ?? `${idx}`
+                    const isExpanded = expandedCards.has(cardId)
+                    const layoverCity = det.layoverCity || ''
+                    const connectionStr = layoverCity
+                        ? `${det.paradas ?? 1} conexão · ${layoverCity}`
+                        : stopCodes(segsOut)
+
+                    return (
+                        <motion.div
+                            key={cardId}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                            transition={{ delay: idx * 0.04 }}
+                            style={{
+                                background: '#fff',
+                                border: `2px solid ${isActive ? '#16A34A' : isReturn ? '#2A60C2' : 'var(--border-light)'}`,
+                                borderRadius: 16,
+                                marginBottom: 12,
+                                overflow: 'hidden',
+                            }}
+                        >
+                            {/* Green banner when ida selected */}
+                            {isActive && (
+                                <div style={{ background: '#16A34A', padding: '6px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <CheckCircle2 size={13} color="#fff" />
+                                        <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: '0.05em' }}>
+                                            {amadPhase === 'confirmed' ? 'VIAGEM CONFIRMADA' : 'IDA SELECIONADA'}
+                                        </span>
+                                    </div>
+                                    {amadPhase === 'ida-sel' && (
+                                        <button onClick={() => { setAmadPhase('browsing'); setAmadSel(null); setAmadReturnSel(null) }}
+                                            style={{ background: 'none', border: 'none', fontSize: 11, color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontFamily: 'inherit', padding: 0, fontWeight: 600 }}>
+                                            ← Mudar ida
+                                        </button>
                                     )}
+                                    {amadPhase === 'confirmed' && (
+                                        <button onClick={() => { setAmadPhase('browsing'); setAmadSel(null); setAmadReturnSel(null) }}
+                                            style={{ background: 'none', border: 'none', fontSize: 11, color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontFamily: 'inherit', padding: 0, fontWeight: 600 }}>
+                                            ← Ver todas as opções
+                                        </button>
+                                    )}
+                                </div>
+                            )}
 
-                                    {/* Top: airline + price */}
-                                    <div className="fly-card-top" style={{
-                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                        padding: '16px 20px',
-                                        borderBottom: '1px solid #F1F5F9',
-                                        background: idx === 0 && sidebarFilters?.sortBy === 'price' ? '#FAFBFF' : '#fff',
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <div style={{ width: 4, height: 32, borderRadius: 4, background: '#0E2A55' }} />
-                                            <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                    <span style={{ fontSize: 15, fontWeight: 700, color: '#0E2A55' }}>{flight.companhia}</span>
-                                                    {det.voo_numero && <span style={{ fontSize: 11, color: '#94A3B8' }}>{det.voo_numero}</span>}
-                                                </div>
-                                                {iata && (
-                                                    <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
-                                                        {['Smiles', 'LATAM Pass', 'TudoAzul', 'Livelo'].filter(p => airlineMatchesPrograms(iata, [p])).map(prog => (
-                                                            <span key={prog} style={{ fontSize: 9, fontWeight: 700, color: '#64748B', background: '#F1F5F9', padding: '1px 6px', borderRadius: 4 }}>{prog}</span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
+                            {/* Top: airline + price */}
+                            <div className="fly-card-top" style={{
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                padding: '16px 20px', borderBottom: '1px solid #F1F5F9',
+                                background: idx === 0 && sidebarFilters?.sortBy === 'price' ? '#FAFBFF' : '#fff',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <div style={{ width: 4, height: 32, borderRadius: 4, background: isReturn ? '#2A60C2' : '#0E2A55' }} />
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ fontSize: 15, fontWeight: 700, color: '#0E2A55' }}>{flight.companhia}</span>
+                                            {det.voo_numero && <span style={{ fontSize: 11, color: '#94A3B8' }}>{det.voo_numero}</span>}
                                         </div>
-
-                                        <div className="fly-card-right" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                                                <div style={{ textAlign: 'center' }}>
-                                                    <div style={{ fontSize: 10, fontWeight: 700, color: '#2A60C2', textTransform: 'uppercase', marginBottom: 2 }}>Milhas</div>
-                                                    <div style={{ fontSize: 18, fontWeight: 800, color: '#1E3A7A', letterSpacing: '-0.01em' }}>{estimatedMiles.toLocaleString('pt-BR')}</div>
-                                                    <div style={{ fontSize: 9, color: '#94A3B8' }}>Pts estimados</div>
-                                                </div>
-                                                <div style={{ width: 1, height: 30, background: '#E2EAF5' }} />
-                                                <div style={{ textAlign: 'center' }}>
-                                                    <div style={{ fontSize: 10, fontWeight: 700, color: '#0E2A55', textTransform: 'uppercase', marginBottom: 2 }}>Dinheiro</div>
-                                                    <div style={{ fontSize: 18, fontWeight: 800, color: '#0E2A55', letterSpacing: '-0.01em' }}>R$ {flight.preco_brl?.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</div>
-                                                    <div style={{ fontSize: 9, color: '#94A3B8' }}>preço final</div>
-                                                </div>
+                                        {iata && (
+                                            <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+                                                {['Smiles', 'LATAM Pass', 'TudoAzul', 'Livelo'].filter(p => airlineMatchesPrograms(iata, [p])).map(prog => (
+                                                    <span key={prog} style={{ fontSize: 9, fontWeight: 700, color: '#64748B', background: '#F1F5F9', padding: '1px 6px', borderRadius: 4 }}>{prog}</span>
+                                                ))}
                                             </div>
-                                            <div className="fly-card-actions" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="fly-card-right" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <div style={{ fontSize: 10, fontWeight: 700, color: '#2A60C2', textTransform: 'uppercase', marginBottom: 2 }}>Milhas</div>
+                                            <div style={{ fontSize: 18, fontWeight: 800, color: '#1E3A7A', letterSpacing: '-0.01em' }}>{estimatedMiles.toLocaleString('pt-BR')}</div>
+                                            <div style={{ fontSize: 9, color: '#94A3B8' }}>Pts estimados</div>
+                                        </div>
+                                        <div style={{ width: 1, height: 30, background: '#E2EAF5' }} />
+                                        <div style={{ textAlign: 'center' }}>
+                                            <div style={{ fontSize: 10, fontWeight: 700, color: '#0E2A55', textTransform: 'uppercase', marginBottom: 2 }}>Dinheiro</div>
+                                            <div style={{ fontSize: 18, fontWeight: 800, color: '#0E2A55', letterSpacing: '-0.01em' }}>R$ {flight.preco_brl?.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</div>
+                                            <div style={{ fontSize: 9, color: '#94A3B8' }}>preço final</div>
+                                        </div>
+                                    </div>
+                                    <div className="fly-card-actions" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {isReturn ? (
+                                            <button onClick={() => { setAmadReturnSel(flight); setAmadPhase('confirmed') }}
+                                                style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
+                                                Confirmar Volta ✓
+                                            </button>
+                                        ) : (
+                                            <>
                                                 {amadPhase === 'browsing' && isRoundTrip && (
                                                     <button onClick={() => { setAmadSel(flight); setAmadPhase('ida-sel') }}
                                                         style={{ background: '#0E2A55', color: '#fff', border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
@@ -548,37 +566,137 @@ export function FlightResultsGrouped({ flights, buscaId, searchInfo, onNewSearch
                                                     style={{ background: 'none', color: '#0E2A55', border: '1px solid #CBD5E1', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
                                                     Ver Detalhes
                                                 </button>
-                                            </div>
-                                        </div>
+                                            </>
+                                        )}
                                     </div>
+                                </div>
+                            </div>
 
-                                    {/* Outbound leg */}
-                                    <div style={{ padding: '16px 20px', borderBottom: showReturn ? '1px dashed #E2EAF5' : 'none' }}>
-                                        <FlightLeg label="Ida" from={flight.origem ?? ''} to={flight.destino ?? ''} departure={formatTime(flight.partida)} arrival={formatTime(flight.chegada)} duration={formatDur(flight.duracao_min)} stops={det.paradas ?? 0} stopStr={stopCodes(segsOut)} dateStr={formatDate(flight.partida)} />
-                                    </div>
+                            {/* Outbound leg */}
+                            <div style={{ padding: '16px 20px', borderBottom: (showReturn || isExpanded) ? '1px dashed #E2EAF5' : 'none' }}>
+                                <FlightLeg
+                                    label={isReturn ? 'Volta' : 'Ida'}
+                                    from={flight.origem ?? ''} to={flight.destino ?? ''}
+                                    departure={formatTime(flight.partida)} arrival={formatTime(flight.chegada)}
+                                    duration={formatDur(flight.duracao_min)}
+                                    stops={det.paradas ?? 0}
+                                    stopStr={connectionStr}
+                                    dateStr={formatDate(flight.partida)}
+                                />
+                            </div>
 
-                                    {/* Return leg */}
-                                    {showReturn && (
-                                        <div style={{ padding: '16px 20px', background: '#FAFBFF' }}>
-                                            <FlightLeg label="Volta" from={det.returnOrigem ?? ''} to={det.returnDestino ?? ''} departure={formatTime(det.returnPartida)} arrival={formatTime(det.returnChegada)} duration={formatDur(det.returnDuracaoMin)} stops={det.returnParadas ?? 0} stopStr={stopCodes(segsRet)} dateStr={formatDate(det.returnPartida)} />
+                            {/* Return leg (Amadeus combined) */}
+                            {showReturn && (
+                                <div style={{ padding: '16px 20px', background: '#FAFBFF', borderBottom: isExpanded ? '1px dashed #E2EAF5' : 'none' }}>
+                                    <FlightLeg label="Volta" from={det.returnOrigem ?? ''} to={det.returnDestino ?? ''} departure={formatTime(det.returnPartida)} arrival={formatTime(det.returnChegada)} duration={formatDur(det.returnDuracaoMin)} stops={det.returnParadas ?? 0} stopStr={stopCodes(segsRet)} dateStr={formatDate(det.returnPartida)} />
+                                </div>
+                            )}
+
+                            {/* Expandable segment details */}
+                            {isExpanded && (
+                                <div style={{ padding: '12px 20px', background: '#F8FAFC', borderBottom: '1px dashed #E2EAF5' }}>
+                                    {segsOut.length > 0 ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                            {segsOut.map((seg: any, si: number) => (
+                                                <div key={si}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                                                        <span style={{ fontWeight: 700, color: '#0E2A55' }}>{seg.origem}</span>
+                                                        <span style={{ color: '#64748B' }}>{seg.partida?.slice(11, 16) ?? seg.partida}</span>
+                                                        <span style={{ color: '#94A3B8' }}>→</span>
+                                                        <span style={{ fontWeight: 700, color: '#0E2A55' }}>{seg.destino}</span>
+                                                        <span style={{ color: '#64748B' }}>{seg.chegada?.slice(11, 16) ?? seg.chegada}</span>
+                                                        {seg.duracao_min > 0 && <span style={{ color: '#94A3B8', fontSize: 11 }}>· {formatDur(seg.duracao_min)}</span>}
+                                                    </div>
+                                                    {si < segsOut.length - 1 && layoverCity && (
+                                                        <div style={{ fontSize: 11, color: '#64748B', paddingLeft: 8, marginTop: 4 }}>
+                                                            ↳ Conexão em {layoverCity}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
-                                    )}
-
-                                    {/* Confirm volta button */}
-                                    {amadPhase === 'ida-sel' && isActive && hasReturn && (
-                                        <div style={{ padding: '12px 20px', borderTop: '1px solid #E2EAF5', display: 'flex', justifyContent: 'flex-end' }}>
-                                            <button
-                                                onClick={() => setAmadPhase('confirmed')}
-                                                style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-                                            >
-                                                Confirmar Volta →
-                                            </button>
+                                    ) : (det.paradas ?? 0) > 0 && layoverCity ? (
+                                        <div style={{ fontSize: 12, color: '#64748B' }}>
+                                            <span style={{ fontWeight: 600 }}>Conexão:</span> {layoverCity}
                                         </div>
+                                    ) : (
+                                        <div style={{ fontSize: 12, color: '#94A3B8' }}>Voo direto</div>
                                     )}
-                                </motion.div>
-                            )
-                        })}
-                    </AnimatePresence>
+                                </div>
+                            )}
+
+                            {/* Expand/collapse toggle */}
+                            <button
+                                onClick={() => toggleExpand(cardId)}
+                                style={{
+                                    width: '100%', background: 'none', border: 'none', borderTop: '1px solid #F1F5F9',
+                                    padding: '6px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                    cursor: 'pointer', color: '#64748B', fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+                                }}
+                            >
+                                {isExpanded ? <><ChevronUp size={13} /> Ocultar detalhes</> : <><ChevronDown size={13} /> Ver detalhes do voo</>}
+                            </button>
+
+                            {/* Confirm volta button (Amadeus combined) */}
+                            {amadPhase === 'ida-sel' && isActive && hasReturn && !hasInbound && (
+                                <div style={{ padding: '12px 20px', borderTop: '1px solid #E2EAF5', display: 'flex', justifyContent: 'flex-end' }}>
+                                    <button onClick={() => setAmadPhase('confirmed')}
+                                        style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                        Confirmar Volta →
+                                    </button>
+                                </div>
+                            )}
+                        </motion.div>
+                    )
+                }
+
+                return (
+                    <>
+                        <AnimatePresence>
+                            {displayFlights.map((flight, idx) => (
+                                <FlightCard key={flight.flight_key ?? idx} flight={flight} idx={idx} />
+                            ))}
+                        </AnimatePresence>
+
+                        {/* ── Voos de volta (Google scraper round-trip) ─────── */}
+                        {amadPhase === 'ida-sel' && hasInbound && (
+                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 12px' }}>
+                                    <div style={{ flex: 1, height: 1, background: '#E2EAF5' }} />
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#2A60C2', whiteSpace: 'nowrap' }}>
+                                        ✈ Selecione o voo de volta
+                                    </span>
+                                    <div style={{ flex: 1, height: 1, background: '#E2EAF5' }} />
+                                </div>
+                                <AnimatePresence>
+                                    {inboundFlights.map((flight, idx) => (
+                                        <FlightCard key={flight.flight_key ?? `in-${idx}`} flight={flight} idx={idx} isReturn />
+                                    ))}
+                                </AnimatePresence>
+                            </motion.div>
+                        )}
+
+                        {/* Volta confirmada summary */}
+                        {amadPhase === 'confirmed' && amadReturnSel && hasInbound && (
+                            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                                style={{ background: '#F0FDF4', border: '2px solid #16A34A', borderRadius: 14, padding: '14px 20px', marginBottom: 12 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                                    <CheckCircle2 size={14} color="#16A34A" />
+                                    <span style={{ fontSize: 12, fontWeight: 800, color: '#16A34A' }}>VOLTA CONFIRMADA</span>
+                                </div>
+                                <FlightLeg label="Volta" from={amadReturnSel.origem ?? ''} to={amadReturnSel.destino ?? ''}
+                                    departure={formatTime(amadReturnSel.partida)} arrival={formatTime(amadReturnSel.chegada)}
+                                    duration={formatDur(amadReturnSel.duracao_min)}
+                                    stops={(amadReturnSel.detalhes as any)?.paradas ?? 0}
+                                    stopStr="" />
+                                <div style={{ textAlign: 'right', marginTop: 8 }}>
+                                    <span style={{ fontSize: 14, fontWeight: 800, color: '#0E2A55' }}>
+                                        Total estimado: R$ {((amadSel?.preco_brl ?? 0) + (amadReturnSel.preco_brl ?? 0)).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                                    </span>
+                                </div>
+                            </motion.div>
+                        )}
+                    </>
                 )
             })()}
 

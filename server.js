@@ -273,7 +273,15 @@ async function getBrowser() {
 process.on('SIGTERM', async () => { if (_browser) await _browser.close(); process.exit(0); });
 process.on('SIGINT',  async () => { if (_browser) await _browser.close(); process.exit(0); });
 
-async function scrapeGoogleFlights(origin, destination, date, returnDate = null) {
+// Adiciona N dias a uma string de data "YYYY-MM-DD"
+function addDaysToDate(dateStr, days) {
+    if (!days) return dateStr;
+    const d = new Date(dateStr + 'T12:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+}
+
+async function scrapeOneway(origin, destination, date) {
     return scrapeLimit(async () => {
         const browser = await getBrowser();
         const context = await browser.newContext({
@@ -284,42 +292,28 @@ async function scrapeGoogleFlights(origin, destination, date, returnDate = null)
         });
         const page = await context.newPage();
 
-        // Intercepta respostas com dados de voos (JSON com ofertas)
-        const captured = [];
-        page.on('response', async (response) => {
-            const url = response.url();
-            if (!url.includes('travel/flights') && !url.includes('tfs=')) return;
-            const ct = response.headers()['content-type'] ?? '';
-            if (!ct.includes('json')) return;
-            try {
-                const json = await response.json().catch(() => null);
-                if (json) captured.push(json);
-            } catch {}
-        });
-
         try {
-            const tripParam = returnDate ? '' : '+one+way';
-            const returnParam = returnDate ? `+return+${returnDate}` : '';
-            const query = encodeURIComponent(`Flights from ${origin} to ${destination} on ${date}${returnParam}${tripParam}`);
+            const query = encodeURIComponent(`Flights from ${origin} to ${destination} on ${date} one way`);
             const url = `https://www.google.com/travel/flights?q=${query}&curr=BRL&hl=pt-BR`;
 
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
-            // Aguarda resultados aparecerem (vários seletores possíveis)
             await Promise.race([
                 page.waitForSelector('li.pIav2d', { timeout: 20000 }),
-                page.waitForSelector('[data-travelport-identifier]', { timeout: 20000 }),
                 page.waitForSelector('ul[role="list"] li', { timeout: 20000 }),
-            ]).catch(() => console.log('[GFlights] Timeout aguardando seletor — tentando extrair mesmo assim'));
+            ]).catch(() => console.log(`[GFlights] ${origin}→${destination}: timeout aguardando seletor`));
 
-            // Pequena pausa para garantir que os dados de rede foram capturados
+            await page.waitForTimeout(2000);
+
+            // Clica em todos os botões "ver detalhes" de uma vez
+            await page.evaluate(() => {
+                document.querySelectorAll('button[jsname="sTDI0"], [jsaction*="flight.detail"], button[aria-label*="etalhes"]')
+                    .forEach(b => { try { b.click(); } catch (_) {} });
+            }).catch(() => {});
             await page.waitForTimeout(1500);
 
-            // Extrai dados do DOM como fallback
-            const domFlights = await page.evaluate(() => {
+            const flights = await page.evaluate(() => {
                 const results = [];
-
-                // Seletores em ordem de preferência
                 const selectors = ['li.pIav2d', 'li[data-id]', 'ul[jsname] > li'];
                 let items = [];
                 for (const sel of selectors) {
@@ -327,55 +321,103 @@ async function scrapeGoogleFlights(origin, destination, date, returnDate = null)
                     if (items.length > 0) break;
                 }
 
-                items.forEach((node, idx) => {
-                    const text = node.innerText ?? '';
-                    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-                    if (lines.length < 4) return;
+                items.slice(0, 15).forEach((node) => {
+                    const lines = (node.innerText ?? '').split('\n').map(l => l.trim()).filter(Boolean);
+                    if (lines.length < 3) return;
 
-                    // Preço: linha contendo R$ ou apenas dígitos/vírgula após "R"
-                    const priceLine = lines.find(l => /R\$|BRL/.test(l) || /^\d[\d.,]+$/.test(l));
-                    const priceRaw = priceLine ? priceLine.replace(/[^\d]/g, '') : '0';
-                    const price = parseInt(priceRaw, 10) || 0;
+                    // ─ Horários: suporta "HH:MM – HH:MM+N" numa linha OU linhas separadas ─
+                    let departure = '', arrival = '', arrivalOffset = 0;
+                    const rangeMatch = lines.find(l => /\d{1,2}:\d{2}\s*[–\-]\s*\d{1,2}:\d{2}/.test(l));
+                    if (rangeMatch) {
+                        const m = rangeMatch.match(/(\d{1,2}:\d{2})\s*[–\-]\s*(\d{1,2}:\d{2})(\+(\d+))?/);
+                        if (m) { departure = m[1]; arrival = m[2]; arrivalOffset = m[4] ? parseInt(m[4]) : 0; }
+                    } else {
+                        const parsedTimes = [];
+                        for (let i = 0; i < lines.length; i++) {
+                            const l = lines[i];
+                            // "HH:MM" exato
+                            if (/^\d{1,2}:\d{2}$/.test(l)) {
+                                const offset = (lines[i + 1] ?? '').match(/^\+(\d+)$/) ? parseInt(lines[i + 1].slice(1)) : 0;
+                                parsedTimes.push({ time: l, offset });
+                            }
+                            // "HH:MM+1" concatenado
+                            else if (/^\d{1,2}:\d{2}\+\d+$/.test(l)) {
+                                const m = l.match(/^(\d{1,2}:\d{2})\+(\d+)$/);
+                                if (m) parsedTimes.push({ time: m[1], offset: parseInt(m[2]) });
+                            }
+                        }
+                        if (parsedTimes.length >= 2) {
+                            departure = parsedTimes[0].time;
+                            arrival   = parsedTimes[1].time;
+                            arrivalOffset = parsedTimes[1].offset;
+                        } else if (parsedTimes.length === 1) {
+                            departure = parsedTimes[0].time;
+                        }
+                    }
 
-                    // Horários: padrão HH:MM
-                    const times = lines.filter(l => /^\d{1,2}:\d{2}$/.test(l));
-                    const departure = times[0] ?? '';
-                    const arrival   = times[1] ?? '';
+                    // ─ Duração ─
+                    let durationMin = 0;
+                    const durLine = lines.find(l => /\d+\s*h(\s*\d+\s*min)?/.test(l) && !/R\$/.test(l) && !/[A-Z]{3}/.test(l.slice(0, 3)));
+                    if (durLine) {
+                        const m = durLine.match(/(\d+)\s*h(?:\s*(\d+)\s*min)?/);
+                        if (m) durationMin = parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0);
+                    }
 
-                    // Duração: padrão "Xh Ymin" ou "X h Y min"
-                    const durationLine = lines.find(l => /\d+\s*h/.test(l) && !/R\$/.test(l));
+                    // ─ Paradas e cidade de conexão ─
+                    const stopsLine = lines.find(l => /direto|nonstop|sem\s+escala|\d\s*parada|\d\s*stop/i.test(l)) ?? '';
+                    const stops = /direto|nonstop|sem\s+escala/i.test(stopsLine) ? 0
+                        : (stopsLine.match(/(\d+)/) ? parseInt(stopsLine.match(/(\d+)/)[1]) : 1);
 
-                    // Companhia aérea: heurística — linha sem números, após os horários
-                    const airlineGuess = lines.find(l =>
-                        !/\d{1,2}:\d{2}/.test(l) &&
-                        !/R\$/.test(l) &&
-                        !/\d+\s*h/.test(l) &&
+                    // Linha de conexão: "3 h 45 min em Bogotá" ou "5h35 em GRU"
+                    const layoverLine = lines.find(l =>
+                        /\bem\s+[A-ZÁÉÍÓÚ]/i.test(l) ||
+                        (/\d+\s*h/.test(l) && /[A-Z]{3}/.test(l) && !/R\$/.test(l) && l !== stopsLine)
+                    ) ?? '';
+                    const layoverCity = layoverLine
+                        ? (layoverLine.match(/em\s+([A-ZÁÉÍÓÚa-záéíóú\s\-]+)/i)?.[1]?.trim() ||
+                           layoverLine.match(/\b([A-Z]{3})\b/)?.[1] || '')
+                        : '';
+
+                    // ─ Preço ─
+                    const priceLine = lines.find(l => /R\$/.test(l));
+                    const price = priceLine ? parseInt(priceLine.replace(/[^\d]/g, ''), 10) || 0 : 0;
+
+                    // ─ Companhia ─
+                    const airlineLine = lines.find(l =>
+                        !/\d{1,2}:\d{2}/.test(l) && !/R\$/.test(l) &&
+                        !/^\d+\s*h/.test(l) && !/direto|parada|escala|nonstop/i.test(l) &&
+                        !/^\+\d/.test(l) && !/^[–\-]/.test(l) &&
                         l.length > 2 && l.length < 60
                     ) ?? '';
 
-                    // Paradas
-                    const stopsLine = lines.find(l => /direto|sem escala|parada|stop/i.test(l)) ?? '';
-                    const stops = /direto|sem escala|nonstop/i.test(stopsLine) ? 0 : 1;
-
-                    results.push({
-                        idx,
-                        companhia: airlineGuess,
-                        partida: departure,
-                        chegada: arrival,
-                        duracao: durationLine ?? '',
-                        paradas: stops,
-                        preco_brl: price,
-                        raw_lines: lines.slice(0, 10),
+                    // ─ Segmentos (se botão expandido funcionou) ─
+                    const segments = [];
+                    node.querySelectorAll('[data-leg-index], [jsname="PkNyj"], .P2UJoe').forEach(segEl => {
+                        const segLines = (segEl.innerText ?? '').split('\n').map(l => l.trim()).filter(Boolean);
+                        const segTimes = segLines.filter(l => /^\d{1,2}:\d{2}$/.test(l));
+                        const segIatas = segLines.filter(l => /^[A-Z]{3}$/.test(l));
+                        if (segTimes.length >= 2) {
+                            const durEl = segLines.find(l => /\d+\s*h/.test(l) && !/R\$/.test(l));
+                            let segDur = 0;
+                            if (durEl) { const dm = durEl.match(/(\d+)\s*h(?:\s*(\d+))?/); if (dm) segDur = parseInt(dm[1]) * 60 + (dm[2] ? parseInt(dm[2]) : 0); }
+                            segments.push({
+                                partida: segTimes[0], chegada: segTimes[1],
+                                origem: segIatas[0] ?? '', destino: segIatas[1] ?? '',
+                                duracao_min: segDur,
+                            });
+                        }
                     });
+
+                    results.push({ companhia: airlineLine, partida: departure, chegada: arrival, chegadaOffset: arrivalOffset, duracao_min: durationMin, paradas: stops, layoverCity, preco_brl: price, segmentos: segments });
                 });
 
                 return results;
             });
 
             await context.close();
-            return domFlights;
+            return flights;
         } catch (err) {
-            console.error('[GFlights] Erro ao fazer scraping:', err.message);
+            console.error(`[GFlights] ${origin}→${destination} erro:`, err.message);
             await context.close();
             return [];
         }
@@ -384,58 +426,50 @@ async function scrapeGoogleFlights(origin, destination, date, returnDate = null)
 
 // Converte resultado do scraper para o formato FlightOffer usado no frontend
 function mapToFlightOffer(item, origin, destination, date, idx) {
-    const dateStr = date + 'T' + (item.partida || '00:00') + ':00';
-    const arrivalStr = date + 'T' + (item.chegada || '00:00') + ':00';
+    const arrivalDate = addDaysToDate(date, item.chegadaOffset || 0);
     return {
         id: `gf-${idx}-${Date.now()}`,
         companhia: item.companhia || 'Companhia não identificada',
-        carrierCode: item.companhia?.slice(0, 2).toUpperCase() || 'XX',
+        carrierCode: (item.companhia ?? '').slice(0, 2).toUpperCase() || 'XX',
         preco_brl: item.preco_brl,
         taxas_brl: 0,
-        partida: dateStr,
-        chegada: arrivalStr,
+        partida: date + 'T' + (item.partida || '12:00') + ':00',
+        chegada: arrivalDate + 'T' + (item.chegada || '12:00') + ':00',
         origem: origin.toUpperCase(),
         destino: destination.toUpperCase(),
-        duracao_min: 0,
+        duracao_min: item.duracao_min || 0,
         paradas: item.paradas ?? 0,
         cabin_class: 'economy',
-        voo_numero: `${item.companhia?.slice(0, 2).toUpperCase() ?? 'XX'}${idx + 1}`,
-        segmentos: [],
+        voo_numero: '',
+        segmentos: item.segmentos || [],
+        layoverCity: item.layoverCity || '',
         flight_key: `gf-${origin}-${destination}-${date}-${idx}`,
         provider: 'google',
-        raw_lines: item.raw_lines,
     };
 }
 
-// GET /api/amadeus/flights — agora usa o scraper do Google Flights
+// GET /api/amadeus/flights — scraper do Google Flights (ida e volta em paralelo)
 app.get('/api/amadeus/flights', async (req, res) => {
-    const {
-        originLocationCode: origin,
-        destinationLocationCode: destination,
-        departureDate: date,
-        returnDate,
-    } = req.query;
+    const { originLocationCode: origin, destinationLocationCode: destination, departureDate: date, returnDate } = req.query;
 
     if (!origin || !destination || !date) {
         return res.status(400).json({ errors: [{ detail: 'origin, destination e departureDate são obrigatórios' }] });
     }
 
-    console.log(`[GFlights] Buscando ${origin} → ${destination} em ${date}${returnDate ? ` (volta: ${returnDate})` : ''}`);
+    console.log(`[GFlights] Buscando ${origin}→${destination} em ${date}${returnDate ? ` | volta ${destination}→${origin} em ${returnDate}` : ''}`);
 
     try {
-        const raw = await scrapeGoogleFlights(origin, destination, date, returnDate || null);
+        // Scrape ida e (se round-trip) volta em paralelo
+        const [rawOut, rawIn = []] = await Promise.all([
+            scrapeOneway(origin, destination, date),
+            returnDate ? scrapeOneway(destination, origin, returnDate) : Promise.resolve([]),
+        ]);
 
-        if (raw.length === 0) {
-            console.warn('[GFlights] Nenhum voo extraído — possível bloqueio ou mudança de seletor.');
-        }
+        const outbound = rawOut.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
+        const inbound  = rawIn.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
 
-        const offers = raw
-            .filter(item => item.preco_brl > 0)
-            .map((item, idx) => mapToFlightOffer(item, origin, destination, date, idx));
-
-        console.log(`[GFlights] ${offers.length} voos mapeados.`);
-        // Retorna no mesmo formato que o Amadeus para compatibilidade com o frontend
-        res.json({ data: offers, meta: { count: offers.length, source: 'google-flights-scraper' } });
+        console.log(`[GFlights] Ida: ${outbound.length} | Volta: ${inbound.length}`);
+        res.json({ data: outbound, inbound, meta: { count: outbound.length, source: 'google-flights-scraper' } });
     } catch (err) {
         console.error('[GFlights] Erro:', err.message);
         res.status(500).json({ errors: [{ detail: err.message }] });

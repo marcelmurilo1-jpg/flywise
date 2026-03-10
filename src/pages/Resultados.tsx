@@ -21,6 +21,7 @@ export default function Resultados() {
     const buscaId = parseInt(searchParams.get('buscaId') ?? '0', 10)
 
     const [flights, setFlights] = useState<ResultadoVoo[]>([])
+    const [inboundFlights, setInboundFlights] = useState<ResultadoVoo[]>([])
     const [busca, setBusca] = useState<Busca | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -170,7 +171,7 @@ export default function Resultados() {
                         setSeatsLoading(false)
                     })
 
-                const [offers] = await Promise.all([
+                const [searchResult] = await Promise.all([
                     searchFlights({
                         origin: orig,
                         destination: destP,
@@ -182,7 +183,10 @@ export default function Resultados() {
                     new Promise<void>(r => setTimeout(r, MIN_ANIM_MS)),
                 ])
 
-                console.log('[Resultados] Got', offers.length, 'offers from Amadeus')
+                const offers = searchResult.flights
+                const inboundOffers = searchResult.inboundFlights
+
+                console.log('[Resultados] Got', offers.length, 'offers from Amadeus', inboundOffers.length, 'inbound')
 
                 if (offers.length === 0) {
                     setFlights([])
@@ -225,8 +229,34 @@ export default function Resultados() {
                     created_at: new Date().toISOString(),
                 } as unknown as ResultadoVoo))
 
+                // Map inbound flights to ResultadoVoo rows
+                const inboundRows = inboundOffers.map(o => ({
+                    id: 0,
+                    busca_id: buscaId,
+                    user_id: user.id,
+                    provider: o.provider,
+                    companhia: o.companhia,
+                    preco_brl: o.preco_brl,
+                    preco_milhas: null,
+                    taxas_brl: o.taxas_brl,
+                    cpm: null,
+                    partida: o.partida,
+                    chegada: o.chegada,
+                    origem: o.origem,
+                    destino: o.destino,
+                    duracao_min: o.duracao_min,
+                    cabin_class: o.cabin_class,
+                    flight_key: o.flight_key,
+                    estrategia_disponivel: false,
+                    moeda: 'BRL',
+                    segmentos: o.segmentos,
+                    detalhes: { paradas: o.paradas, voo_numero: o.voo_numero, layoverCity: (o as any).layoverCity },
+                    created_at: new Date().toISOString(),
+                } as unknown as ResultadoVoo))
+
                 // Show results right away
                 setFlights(rows)
+                setInboundFlights(inboundRows)
 
                 // Save to Supabase in background (non-blocking)
                 const insertRows = rows.map(r => { const { id, ...rest } = r; return rest })
@@ -432,6 +462,7 @@ export default function Resultados() {
                                     </div>
                                     <FlightResultsGrouped
                                         flights={flights}
+                                        inboundFlights={inboundFlights}
                                         buscaId={buscaId}
                                         searchInfo={busca ? { origem: busca.origem, destino: busca.destino, data_ida: busca.data_ida, passageiros: busca.passageiros } : undefined}
                                         onNewSearch={() => { (document.querySelector('input[placeholder="De — GRU"]') as HTMLInputElement)?.focus() }}

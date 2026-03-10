@@ -95,8 +95,13 @@ export interface SearchFlightsParams {
     nonStop?: boolean
 }
 
+export interface FlightSearchResult {
+    flights: FlightOffer[]
+    inboundFlights: FlightOffer[]
+}
+
 /** Busca voos via proxy do servidor com timeout de 12s */
-export async function searchFlights(params: SearchFlightsParams): Promise<FlightOffer[]> {
+export async function searchFlights(params: SearchFlightsParams): Promise<FlightSearchResult> {
     const qp: Record<string, string> = {
         originLocationCode: params.origin.trim().toUpperCase(),
         destinationLocationCode: params.destination.trim().toUpperCase(),
@@ -137,10 +142,13 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
 
     // Se o backend já retornou dados mapeados (Google Flights scraper), devolve direto
     if (data.meta?.source === 'google-flights-scraper') {
-        return offers as FlightOffer[]
+        return {
+            flights: offers as FlightOffer[],
+            inboundFlights: (data.inbound ?? []) as FlightOffer[],
+        }
     }
 
-    return offers.map((offer): FlightOffer => {
+    const mappedFlights = offers.map((offer): FlightOffer => {
         const itin0 = offer.itineraries[0]
         const segs0: any[] = itin0.segments
         const first0 = segs0[0]
@@ -204,4 +212,5 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
             ...returnFields,
         }
     })
+    return { flights: mappedFlights, inboundFlights: [] }
 }
