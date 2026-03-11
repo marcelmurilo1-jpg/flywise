@@ -965,6 +965,34 @@ body {
     padding-bottom: 60px !important;
   }
 
+  /* Section: Alertas */
+  .landing-alerts-grid {
+    grid-template-columns: 1fr !important;
+    gap: 40px !important;
+  }
+
+  /* Alertas: deal text wraps instead of clipping */
+  .landing-alert-deal {
+    white-space: normal !important;
+  }
+
+  /* Alertas: hide timestamp on small screens to save space */
+  .landing-alert-time {
+    display: none !important;
+  }
+
+  /* Section: Roteiro */
+  .landing-roteiro-grid {
+    grid-template-columns: 1fr !important;
+    gap: 40px !important;
+  }
+
+  /* Roteiro: show text before mockup card on mobile */
+  .landing-roteiro-mockup {
+    order: 2 !important;
+    padding: 20px !important;
+  }
+
   /* Footer */
   .landing-footer {
     padding: 48px 20px 28px !important;
