@@ -21,21 +21,17 @@ type TravelStyle = 'Econômico' | 'Cultural' | 'Gastronômico' | 'Aventura' | 'C
 type Step = 'form' | 'loading' | 'result' | 'list' | 'list-loading' | 'view'
 type ExtraCategory = 'gastronomia' | 'cultura' | 'natureza' | 'compras'
 
-interface ActivityExtra {
+interface Activity {
     horario: string
     atividade: string
     local: string
     dica: string
+    lat?: number
+    lng?: number
 }
 
 interface DayPeriod {
-    horario?: string
-    atividade: string
-    local: string
-    dica: string
-    extras_atividades?: ActivityExtra[]
-    lat?: number
-    lng?: number
+    atividades: Activity[]
 }
 
 interface ItineraryDay {
@@ -106,14 +102,14 @@ const EXTRA_TABS: { key: ExtraCategory; label: string; Icon: React.ElementType }
 ]
 
 
-const BLANK_PERIOD: DayPeriod = { horario: '', atividade: '', local: '', dica: '', extras_atividades: [] }
-const BLANK_EXTRA: ActivityExtra = { horario: '', atividade: '', local: '', dica: '' }
+const BLANK_ACTIVITY: Activity = { horario: '', atividade: '', local: '', dica: '' }
+const BLANK_PERIOD: DayPeriod = { atividades: [{ ...BLANK_ACTIVITY }] }
 const BLANK_DAY = (dia: number): ItineraryDay => ({
     dia,
     tema: '',
-    manha: { ...BLANK_PERIOD },
-    tarde: { ...BLANK_PERIOD },
-    noite: { ...BLANK_PERIOD },
+    manha: { atividades: [{ ...BLANK_ACTIVITY }] },
+    tarde: { atividades: [{ ...BLANK_ACTIVITY }] },
+    noite: { atividades: [{ ...BLANK_ACTIVITY }] },
 })
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -197,7 +193,12 @@ export default function Roteiro() {
                 body: { itinerary_id: row.id },
             })
 
-            if (fnErr) throw new Error('Erro ao gerar roteiro. Tente novamente.')
+            if (fnErr) {
+                // Try to extract a more descriptive error from the response
+                const detail = (fnErr as any)?.context?.error || (fnErr as any)?.message || 'Erro ao gerar roteiro. Tente novamente.'
+                throw new Error(detail)
+            }
+            if (data?.error) throw new Error(data.error)
 
             const { result } = data
             setItinerary(result)
@@ -284,52 +285,34 @@ export default function Roteiro() {
         })
     }
 
-    const updatePeriod = (dayIdx: number, period: 'manha' | 'tarde' | 'noite', field: string, value: string) => {
-        setEditableItinerary(prev => {
-            if (!prev) return prev
-            const dias = [...prev.dias]
-            dias[dayIdx] = {
-                ...dias[dayIdx],
-                [period]: { ...dias[dayIdx][period], [field]: value },
-            }
-            return { ...prev, dias }
-        })
-    }
-
-    const addPeriodActivity = (dayIdx: number, period: 'manha' | 'tarde' | 'noite') => {
+    const setActivity = (dayIdx: number, period: 'manha' | 'tarde' | 'noite', actIdx: number, field: keyof Activity, value: string) => {
         setEditableItinerary(prev => {
             if (!prev) return prev
             const dias = [...prev.dias]
             const p = dias[dayIdx][period]
-            dias[dayIdx] = {
-                ...dias[dayIdx],
-                [period]: { ...p, extras_atividades: [...(p.extras_atividades ?? []), { ...BLANK_EXTRA }] },
-            }
+            const atividades = [...p.atividades]
+            atividades[actIdx] = { ...atividades[actIdx], [field]: value }
+            dias[dayIdx] = { ...dias[dayIdx], [period]: { atividades } }
             return { ...prev, dias }
         })
     }
 
-    const removePeriodActivity = (dayIdx: number, period: 'manha' | 'tarde' | 'noite', extraIdx: number) => {
+    const addActivity = (dayIdx: number, period: 'manha' | 'tarde' | 'noite') => {
         setEditableItinerary(prev => {
             if (!prev) return prev
             const dias = [...prev.dias]
             const p = dias[dayIdx][period]
-            dias[dayIdx] = {
-                ...dias[dayIdx],
-                [period]: { ...p, extras_atividades: (p.extras_atividades ?? []).filter((_, i) => i !== extraIdx) },
-            }
+            dias[dayIdx] = { ...dias[dayIdx], [period]: { atividades: [...p.atividades, { ...BLANK_ACTIVITY }] } }
             return { ...prev, dias }
         })
     }
 
-    const updatePeriodActivity = (dayIdx: number, period: 'manha' | 'tarde' | 'noite', extraIdx: number, field: keyof ActivityExtra, value: string) => {
+    const removeActivity = (dayIdx: number, period: 'manha' | 'tarde' | 'noite', actIdx: number) => {
         setEditableItinerary(prev => {
             if (!prev) return prev
             const dias = [...prev.dias]
             const p = dias[dayIdx][period]
-            const extras = [...(p.extras_atividades ?? [])]
-            extras[extraIdx] = { ...extras[extraIdx], [field]: value }
-            dias[dayIdx] = { ...dias[dayIdx], [period]: { ...p, extras_atividades: extras } }
+            dias[dayIdx] = { ...dias[dayIdx], [period]: { atividades: p.atividades.filter((_, i) => i !== actIdx) } }
             return { ...prev, dias }
         })
     }
@@ -687,11 +670,10 @@ export default function Roteiro() {
                                             onToggle={() => toggleDay(i)}
                                             onExpand={() => expandDay(i)}
                                             onUpdateTema={v => updateDayTema(i, v)}
-                                            onUpdatePeriod={(p, f, v) => updatePeriod(i, p, f, v)}
+                                            onSetActivity={(p, ai, f, v) => setActivity(i, p, ai, f, v)}
+                                            onAddActivity={p => addActivity(i, p)}
+                                            onRemoveActivity={(p, ai) => removeActivity(i, p, ai)}
                                             onRemove={() => removeDay(i)}
-                                            onAddActivity={p => addPeriodActivity(i, p)}
-                                            onRemoveActivity={(p, ei) => removePeriodActivity(i, p, ei)}
-                                            onUpdateActivity={(p, ei, f, v) => updatePeriodActivity(i, p, ei, f, v)}
                                         />
                                     ))}
 
@@ -890,7 +872,7 @@ export default function Roteiro() {
                                         </div>
                                     </div>
                                     {viewingTrip.result.dias.map((day, i) => (
-                                        <EditableDayCard key={i} day={day} index={i} isEditing={false} collapsed={viewCollapsedDays[i] ?? false} onToggle={() => toggleViewDay(i)} onExpand={() => expandViewDay(i)} onUpdateTema={() => {}} onUpdatePeriod={() => {}} onRemove={() => {}} onAddActivity={() => {}} onRemoveActivity={() => {}} onUpdateActivity={() => {}} />
+                                        <EditableDayCard key={i} day={day} index={i} isEditing={false} collapsed={viewCollapsedDays[i] ?? false} onToggle={() => toggleViewDay(i)} onExpand={() => expandViewDay(i)} onUpdateTema={() => {}} onSetActivity={() => {}} onAddActivity={() => {}} onRemoveActivity={() => {}} onRemove={() => {}} />
                                     ))}
                                     <TipsBudgetCard itinerary={viewingTrip.result} delayBase={viewingTrip.result.dias.length} />
                                 </div>
@@ -928,14 +910,13 @@ interface EditableDayCardProps {
     onToggle: () => void
     onExpand: () => void
     onUpdateTema: (v: string) => void
-    onUpdatePeriod: (p: 'manha' | 'tarde' | 'noite', f: string, v: string) => void
-    onRemove: () => void
+    onSetActivity: (p: 'manha' | 'tarde' | 'noite', actIdx: number, f: keyof Activity, v: string) => void
     onAddActivity: (p: 'manha' | 'tarde' | 'noite') => void
-    onRemoveActivity: (p: 'manha' | 'tarde' | 'noite', extraIdx: number) => void
-    onUpdateActivity: (p: 'manha' | 'tarde' | 'noite', extraIdx: number, f: keyof ActivityExtra, v: string) => void
+    onRemoveActivity: (p: 'manha' | 'tarde' | 'noite', actIdx: number) => void
+    onRemove: () => void
 }
 
-function EditableDayCard({ day, index, isEditing, collapsed, onToggle, onExpand, onUpdateTema, onUpdatePeriod, onRemove, onAddActivity, onRemoveActivity, onUpdateActivity }: EditableDayCardProps) {
+function EditableDayCard({ day, index, isEditing, collapsed, onToggle, onExpand, onUpdateTema, onSetActivity, onAddActivity, onRemoveActivity, onRemove }: EditableDayCardProps) {
     useEffect(() => {
         if (isEditing) onExpand()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1009,13 +990,14 @@ function EditableDayCard({ day, index, isEditing, collapsed, onToggle, onExpand,
                         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                         style={{ overflow: 'hidden' }}
                     >
-            <div style={{ padding: '4px 0' }}>
+                    <div style={{ padding: '4px 0' }}>
                 {PERIOD_CONFIG.map(({ key, label, Icon, color, bg }) => {
                     const period = day[key]
+                    const atividades = period.atividades ?? []
                     return (
                         <div key={key} style={{ padding: '16px 24px', borderBottom: key !== 'noite' ? '1px solid var(--border-light)' : 'none' }}>
                             {/* Period label */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                                 <div style={{ width: '26px', height: '26px', borderRadius: '8px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                     <Icon size={13} color={color} />
                                 </div>
@@ -1024,45 +1006,26 @@ function EditableDayCard({ day, index, isEditing, collapsed, onToggle, onExpand,
 
                             {isEditing ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                    {/* Main activity */}
-                                    <ActivityEditBlock
-                                        horario={period.horario ?? ''}
-                                        atividade={period.atividade}
-                                        local={period.local}
-                                        dica={period.dica}
-                                        isMain
-                                        onChangeHorario={v => onUpdatePeriod(key, 'horario', v)}
-                                        onChangeAtividade={v => onUpdatePeriod(key, 'atividade', v)}
-                                        onChangeLocal={v => onUpdatePeriod(key, 'local', v)}
-                                        onChangeDica={v => onUpdatePeriod(key, 'dica', v)}
-                                    />
-
-                                    {/* Extra activities */}
-                                    {(period.extras_atividades ?? []).map((extra, ei) => (
-                                        <ActivityEditBlock
-                                            key={ei}
-                                            horario={extra.horario}
-                                            atividade={extra.atividade}
-                                            local={extra.local}
-                                            dica={extra.dica}
-                                            onChangeHorario={v => onUpdateActivity(key, ei, 'horario', v)}
-                                            onChangeAtividade={v => onUpdateActivity(key, ei, 'atividade', v)}
-                                            onChangeLocal={v => onUpdateActivity(key, ei, 'local', v)}
-                                            onChangeDica={v => onUpdateActivity(key, ei, 'dica', v)}
-                                            onRemove={() => onRemoveActivity(key, ei)}
-                                        />
+                                    {atividades.map((act, ai) => (
+                                        <div key={ai} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                                                <div style={{ display: 'flex', gap: '6px' }}>
+                                                    <input value={act.horario} onChange={e => onSetActivity(key, ai, 'horario', e.target.value)} placeholder="08:00" style={{ width: '70px', fontSize: '12px', fontWeight: 700, color: 'var(--blue-vibrant)', border: '1px solid var(--border-light)', borderRadius: '6px', padding: '4px 6px', fontFamily: 'inherit', outline: 'none' }} />
+                                                    <input value={act.local} onChange={e => onSetActivity(key, ai, 'local', e.target.value)} placeholder="Local..." style={{ flex: 1, fontSize: '12px', color: 'var(--text-muted)', border: '1px solid var(--border-light)', borderRadius: '6px', padding: '4px 6px', fontFamily: 'inherit', outline: 'none' }} />
+                                                </div>
+                                                <textarea value={act.atividade} onChange={e => onSetActivity(key, ai, 'atividade', e.target.value)} placeholder="Atividade..." rows={2} style={{ fontSize: '13px', color: 'var(--text-dark)', border: '1px solid var(--border-light)', borderRadius: '6px', padding: '5px 7px', fontFamily: 'inherit', outline: 'none', resize: 'vertical', width: '100%', boxSizing: 'border-box' }} />
+                                                <input value={act.dica} onChange={e => onSetActivity(key, ai, 'dica', e.target.value)} placeholder="Dica..." style={{ fontSize: '12px', color: 'var(--text-muted)', border: '1px solid var(--border-light)', borderRadius: '6px', padding: '4px 6px', fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+                                            </div>
+                                            {atividades.length > 1 && (
+                                                <button onClick={() => onRemoveActivity(key, ai)} style={{ width: '26px', height: '26px', borderRadius: '6px', border: '1px solid #fca5a5', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, marginTop: '2px' }}>
+                                                    <Trash2 size={12} color="#ef4444" />
+                                                </button>
+                                            )}
+                                        </div>
                                     ))}
-
-                                    {/* Add activity button */}
                                     <button
                                         onClick={() => onAddActivity(key)}
-                                        style={{
-                                            display: 'flex', alignItems: 'center', gap: '6px',
-                                            padding: '7px 12px', borderRadius: '8px',
-                                            border: '1.5px dashed var(--border-light)', background: 'transparent',
-                                            color: 'var(--text-muted)', fontSize: '12px', fontWeight: 700,
-                                            cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start',
-                                        }}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '8px', border: '1.5px dashed var(--border-light)', background: 'transparent', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start' }}
                                         onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue-medium)'; e.currentTarget.style.color = 'var(--blue-medium)' }}
                                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-muted)' }}
                                     >
@@ -1070,11 +1033,33 @@ function EditableDayCard({ day, index, isEditing, collapsed, onToggle, onExpand,
                                     </button>
                                 </div>
                             ) : (
-                                /* View mode */
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                    <ActivityViewBlock period={period} />
-                                    {(period.extras_atividades ?? []).map((extra, ei) => (
-                                        <ActivityViewBlock key={ei} period={extra} />
+                                /* View mode — flat list with timeline */
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    {atividades.map((act, ai) => (
+                                        <div key={ai} style={{ display: 'flex', gap: '10px', position: 'relative' }}>
+                                            {/* Timeline column */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '20px', flexShrink: 0 }}>
+                                                <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, zIndex: 1 }}>
+                                                    <span style={{ fontSize: '10px', fontWeight: 800, color: '#fff' }}>{ai + 1}</span>
+                                                </div>
+                                                {ai < atividades.length - 1 && (
+                                                    <div style={{ width: '2px', flex: 1, background: 'var(--border-light)', minHeight: '12px', margin: '2px 0' }} />
+                                                )}
+                                            </div>
+                                            {/* Content */}
+                                            <div style={{ flex: 1, paddingBottom: ai < atividades.length - 1 ? '10px' : '0' }}>
+                                                {act.horario && (
+                                                    <span style={{ fontSize: '11px', fontWeight: 800, color, display: 'inline-flex', alignItems: 'center', gap: '3px', marginBottom: '3px', background: bg, padding: '1px 7px', borderRadius: '20px' }}>
+                                                        <Clock size={9} /> {act.horario}
+                                                    </span>
+                                                )}
+                                                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)', margin: '0 0 4px', lineHeight: 1.5 }}>{act.atividade}</p>
+                                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                                    {act.local && <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}><MapPin size={10} />{act.local}</span>}
+                                                    {act.dica && <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'flex-start', gap: '3px' }}><Lightbulb size={10} style={{ flexShrink: 0, marginTop: '1px' }} />{act.dica}</span>}
+                                                </div>
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
                             )}
@@ -1089,94 +1074,6 @@ function EditableDayCard({ day, index, isEditing, collapsed, onToggle, onExpand,
     )
 }
 
-interface ActivityEditBlockProps {
-    horario: string
-    atividade: string
-    local: string
-    dica: string
-    isMain?: boolean
-    onChangeHorario: (v: string) => void
-    onChangeAtividade: (v: string) => void
-    onChangeLocal: (v: string) => void
-    onChangeDica: (v: string) => void
-    onRemove?: () => void
-}
-
-function ActivityEditBlock({ horario, atividade, local, dica, isMain, onChangeHorario, onChangeAtividade, onChangeLocal, onChangeDica, onRemove }: ActivityEditBlockProps) {
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '10px', borderRadius: '10px', background: isMain ? 'transparent' : '#f8fafc', border: isMain ? 'none' : '1px solid var(--border-light)' }}>
-            {!isMain && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Atividade extra</span>
-                    {onRemove && (
-                        <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
-                            <Trash2 size={13} color="#ef4444" />
-                        </button>
-                    )}
-                </div>
-            )}
-            {/* Horário + atividade */}
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
-                <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <Clock size={12} color="var(--text-faint)" style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-                    <input
-                        type="time"
-                        value={horario}
-                        onChange={e => onChangeHorario(e.target.value)}
-                        style={{ paddingLeft: '26px', paddingRight: '8px', height: '34px', width: '110px', fontSize: '13px', fontWeight: 700, color: 'var(--text-dark)', border: '1px solid var(--border-light)', borderRadius: '8px', outline: 'none', background: '#fff', fontFamily: 'inherit', boxSizing: 'border-box' }}
-                    />
-                </div>
-                <textarea
-                    value={atividade}
-                    onChange={e => onChangeAtividade(e.target.value)}
-                    placeholder="Descrição da atividade..."
-                    rows={2}
-                    style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)', border: '1px solid var(--border-light)', borderRadius: '8px', outline: 'none', background: '#fff', fontFamily: 'inherit', padding: '7px 10px', resize: 'vertical', boxSizing: 'border-box' }}
-                />
-            </div>
-            {/* Local + dica */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                <input
-                    value={local}
-                    onChange={e => onChangeLocal(e.target.value)}
-                    placeholder="Local..."
-                    style={{ fontSize: '12px', color: 'var(--text-dark)', border: '1px solid var(--border-light)', borderRadius: '8px', outline: 'none', background: '#fff', fontFamily: 'inherit', padding: '7px 10px', boxSizing: 'border-box' }}
-                />
-                <input
-                    value={dica}
-                    onChange={e => onChangeDica(e.target.value)}
-                    placeholder="Dica..."
-                    style={{ fontSize: '12px', color: 'var(--text-dark)', border: '1px solid var(--border-light)', borderRadius: '8px', outline: 'none', background: '#fff', fontFamily: 'inherit', padding: '7px 10px', boxSizing: 'border-box' }}
-                />
-            </div>
-        </div>
-    )
-}
-
-function ActivityViewBlock({ period }: { period: Pick<DayPeriod, 'horario' | 'atividade' | 'local' | 'dica'> | ActivityExtra }) {
-    return (
-        <div>
-            {'horario' in period && period.horario && (
-                <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--blue-vibrant)', display: 'inline-flex', alignItems: 'center', gap: '4px', marginBottom: '4px', background: 'var(--blue-pale-mid)', padding: '2px 8px', borderRadius: '6px' }}>
-                    <Clock size={10} /> {period.horario}
-                </span>
-            )}
-            <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)', margin: '0 0 6px', lineHeight: 1.5 }}>{period.atividade}</p>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                {period.local && (
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <MapPin size={11} /> {period.local}
-                    </span>
-                )}
-                {period.dica && (
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
-                        <Lightbulb size={11} style={{ flexShrink: 0, marginTop: '1px' }} /> {period.dica}
-                    </span>
-                )}
-            </div>
-        </div>
-    )
-}
 
 function FitBounds({ positions }: { positions: [number, number][] }) {
     const map = useMap()
@@ -1213,14 +1110,17 @@ interface DayPin {
 function DaysMapSection({ dias, collapsedDays }: { dias: ItineraryDay[]; collapsedDays: boolean[] }) {
     const [expanded, setExpanded] = useState(false)
 
+    // Build pins: for each period, number activities sequentially across expanded days
     const pins: DayPin[] = []
-    dias.forEach((day, i) => {
-        if (collapsedDays[i]) return
-        PERIOD_CONFIG.forEach(({ key, color, label }) => {
-            const p = day[key]
-            if (p?.lat != null && p?.lng != null) {
-                pins.push({ lat: p.lat, lng: p.lng, color, dayNum: day.dia, period: label, atividade: p.atividade, local: p.local })
-            }
+    PERIOD_CONFIG.forEach(({ key, color }) => {
+        dias.forEach((day, i) => {
+            if (collapsedDays[i]) return
+            const atividades = day[key]?.atividades ?? []
+            atividades.forEach(act => {
+                if (act.lat != null && act.lng != null) {
+                    pins.push({ lat: act.lat, lng: act.lng, color, dayNum: day.dia, period: key, atividade: act.atividade, local: act.local })
+                }
+            })
         })
     })
 
@@ -1232,8 +1132,10 @@ function DaysMapSection({ dias, collapsedDays }: { dias: ItineraryDay[]; collaps
     const fallbackCenter = useMemo<[number, number]>(() => {
         for (const day of dias) {
             for (const { key } of PERIOD_CONFIG) {
-                const p = day[key]
-                if (p?.lat != null && p?.lng != null) return [p.lat, p.lng]
+                const atividades = day[key]?.atividades ?? []
+                for (const a of atividades) {
+                    if (a.lat != null && a.lng != null) return [a.lat, a.lng]
+                }
             }
         }
         return [-15.793, -47.882] // Brasil

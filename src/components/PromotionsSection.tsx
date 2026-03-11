@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Tag, AlertCircle, X, ExternalLink, Clock, Calendar, Flame } from 'lucide-react'
+import { Tag, AlertCircle, X, Clock, Calendar, Flame } from 'lucide-react'
 import { supabase, type Promocao } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import { format, isToday, isYesterday, parseISO } from 'date-fns'
@@ -8,26 +8,12 @@ import { Link } from 'react-router-dom'
 
 interface PromotionsSectionProps {
     limit?: number
-    /** When true: no tabs, no modal — clicking goes to /auth (landing page) */
+    /** When true: no tabs, simpler mode for landing page */
     landingMode?: boolean
 }
 
 // ─── Promotion Modal ──────────────────────────────────────────────────────────
 function PromoModal({ promo, onClose }: { promo: Promocao; onClose: () => void }) {
-    const imgs: { src: string; alt: string }[] = (() => {
-        try {
-            const raw = promo.imagens
-            if (!raw) return []
-            const list = typeof raw === 'string' ? JSON.parse(raw) : raw
-            return Array.isArray(list) ? list.filter((i: any) => i.src) : []
-        } catch { return [] }
-    })()
-
-    const bodyText = (promo.conteudo ?? '')
-        .replace(/<[^>]*>/g, ' ')
-        .replace(/\s{2,}/g, ' ')
-        .trim()
-
     const expiresText = promo.valid_until
         ? isToday(parseISO(promo.valid_until))
             ? `⏰ Termina hoje às ${format(parseISO(promo.valid_until), 'HH:mm')}`
@@ -56,7 +42,7 @@ function PromoModal({ promo, onClose }: { promo: Promocao; onClose: () => void }
                 onClick={e => e.stopPropagation()}
                 style={{
                     background: '#fff', borderRadius: '24px', width: '100%',
-                    maxWidth: '680px', maxHeight: '85vh', overflowY: 'auto',
+                    maxWidth: '720px', maxHeight: '88vh', overflowY: 'auto',
                     boxShadow: '0 32px 80px rgba(14,42,85,0.25)',
                     fontFamily: 'Inter, system-ui, sans-serif',
                 }}
@@ -92,7 +78,7 @@ function PromoModal({ promo, onClose }: { promo: Promocao; onClose: () => void }
                         {promo.titulo ?? 'Promoção'}
                     </h2>
 
-                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
                         {promo.created_at && (
                             <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#64748B', fontWeight: 500 }}>
                                 <Calendar size={13} />
@@ -111,40 +97,46 @@ function PromoModal({ promo, onClose }: { promo: Promocao; onClose: () => void }
                         )}
                     </div>
 
-                    {imgs.length > 0 && (
-                        <div style={{ display: 'grid', gridTemplateColumns: imgs.length === 1 ? '1fr' : '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
-                            {imgs.slice(0, 4).map((img, i) => (
-                                <img key={i} src={img.src} alt={img.alt || ''}
-                                    style={{ width: '100%', height: imgs.length === 1 ? '220px' : '140px', objectFit: 'cover', borderRadius: '12px' }}
-                                    onError={e => e.currentTarget.style.display = 'none'}
-                                />
-                            ))}
-                        </div>
-                    )}
+                    {/* Scoped CSS for the HTML article body */}
+                    <style>{`
+                        .promo-html-body { color: #334155; font-size: 15px; line-height: 1.85; }
+                        .promo-html-body p { margin: 0 0 16px; }
+                        .promo-html-body h1, .promo-html-body h2, .promo-html-body h3,
+                        .promo-html-body h4, .promo-html-body h5 {
+                            color: #0E2A55; font-weight: 800; line-height: 1.3;
+                            letter-spacing: -0.02em; margin: 24px 0 10px;
+                        }
+                        .promo-html-body h2 { font-size: 20px; }
+                        .promo-html-body h3 { font-size: 17px; }
+                        .promo-html-body strong, .promo-html-body b { font-weight: 700; color: #0E2A55; }
+                        .promo-html-body ul, .promo-html-body ol { padding-left: 20px; margin: 0 0 16px; }
+                        .promo-html-body li { margin-bottom: 6px; }
+                        .promo-html-body img {
+                            width: 100%; max-width: 100%; height: auto;
+                            border-radius: 12px; margin: 16px 0;
+                            display: block;
+                        }
+                        .promo-html-body a { color: #2A60C2; text-decoration: underline; }
+                        .promo-html-body blockquote {
+                            border-left: 3px solid #2A60C2; margin: 16px 0;
+                            padding: 8px 16px; background: #EEF2F8; border-radius: 0 8px 8px 0;
+                            color: #334155;
+                        }
+                        .promo-html-body table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+                        .promo-html-body th, .promo-html-body td {
+                            padding: 10px 14px; border: 1px solid #E2EAF5; font-size: 14px;
+                        }
+                        .promo-html-body th { background: #EEF2F8; font-weight: 700; color: #0E2A55; }
+                        .promo-html-body hr { border: none; border-top: 1px solid #E2EAF5; margin: 20px 0; }
+                    `}</style>
 
-                    {bodyText && (
-                        <div style={{ fontSize: '15px', color: '#334155', lineHeight: 1.8, whiteSpace: 'pre-line' }}>
-                            {bodyText.slice(0, 1600)}{bodyText.length > 1600 && '…'}
-                        </div>
-                    )}
-
-                    {promo.url && (
-                        <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #E2EAF5' }}>
-                            <a href={promo.url} target="_blank" rel="noopener noreferrer" style={{
-                                display: 'inline-flex', alignItems: 'center', gap: '8px',
-                                background: '#2A60C2', color: '#fff', padding: '13px 24px',
-                                borderRadius: '12px', textDecoration: 'none', fontWeight: 700, fontSize: '14px',
-                                boxShadow: '0 4px 16px rgba(42,96,194,0.35)', transition: 'background 0.2s',
-                            }}
-                                onMouseEnter={e => e.currentTarget.style.background = '#1A4EA8'}
-                                onMouseLeave={e => e.currentTarget.style.background = '#2A60C2'}
-                            >
-                                <ExternalLink size={15} /> Ver promoção completa
-                            </a>
-                            <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '8px' }}>
-                                Abre no site original (Passageiro de Primeira)
-                            </p>
-                        </div>
+                    {promo.conteudo ? (
+                        <div
+                            className="promo-html-body"
+                            dangerouslySetInnerHTML={{ __html: promo.conteudo }}
+                        />
+                    ) : (
+                        <p style={{ color: '#94A3B8', fontStyle: 'italic' }}>Sem conteúdo disponível.</p>
                     )}
                 </div>
             </motion.div>
@@ -440,7 +432,7 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
                     <div className="promo-landing-grid">
                         {displayPromos.map((promo, idx) => (
                             <Link key={promo.id} to="/auth" className="promo-card-link">
-                                <PromoCard promo={promo} idx={idx} onClick={() => { }} dark={false} />
+                                <PromoCard promo={promo} idx={idx} onClick={() => {}} dark={false} />
                             </Link>
                         ))}
                     </div>

@@ -23,8 +23,8 @@ export default function Promotions() {
                         </h1>
                     </div>
                     <p style={{ color: '#64748B', fontSize: '14px', maxWidth: '500px' }}>
-                        Promoções extraídas automaticamente do Passageiro de Primeira, atualizadas a cada hora.
-                        Clique em qualquer card para ver a promoção completa.
+                        Promoções de milhas aéreas agregadas automaticamente, atualizadas a cada hora.
+                        Clique em qualquer card para ver a promoção completa com todos os detalhes e imagens.
                     </p>
                 </div>
 

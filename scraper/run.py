@@ -77,8 +77,8 @@ def upsert_promocao(conn, data: dict):
     cur = conn.cursor()
     now = datetime.now(TZ)
 
-    # Monta o conteúdo: usa content_text como principal
-    conteudo = data.get("content_text") or data.get("content_html") or ""
+    # Monta o conteúdo: usa content_html (HTML formatado) como principal
+    conteudo = data.get("content_html") or data.get("content_text") or ""
 
     cur.execute(
         """

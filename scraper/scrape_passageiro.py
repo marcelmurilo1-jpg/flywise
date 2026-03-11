@@ -603,14 +603,18 @@ def extrair_conteudo(url, feed_title=None, published_dt: Optional[datetime] = No
     for bad in content_soup.find_all(["script", "style", "iframe", "ins", "noscript", "svg"]):
         bad.decompose()
 
-    # ---- NOVO BLOCO: corta no "Central de cupons" (case-insensitive)
+    # ---- NOVO BLOCO: corta em frases que marcam o fim do conteúdo útil
     raw_html = str(content_soup)
-    stop_phrase = "central de cupons"
+    STOP_PHRASES = [
+        "central de cupons",
+        "quer ficar por dentro de todas as novidades",
+    ]
     low_html = raw_html.lower()
-    if stop_phrase in low_html:
-        # localizar posição insensível a maiúsc/minúsc
-        idx = low_html.find(stop_phrase)
-        raw_html = raw_html[:idx]
+    for stop_phrase in STOP_PHRASES:
+        if stop_phrase in low_html:
+            idx = low_html.find(stop_phrase)
+            raw_html = raw_html[:idx]
+            low_html = raw_html.lower()  # atualiza para próximas checagens
     content_soup = BeautifulSoup(raw_html, "html.parser")
     content_text = _collect_text_from_container(content_soup) or ""
     content_html = raw_html
