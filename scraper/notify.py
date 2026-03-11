@@ -156,6 +156,9 @@ def _promo_block(p: dict) -> str:
       </h3>
       <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5">{conteudo}</p>
       {expira}
+      <a href="https://flywise.com.br/promotions" style="display:inline-block;margin-top:14px;padding:9px 18px;
+         border-radius:10px;background:#2563eb;color:#fff;font-size:13px;
+         font-weight:700;text-decoration:none">Ver promoção →</a>
     </div>
     """
 
