@@ -11,6 +11,7 @@ import SavedStrategies from '@/pages/SavedStrategies'
 import SearchWizard from '@/pages/SearchWizard'
 import Roteiro from '@/pages/Roteiro'
 import Configuracoes from '@/pages/Configuracoes'
+import Planos from '@/pages/Planos'
 import { BottomNav } from '@/components/BottomNav'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -75,6 +76,7 @@ function AppRoutes() {
         <Route path="/busca-avancada" element={<ProtectedRoute><SearchWizard /></ProtectedRoute>} />
         <Route path="/roteiro" element={<ProtectedRoute><Roteiro /></ProtectedRoute>} />
         <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
+        <Route path="/planos" element={<ProtectedRoute><Planos /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <AppRoutesInner />

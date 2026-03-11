@@ -270,32 +270,6 @@ export default function Configuracoes() {
 
     // Plan state
     const [planoAtivo, setPlanoAtivo] = useState<string | null>(null)
-    const [checkoutLoadingPlan, setCheckoutLoadingPlan] = useState<string | null>(null)
-    const [checkoutPlanError, setCheckoutPlanError] = useState<string | null>(null)
-
-    async function handlePlanCheckout(plan: typeof PLANS[number]) {
-        setCheckoutLoadingPlan(plan.id)
-        setCheckoutPlanError(null)
-        try {
-            const res = await fetch('/api/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    origin: 'PLANO',
-                    destination: plan.name.toUpperCase(),
-                    totalBrl: plan.price / 100,
-                    outboundCompany: `FlyWise ${plan.name}`,
-                }),
-            })
-            const data = await res.json()
-            if (!res.ok || !data.url) throw new Error(data.error || 'Erro ao iniciar pagamento')
-            window.open(data.url, '_blank')
-        } catch (err: any) {
-            setCheckoutPlanError(err.message)
-        } finally {
-            setCheckoutLoadingPlan(null)
-        }
-    }
 
     // Active section highlight for nav
     const [activeSection, setActiveSection] = useState<SectionId>('perfil')
@@ -1036,10 +1010,7 @@ export default function Configuracoes() {
                                             </button>
                                             {PLANS.find(p => p.id !== planoAtivo?.toLowerCase()) && (
                                                 <button
-                                                    onClick={() => {
-                                                        const next = PLANS.find(p => p.id !== planoAtivo?.toLowerCase())
-                                                        if (next) handlePlanCheckout(next)
-                                                    }}
+                                                    onClick={() => navigate('/planos')}
                                                     style={{
                                                         padding: '10px 20px', borderRadius: 10, fontSize: 13, fontWeight: 700,
                                                         border: 'none', background: '#7C3AED',
@@ -1053,59 +1024,22 @@ export default function Configuracoes() {
                                     </div>
                                 ) : (
                                     /* ── Sem plano: upgrade ── */
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                                         <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
                                             Desbloqueie buscas ilimitadas, alertas de milhas e roteiros por IA.
                                         </p>
-                                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                                            {PLANS.map(plan => (
-                                                <div
-                                                    key={plan.id}
-                                                    style={{
-                                                        flex: '1 1 220px', borderRadius: 14, padding: '18px 20px',
-                                                        border: `1.5px solid ${plan.color}40`,
-                                                        background: `linear-gradient(135deg, ${plan.color}10 0%, ${plan.color}05 100%)`,
-                                                        display: 'flex', flexDirection: 'column', gap: 12,
-                                                    }}
-                                                >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                        <div style={{ width: 36, height: 36, borderRadius: 10, background: plan.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                            <plan.Icon size={18} color="#fff" />
-                                                        </div>
-                                                        <div>
-                                                            <div style={{ fontSize: 15, fontWeight: 800, color: plan.color }}>FlyWise {plan.name}</div>
-                                                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-dark)' }}>{plan.priceFmt}</div>
-                                                        </div>
-                                                    </div>
-                                                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                                                        {plan.features.map(f => (
-                                                            <li key={f} style={{ fontSize: 12, color: 'var(--text-body)', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-                                                                <Check size={13} color={plan.color} style={{ marginTop: 1, flexShrink: 0 }} />
-                                                                {f}
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                    <button
-                                                        onClick={() => handlePlanCheckout(plan)}
-                                                        disabled={checkoutLoadingPlan === plan.id}
-                                                        style={{
-                                                            padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 800,
-                                                            border: 'none', background: plan.color,
-                                                            color: '#fff', cursor: checkoutLoadingPlan === plan.id ? 'not-allowed' : 'pointer',
-                                                            fontFamily: 'inherit', opacity: checkoutLoadingPlan === plan.id ? 0.75 : 1,
-                                                            transition: 'opacity 0.15s',
-                                                        }}
-                                                    >
-                                                        {checkoutLoadingPlan === plan.id ? 'Aguarde...' : `Assinar ${plan.name} ✦`}
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        {checkoutPlanError && (
-                                            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '8px 14px', fontSize: 12, color: '#DC2626' }}>
-                                                {checkoutPlanError}
-                                            </div>
-                                        )}
+                                        <button
+                                            onClick={() => navigate('/planos')}
+                                            style={{
+                                                alignSelf: 'flex-start',
+                                                padding: '11px 24px', borderRadius: 12, fontSize: 14, fontWeight: 800,
+                                                border: 'none', background: 'linear-gradient(135deg, #2A60C2 0%, #7C3AED 100%)',
+                                                color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
+                                                display: 'flex', alignItems: 'center', gap: 8,
+                                            }}
+                                        >
+                                            <Crown size={15} /> Ver planos disponíveis
+                                        </button>
                                     </div>
                                 )}
                             </SectionCard>
