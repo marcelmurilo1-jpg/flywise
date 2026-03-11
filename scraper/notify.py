@@ -14,12 +14,9 @@ Variáveis de ambiente necessárias:
   FROM_EMAIL     — remetente verificado no Resend (ex: noreply@flywise.com.br)
 """
 import os
-import sys
-import json
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Optional
 
 import psycopg2
 import psycopg2.extras
@@ -136,7 +133,6 @@ def _badge(cat: str) -> str:
 
 def _promo_block(p: dict) -> str:
     titulo = p["titulo"] or "Promoção"
-    url    = p["url"]
     cat    = p["categoria"] or "passagens"
     conteudo_raw = (p["conteudo"] or "")
     # Extrai primeiros ~200 caracteres sem tags HTML
@@ -160,9 +156,6 @@ def _promo_block(p: dict) -> str:
       </h3>
       <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5">{conteudo}</p>
       {expira}
-      <a href="{url}" style="display:inline-block;margin-top:14px;padding:9px 18px;
-         border-radius:10px;background:#2563eb;color:#fff;font-size:13px;
-         font-weight:700;text-decoration:none">Ver promoção →</a>
     </div>
     """
 
