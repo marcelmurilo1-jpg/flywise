@@ -5,7 +5,7 @@ import {
     Search, ArrowRight, ArrowRightLeft, Users,
     ChevronDown, CheckCircle2, BarChart3, Globe, Zap, Shield,
     Twitter, Instagram, Linkedin, Youtube, Flame, Lock, ChevronUp,
-    Info, MapPin, CreditCard, BookOpen, ChevronLeft
+    Info, MapPin, CreditCard, BookOpen, ChevronLeft, Bell, CalendarDays
 } from 'lucide-react'
 import { NavBar } from '@/components/ui/tubelight-navbar'
 import { FeaturesSectionWithHoverEffects } from '@/components/ui/feature-section-with-hover-effects'
@@ -74,25 +74,32 @@ const PROGRAMS_ROW2 = [
 
 const PLANS = [
     {
-        name: 'Básico', price: 'Grátis', priceAnual: 'Grátis',
+        name: 'Free', price: 'Grátis', priceAnual: 'Grátis',
         priceVal: null as number | null, priceAnualVal: null as number | null,
         period: '', featured: false,
-        desc: 'Para começar sua jornada com milhas.',
-        features: ['5 análises por mês', 'Comparador básico', 'Relatórios simples', 'Suporte por e-mail'],
+        desc: 'Para dar o primeiro passo com milhas.',
+        features: ['Janela de 30 dias de pesquisa', '1 estratégia', 'Sem roteiro', 'Sem notificações'],
     },
     {
-        name: 'Pro', price: 'R$ 49', priceAnual: 'R$ 32',
-        priceVal: 49, priceAnualVal: 32,
+        name: 'Essencial', price: 'R$ 19', priceAnual: 'R$ 12',
+        priceVal: 19, priceAnualVal: 12,
+        period: '/mês', featured: false,
+        desc: 'Para quem quer começar a viajar melhor.',
+        features: ['Buscas ilimitadas de passagens', '3 estratégias/mês', '1 roteiro/mês', 'Sem notificações'],
+    },
+    {
+        name: 'Pro', price: 'R$ 39', priceAnual: 'R$ 25',
+        priceVal: 39, priceAnualVal: 25,
         period: '/mês', featured: true,
         desc: 'Para viajantes frequentes e estratégicos.',
-        features: ['Análises ilimitadas', 'CPM em tempo real', 'Alertas de promoções', 'Relatórios avançados', 'Suporte prioritário'],
+        features: ['Buscas ilimitadas de passagens', '5 estratégias/mês', '3 roteiros/mês', 'Alertas de promoções por e-mail'],
     },
     {
-        name: 'Elite', price: 'R$ 149', priceAnual: 'R$ 97',
-        priceVal: 149, priceAnualVal: 97,
+        name: 'Elite', price: 'R$ 69', priceAnual: 'R$ 45',
+        priceVal: 69, priceAnualVal: 45,
         period: '/mês', featured: false,
-        desc: 'Para agências e power users.',
-        features: ['Tudo do Pro', 'Multi-usuário (5 contas)', 'API de acesso', 'Relatórios white-label', 'Gerente de conta'],
+        desc: 'Para quem não quer perder nenhuma promoção.',
+        features: ['Buscas ilimitadas de passagens', '10 estratégias/mês', '5 roteiros/mês', 'Alertas por e-mail e WhatsApp'],
     },
 ]
 
@@ -100,7 +107,7 @@ const FAQS = [
     { q: 'O FlyWise mostra passagens em tempo real?', a: 'Não exibimos reservas diretas — somos uma ferramenta analítica que compara o valor das suas milhas com tarifas pagas para você decidir a melhor estratégia de resgate.' },
     { q: 'Quais programas de milhas são suportados?', a: 'Smiles (GOL), LATAM Pass, TudoAzul, Livelo, Esfera, Membership Rewards e 35+ outros programas parceiros.' },
     { q: 'Preciso ter milhas para usar o FlyWise?', a: 'Não. Você pode simular quantas milhas precisaria acumular para voar para determinado destino e calcular se vale mais a pena comprar, transferir ou acumular.' },
-    { q: 'O plano Básico tem limite de buscas?', a: 'Sim, o Básico permite 5 análises por mês. No plano Pro e Elite as análises são ilimitadas.' },
+    { q: 'O plano Free tem limite de buscas?', a: 'Sim, o Free tem janela de pesquisa de 30 dias e apenas 1 estratégia. A partir do plano Essencial as buscas são ilimitadas.' },
     { q: 'Posso cancelar a assinatura a qualquer momento?', a: 'Sim. Sem fidelidade, sem multa. Você cancela quando quiser pelo painel de configurações.' },
 ]
 
@@ -904,6 +911,104 @@ export default function Landing() {
                 <PromotionsSection limit={4} landingMode />
             </section>
 
+            {/* ████ 5.5. ALERTAS DE NOTIFICAÇÃO ████ */}
+            <section className="landing-section" style={{ background: '#0E2A55', padding: '100px 60px' }}>
+                <div className="landing-alerts-grid" style={{ maxWidth: '1280px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
+
+                    {/* Texto esquerda */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 24 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6 }}
+                        viewport={{ once: true }}
+                    >
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.9)', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '24px' }}>
+                            <Bell size={12} /> Alertas em Tempo Real
+                        </div>
+                        <h2 style={{ fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1.1, margin: '0 0 20px' }}>
+                            Nunca perca uma<br /><span style={{ color: '#60A5FA' }}>promoção de milhas</span>
+                        </h2>
+                        <p style={{ color: 'rgba(255,255,255,0.60)', fontSize: '16px', lineHeight: 1.65, marginBottom: '36px', maxWidth: '420px' }}>
+                            Configure seus programas favoritos e receba alertas automáticos por e-mail assim que surgirem promoções de passagens ou transferências de milhas.
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                            {[
+                                { icon: <Bell size={17} color="#60A5FA" />, title: 'Alertas personalizados', desc: 'Escolha entre promoções de passagens aéreas ou transferências de milhas' },
+                                { icon: <Zap size={17} color="#60A5FA" />, title: 'Notificação imediata', desc: 'Receba no e-mail assim que a promoção for detectada automaticamente' },
+                                { icon: <CheckCircle2 size={17} color="#60A5FA" />, title: 'Filtro por programa', desc: 'Smiles, TudoAzul, LATAM Pass, Livelo, Esfera e muito mais' },
+                            ].map((item, i) => (
+                                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                                    <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        {item.icon}
+                                    </div>
+                                    <div>
+                                        <div style={{ fontWeight: 700, color: '#fff', fontSize: '14px', marginBottom: '3px' }}>{item.title}</div>
+                                        <div style={{ color: 'rgba(255,255,255,0.50)', fontSize: '13px', lineHeight: 1.5 }}>{item.desc}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <motion.div
+                            whileHover={{ scale: 1.04, y: -2 }}
+                            transition={{ type: 'tween', duration: 0.18 }}
+                            style={{ display: 'inline-block', marginTop: '36px' }}
+                        >
+                            <Link to="/auth?tab=signup" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#2A60C2', color: '#fff', padding: '14px 28px', borderRadius: '12px', textDecoration: 'none', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 16px rgba(42,96,194,0.45)' }}>
+                                Ativar alertas grátis <ArrowRight size={15} />
+                            </Link>
+                        </motion.div>
+                    </motion.div>
+
+                    {/* Mockup de notificações */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        {[
+                            { prog: 'Smiles', deal: 'GRU → MIA a partir de 18.000 pts', time: 'agora mesmo', badge: 'Novo', badgeColor: '#34D399', badgeBg: 'rgba(52,211,153,0.15)' },
+                            { prog: 'TudoAzul', deal: 'Transferência com bônus de 100% — só hoje', time: '5 min atrás', badge: 'Urgente', badgeColor: '#F87171', badgeBg: 'rgba(248,113,113,0.15)' },
+                            { prog: 'LATAM Pass', deal: 'Buenos Aires ida e volta por 25.000 pts', time: '2h atrás', badge: 'Novo', badgeColor: '#34D399', badgeBg: 'rgba(52,211,153,0.15)' },
+                            { prog: 'Livelo', deal: 'Bônus de 80% na transferência para Smiles', time: '4h atrás', badge: 'Novo', badgeColor: '#34D399', badgeBg: 'rgba(52,211,153,0.15)' },
+                        ].map((n, i) => (
+                            <motion.div
+                                key={i}
+                                initial={{ opacity: 0, x: 20 }}
+                                whileInView={{ opacity: 1, x: 0 }}
+                                whileHover={{ scale: 1.025, y: -3, boxShadow: '0 8px 32px rgba(0,0,0,0.25)', transition: { type: 'tween', duration: 0.4, delay: 0 } }}
+                                transition={{ delay: i * 0.08, duration: 0.4 }}
+                                viewport={{ once: true }}
+                                style={{
+                                    background: 'rgba(255,255,255,0.05)',
+                                    border: '1px solid rgba(255,255,255,0.09)',
+                                    borderRadius: '14px',
+                                    padding: '16px 18px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '14px',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <div style={{ width: '40px', height: '40px', borderRadius: '11px', background: 'rgba(96,165,250,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <Bell size={18} color="#60A5FA" />
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                                        <span style={{ fontWeight: 700, color: '#fff', fontSize: '13.5px' }}>{n.prog}</span>
+                                        <span style={{ fontSize: '10px', fontWeight: 700, color: n.badgeColor, background: n.badgeBg, padding: '2px 8px', borderRadius: '999px', flexShrink: 0 }}>{n.badge}</span>
+                                    </div>
+                                    <div className="landing-alert-deal" style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.deal}</div>
+                                </div>
+                                <div className="landing-alert-time" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.30)', flexShrink: 0 }}>{n.time}</div>
+                            </motion.div>
+                        ))}
+                        <div style={{ textAlign: 'center', marginTop: '8px' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', color: 'rgba(255,255,255,0.35)', fontSize: '12px' }}>
+                                <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#34D399', flexShrink: 0 }} />
+                                Sistema monitorando promoções em tempo real
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
             {/* ████ 6. DESTINOS ESTRATÉGICOS ████ */}
             <section id="destinos" className="landing-section" style={{ padding: '80px 60px 100px', background: '#F7F9FC', maxWidth: '100%' }}>
                 <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
@@ -923,8 +1028,131 @@ export default function Landing() {
                 </div>
             </section>
 
+            {/* ████ 6.5. ROTEIRO COM IA ████ */}
+            <section className="landing-section" style={{ padding: '100px 60px', background: '#fff' }}>
+                <div className="landing-roteiro-grid" style={{ maxWidth: '1280px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
+
+                    {/* Mockup visual lado esquerdo */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 24 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6 }}
+                        viewport={{ once: true }}
+                        className="landing-roteiro-mockup"
+                        style={{
+                            background: '#F7F9FC',
+                            borderRadius: '24px',
+                            padding: '28px',
+                            border: '1px solid #E2EAF5',
+                            boxShadow: '0 8px 32px rgba(14,42,85,0.08)',
+                        }}
+                    >
+                        {/* Cabeçalho do card */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '8px' }}>
+                            <div>
+                                <div style={{ fontWeight: 800, color: '#0E2A55', fontSize: '16px' }}>Paris, França</div>
+                                <div style={{ fontSize: '13px', color: '#6B7A99', marginTop: '2px' }}>5 dias · Casal · Cultural & Gastronômico</div>
+                            </div>
+                            <div style={{ background: '#EEF2F8', borderRadius: '10px', padding: '7px 12px', fontSize: '12px', fontWeight: 700, color: '#2A60C2', flexShrink: 0 }}>
+                                Dia 1 de 5
+                            </div>
+                        </div>
+
+                        {/* Tema do dia */}
+                        <div style={{ background: 'linear-gradient(135deg, #0E2A55, #2A60C2)', borderRadius: '14px', padding: '16px 18px', marginBottom: '14px', color: '#fff' }}>
+                            <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.65, marginBottom: '4px' }}>Tema do dia</div>
+                            <div style={{ fontSize: '15px', fontWeight: 800 }}>Descobrindo o coração de Paris</div>
+                        </div>
+
+                        {/* Períodos */}
+                        {[
+                            { period: 'Manhã', time: '09:00', activity: 'Torre Eiffel', local: 'Champ de Mars', emoji: '🌅' },
+                            { period: 'Tarde', time: '14:00', activity: 'Museu do Louvre', local: 'Rue de Rivoli', emoji: '☀️' },
+                            { period: 'Noite', time: '20:00', activity: 'Jantar em Montmartre', local: 'Butte Montmartre', emoji: '🌙' },
+                        ].map((p, i) => (
+                            <motion.div
+                                key={i}
+                                whileHover={{ x: 5, backgroundColor: '#f0f5ff' }}
+                                transition={{ type: 'tween', duration: 0.18 }}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '12px',
+                                    padding: '12px 14px',
+                                    background: '#fff',
+                                    borderRadius: '12px',
+                                    marginBottom: i < 2 ? '8px' : '14px',
+                                    border: '1px solid #E2EAF5',
+                                    cursor: 'default',
+                                }}
+                            >
+                                <span style={{ fontSize: '18px', flexShrink: 0 }}>{p.emoji}</span>
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#2A60C2', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{p.period} · {p.time}</div>
+                                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#0E2A55', marginTop: '2px' }}>{p.activity}</div>
+                                    <div style={{ fontSize: '12px', color: '#6B7A99' }}>{p.local}</div>
+                                </div>
+                            </motion.div>
+                        ))}
+
+                        {/* Mapa placeholder */}
+                        <motion.div
+                            whileHover={{ scale: 1.02 }}
+                            transition={{ type: 'tween', duration: 0.2 }}
+                            style={{ borderRadius: '12px', overflow: 'hidden', height: '100px', background: 'linear-gradient(135deg, #dce8f8 0%, #b8d0f0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}
+                        >
+                            <MapPin size={20} color="#2A60C2" />
+                            <span style={{ color: '#2A60C2', fontWeight: 700, fontSize: '13px' }}>Mapa interativo dos locais</span>
+                        </motion.div>
+                    </motion.div>
+
+                    {/* Texto direita */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 24 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, delay: 0.15 }}
+                        viewport={{ once: true }}
+                    >
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '24px' }}>
+                            <CalendarDays size={12} /> Roteiro com IA
+                        </div>
+                        <h2 style={{ fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.04em', lineHeight: 1.1, margin: '0 0 20px' }}>
+                            Seu roteiro de viagem<br /><span style={{ color: '#4A90E2' }}>gerado por IA</span>
+                        </h2>
+                        <p style={{ color: '#6B7A99', fontSize: '16px', lineHeight: 1.65, marginBottom: '36px', maxWidth: '420px' }}>
+                            Informe destino, duração e estilo de viagem. Nossa IA monta um roteiro completo, dia a dia, com atividades para manhã, tarde e noite — tudo no mapa.
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                            {[
+                                { icon: <Zap size={17} color="#2A60C2" />, title: 'Roteiro em segundos', desc: 'IA cria seu plano personalizado com base no perfil e estilo de viagem' },
+                                { icon: <MapPin size={17} color="#2A60C2" />, title: 'Mapa interativo', desc: 'Veja todos os pontos do roteiro georreferenciados e navegáveis' },
+                                { icon: <BookOpen size={17} color="#2A60C2" />, title: 'Salve e organize', desc: 'Guarde múltiplos roteiros e acesse quando quiser, em qualquer dispositivo' },
+                            ].map((item, i) => (
+                                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                                    <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: '#EEF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        {item.icon}
+                                    </div>
+                                    <div>
+                                        <div style={{ fontWeight: 700, color: '#0E2A55', fontSize: '14px', marginBottom: '3px' }}>{item.title}</div>
+                                        <div style={{ color: '#6B7A99', fontSize: '13px', lineHeight: 1.5 }}>{item.desc}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <motion.div
+                            whileHover={{ scale: 1.04, y: -2 }}
+                            transition={{ type: 'tween', duration: 0.18 }}
+                            style={{ display: 'inline-block', marginTop: '36px' }}
+                        >
+                            <Link to="/auth?tab=signup" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#0E2A55', color: '#fff', padding: '14px 28px', borderRadius: '12px', textDecoration: 'none', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 16px rgba(14,42,85,0.20)' }}>
+                                Gerar meu roteiro <ArrowRight size={15} />
+                            </Link>
+                        </motion.div>
+                    </motion.div>
+
+                </div>
+            </section>
+
             {/* ████ 7. PLANOS ████ */}
-            <section id="planos" className="landing-section" style={{ padding: '100px 60px', background: '#fff' }}>
+            <section id="planos" className="landing-section" style={{ padding: '100px 60px', background: '#F7F9FC' }}>
                 <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
                     <div style={{ textAlign: 'center', marginBottom: '48px' }}>
                         <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '16px' }}>Planos</div>
