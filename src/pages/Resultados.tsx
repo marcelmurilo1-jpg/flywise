@@ -534,7 +534,7 @@ export default function Resultados() {
                                                     })}
                                                     {seatsVoltaSel && (
                                                         <div style={{ background: '#0E2A55', borderRadius: 12, padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <span style={{ fontSize: 13, fontWeight: 700, color: '#BBF7D0' }}>Total (ida + volta)</span>
+                                                            <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total (ida + volta)</span>
                                                             <span style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>{((seatsIdaSel?.precoMilhas ?? 0) + (seatsVoltaSel?.precoMilhas ?? 0)).toLocaleString('pt-BR')} pts</span>
                                                         </div>
                                                     )}
