@@ -103,7 +103,6 @@ const EXTRA_TABS: { key: ExtraCategory; label: string; Icon: React.ElementType }
 
 
 const BLANK_ACTIVITY: Activity = { horario: '', atividade: '', local: '', dica: '' }
-const BLANK_PERIOD: DayPeriod = { atividades: [{ ...BLANK_ACTIVITY }] }
 const BLANK_DAY = (dia: number): ItineraryDay => ({
     dia,
     tema: '',
