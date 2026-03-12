@@ -665,8 +665,8 @@ app.post('/api/checkout', async (req, res) => {
                 quantity: 1,
                 price: Math.round(totalBrl * 100),
             }],
-            returnUrl: `${req.headers.origin || 'http://localhost:5173'}/planos`,
-            completionUrl: `${req.headers.origin || 'http://localhost:5173'}/planos?pagamento=sucesso`,
+            returnUrl: `${req.headers.origin || 'http://localhost:5173'}/onboarding`,
+            completionUrl: `${req.headers.origin || 'http://localhost:5173'}/onboarding`,
             metadata: { origin, destination, departureDate, returnDate, outboundCompany, returnCompany },
         };
 
