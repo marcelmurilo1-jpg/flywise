@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { CheckCircle2, ChevronLeft, Loader2 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import NumberFlow from '@number-flow/react'
+import { useAuth } from '@/contexts/AuthContext'
 
 const PLANS = [
     {
@@ -38,6 +39,7 @@ const PLANS = [
 
 export default function Planos() {
     const navigate = useNavigate()
+    const { user } = useAuth()
     const [billing, setBilling] = useState<'mensal' | 'anual'>('mensal')
     const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
@@ -70,6 +72,8 @@ export default function Planos() {
                     destination: plan.name.toUpperCase(),
                     totalBrl: priceVal,
                     outboundCompany: `FlyWise ${plan.name}`,
+                    customerEmail: user?.email,
+                    customerName: user?.user_metadata?.full_name || user?.email?.split('@')[0],
                 }),
             })
             const data = await res.json()

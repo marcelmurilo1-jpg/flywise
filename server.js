@@ -611,50 +611,75 @@ const ABACATEPAY_API_KEY = process.env.ABACATEPAY_API_KEY || 'abc_dev_GwmHy0SnK5
 const ABACATEPAY_BASE = 'https://api.abacatepay.com/v1';
 
 app.post('/api/checkout', async (req, res) => {
-    const { origin, destination, departureDate, returnDate, totalBrl, outboundCompany, returnCompany } = req.body;
+    const { origin, destination, departureDate, returnDate, totalBrl, outboundCompany, returnCompany, customerName, customerEmail, customerTaxId } = req.body;
 
     if (!totalBrl || totalBrl <= 0) {
         return res.status(400).json({ error: 'totalBrl é obrigatório e deve ser maior que zero' });
     }
 
-    const productName = returnDate
-        ? `Passagem Aérea ${origin}→${destination} + ${destination}→${origin}`
-        : `Passagem Aérea ${origin}→${destination}`;
-
-    const externalId = `flywise-${origin}-${destination}-${departureDate}-${Date.now()}`;
-
-    const payload = {
-        frequency: 'ONE_TIME',
-        methods: ['PIX'],
-        products: [{
-            externalId,
-            name: productName,
-            quantity: 1,
-            price: Math.round(totalBrl * 100), // centavos
-        }],
-        returnUrl: `${req.headers.origin || 'http://localhost:5173'}/resultados`,
-        completionUrl: `${req.headers.origin || 'http://localhost:5173'}/resultados?pagamento=sucesso`,
-        metadata: {
-            origin, destination, departureDate, returnDate,
-            outboundCompany, returnCompany,
-        },
+    const abHeaders = {
+        'Authorization': `Bearer ${ABACATEPAY_API_KEY}`,
+        'Content-Type': 'application/json',
     };
 
     try {
-        const abRes = await fetch(`${ABACATEPAY_BASE}/billing/create`, {
+        // 1. Criar ou recuperar cliente
+        const customerPayload = {
+            name: customerName || 'FlyWise User',
+            email: customerEmail || 'user@flywise.app',
+            taxId: customerTaxId || '00000000000',
+            cellphone: '11999999999',
+        };
+
+        const custRes = await fetch(`${ABACATEPAY_BASE}/customer/create`, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${ABACATEPAY_API_KEY}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
+            headers: abHeaders,
+            body: JSON.stringify(customerPayload),
             signal: AbortSignal.timeout(15000),
         });
+        const custData = await custRes.json();
+        console.log('[AbacatePay] Customer:', JSON.stringify(custData).slice(0, 200));
 
+        const customerId = custData.data?.id;
+        if (!customerId) {
+            console.error('[AbacatePay] Falha ao criar cliente:', custData);
+            return res.status(400).json({ error: custData.error || 'Falha ao criar cliente no AbacatePay' });
+        }
+
+        // 2. Criar cobrança
+        const productName = returnDate
+            ? `Passagem Aérea ${origin}→${destination} + ${destination}→${origin}`
+            : origin === 'PLANO'
+                ? `FlyWise ${destination} — Assinatura`
+                : `Passagem Aérea ${origin}→${destination}`;
+
+        const externalId = `flywise-${origin}-${destination}-${Date.now()}`;
+
+        const billingPayload = {
+            frequency: 'ONE_TIME',
+            methods: ['PIX'],
+            customerId,
+            products: [{
+                externalId,
+                name: productName,
+                quantity: 1,
+                price: Math.round(totalBrl * 100),
+            }],
+            returnUrl: `${req.headers.origin || 'http://localhost:5173'}/planos`,
+            completionUrl: `${req.headers.origin || 'http://localhost:5173'}/planos?pagamento=sucesso`,
+            metadata: { origin, destination, departureDate, returnDate, outboundCompany, returnCompany },
+        };
+
+        const abRes = await fetch(`${ABACATEPAY_BASE}/billing/create`, {
+            method: 'POST',
+            headers: abHeaders,
+            body: JSON.stringify(billingPayload),
+            signal: AbortSignal.timeout(15000),
+        });
         const abData = await abRes.json();
 
         if (!abRes.ok || abData.error) {
-            console.error('[AbacatePay] Erro:', abData);
+            console.error('[AbacatePay] Erro billing:', abData);
             return res.status(abRes.status).json({ error: abData.error || 'Erro ao criar cobrança' });
         }
 
