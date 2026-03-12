@@ -13,6 +13,7 @@ import Roteiro from '@/pages/Roteiro'
 import Configuracoes from '@/pages/Configuracoes'
 import Planos from '@/pages/Planos'
 import Checkout from '@/pages/Checkout'
+import Onboarding from '@/pages/Onboarding'
 import { BottomNav } from '@/components/BottomNav'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -79,6 +80,7 @@ function AppRoutes() {
         <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
         <Route path="/planos" element={<ProtectedRoute><Planos /></ProtectedRoute>} />
         <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <AppRoutesInner />
