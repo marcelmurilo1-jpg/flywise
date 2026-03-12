@@ -49,14 +49,18 @@ export default function Wallet() {
 
     // Clubes ativos do usuário (salvo em user_metadata)
     const [activeClubs, setActiveClubs] = useState<string[]>([])
+    // Plano selecionado por clube (ex: { smiles_club: 'Plano 2.000 mi' })
+    const [activeClubTiers, setActiveClubTiers] = useState<Record<string, string>>({})
     const [awardsLastUpdated, setAwardsLastUpdated] = useState<string | undefined>(undefined)
 
     useEffect(() => {
         if (!user) return
         const stored: MilesMap = (user.user_metadata?.miles as MilesMap) ?? {}
         const clubs: string[] = (user.user_metadata?.activeClubs as string[]) ?? []
+        const tiers: Record<string, string> = (user.user_metadata?.activeClubTiers as Record<string, string>) ?? {}
         setMiles(stored)
         setActiveClubs(clubs)
+        setActiveClubTiers(tiers)
         setLoading(false)
     }, [user])
 
@@ -73,8 +77,8 @@ export default function Wallet() {
         setSaving(false)
     }
 
-    const saveClubs = async (updated: string[]) => {
-        await supabase.auth.updateUser({ data: { activeClubs: updated } })
+    const saveClubs = async (clubs: string[], tiers: Record<string, string>) => {
+        await supabase.auth.updateUser({ data: { activeClubs: clubs, activeClubTiers: tiers } })
     }
 
     const toggleClub = async (clubId: string) => {
@@ -82,7 +86,16 @@ export default function Wallet() {
             ? activeClubs.filter(c => c !== clubId)
             : [...activeClubs, clubId]
         setActiveClubs(updated)
-        await saveClubs(updated)
+        await saveClubs(updated, activeClubTiers)
+    }
+
+    const selectClubTier = async (clubId: string, tierName: string) => {
+        const updatedTiers = { ...activeClubTiers, [clubId]: tierName }
+        // Ensure club is active when selecting a tier
+        const updatedClubs = activeClubs.includes(clubId) ? activeClubs : [...activeClubs, clubId]
+        setActiveClubTiers(updatedTiers)
+        setActiveClubs(updatedClubs)
+        await saveClubs(updatedClubs, updatedTiers)
     }
 
     const handleEdit = (program: string) => {
@@ -212,36 +225,72 @@ export default function Wallet() {
                                                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Afeta o bônus no Simulador de Transferência</div>
                                             </div>
                                         </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                             {MILES_CLUBS.map(club => {
                                                 const isActive = activeClubs.includes(club.id)
+                                                const selectedTier = activeClubTiers[club.id] ?? null
                                                 return (
-                                                    <button
-                                                        key={club.id}
-                                                        onClick={() => toggleClub(club.id)}
-                                                        title={club.description}
-                                                        style={{
-                                                            background: isActive ? `${club.color}12` : 'var(--snow)',
-                                                            border: `2px solid ${isActive ? club.color : 'var(--border-light)'}`,
-                                                            borderRadius: 12, padding: '12px 14px',
-                                                            cursor: 'pointer', fontFamily: 'inherit',
-                                                            display: 'flex', alignItems: 'center', gap: 10,
-                                                            transition: 'all .18s', textAlign: 'left',
-                                                        }}
-                                                    >
-                                                        <div style={{ width: 32, height: 32, borderRadius: 8, background: club.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                            <span style={{ fontSize: 11, fontWeight: 900, color: '#fff' }}>
-                                                                {club.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
-                                                            </span>
-                                                        </div>
-                                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                                            <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? club.color : 'var(--text-dark)', lineHeight: 1.2 }}>{club.name}</div>
-                                                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{club.monthlyFee}</div>
-                                                        </div>
-                                                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: isActive ? club.color : 'var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background .18s' }}>
-                                                            {isActive && <Check size={11} color="#fff" />}
-                                                        </div>
-                                                    </button>
+                                                    <div key={club.id}>
+                                                        <button
+                                                            onClick={() => toggleClub(club.id)}
+                                                            title={club.description}
+                                                            style={{
+                                                                width: '100%',
+                                                                background: isActive ? `${club.color}12` : 'var(--snow)',
+                                                                border: `2px solid ${isActive ? club.color : 'var(--border-light)'}`,
+                                                                borderRadius: selectedTier ? '12px 12px 0 0' : 12,
+                                                                padding: '12px 14px',
+                                                                cursor: 'pointer', fontFamily: 'inherit',
+                                                                display: 'flex', alignItems: 'center', gap: 10,
+                                                                transition: 'all .18s', textAlign: 'left',
+                                                            }}
+                                                        >
+                                                            <div style={{ width: 32, height: 32, borderRadius: 8, background: club.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                                <span style={{ fontSize: 11, fontWeight: 900, color: '#fff' }}>
+                                                                    {club.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                                <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? club.color : 'var(--text-dark)', lineHeight: 1.2 }}>{club.name}</div>
+                                                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                                                                    {selectedTier ? selectedTier : club.monthlyFee}
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ width: 18, height: 18, borderRadius: '50%', background: isActive ? club.color : 'var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background .18s' }}>
+                                                                {isActive && <Check size={11} color="#fff" />}
+                                                            </div>
+                                                        </button>
+                                                        {/* Tier selector (only for clubs with tiers, when active) */}
+                                                        {isActive && club.tiers && (
+                                                            <div style={{ border: `2px solid ${club.color}`, borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '10px 12px', background: `${club.color}06` }}>
+                                                                <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+                                                                    Qual seu plano?
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                                                    {club.tiers.map(t => {
+                                                                        const isSel = selectedTier === t.name
+                                                                        return (
+                                                                            <button
+                                                                                key={t.name}
+                                                                                onClick={() => selectClubTier(club.id, t.name)}
+                                                                                style={{
+                                                                                    background: isSel ? club.color : 'var(--bg-white)',
+                                                                                    color: isSel ? '#fff' : 'var(--text-dark)',
+                                                                                    border: `1.5px solid ${isSel ? club.color : 'var(--border-light)'}`,
+                                                                                    borderRadius: 8, padding: '5px 10px',
+                                                                                    fontSize: 11, fontWeight: 700,
+                                                                                    cursor: 'pointer', fontFamily: 'inherit',
+                                                                                    transition: 'all .15s',
+                                                                                }}
+                                                                            >
+                                                                                {t.name}
+                                                                            </button>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 )
                                             })}
                                         </div>
@@ -344,7 +393,7 @@ export default function Wallet() {
                     {/* ── Tab: Simulador ── */}
                     {activeTab === 'simulador' && (
                         <motion.div key="simulador" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
-                            <TransferSimulator activeClubs={activeClubs} awardsLastUpdated={awardsLastUpdated} />
+                            <TransferSimulator activeClubs={activeClubs} activeClubTiers={activeClubTiers} awardsLastUpdated={awardsLastUpdated} />
                         </motion.div>
                     )}
 

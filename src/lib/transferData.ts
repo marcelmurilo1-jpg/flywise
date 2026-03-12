@@ -1,26 +1,26 @@
 // ─── Transfer Data ────────────────────────────────────────────────────────────
 // Taxas e programas baseados em dados oficiais dos bancos/programas (mar/2026).
-// Promoções são campanhas periódicas — atualizar conforme novos anúncios.
+// Promoções são campanhas periódicas — a API /api/transfer-promotions atualiza
+// diariamente ao meio-dia via Supabase. Os dados abaixo são o fallback local.
 //
 // IMPORTANTE sobre ratios:
 //   ratio = quantos pontos do cartão para 1 milha/ponto no programa destino.
 //   Ex: ratio 1.0 → 1.000 pontos do cartão = 1.000 milhas (1:1)
-//       ratio 2.5 → 2.500 pontos do cartão = 1.000 milhas
 //
-// A maioria dos programas modernos (Iupp, C6, Nubank, Esfera) opera em 1:1.
+// Fontes: Passageiro de Primeira, Melhores Destinos (mar/2026)
 
 export interface TransferTier {
     clubId: string | null       // null = sem clube necessário
     label: string
     ratio: number               // pontos cartão por 1 milha
-    bonusPercent: number        // bônus adicional em campanhas
+    bonusPercent: number        // bônus base do tier
 }
 
 export interface TransferPartner {
     program: string
     tiers: TransferTier[]       // melhor tier primeiro
     minPoints: number
-    minPointsLabel: string      // formatado para exibição
+    minPointsLabel: string
     transferTime: string
     url: string
 }
@@ -34,6 +34,12 @@ export interface CreditCard {
     partners: TransferPartner[]
 }
 
+export interface ClubTierInfo {
+    name: string                 // ex: 'Plano 1.000 mi'
+    monthlyFee: string
+    bonusLabel: string           // informativo
+}
+
 export interface MilesClub {
     id: string
     name: string
@@ -42,20 +48,25 @@ export interface MilesClub {
     monthlyFee: string
     description: string
     benefits: string[]
-    tiers?: { name: string; monthlyFee: string; bonus: string }[]
+    tiers?: ClubTierInfo[]
+    signupUrl: string
 }
 
 export interface TransferPromotion {
+    id: string
     cardId: string
     program: string
-    bonusPercent: number        // para não-clube
-    clubBonusPercent: number    // para assinantes do clube
+    bonusPercent: number         // para não-clube
+    clubBonusPercent: number     // para qualquer assinante (fallback genérico)
+    // bônus específico por plano do clube (ex: Smiles campanhas por tier)
+    clubTierBonuses: Record<string, number>   // tierName → bonus%
     clubRequired: string | null
     validUntil: string
     description: string
     isPeriodic: boolean
-    lastConfirmed: string       // data da última confirmação oficial
+    lastConfirmed: string
     rules: string[]
+    registrationUrl?: string
 }
 
 export interface RouteCategory {
@@ -78,21 +89,22 @@ export const MILES_CLUBS: MilesClub[] = [
         name: 'Clube Smiles',
         program: 'Smiles',
         color: '#FF6B00',
-        monthlyFee: 'A partir de R$ 39,90/mês',
-        description: 'Assinatura mensal da Smiles com compra garantida de milhas + bônus diferencial em promoções de transferência',
+        monthlyFee: 'A partir de ~R$ 39,90/mês',
+        signupUrl: 'https://www.smiles.com.br/clube-smiles',
+        description: 'Assinatura mensal da Smiles com compra garantida de milhas + bônus diferencial por plano em promoções de transferência',
         tiers: [
-            { name: 'Plano 1.000 mi', monthlyFee: '~R$ 39,90/mês', bonus: 'Bônus diferencial em promos' },
-            { name: 'Plano 2.000 mi', monthlyFee: '~R$ 69,90/mês', bonus: 'Bônus diferencial em promos' },
-            { name: 'Plano 5.000 mi', monthlyFee: '~R$ 149,90/mês', bonus: 'Bônus diferencial em promos' },
-            { name: 'Plano 10.000 mi', monthlyFee: '~R$ 259,90/mês', bonus: 'Bônus diferencial + lounge' },
-            { name: 'Plano 20.000 mi / Diamante', monthlyFee: '~R$ 449,90/mês', bonus: 'Máximo bônus em promos' },
+            { name: 'Plano 1.000 mi', monthlyFee: '~R$ 39,90/mês', bonusLabel: 'Bônus diferencial em promos (ex: 70%)' },
+            { name: 'Plano 2.000 mi', monthlyFee: '~R$ 69,90/mês', bonusLabel: 'Bônus diferencial em promos (ex: 80%)' },
+            { name: 'Plano 5.000 mi', monthlyFee: '~R$ 149,90/mês', bonusLabel: 'Bônus diferencial em promos — confirmar' },
+            { name: 'Plano 10.000 mi', monthlyFee: '~R$ 259,90/mês', bonusLabel: 'Bônus diferencial + lounge — confirmar' },
+            { name: 'Plano 20.000 mi / Diamante', monthlyFee: '~R$ 449,90/mês', bonusLabel: 'Máximo bônus em promos — confirmar' },
         ],
         benefits: [
             'Milhas garantidas todo mês (1.000 a 20.000 conforme plano)',
-            'Bônus diferencial em promoções de transferência de cartão',
+            'Bônus diferencial por plano em promoções de transferência de cartão',
             'Compra de milhas com desconto',
             'Acesso a tarifas exclusivas de resgate',
-            'Clientes Diamante recebem bônus máximo em campanhas',
+            'Plano Diamante (20k): bônus máximo em campanhas',
         ],
     },
     {
@@ -100,34 +112,37 @@ export const MILES_CLUBS: MilesClub[] = [
         name: 'Clube Azul Fidelidade',
         program: 'TudoAzul',
         color: '#003DA5',
-        monthlyFee: 'A partir de R$ 35,00/mês',
+        monthlyFee: 'A partir de ~R$ 35,00/mês',
+        signupUrl: 'https://www.voeazul.com.br/clube-azul',
         description: 'Assinatura do Azul Fidelidade com pontos mensais + bônus progressivo por tempo de assinatura',
         tiers: [
-            { name: 'Plano 1.000 pts (6+ meses)', monthlyFee: '~R$ 35,00/mês', bonus: '+5% em transferências' },
-            { name: 'Plano 1.000–5.000 pts (12+ meses)', monthlyFee: 'R$ 35–149/mês', bonus: '+10% em transferências' },
-            { name: 'Plano 10.000–20.000 pts (12+ meses)', monthlyFee: 'R$ 250–449/mês', bonus: '+20% em transferências' },
-            { name: '5+ anos de assinatura', monthlyFee: 'Plano ativo', bonus: '+30% a +133% em promos especiais' },
+            { name: 'Plano 1.000 pts', monthlyFee: '~R$ 35,00/mês', bonusLabel: '+5% em transferências (6+ meses)' },
+            { name: 'Plano 2.000 pts', monthlyFee: '~R$ 60,00/mês', bonusLabel: '+10% em transferências (12+ meses)' },
+            { name: 'Plano 5.000 pts', monthlyFee: '~R$ 120,00/mês', bonusLabel: '+10% em transferências (12+ meses)' },
+            { name: 'Plano 10.000 pts', monthlyFee: '~R$ 250,00/mês', bonusLabel: '+20% em transferências (12+ meses)' },
+            { name: 'Plano 20.000 pts', monthlyFee: '~R$ 449,00/mês', bonusLabel: '+20% a +133% (5+ anos de assinatura)' },
         ],
         benefits: [
             'Pontos mensais garantidos (1.000 a 20.000)',
             'Bônus progressivo por tempo de assinatura (5%, 10% ou 20%)',
-            'Bônus de até 133% durante campanhas Livelo (assinantes 5+ anos)',
+            'Bônus de até 133% em campanhas Livelo (assinantes 5+ anos)',
             'Pontos não expiram com assinatura ativa',
             'Resgate a partir de 5.000 pontos',
         ],
     },
     {
         id: 'latam_pass_status',
-        name: 'LATAM Pass Silver/Gold/Black',
+        name: 'LATAM Pass Status',
         program: 'LATAM Pass',
         color: '#E3000F',
         monthlyFee: 'Obtido por voos (sem custo direto)',
-        description: 'Status de elite da LATAM obtido por quilometragem voada — concede bônus de acúmulo e benefícios premium',
+        signupUrl: 'https://latampass.latam.com/pt_br',
+        description: 'Status de elite da LATAM obtido por quilômetros voados — concede bônus de acúmulo e benefícios premium',
         tiers: [
-            { name: 'Silver', monthlyFee: '6.000 QV/ano', bonus: '+50% em acúmulo de pontos' },
-            { name: 'Gold', monthlyFee: '12.000 QV/ano', bonus: '+75% em acúmulo de pontos' },
-            { name: 'Black', monthlyFee: '24.000 QV/ano', bonus: '+100% em acúmulo de pontos' },
-            { name: 'Black Signature', monthlyFee: '50.000 QV/ano', bonus: '+125% em acúmulo + benefícios premium' },
+            { name: 'Silver', monthlyFee: '6.000 QV/ano', bonusLabel: '+50% em acúmulo de pontos por voo' },
+            { name: 'Gold', monthlyFee: '12.000 QV/ano', bonusLabel: '+75% em acúmulo de pontos por voo' },
+            { name: 'Black', monthlyFee: '24.000 QV/ano', bonusLabel: '+100% em acúmulo + lounges LATAM' },
+            { name: 'Black Signature', monthlyFee: '50.000 QV/ano', bonusLabel: '+125% em acúmulo + benefícios premium' },
         ],
         benefits: [
             'Bônus de 50 a 125% em acúmulo de pontos por voo',
@@ -143,6 +158,7 @@ export const MILES_CLUBS: MilesClub[] = [
         program: 'Livelo',
         color: '#8B5CF6',
         monthlyFee: 'Gratuito (via banco parceiro)',
+        signupUrl: 'https://www.livelo.com.br',
         description: 'Programa de benefícios Livelo com transferência imediata gratuita e acesso a promoções exclusivas de parceiros',
         benefits: [
             'Transferência imediata para Smiles e Azul Fidelidade (sem aguardar 72h)',
@@ -152,11 +168,32 @@ export const MILES_CLUBS: MilesClub[] = [
             'Parceria com Bradesco, Santander e Banco do Brasil',
         ],
     },
+    {
+        id: 'esfera_clube',
+        name: 'Esfera Santander',
+        program: 'Esfera',
+        color: '#EC0000',
+        monthlyFee: 'Gratuito (vinculado ao cartão Santander)',
+        signupUrl: 'https://esfera.com.vc',
+        description: 'Programa de pontos do Santander. Ter cartão Santander já vincula ao Esfera com 20% de bônus permanente em transferências para Smiles',
+        tiers: [
+            { name: 'Esfera Básico', monthlyFee: 'Cartões padrão Santander', bonusLabel: '20% bônus permanente Smiles' },
+            { name: 'Esfera Select', monthlyFee: 'Van Gogh / Select', bonusLabel: '20% bônus permanente Smiles' },
+            { name: 'Esfera Infinite', monthlyFee: 'Infinite / Unique', bonusLabel: '20% permanente + promos exclusivas' },
+        ],
+        benefits: [
+            'Bônus de 20% permanente em transferências para Smiles (todos os cartões)',
+            'Acesso a promoções exclusivas com bônus adicionais via Esfera',
+            'Pontos Esfera acumulam em todas as compras',
+            'Transferência mínima de 1.000 pontos',
+            'Prazo de crédito: até 5 dias úteis',
+        ],
+    },
 ]
 
 // ─── Cartões ─────────────────────────────────────────────────────────────────
-// Ratios corrigidos — fontes: Passageiro de Primeira, Melhores Destinos (mar/2026)
-// Iupp (Itaú), C6 Átomos, Nubank, Esfera (Santander): transferência 1:1
+// Fontes: Passageiro de Primeira, Melhores Destinos (mar/2026)
+// Ratios: transferência 1:1 para os principais programas.
 
 export const CREDIT_CARDS: CreditCard[] = [
     {
@@ -180,13 +217,12 @@ export const CREDIT_CARDS: CreditCard[] = [
             {
                 program: 'LATAM Pass',
                 tiers: [
-                    { clubId: 'latam_pass_status', label: 'LATAM Black', ratio: 1.0, bonusPercent: 100 },
-                    { clubId: null, label: 'Sem status', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
                 minPointsLabel: '1.000 pts',
                 transferTime: 'Até 5 dias úteis',
-                url: 'https://latampass.latam.com/pt_br/promocao/itau-milhas-extras',
+                url: 'https://latampass.latam.com/pt_br/junte-milhas',
             },
             {
                 program: 'TudoAzul',
@@ -304,7 +340,8 @@ export const CREDIT_CARDS: CreditCard[] = [
                 program: 'Smiles',
                 tiers: [
                     { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
-                    { clubId: null, label: 'Sem clube (promo permanente)', ratio: 1.0, bonusPercent: 20 },
+                    { clubId: 'esfera_clube', label: 'Santander Esfera (sem Clube Smiles)', ratio: 1.0, bonusPercent: 20 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 20 },
                 ],
                 minPoints: 1000,
                 minPointsLabel: '1.000 pts Esfera',
@@ -508,112 +545,168 @@ export const LIVELO_AIRLINE_PARTNERS = [
 ]
 
 // ─── Promoções periódicas ─────────────────────────────────────────────────────
-// Baseado em campanhas recentes (ago/2024 – mar/2026).
-// Estas campanhas se repetem com frequência, geralmente com 30–60 dias de intervalo.
 // ⚠️ SEMPRE confirme na página oficial antes de transferir.
+// ⚠️ Bônus POR PLANO do Clube Smiles:
+//    1k=70%, 2k=80% (confirmados pelo usuário, mar/2026).
+//    5k, 10k, Diamante: valores típicos de campanhas — confirmar na campanha vigente.
+//
+// Estes dados são o FALLBACK LOCAL. A API /api/transfer-promotions retorna
+// dados atualizados do Supabase (atualizado diariamente ao meio-dia).
 
 export const ACTIVE_PROMOTIONS: TransferPromotion[] = [
     {
+        id: 'iupp_smiles',
         cardId: 'iupp_itau',
         program: 'Smiles',
         bonusPercent: 30,
         clubBonusPercent: 60,
+        clubTierBonuses: {
+            'Plano 1.000 mi': 70,
+            'Plano 2.000 mi': 80,
+            'Plano 5.000 mi': 100,
+            'Plano 10.000 mi': 120,
+            'Plano 20.000 mi / Diamante': 130,
+        },
         clubRequired: 'smiles_club',
         validUntil: 'Campanha periódica (confirme em smiles.com.br)',
         lastConfirmed: 'Mar/2026',
         isPeriodic: true,
-        description: 'Bônus de 30% para todos e 60% para Clube Smiles — Itaú → Smiles',
+        description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% (e mais) — Itaú → Smiles',
+        registrationUrl: 'https://www.smiles.com.br/promocao-transferencia',
         rules: [
             '⚠️ Cadastre-se na página da promoção ANTES de transferir — sem cadastro, sem bônus',
-            'Clientes sem clube: 30% de bônus sobre a transferência',
-            'Assinantes do Clube Smiles (qualquer plano) ou Diamante: 60% de bônus',
+            'Sem clube: 30% de bônus',
+            'Clube Smiles Plano 1.000 mi: 70% de bônus (confirmado)',
+            'Clube Smiles Plano 2.000 mi: 80% de bônus (confirmado)',
+            'Planos 5k, 10k, Diamante: bônus maior — confirmar na campanha vigente',
             'Limite de 300.000 milhas bônus por CPF ou Conta Família',
             'Milhas bônus creditadas em até 15 dias após encerramento da campanha',
             'Validade das milhas bônus: 12 meses após creditação',
-            'Não é possível cancelar a transferência após confirmação',
         ],
     },
     {
+        id: 'nubank_smiles',
         cardId: 'nubank_ultravioleta',
         program: 'Smiles',
         bonusPercent: 30,
         clubBonusPercent: 60,
+        clubTierBonuses: {
+            'Plano 1.000 mi': 70,
+            'Plano 2.000 mi': 80,
+            'Plano 5.000 mi': 100,
+            'Plano 10.000 mi': 120,
+            'Plano 20.000 mi / Diamante': 130,
+        },
         clubRequired: 'smiles_club',
         validUntil: 'Campanha periódica (confirme em smiles.com.br)',
         lastConfirmed: 'Mar/2026',
         isPeriodic: true,
-        description: 'Bônus de 30% para todos e 60% para Clube Smiles — Nubank → Smiles',
+        description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% (e mais) — Nubank → Smiles',
+        registrationUrl: 'https://www.smiles.com.br/promocao-transferencia',
         rules: [
             '⚠️ Cadastre-se na página da promoção ANTES de transferir',
             'Sem cadastro prévio = sem bônus (sem exceções)',
             'Mínimo de 2.500 Núcleos por transferência',
-            'Clientes Clube Smiles ou Diamante: 60% de bônus',
+            'Plano 1.000 mi: 70% de bônus; Plano 2.000 mi: 80%',
+            'Planos maiores: confirmar na campanha vigente',
             'Limite: 300.000 milhas bônus por CPF',
             'Validade das milhas bônus: 12 meses',
         ],
     },
     {
+        id: 'c6_smiles',
         cardId: 'c6_atomos',
         program: 'Smiles',
         bonusPercent: 30,
         clubBonusPercent: 60,
+        clubTierBonuses: {
+            'Plano 1.000 mi': 70,
+            'Plano 2.000 mi': 80,
+            'Plano 5.000 mi': 100,
+            'Plano 10.000 mi': 120,
+            'Plano 20.000 mi / Diamante': 130,
+        },
         clubRequired: 'smiles_club',
         validUntil: 'Campanha periódica (confirme em smiles.com.br)',
         lastConfirmed: 'Mar/2026',
         isPeriodic: true,
-        description: 'Bônus de 30% para todos e 60% para Clube Smiles — C6 Bank → Smiles',
+        description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% — C6 Bank → Smiles',
+        registrationUrl: 'https://www.smiles.com.br/promocao-transferencia',
         rules: [
             '⚠️ Cadastre-se na página da promoção ANTES de transferir',
-            'Clientes sem clube: 30% de bônus',
-            'Assinantes Clube Smiles ou Diamante: 60% de bônus',
+            'Plano 1.000 mi: 70%; Plano 2.000 mi: 80%',
+            'Planos maiores: confirmar na campanha vigente',
             'Limite: 300.000 milhas bônus por CPF',
             'Prazo de creditação: até 5 dias úteis para a transferência base',
         ],
     },
     {
+        id: 'santander_smiles',
         cardId: 'santander_esfera',
         program: 'Smiles',
         bonusPercent: 20,
         clubBonusPercent: 60,
+        clubTierBonuses: {
+            'Plano 1.000 mi': 70,
+            'Plano 2.000 mi': 80,
+            'Plano 5.000 mi': 100,
+            'Plano 10.000 mi': 120,
+            'Plano 20.000 mi / Diamante': 130,
+        },
         clubRequired: 'smiles_club',
         validUntil: 'Bônus de 20% permanente + campanhas periódicas para clube',
         lastConfirmed: 'Mar/2026',
         isPeriodic: false,
-        description: '20% permanente para todos (Esfera) + 60% em promos para Clube Smiles',
+        description: '20% permanente para todos (Esfera) + por plano Clube Smiles em campanhas',
+        registrationUrl: 'https://esfera.com.vc',
         rules: [
             'Bônus de 20% é permanente para todos os clientes Santander via Esfera',
-            'Assinantes do Clube Smiles recebem 60% de bônus durante campanhas',
+            'Clube Smiles ativo: bônus extra durante campanhas periódicas',
+            'Plano 1.000 mi: 70%; Plano 2.000 mi: 80% (em campanhas)',
             'Para campanhas extras: cadastre-se na página da promoção antes',
             'Mínimo: 1.000 pontos Esfera por transferência',
             'Prazo de crédito: até 5 dias úteis',
         ],
     },
     {
+        id: 'xp_smiles',
         cardId: 'xp_visa',
         program: 'Smiles',
         bonusPercent: 30,
         clubBonusPercent: 60,
+        clubTierBonuses: {
+            'Plano 1.000 mi': 70,
+            'Plano 2.000 mi': 80,
+            'Plano 5.000 mi': 100,
+            'Plano 10.000 mi': 120,
+            'Plano 20.000 mi / Diamante': 130,
+        },
         clubRequired: 'smiles_club',
         validUntil: 'Campanha periódica (confirme em smiles.com.br)',
         lastConfirmed: 'Mar/2026',
         isPeriodic: true,
-        description: 'Bônus de 30% para todos e 60% para Clube Smiles — XP → Smiles',
+        description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% — XP → Smiles',
+        registrationUrl: 'https://www.smiles.com.br/promocao-transferencia',
         rules: [
             '⚠️ Cadastre-se na página da promoção antes de transferir',
             'Mínimo de 1.000 XP Pontos por transferência',
+            'Plano 1.000 mi: 70%; Plano 2.000 mi: 80%',
             'Limite: 300.000 milhas bônus por CPF',
         ],
     },
     {
+        id: 'btg_latam',
         cardId: 'btg_pactual',
         program: 'LATAM Pass',
         bonusPercent: 25,
         clubBonusPercent: 25,
+        clubTierBonuses: {},
         clubRequired: null,
         validUntil: 'Campanha periódica (confirme em latampass.latam.com)',
-        lastConfirmed: 'Mar/2026 — válido até 05/03/2026',
+        lastConfirmed: 'Mar/2026',
         isPeriodic: true,
         description: '25% de bônus + 1.000 milhas extras na primeira transferência BTG → LATAM Pass',
+        registrationUrl: 'https://latampass.latam.com/pt_br/junte-milhas',
         rules: [
             '⚠️ Registre-se na página da promoção antes de transferir',
             'Bônus de 25% válido para todos os clientes BTG Pactual',
@@ -623,41 +716,104 @@ export const ACTIVE_PROMOTIONS: TransferPromotion[] = [
         ],
     },
     {
+        id: 'inter_tudoazul',
         cardId: 'inter_black',
         program: 'TudoAzul',
         bonusPercent: 80,
         clubBonusPercent: 130,
+        clubTierBonuses: {
+            'Plano 1.000 pts': 103,
+            'Plano 2.000 pts': 103,
+            'Plano 5.000 pts': 103,
+            'Plano 10.000 pts': 103,
+            'Plano 20.000 pts': 130,
+        },
         clubRequired: 'azul_fidelidade_clube',
         validUntil: 'Campanha periódica (confirme em tudoazul.voeazul.com.br)',
-        lastConfirmed: 'Mar/2026 — válido até 05/03/2026',
+        lastConfirmed: 'Mar/2026',
         isPeriodic: true,
-        description: '80% para todos e até 130% para Clube Azul — Inter → TudoAzul',
+        description: '80% para todos; Clube Azul: 103%; 5+ anos assinatura: 130% — Inter → TudoAzul',
+        registrationUrl: 'https://www.voeazul.com.br/inter-pontos',
         rules: [
             '⚠️ Cadastre-se na página da promoção antes de transferir',
             'Todos os clientes Inter: 80% de bônus',
-            'Assinantes do Clube Azul Fidelidade: 103% de bônus',
-            'Assinantes há 5+ anos: 130% ou mais de bônus',
+            'Assinantes do Clube Azul Fidelidade (qualquer plano): 103% de bônus',
+            'Assinantes há 5+ anos (Plano 20.000 pts): 130% de bônus',
             'Limite: 300.000 pontos bônus por CPF',
             'Creditação em até 15 dias úteis',
             'Validade dos pontos bônus: 6 meses',
         ],
     },
     {
+        id: 'bradesco_livelo',
         cardId: 'bradesco_livelo',
         program: 'Livelo',
         bonusPercent: 0,
         clubBonusPercent: 0,
+        clubTierBonuses: {},
         clubRequired: null,
         validUntil: 'Transferência padrão (sem campanha ativa no momento)',
         lastConfirmed: 'Mar/2026',
         isPeriodic: false,
-        description: 'Bradesco/BB → Livelo: transferência 1:1, sem bônus atualmente. Da Livelo para aéreas também 1:1.',
+        description: 'Bradesco/BB → Livelo: transferência 1:1, sem bônus atualmente.',
         rules: [
             'Transferência de Bradesco/BB para Livelo: taxa 1:1',
             'Depois, de Livelo para Smiles/LATAM/TudoAzul: também 1:1',
             'Mínimo de 15.000 pontos por transferência Livelo → aérea',
             'Transferência imediata disponível para membros do Clube Livelo',
             'Sem bônus de campanha ativo no momento — aguarde promoções periódicas',
+        ],
+    },
+    {
+        id: 'caixa_smiles',
+        cardId: 'caixa_uau',
+        program: 'Smiles',
+        bonusPercent: 30,
+        clubBonusPercent: 60,
+        clubTierBonuses: {
+            'Plano 1.000 mi': 70,
+            'Plano 2.000 mi': 80,
+            'Plano 5.000 mi': 100,
+            'Plano 10.000 mi': 120,
+            'Plano 20.000 mi / Diamante': 130,
+        },
+        clubRequired: 'smiles_club',
+        validUntil: 'Campanha periódica (confirme em smiles.com.br)',
+        lastConfirmed: 'Mar/2026',
+        isPeriodic: true,
+        description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% — Caixa → Smiles',
+        registrationUrl: 'https://www.smiles.com.br/promocao-transferencia',
+        rules: [
+            '⚠️ Cadastre-se na página da promoção ANTES de transferir',
+            'Plano 1.000 mi: 70%; Plano 2.000 mi: 80%',
+            'Planos maiores: confirmar na campanha vigente',
+            'Limite: 300.000 milhas bônus por CPF',
+        ],
+    },
+    {
+        id: 'btg_smiles',
+        cardId: 'btg_pactual',
+        program: 'Smiles',
+        bonusPercent: 30,
+        clubBonusPercent: 60,
+        clubTierBonuses: {
+            'Plano 1.000 mi': 70,
+            'Plano 2.000 mi': 80,
+            'Plano 5.000 mi': 100,
+            'Plano 10.000 mi': 120,
+            'Plano 20.000 mi / Diamante': 130,
+        },
+        clubRequired: 'smiles_club',
+        validUntil: 'Campanha periódica (confirme em smiles.com.br)',
+        lastConfirmed: 'Mar/2026',
+        isPeriodic: true,
+        description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% — BTG → Smiles',
+        registrationUrl: 'https://www.smiles.com.br/promocao-transferencia',
+        rules: [
+            '⚠️ Cadastre-se na página da promoção antes de transferir',
+            'Plano 1.000 mi: 70%; Plano 2.000 mi: 80%',
+            'Planos maiores: confirmar na campanha vigente',
+            'Limite: 300.000 milhas bônus por CPF',
         ],
     },
 ]
@@ -754,8 +910,17 @@ export function computeMiles(points: number, ratio: number, bonusPercent: number
     return Math.floor(base * (1 + bonusPercent / 100))
 }
 
-export function findPromotion(cardId: string, program: string): TransferPromotion | null {
-    return ACTIVE_PROMOTIONS.find(p => p.cardId === cardId && p.program === program) ?? null
+export function findPromotion(cardId: string, program: string, promotions?: TransferPromotion[]): TransferPromotion | null {
+    const list = promotions ?? ACTIVE_PROMOTIONS
+    return list.find(p => p.cardId === cardId && p.program === program) ?? null
+}
+
+/** Retorna o bônus do promo para um tier específico do clube, ou fallback clubBonusPercent. */
+export function getClubTierBonus(promo: TransferPromotion, tierName: string | null): number {
+    if (!tierName) return promo.bonusPercent
+    const tierBonus = promo.clubTierBonuses[tierName]
+    if (tierBonus !== undefined) return tierBonus
+    return promo.clubBonusPercent
 }
 
 export function rateCPM(cpm: number): { label: string; color: string; rating: string } {

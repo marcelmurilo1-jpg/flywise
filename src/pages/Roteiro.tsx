@@ -117,7 +117,7 @@ const BLANK_DAY = (dia: number): ItineraryDay => ({
 export default function Roteiro() {
     const { user } = useAuth()
     const navigate = useNavigate()
-    const { canGenerateRoteiro, roteiroUsed, roteiroLimit, plan: userPlan, refresh: refreshPlan } = usePlan()
+    const { canGenerateRoteiro, roteiroLimit, plan: userPlan, refresh: refreshPlan } = usePlan()
 
     // Form state
     const [destination, setDestination] = useState('')

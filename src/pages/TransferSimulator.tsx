@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     ChevronDown, ChevronUp, Info, ArrowRight, Zap, AlertTriangle,
@@ -6,8 +6,9 @@ import {
 } from 'lucide-react'
 import {
     CREDIT_CARDS, MILES_CLUBS, ROUTE_CATEGORIES, LIVELO_AIRLINE_PARTNERS,
-    computeMiles, findPromotion, rateCPM,
-    type TransferPartner,
+    ACTIVE_PROMOTIONS,
+    computeMiles, findPromotion, getClubTierBonus, rateCPM,
+    type TransferPartner, type TransferPromotion,
 } from '@/lib/transferData'
 
 const PROGRAM_COLORS: Record<string, string> = {
@@ -21,22 +22,56 @@ function fmt(n: number) { return n.toLocaleString('pt-BR') }
 
 interface Props {
     activeClubs: string[]
-    awardsLastUpdated?: string   // ISO date from cache, undefined = using hardcoded
+    activeClubTiers: Record<string, string>   // clubId → tier name saved in wallet
+    awardsLastUpdated?: string
 }
 
-export default function TransferSimulator({ activeClubs, awardsLastUpdated }: Props) {
+export default function TransferSimulator({ activeClubs, activeClubTiers, awardsLastUpdated }: Props) {
     const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
     const [points, setPoints] = useState<string>('')
     const [selectedProgram, setSelectedProgram] = useState<string | null>(null)
+    const [selectedClubTier, setSelectedClubTier] = useState<string | null>(null)   // selected in sim
     const [expandedRules, setExpandedRules] = useState(false)
     const [expandedClubInfo, setExpandedClubInfo] = useState(false)
     const [liveloTarget, setLiveloTarget] = useState<string | null>(null)
+    const [livePromos, setLivePromos] = useState<TransferPromotion[] | null>(null)
+
+    // Fetch live promotions from API (updated daily at noon from Supabase)
+    useEffect(() => {
+        fetch('/api/transfer-promotions')
+            .then(r => r.json())
+            .then(d => {
+                if (Array.isArray(d.promotions) && d.promotions.length > 0) {
+                    setLivePromos(d.promotions)
+                }
+            })
+            .catch(() => {})
+    }, [])
+
+    const promotions = livePromos ?? ACTIVE_PROMOTIONS
 
     const card = CREDIT_CARDS.find(c => c.id === selectedCardId) ?? null
     const partner = card?.partners.find(p => p.program === selectedProgram) ?? null
     const pointsNum = parseInt(points.replace(/\D/g, '')) || 0
-    const promo = card && selectedProgram ? findPromotion(card.id, selectedProgram) : null
+    const promo = card && selectedProgram ? findPromotion(card.id, selectedProgram, promotions) : null
     const isLivelo = selectedProgram === 'Livelo'
+
+    // Find the club relevant to selected program
+    const relevantClub = promo?.clubRequired
+        ? MILES_CLUBS.find(c => c.id === promo.clubRequired)
+        : null
+    const clubHasTiers = (relevantClub?.tiers?.length ?? 0) > 0
+
+    // When program changes, pre-select tier from wallet saved tiers
+    useEffect(() => {
+        if (!promo?.clubRequired) {
+            setSelectedClubTier(null)
+            return
+        }
+        const savedTier = activeClubTiers[promo.clubRequired] ?? null
+        // Only pre-select if user actually has the club active
+        setSelectedClubTier(activeClubs.includes(promo.clubRequired) ? savedTier : null)
+    }, [selectedProgram, promo?.clubRequired]) // eslint-disable-line react-hooks/exhaustive-deps
 
     // For Livelo hub: compute Livelo miles then show airline sub-step
     const liveloMiles = isLivelo && partner && pointsNum > 0
@@ -44,25 +79,23 @@ export default function TransferSimulator({ activeClubs, awardsLastUpdated }: Pr
         : 0
 
     function getBestTier(p: TransferPartner) {
-        // Use promo bonuses if they're higher than tier bonuses
         const tierResult = p.tiers.find(t => t.clubId === null || activeClubs.includes(t.clubId))
             ?? p.tiers[p.tiers.length - 1]
-
-        // If promo gives better bonus, upgrade it
-        if (promo) {
-            const userClubBonus = promo.clubRequired && activeClubs.includes(promo.clubRequired)
-                ? promo.clubBonusPercent
-                : promo.bonusPercent
-            if (userClubBonus > tierResult.bonusPercent) {
-                return { ...tierResult, bonusPercent: userClubBonus }
-            }
-        }
         return tierResult
     }
 
+    // Compute effective bonus considering selected club tier
+    function getEffectiveBonus(): number {
+        if (!promo) return activeTier?.bonusPercent ?? 0
+        const userHasClub = promo.clubRequired ? activeClubs.includes(promo.clubRequired) : false
+        if (!userHasClub) return promo.bonusPercent
+        return getClubTierBonus(promo, selectedClubTier)
+    }
+
     const activeTier = partner ? getBestTier(partner) : null
+    const effectiveBonus = getEffectiveBonus()
     const milesResult = activeTier && pointsNum > 0 && !isLivelo
-        ? computeMiles(pointsNum, activeTier.ratio, activeTier.bonusPercent)
+        ? computeMiles(pointsNum, activeTier.ratio, effectiveBonus)
         : 0
 
     // Missing tiers (clubs user doesn't have that would give more)
@@ -91,13 +124,16 @@ export default function TransferSimulator({ activeClubs, awardsLastUpdated }: Pr
         setSelectedProgram(null)
         setPoints('')
         setExpandedRules(false)
+        setSelectedClubTier(null)
         setLiveloTarget(null)
     }
 
     function onSelectProgram(prog: string) {
         setSelectedProgram(prog)
         setExpandedRules(false)
+        setExpandedClubInfo(false)
         setLiveloTarget(null)
+        setSelectedClubTier(null)
     }
 
     return (
@@ -202,74 +238,161 @@ export default function TransferSimulator({ activeClubs, awardsLastUpdated }: Pr
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                 {card.partners.map(p => {
                                     const tier = getBestTier(p)
-                                    const promo = findPromotion(card.id, p.program)
-                                    // Show best bonus: either club+promo or base promo
-                                    const bestBonus = promo
-                                        ? (promo.clubRequired && activeClubs.includes(promo.clubRequired)
-                                            ? promo.clubBonusPercent
-                                            : promo.bonusPercent)
+                                    const localPromo = findPromotion(card.id, p.program, promotions)
+                                    const userHasClub = localPromo?.clubRequired ? activeClubs.includes(localPromo.clubRequired) : false
+                                    const savedTier = localPromo?.clubRequired ? activeClubTiers[localPromo.clubRequired] ?? null : null
+                                    const displayBonus = localPromo
+                                        ? userHasClub
+                                            ? getClubTierBonus(localPromo, savedTier)
+                                            : localPromo.bonusPercent
                                         : tier.bonusPercent
-                                    const miles = pointsNum > 0 ? computeMiles(pointsNum, tier.ratio, bestBonus) : null
+                                    const miles = pointsNum > 0 ? computeMiles(pointsNum, tier.ratio, displayBonus) : null
                                     const progColor = PROGRAM_COLORS[p.program] ?? '#0E2A55'
                                     const isSelected = selectedProgram === p.program
-                                    const hasBetterWithClub = promo?.clubRequired && !activeClubs.includes(promo.clubRequired)
-                                        && promo.clubBonusPercent > promo.bonusPercent
+                                    const hasBetterWithClub = localPromo?.clubRequired && !activeClubs.includes(localPromo.clubRequired)
+                                        && localPromo.clubBonusPercent > localPromo.bonusPercent
 
                                     return (
-                                        <button
-                                            key={p.program}
-                                            onClick={() => onSelectProgram(p.program)}
-                                            style={{
-                                                background: isSelected ? `${progColor}0e` : 'var(--bg-white)',
-                                                border: `2px solid ${isSelected ? progColor : 'var(--border-light)'}`,
-                                                borderRadius: 14, padding: '16px 18px',
-                                                cursor: 'pointer', fontFamily: 'inherit',
-                                                display: 'flex', alignItems: 'center', gap: 14,
-                                                transition: 'all .18s', textAlign: 'left',
-                                            }}
-                                            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = `${progColor}50` }}
-                                            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--border-light)' }}
-                                        >
-                                            <div style={{ width: 40, height: 40, borderRadius: 10, background: progColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                <span style={{ fontSize: 12, fontWeight: 900, color: '#fff' }}>
-                                                    {p.program.split(/[\s&]+/).map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
-                                                </span>
-                                            </div>
-                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dark)' }}>{p.program}</span>
-                                                    {p.program === 'Livelo' && (
-                                                        <span style={{ background: '#EDE9FE', border: '1px solid #C4B5FD', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 800, color: '#5B21B6', display: 'flex', alignItems: 'center', gap: 3 }}>
-                                                            <ArrowRightLeft size={9} /> HUB → aéreas
-                                                        </span>
-                                                    )}
-                                                    {promo && p.program !== 'Livelo' && (
-                                                        <span style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 800, color: '#92400E', display: 'flex', alignItems: 'center', gap: 3 }}>
-                                                            <Zap size={9} /> +{bestBonus}% bônus
-                                                        </span>
-                                                    )}
-                                                    {hasBetterWithClub && (
-                                                        <span style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 700, color: '#92400E', display: 'flex', alignItems: 'center', gap: 3 }}>
-                                                            <Tag size={9} /> Clube = +{promo!.clubBonusPercent}%
-                                                        </span>
-                                                    )}
+                                        <div key={p.program}>
+                                            <button
+                                                onClick={() => onSelectProgram(p.program)}
+                                                style={{
+                                                    width: '100%',
+                                                    background: isSelected ? `${progColor}0e` : 'var(--bg-white)',
+                                                    border: `2px solid ${isSelected ? progColor : 'var(--border-light)'}`,
+                                                    borderRadius: 14, padding: '16px 18px',
+                                                    cursor: 'pointer', fontFamily: 'inherit',
+                                                    display: 'flex', alignItems: 'center', gap: 14,
+                                                    transition: 'all .18s', textAlign: 'left',
+                                                }}
+                                                onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = `${progColor}50` }}
+                                                onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--border-light)' }}
+                                            >
+                                                <div style={{ width: 40, height: 40, borderRadius: 10, background: progColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    <span style={{ fontSize: 12, fontWeight: 900, color: '#fff' }}>
+                                                        {p.program.split(/[\s&]+/).map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                                                    </span>
                                                 </div>
-                                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                                                    {p.program === 'Livelo'
-                                                        ? `${tier.ratio}:1 → depois transfira para Smiles, LATAM ou Azul`
-                                                        : `Taxa ${tier.ratio.toLocaleString('pt-BR')}:1${bestBonus > 0 ? ` +${bestBonus}% bônus` : ''}`
-                                                    }
-                                                </div>
-                                            </div>
-                                            {miles !== null && (
-                                                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                                    <div style={{ fontSize: 20, fontWeight: 900, color: progColor, letterSpacing: '-0.02em' }}>{fmt(miles)}</div>
-                                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>
-                                                        {p.program === 'Livelo' ? 'pts Livelo' : 'milhas'}
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dark)' }}>{p.program}</span>
+                                                        {p.program === 'Livelo' && (
+                                                            <span style={{ background: '#EDE9FE', border: '1px solid #C4B5FD', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 800, color: '#5B21B6', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                                <ArrowRightLeft size={9} /> HUB → aéreas
+                                                            </span>
+                                                        )}
+                                                        {localPromo && p.program !== 'Livelo' && displayBonus > 0 && (
+                                                            <span style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 800, color: '#92400E', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                                <Zap size={9} /> +{displayBonus}% bônus
+                                                            </span>
+                                                        )}
+                                                        {hasBetterWithClub && (
+                                                            <span style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 700, color: '#92400E', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                                <Tag size={9} /> Clube = +{localPromo!.clubBonusPercent}%
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                                                        {p.program === 'Livelo'
+                                                            ? `${tier.ratio}:1 → depois transfira para Smiles, LATAM ou Azul`
+                                                            : `Taxa ${tier.ratio.toLocaleString('pt-BR')}:1${displayBonus > 0 ? ` +${displayBonus}% bônus` : ''}`
+                                                        }
                                                     </div>
                                                 </div>
-                                            )}
-                                        </button>
+                                                {miles !== null && (
+                                                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                        <div style={{ fontSize: 20, fontWeight: 900, color: progColor, letterSpacing: '-0.02em' }}>{fmt(miles)}</div>
+                                                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>
+                                                            {p.program === 'Livelo' ? 'pts Livelo' : 'milhas'}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </button>
+
+                                            {/* ── Club Plan Dropdown (aparece ao selecionar o programa) ── */}
+                                            <AnimatePresence>
+                                                {isSelected && localPromo?.clubRequired && clubHasTiers && relevantClub?.tiers && (
+                                                    <motion.div
+                                                        key={`tier-drop-${p.program}`}
+                                                        initial={{ opacity: 0, height: 0 }}
+                                                        animate={{ opacity: 1, height: 'auto' }}
+                                                        exit={{ opacity: 0, height: 0 }}
+                                                        style={{ overflow: 'hidden' }}
+                                                    >
+                                                        <div style={{ background: `${progColor}06`, border: `1.5px solid ${progColor}30`, borderTop: 'none', borderRadius: '0 0 14px 14px', padding: '14px 18px' }}>
+                                                            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>
+                                                                Qual seu plano do {relevantClub.name}?
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                                {/* Option: no club */}
+                                                                <button
+                                                                    onClick={() => setSelectedClubTier(null)}
+                                                                    style={{
+                                                                        background: selectedClubTier === null ? '#FEF2F2' : 'var(--snow)',
+                                                                        border: `1.5px solid ${selectedClubTier === null ? '#FECACA' : 'var(--border-light)'}`,
+                                                                        borderRadius: 10, padding: '10px 14px',
+                                                                        cursor: 'pointer', fontFamily: 'inherit',
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                                        transition: 'all .15s',
+                                                                    }}
+                                                                >
+                                                                    <div>
+                                                                        <div style={{ fontSize: 12, fontWeight: 700, color: selectedClubTier === null ? '#DC2626' : 'var(--text-dark)' }}>
+                                                                            Não tenho {relevantClub.name}
+                                                                        </div>
+                                                                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                                                            Bônus: {localPromo.bonusPercent}%
+                                                                        </div>
+                                                                    </div>
+                                                                    <div style={{ fontSize: 14, fontWeight: 900, color: '#DC2626' }}>
+                                                                        {pointsNum > 0 ? `${fmt(computeMiles(pointsNum, 1.0, localPromo.bonusPercent))} mi` : ''}
+                                                                    </div>
+                                                                </button>
+                                                                {/* Club tier options */}
+                                                                {relevantClub.tiers!.map(t => {
+                                                                    const tierBonus = localPromo.clubTierBonuses[t.name] ?? localPromo.clubBonusPercent
+                                                                    const isThisTier = selectedClubTier === t.name
+                                                                    return (
+                                                                        <button
+                                                                            key={t.name}
+                                                                            onClick={() => setSelectedClubTier(t.name)}
+                                                                            style={{
+                                                                                background: isThisTier ? `${progColor}12` : 'var(--snow)',
+                                                                                border: `1.5px solid ${isThisTier ? progColor : 'var(--border-light)'}`,
+                                                                                borderRadius: 10, padding: '10px 14px',
+                                                                                cursor: 'pointer', fontFamily: 'inherit',
+                                                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                                                transition: 'all .15s',
+                                                                            }}
+                                                                        >
+                                                                            <div>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                                                    <span style={{ fontSize: 12, fontWeight: 700, color: isThisTier ? progColor : 'var(--text-dark)' }}>{t.name}</span>
+                                                                                    {isThisTier && <CheckCircle2 size={12} color={progColor} />}
+                                                                                </div>
+                                                                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                                                                    {t.monthlyFee} · Bônus: {tierBonus}%
+                                                                                    {!activeClubs.includes(localPromo.clubRequired!) && (
+                                                                                        <span style={{ color: '#F59E0B', marginLeft: 6 }}>· você não tem este clube</span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div style={{ fontSize: 14, fontWeight: 900, color: isThisTier ? progColor : 'var(--text-muted)' }}>
+                                                                                {pointsNum > 0 ? `${fmt(computeMiles(pointsNum, 1.0, tierBonus))} mi` : ''}
+                                                                            </div>
+                                                                        </button>
+                                                                    )
+                                                                })}
+                                                            </div>
+                                                            <div style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                                <Info size={10} />
+                                                                Bônus por plano variam por campanha — confirme na página oficial antes de transferir
+                                                            </div>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
                                     )
                                 })}
                             </div>
@@ -350,7 +473,11 @@ export default function TransferSimulator({ activeClubs, awardsLastUpdated }: Pr
                                         {fmt(finalMiles)}
                                     </div>
                                     <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6 }}>
-                                        milhas · {isLivelo ? `${fmt(liveloMiles)} pts Livelo → ${fmt(finalMiles)} mi ${finalProgram}` : activeTier.label}
+                                        milhas · {isLivelo
+                                            ? `${fmt(liveloMiles)} pts Livelo → ${fmt(finalMiles)} mi ${finalProgram}`
+                                            : selectedClubTier
+                                                ? `${selectedClubTier} (+${effectiveBonus}% bônus)`
+                                                : activeTier.label}
                                     </div>
                                 </div>
                                 {pointsNum > 0 && (
@@ -366,13 +493,13 @@ export default function TransferSimulator({ activeClubs, awardsLastUpdated }: Pr
                                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${finalColor}20`, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
                                     {[
                                         { label: 'Taxa base', value: `${fmt(Math.floor(pointsNum / activeTier.ratio))} mi` },
-                                        ...(activeTier.bonusPercent > 0 ? [{ label: `Bônus +${activeTier.bonusPercent}%`, value: `+${fmt(finalMiles - Math.floor(pointsNum / activeTier.ratio))} mi` }] : []),
+                                        ...(effectiveBonus > 0 ? [{ label: `Bônus +${effectiveBonus}%`, value: `+${fmt(finalMiles - Math.floor(pointsNum / activeTier.ratio))} mi` }] : []),
                                         { label: 'Tempo', value: partner.transferTime },
                                         { label: 'Mín.', value: partner.minPointsLabel },
                                     ].map(item => (
                                         <div key={item.label}>
                                             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{item.label}</div>
-                                            <div style={{ fontSize: 14, fontWeight: 800, color: activeTier.bonusPercent > 0 && item.label.includes('Bônus') ? '#16A34A' : 'var(--text-dark)' }}>{item.value}</div>
+                                            <div style={{ fontSize: 14, fontWeight: 800, color: effectiveBonus > 0 && item.label.includes('Bônus') ? '#16A34A' : 'var(--text-dark)' }}>{item.value}</div>
                                         </div>
                                     ))}
                                 </div>
@@ -384,8 +511,8 @@ export default function TransferSimulator({ activeClubs, awardsLastUpdated }: Pr
                             <div style={{ background: '#FFF7ED', border: '1.5px solid #FED7AA', borderRadius: 14, padding: '12px 16px', marginBottom: 12, display: 'flex', gap: 10 }}>
                                 <AlertTriangle size={16} color="#D97706" style={{ flexShrink: 0, marginTop: 2 }} />
                                 <div style={{ fontSize: 12, color: '#92400E', lineHeight: 1.6 }}>
-                                    <b>⚠️ Cadastro obrigatório!</b> Você precisa se registrar na página da promoção <b>antes</b> de transferir. Sem cadastro = sem bônus, sem exceções.{' '}
-                                    <a href={partner.url} target="_blank" rel="noopener noreferrer" style={{ color: '#B45309', fontWeight: 700 }}>Ir para a página →</a>
+                                    <b>⚠️ Cadastro obrigatório!</b> Registre-se na página da promoção <b>antes</b> de transferir. Sem cadastro = sem bônus, sem exceções.{' '}
+                                    <a href={promo.registrationUrl ?? partner.url} target="_blank" rel="noopener noreferrer" style={{ color: '#B45309', fontWeight: 700 }}>Ir para a página →</a>
                                 </div>
                             </div>
                         )}
@@ -420,6 +547,9 @@ export default function TransferSimulator({ activeClubs, awardsLastUpdated }: Pr
                                     <span style={{ color: '#16803D', fontWeight: 600 }}>Última confirmação: {promo.lastConfirmed}</span>
                                     {' · '}
                                     <span style={{ color: '#15803D' }}>{promo.validUntil}</span>
+                                    {livePromos && (
+                                        <span style={{ marginLeft: 8, fontSize: 10, color: '#16A34A', fontWeight: 600 }}>· atualizado via API</span>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -432,7 +562,7 @@ export default function TransferSimulator({ activeClubs, awardsLastUpdated }: Pr
                             >
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: 'var(--text-dark)' }}>
                                     <Info size={15} color="var(--blue-medium)" />
-                                    Regras de transferência e tiers de bônus
+                                    Regras de transferência e bônus por plano
                                 </div>
                                 {expandedRules ? <ChevronUp size={16} color="var(--text-muted)" /> : <ChevronDown size={16} color="var(--text-muted)" />}
                             </button>
@@ -440,75 +570,87 @@ export default function TransferSimulator({ activeClubs, awardsLastUpdated }: Pr
                                 {expandedRules && (
                                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
                                         <div style={{ padding: '0 18px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>
-                                                Bônus por nível de clube
-                                            </div>
-                                            {partner.tiers.map(tier => {
-                                                const club = tier.clubId ? MILES_CLUBS.find(c => c.id === tier.clubId) : null
-                                                const userHas = tier.clubId === null || activeClubs.includes(tier.clubId)
-                                                // Use promo bonus if applies
-                                                const effectiveBonus = promo
-                                                    ? (tier.clubId === promo.clubRequired ? promo.clubBonusPercent : promo.bonusPercent)
-                                                    : tier.bonusPercent
-                                                const exMiles = pointsNum > 0 ? computeMiles(pointsNum, tier.ratio, effectiveBonus) : null
-                                                return (
-                                                    <div key={tier.label} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: userHas ? '#F0FDF4' : 'var(--snow)', border: `1px solid ${userHas ? '#86EFAC' : 'var(--border-light)'}`, borderRadius: 10 }}>
-                                                        {userHas ? <CheckCircle2 size={14} color="#16A34A" /> : <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid #CBD5E1', flexShrink: 0 }} />}
-                                                        <div style={{ flex: 1 }}>
-                                                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dark)' }}>
-                                                                {club?.name ?? 'Sem clube'}
-                                                                {userHas && <span style={{ fontSize: 10, color: '#16A34A', fontWeight: 600, marginLeft: 6 }}>✓ Ativo</span>}
-                                                            </div>
-                                                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                                                Taxa {tier.ratio.toLocaleString('pt-BR')}:1
-                                                                {effectiveBonus > 0 ? ` + ${effectiveBonus}% bônus` : ' · sem bônus'}
-                                                            </div>
-                                                        </div>
-                                                        {exMiles !== null && (
-                                                            <div style={{ fontSize: 14, fontWeight: 900, color: userHas ? '#16A34A' : 'var(--text-muted)' }}>
-                                                                {fmt(exMiles)} mi
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )
-                                            })}
 
-                                            {/* Expandir info do clube */}
-                                            {activeTier?.clubId && (() => {
-                                                const club = MILES_CLUBS.find(c => c.id === activeTier.clubId)
-                                                if (!club?.tiers) return null
-                                                return (
-                                                    <>
-                                                        <button
-                                                            onClick={() => setExpandedClubInfo(!expandedClubInfo)}
-                                                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--blue-medium)', padding: '4px 0', marginTop: 4 }}
-                                                        >
-                                                            {expandedClubInfo ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                                                            Ver planos do {club.name}
-                                                        </button>
-                                                        <AnimatePresence>
-                                                            {expandedClubInfo && (
-                                                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
-                                                                        {club.tiers.map(t => (
-                                                                            <div key={t.name} style={{ padding: '8px 12px', background: 'var(--snow)', borderRadius: 8, border: '1px solid var(--border-light)' }}>
-                                                                                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dark)' }}>{t.name}</div>
-                                                                                <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 16, marginTop: 2 }}>
-                                                                                    <span>{t.monthlyFee}</span>
-                                                                                    <span style={{ color: '#16A34A', fontWeight: 600 }}>{t.bonus}</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
-                                                                        <a href={partner.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'var(--blue-medium)', fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                                                                            <ExternalLink size={11} /> Assinar {club.name} (oficial)
-                                                                        </a>
+                                            {/* Tier-specific bonuses from promo */}
+                                            {promo && relevantClub?.tiers && (
+                                                <>
+                                                    <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>
+                                                        Bônus por plano em campanhas
+                                                    </div>
+                                                    {/* No-club row */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--snow)', border: '1px solid var(--border-light)', borderRadius: 10 }}>
+                                                        <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid #CBD5E1', flexShrink: 0 }} />
+                                                        <div style={{ flex: 1 }}>
+                                                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dark)' }}>Sem clube</div>
+                                                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Bônus: {promo.bonusPercent}%</div>
+                                                        </div>
+                                                        {pointsNum > 0 && <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--text-muted)' }}>{fmt(computeMiles(pointsNum, 1.0, promo.bonusPercent))} mi</div>}
+                                                    </div>
+                                                    {/* Club tier rows */}
+                                                    {relevantClub.tiers.map(t => {
+                                                        const tierBonus = promo.clubTierBonuses[t.name] ?? promo.clubBonusPercent
+                                                        const userHasThis = activeClubs.includes(promo.clubRequired!)
+                                                        const isSelectedTier = selectedClubTier === t.name
+                                                        return (
+                                                            <div key={t.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: isSelectedTier ? '#F0FDF4' : 'var(--snow)', border: `1px solid ${isSelectedTier ? '#86EFAC' : 'var(--border-light)'}`, borderRadius: 10 }}>
+                                                                {isSelectedTier ? <CheckCircle2 size={14} color="#16A34A" /> : <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid #CBD5E1', flexShrink: 0 }} />}
+                                                                <div style={{ flex: 1 }}>
+                                                                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dark)' }}>
+                                                                        {t.name}
+                                                                        {isSelectedTier && <span style={{ fontSize: 10, color: '#16A34A', fontWeight: 600, marginLeft: 6 }}>✓ Selecionado</span>}
+                                                                        {!userHasThis && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, marginLeft: 6 }}>· você não tem</span>}
                                                                     </div>
-                                                                </motion.div>
-                                                            )}
-                                                        </AnimatePresence>
-                                                    </>
-                                                )
-                                            })()}
+                                                                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                                                        {t.monthlyFee} · Bônus: <b style={{ color: '#16A34A' }}>{tierBonus}%</b>
+                                                                    </div>
+                                                                </div>
+                                                                {pointsNum > 0 && (
+                                                                    <div style={{ fontSize: 14, fontWeight: 900, color: isSelectedTier ? '#16A34A' : 'var(--text-muted)' }}>
+                                                                        {fmt(computeMiles(pointsNum, 1.0, tierBonus))} mi
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )
+                                                    })}
+                                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                                        <Info size={10} />
+                                                        Bônus por plano variam em cada campanha. Confirme na página oficial antes de transferir.
+                                                    </div>
+                                                </>
+                                            )}
+
+                                            {/* Club plan details expandable */}
+                                            {relevantClub?.tiers && (
+                                                <>
+                                                    <button
+                                                        onClick={() => setExpandedClubInfo(!expandedClubInfo)}
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--blue-medium)', padding: '4px 0', marginTop: 4 }}
+                                                    >
+                                                        {expandedClubInfo ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                                        Detalhes dos planos do {relevantClub.name}
+                                                    </button>
+                                                    <AnimatePresence>
+                                                        {expandedClubInfo && (
+                                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                                                                    {relevantClub.tiers.map(t => (
+                                                                        <div key={t.name} style={{ padding: '8px 12px', background: 'var(--snow)', borderRadius: 8, border: '1px solid var(--border-light)' }}>
+                                                                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dark)' }}>{t.name}</div>
+                                                                            <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 16, marginTop: 2, flexWrap: 'wrap' }}>
+                                                                                <span>{t.monthlyFee}</span>
+                                                                                <span style={{ color: '#16A34A', fontWeight: 600 }}>{t.bonusLabel}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                    <a href={relevantClub.signupUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'var(--blue-medium)', fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                                                        <ExternalLink size={11} /> Assinar {relevantClub.name} (oficial)
+                                                                    </a>
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </>
+                                            )}
 
                                             {promo && (
                                                 <>
@@ -541,7 +683,6 @@ export default function TransferSimulator({ activeClubs, awardsLastUpdated }: Pr
                                     <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.10em', textTransform: 'uppercase' }}>
                                         O que você consegue com {fmt(finalMiles)} milhas
                                     </div>
-                                    {/* Disclaimer preços médios */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#F8FAFC', border: '1px solid var(--border-light)', borderRadius: 8, padding: '4px 10px' }}>
                                         <Info size={11} color="var(--text-muted)" />
                                         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>
@@ -599,11 +740,7 @@ export default function TransferSimulator({ activeClubs, awardsLastUpdated }: Pr
                                 </div>
 
                                 <a
-                                    href={isLivelo
-                                        ? LIVELO_AIRLINE_PARTNERS.find(lp => lp.program === liveloTarget)?.program
-                                            ? `https://www.livelo.com.br`
-                                            : partner?.url ?? '#'
-                                        : partner?.url ?? '#'}
+                                    href={isLivelo ? 'https://www.livelo.com.br' : partner?.url ?? '#'}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20, padding: '14px 24px', background: `linear-gradient(135deg, ${finalColor}, ${finalColor}cc)`, color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 14, fontWeight: 800, boxShadow: `0 6px 24px ${finalColor}35` }}

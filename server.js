@@ -825,13 +825,83 @@ app.post('/api/award-prices/sync', async (req, res) => {
     res.json({ message: 'Sincronização iniciada em background' });
 });
 
+// ─── Promoções de Transferência ───────────────────────────────────────────────
+// Cache em memória com TTL de 12h. A tabela `transfer_promotions` no Supabase
+// é a fonte de verdade — atualizada manualmente ou via POST /api/transfer-promotions/update.
+// Fallback: se Supabase estiver vazio, a API retorna array vazio e o frontend
+// usa os dados hardcoded em transferData.ts.
+
+let promotionsCache = null;
+let promotionsCacheAt = 0;
+const PROMOTIONS_CACHE_TTL = 12 * 60 * 60 * 1000; // 12h
+
+async function refreshPromotionsCache() {
+    if (!supabase) return;
+    try {
+        const { data, error } = await supabase
+            .from('transfer_promotions')
+            .select('*')
+            .eq('active', true);
+        if (error) throw error;
+        if (data && data.length > 0) {
+            promotionsCache = data.map(row => ({
+                id: row.id,
+                cardId: row.card_id,
+                program: row.program,
+                bonusPercent: row.bonus_percent ?? 0,
+                clubBonusPercent: row.club_bonus_percent ?? 0,
+                clubTierBonuses: row.club_tier_bonuses ?? {},
+                clubRequired: row.club_required ?? null,
+                validUntil: row.valid_until ?? '',
+                description: row.description ?? '',
+                isPeriodic: row.is_periodic ?? true,
+                lastConfirmed: row.last_confirmed ?? '',
+                rules: row.rules ?? [],
+                registrationUrl: row.registration_url ?? undefined,
+            }));
+            promotionsCacheAt = Date.now();
+            console.log(`[Promotions] Cache atualizado: ${promotionsCache.length} promoções`);
+        }
+    } catch (err) {
+        console.error('[Promotions] Erro ao atualizar cache:', err.message);
+    }
+}
+
+// GET /api/transfer-promotions — retorna promoções de transferência (com cache 12h)
+app.get('/api/transfer-promotions', async (req, res) => {
+    const stale = Date.now() - promotionsCacheAt > PROMOTIONS_CACHE_TTL;
+    if (!promotionsCache || stale) {
+        await refreshPromotionsCache();
+    }
+    res.json({
+        promotions: promotionsCache ?? [],
+        cachedAt: promotionsCacheAt ? new Date(promotionsCacheAt).toISOString() : null,
+    });
+});
+
+// POST /api/transfer-promotions/update — força re-fetch do Supabase (protegido por header)
+app.post('/api/transfer-promotions/update', async (req, res) => {
+    const secret = (req.headers['x-sync-secret'] ?? '');
+    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
+        return res.status(401).json({ error: 'Não autorizado' });
+    }
+    await refreshPromotionsCache();
+    res.json({ message: 'Cache de promoções atualizado', count: promotionsCache?.length ?? 0 });
+});
+
 // Localmente: inicia o servidor Express normalmente.
 // Na Vercel: o arquivo é importado como módulo serverless — app.listen não é chamado.
 if (process.env.VERCEL !== '1') {
-    // Toda segunda-feira às 04:00 BRT (07:00 UTC)
+    // Toda segunda-feira às 04:00 BRT (07:00 UTC) — preços Seats.aero
     cron.schedule('0 7 * * 1', () => {
         console.log('[Cron] Disparando sync semanal de preços de milhas (Seats.aero)...');
         syncAwardPrices().catch(console.error);
+    });
+
+    // Todo dia ao meio-dia BRT (15:00 UTC) — refresh de promoções de transferência
+    cron.schedule('0 15 * * *', () => {
+        console.log('[Cron] Refreshing cache de promoções de transferência...');
+        refreshPromotionsCache().catch(console.error);
     });
 
     const PORT = process.env.PORT || 3001;
