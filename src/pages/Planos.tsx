@@ -1,10 +1,9 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, ChevronLeft, Loader2, Copy, Check, X, QrCode } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, Loader2, X } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import NumberFlow from '@number-flow/react'
-import { QRCodeSVG } from 'qrcode.react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 
@@ -53,150 +52,6 @@ function maskPhone(v: string) {
 }
 
 // ─── Modal PIX ────────────────────────────────────────────────────────────────
-function PixModal({ billingId, pixCode, pixQrCode, planName, priceLabel, onClose, onPaid }: {
-    billingId: string; pixCode: string | null; pixQrCode: string | null
-    planName: string; priceLabel: string; onClose: () => void; onPaid: () => void
-}) {
-    const [copied, setCopied] = useState(false)
-    const [status, setStatus] = useState<'PENDING' | 'PAID' | 'EXPIRED'>('PENDING')
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-    useEffect(() => {
-        pollRef.current = setInterval(async () => {
-            try {
-                const r = await fetch(`/api/checkout/status/${billingId}`)
-                const d = await r.json()
-                if (d.status === 'PAID' || d.status === 'COMPLETED') {
-                    setStatus('PAID')
-                    clearInterval(pollRef.current!)
-                    confetti({ particleCount: 150, spread: 90, origin: { y: 0.5 }, colors: ['#16A34A', '#4ADE80', '#fff'] })
-                    setTimeout(onPaid, 2200)
-                } else if (d.status === 'EXPIRED' || d.status === 'CANCELLED') {
-                    setStatus('EXPIRED')
-                    clearInterval(pollRef.current!)
-                }
-            } catch { /* ignore */ }
-        }, 3000)
-        return () => { if (pollRef.current) clearInterval(pollRef.current) }
-    }, [billingId, onPaid])
-
-    function copyCode() {
-        if (!pixCode) return
-        navigator.clipboard.writeText(pixCode)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-    }
-
-    return (
-        <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            style={{
-                position: 'fixed', inset: 0, background: 'rgba(14,42,85,0.55)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                zIndex: 1000, padding: 16, backdropFilter: 'blur(4px)',
-            }}
-            onClick={e => { if (e.target === e.currentTarget) onClose() }}
-        >
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                style={{
-                    background: '#fff', borderRadius: 24, padding: '32px 28px',
-                    maxWidth: 440, width: '100%',
-                    boxShadow: '0 24px 80px rgba(14,42,85,0.20)',
-                    display: 'flex', flexDirection: 'column', gap: 20,
-                }}
-            >
-                {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 4 }}>
-                            Pagamento PIX
-                        </div>
-                        <div style={{ fontSize: 20, fontWeight: 900, color: '#0E2A55' }}>FlyWise {planName}</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: '#2A60C2', marginTop: 2 }}>{priceLabel}/mês</div>
-                    </div>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 4 }}>
-                        <X size={20} />
-                    </button>
-                </div>
-
-                {status === 'PAID' ? (
-                    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                        style={{ textAlign: 'center', padding: '24px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <CheckCircle2 size={36} color="#16A34A" />
-                        </div>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: '#16A34A' }}>Pagamento confirmado!</div>
-                        <div style={{ fontSize: 13, color: '#64748B' }}>Seu plano {planName} está ativo. Redirecionando…</div>
-                    </motion.div>
-                ) : status === 'EXPIRED' ? (
-                    <div style={{ textAlign: 'center', padding: '16px 0', color: '#DC2626', fontSize: 14, fontWeight: 600 }}>
-                        O pagamento expirou. Tente novamente.
-                    </div>
-                ) : (
-                    <>
-                        {/* QR Code */}
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                            <div style={{ padding: 16, background: '#F8FAFC', borderRadius: 16, border: '1px solid #E2EAF5' }}>
-                                {pixQrCode ? (
-                                    <img src={pixQrCode} alt="QR Code PIX" style={{ width: 180, height: 180, display: 'block' }} />
-                                ) : pixCode ? (
-                                    <QRCodeSVG value={pixCode} size={180} />
-                                ) : (
-                                    <div style={{ width: 180, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>
-                                        <QrCode size={40} />
-                                    </div>
-                                )}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#64748B', fontSize: 12 }}>
-                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#16A34A', display: 'inline-block', animation: 'pulse-dot 1.5s ease-in-out infinite' }} />
-                                Aguardando pagamento…
-                            </div>
-                        </div>
-
-                        {/* Copy code */}
-                        {pixCode && (
-                            <div>
-                                <div style={{ fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 6 }}>
-                                    Ou copie o código PIX:
-                                </div>
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <div style={{
-                                        flex: 1, background: '#F8FAFC', border: '1px solid #E2EAF5',
-                                        borderRadius: 10, padding: '10px 12px',
-                                        fontSize: 11, color: '#64748B', fontFamily: 'monospace',
-                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                    }}>
-                                        {pixCode}
-                                    </div>
-                                    <button
-                                        onClick={copyCode}
-                                        style={{
-                                            background: copied ? '#DCFCE7' : '#0E2A55', color: copied ? '#16A34A' : '#fff',
-                                            border: 'none', borderRadius: 10, padding: '0 16px',
-                                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                                            fontSize: 12, fontWeight: 700, fontFamily: 'inherit', flexShrink: 0,
-                                            transition: 'all 0.2s',
-                                        }}
-                                    >
-                                        {copied ? <><Check size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        <div style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center' }}>
-                            O QR code expira em 30 minutos · Verificando automaticamente a cada 3s
-                        </div>
-                    </>
-                )}
-            </motion.div>
-        </motion.div>
-    )
-}
-
 // ─── Modal completar dados ─────────────────────────────────────────────────────
 function CompleteDataModal({ onSubmit, onClose, loading }: {
     onSubmit: (cpf: string, phone: string) => void; onClose: () => void; loading: boolean
@@ -295,13 +150,11 @@ export default function Planos() {
     const { user } = useAuth()
     const [billing, setBilling] = useState<'mensal' | 'anual'>('mensal')
     const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
-    const [error, setError] = useState<string | null>(null)
 
     // fluxo
     const [pendingPlan, setPendingPlan] = useState<typeof PLANS[number] | null>(null)
     const [showDataModal, setShowDataModal] = useState(false)
     const [savingData, setSavingData] = useState(false)
-    const [pixData, setPixData] = useState<{ id: string; pixCode: string | null; pixQrCode: string | null; planName: string; priceLabel: string } | null>(null)
 
     const switchToAnual = useCallback(() => {
         if (billing === 'mensal') {
@@ -312,58 +165,44 @@ export default function Planos() {
         }
     }, [billing])
 
-    async function startCheckout(plan: typeof PLANS[number], cpf?: string, phone?: string) {
-        setLoadingPlan(plan.name)
-        setError(null)
+    function goToCheckout(plan: typeof PLANS[number], cpf: string, phone: string) {
         const priceVal = billing === 'anual' ? plan.priceAnualVal! : plan.priceVal!
-        try {
-            const res = await fetch('/api/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    origin: 'PLANO',
-                    destination: plan.name.toUpperCase(),
-                    totalBrl: priceVal,
-                    outboundCompany: `FlyWise ${plan.name}`,
-                    customerEmail: user?.email,
-                    customerName: user?.user_metadata?.full_name || user?.email?.split('@')[0],
-                    customerTaxId: cpf,
-                    customerPhone: phone,
-                }),
-            })
-            const data = await res.json()
-            if (!res.ok || data.error) throw new Error(data.error || 'Erro ao iniciar pagamento')
-
-            const priceLabel = billing === 'anual'
-                ? `R$ ${plan.priceAnualVal}`
-                : plan.price
-
-            setPixData({ id: data.id, pixCode: data.pixCode, pixQrCode: data.pixQrCode, planName: plan.name, priceLabel })
-        } catch (err: any) {
-            setError(err.message)
-        } finally {
-            setLoadingPlan(null)
-        }
+        const priceLabel = billing === 'anual' ? `R$ ${plan.priceAnualVal}` : plan.price
+        navigate('/checkout', {
+            state: {
+                planName: plan.name,
+                planDesc: plan.desc,
+                planFeatures: plan.features,
+                priceVal,
+                priceLabel,
+                billing,
+                customerEmail: user?.email ?? '',
+                customerName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || '',
+                customerTaxId: cpf,
+                customerPhone: phone,
+            },
+        })
     }
 
     async function handlePlanClick(plan: typeof PLANS[number]) {
         if (!plan.priceVal) return
         setPendingPlan(plan)
+        setLoadingPlan(plan.name)
 
-        // Verificar se tem CPF e telefone no perfil
         const { data: profile } = await supabase
             .from('user_profiles')
             .select('phone, cpf')
             .eq('id', user!.id)
             .single()
 
+        setLoadingPlan(null)
         const hasCpf = !!(profile as any)?.cpf
         const hasPhone = !!profile?.phone
 
         if (!hasCpf || !hasPhone) {
             setShowDataModal(true)
         } else {
-            await startCheckout(plan, (profile as any).cpf, profile!.phone)
+            goToCheckout(plan, (profile as any).cpf, profile!.phone)
         }
     }
 
@@ -372,7 +211,7 @@ export default function Planos() {
         try {
             await supabase.from('user_profiles').upsert({ id: user!.id, cpf, phone })
             setShowDataModal(false)
-            if (pendingPlan) await startCheckout(pendingPlan, cpf, phone)
+            if (pendingPlan) goToCheckout(pendingPlan, cpf, phone)
         } finally {
             setSavingData(false)
         }
@@ -476,12 +315,6 @@ export default function Planos() {
                         ))}
                     </div>
 
-                    {error && (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                            style={{ marginTop: 24, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '10px 18px', fontSize: 13, color: '#DC2626', maxWidth: 720, margin: '24px auto 0' }}>
-                            {error}
-                        </motion.div>
-                    )}
 
                     <p style={{ marginTop: 32, textAlign: 'center', fontSize: 13, color: '#94A3B8' }}>
                         Pagamento via PIX · Cancele a qualquer momento · Sem fidelidade
@@ -496,17 +329,6 @@ export default function Planos() {
                         loading={savingData}
                         onSubmit={handleDataSubmit}
                         onClose={() => { setShowDataModal(false); setPendingPlan(null) }}
-                    />
-                )}
-                {pixData && (
-                    <PixModal
-                        billingId={pixData.id}
-                        pixCode={pixData.pixCode}
-                        pixQrCode={pixData.pixQrCode}
-                        planName={pixData.planName}
-                        priceLabel={pixData.priceLabel}
-                        onClose={() => setPixData(null)}
-                        onPaid={() => { setPixData(null); navigate('/configuracoes') }}
                     />
                 )}
             </AnimatePresence>
