@@ -683,10 +683,40 @@ app.post('/api/checkout', async (req, res) => {
             return res.status(abRes.status).json({ error: abData.error || 'Erro ao criar cobrança' });
         }
 
-        console.log(`[AbacatePay] Cobrança criada: ${abData.data?.url}`);
-        res.json({ url: abData.data?.url, id: abData.data?.id });
+        console.log('[AbacatePay] Billing criado:', JSON.stringify(abData).slice(0, 400));
+
+        // Extrair PIX code de possíveis locais na resposta
+        const d = abData.data ?? {};
+        const methods = d.methods ?? [];
+        const pixMethod = methods.find(m => m.method === 'PIX') ?? methods[0] ?? {};
+        const pixCode = pixMethod.pixCode ?? pixMethod.brCode ?? d.brCode ?? d.pixCode ?? d.pixCopyPaste ?? null;
+        const pixQrCode = pixMethod.pixQrCode ?? pixMethod.qrCodeImage ?? d.qrCodeImage ?? null;
+
+        res.json({
+            id: d.id,
+            url: d.url,
+            pixCode,
+            pixQrCode,
+            status: d.status ?? 'PENDING',
+        });
     } catch (err) {
         console.error('[AbacatePay] Exceção:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/checkout/status/:id — verifica status da cobrança
+app.get('/api/checkout/status/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const abRes = await fetch(`${ABACATEPAY_BASE}/billing/${id}`, {
+            headers: { 'Authorization': `Bearer ${ABACATEPAY_API_KEY}` },
+            signal: AbortSignal.timeout(10000),
+        });
+        const abData = await abRes.json();
+        const d = abData.data ?? {};
+        res.json({ status: d.status ?? 'PENDING', id: d.id });
+    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
