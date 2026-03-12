@@ -94,9 +94,23 @@ _PASSAGENS_KEYWORDS = [
     "viagem", "destino", "ida e volta", "só ida", "so ida",
 ]
 
+# Sub-categorias dentro de milhas
+_TRANSFERENCIA_KEYWORDS = [
+    "transferência", "transferencia", "bônus de transferência", "bonus de transferencia",
+    "bônus transferência", "bonus transferencia", "transfer bonus",
+    "bônus de pontos", "bonus de pontos", "promoção de transferência",
+    "promocao de transferencia", "pontos extras",
+]
 
-def classificar(titulo: str, conteudo: str) -> tuple[str | None, list[str]]:
-    """Retorna (categoria, programas_tags) a partir do texto da promoção."""
+_CLUBE_KEYWORDS = [
+    "clube", "club smiles", "club latam", "club azul",
+    "tudoazul família", "tudoazul familia", "tudoazul club",
+    "assinatura", "mensalidade", "clube de assinatura", "plano clube",
+]
+
+
+def classificar(titulo: str, conteudo: str) -> tuple[str | None, str | None, list[str]]:
+    """Retorna (categoria, subcategoria, programas_tags) a partir do texto da promoção."""
     texto = (titulo + " " + (conteudo or "")).lower()
 
     programas_tags = [
@@ -108,14 +122,20 @@ def classificar(titulo: str, conteudo: str) -> tuple[str | None, list[str]]:
     passagens_score = sum(1 for kw in _PASSAGENS_KEYWORDS if kw in texto)
 
     if milhas_score == 0 and passagens_score == 0:
-        categoria = None
+        return None, None, []
     elif milhas_score >= passagens_score:
         categoria = "milhas"
+        trans_score = sum(1 for kw in _TRANSFERENCIA_KEYWORDS if kw in texto)
+        clube_score = sum(1 for kw in _CLUBE_KEYWORDS if kw in texto)
+        if trans_score > clube_score:
+            subcategoria = "transferencia"
+        elif clube_score > trans_score:
+            subcategoria = "clube"
+        else:
+            subcategoria = None
+        return categoria, subcategoria, programas_tags
     else:
-        categoria = "passagens"
-        programas_tags = []  # passagens não têm programas de milhas
-
-    return categoria, programas_tags
+        return "passagens", None, []
 
 
 # ─── Upsert ───────────────────────────────────────────────────────────────────
@@ -132,22 +152,23 @@ def upsert_promocao(conn, data: dict):
     conteudo = data.get("content_html") or data.get("content_text") or ""
 
     titulo = data.get("title") or "Sem título"
-    categoria, programas_tags = classificar(titulo, conteudo)
+    categoria, subcategoria, programas_tags = classificar(titulo, conteudo)
 
     cur.execute(
         """
         INSERT INTO promocoes
-            (titulo, conteudo, url, fonte, valid_until, categoria, programas_tags, created_at, updated_at)
+            (titulo, conteudo, url, fonte, valid_until, categoria, subcategoria, programas_tags, created_at, updated_at)
         VALUES
-            (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (url) DO UPDATE SET
-            titulo        = EXCLUDED.titulo,
-            conteudo      = EXCLUDED.conteudo,
-            fonte         = EXCLUDED.fonte,
-            valid_until   = EXCLUDED.valid_until,
-            categoria     = EXCLUDED.categoria,
+            titulo         = EXCLUDED.titulo,
+            conteudo       = EXCLUDED.conteudo,
+            fonte          = EXCLUDED.fonte,
+            valid_until    = EXCLUDED.valid_until,
+            categoria      = EXCLUDED.categoria,
+            subcategoria   = EXCLUDED.subcategoria,
             programas_tags = EXCLUDED.programas_tags,
-            updated_at    = EXCLUDED.updated_at
+            updated_at     = EXCLUDED.updated_at
         """,
         (
             titulo,
@@ -156,6 +177,7 @@ def upsert_promocao(conn, data: dict):
             "passageirodeprimeira.com",
             data.get("valid_until"),
             categoria,
+            subcategoria,
             programas_tags if programas_tags else None,
             now,
             now,
@@ -200,9 +222,9 @@ def main():
             upsert_promocao(conn, data)
             saved += 1
             titulo = (data.get("title") or "")[:60]
-            cat, tags = classificar(titulo, data.get("content_text") or "")
+            cat, sub, tags = classificar(titulo, data.get("content_text") or "")
             print(f"   ✅ Salvo: {titulo}")
-            print(f"   ↳  Categoria: {cat or '?'}  |  Tags: {tags or '—'}")
+            print(f"   ↳  Categoria: {cat or '?'}  |  Sub: {sub or '—'}  |  Tags: {tags or '—'}")
             if data.get("valid_until"):
                 print(f"   ↳  Expira: {data['valid_until'].strftime('%d/%m/%Y %H:%M')}")
         except Exception as e:

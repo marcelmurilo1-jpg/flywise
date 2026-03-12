@@ -42,23 +42,50 @@ def db_connect():
     return psycopg2.connect(DB_URL, cursor_factory=psycopg2.extras.RealDictCursor)
 
 
-def buscar_promocoes_novas(conn) -> list[dict]:
-    """Retorna promoções ainda não notificadas e não expiradas."""
+def buscar_promocoes_validas(conn) -> list[dict]:
+    """Retorna promoções válidas (não expiradas) com categoria definida."""
     now = datetime.now(TZ)
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, titulo, conteudo, url, categoria, programas_tags, valid_until
+            SELECT id, titulo, conteudo, url, categoria, subcategoria, programas_tags, valid_until
             FROM   promocoes
-            WHERE  notificado_em IS NULL
-              AND  categoria IS NOT NULL
+            WHERE  categoria IS NOT NULL
               AND  (valid_until IS NULL OR valid_until > %s)
             ORDER  BY created_at DESC
-            LIMIT  50
+            LIMIT  100
             """,
             (now,),
         )
         return cur.fetchall()
+
+
+def buscar_promos_ja_enviadas(conn, user_id: str) -> set[int]:
+    """Retorna IDs de promoções já enviadas para este usuário."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT promotion_id FROM user_promotion_log WHERE user_id = %s",
+            (user_id,),
+        )
+        return {row["promotion_id"] for row in cur.fetchall()}
+
+
+def registrar_envio(conn, user_id: str, ids: list[int]):
+    """Registra promoções como enviadas para este usuário."""
+    if not ids:
+        return
+    now = datetime.now(TZ)
+    with conn.cursor() as cur:
+        for promo_id in ids:
+            cur.execute(
+                """
+                INSERT INTO user_promotion_log (user_id, promotion_id, sent_at)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (user_id, promotion_id) DO NOTHING
+                """,
+                (user_id, promo_id, now),
+            )
+    conn.commit()
 
 
 def buscar_preferencias_usuarios(conn) -> list[dict]:
@@ -90,34 +117,29 @@ def buscar_preferencias_usuarios(conn) -> list[dict]:
         return cur.fetchall()
 
 
-def marcar_notificado(conn, ids: list[int]):
-    """Marca promoções como notificadas."""
-    if not ids:
-        return
-    now = datetime.now(TZ)
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE promocoes SET notificado_em = %s WHERE id = ANY(%s)",
-            (now, ids),
-        )
-    conn.commit()
-
-
 # ─── Matching ─────────────────────────────────────────────────────────────────
 
-def promos_para_usuario(usuario: dict, promos: list[dict]) -> list[dict]:
+def promos_para_usuario(usuario: dict, promos: list[dict], ja_enviadas: set[int]) -> list[dict]:
     """Filtra promoções que interessam a um usuário específico."""
     resultado = []
     for p in promos:
+        if p["id"] in ja_enviadas:
+            continue
+
         cat = p["categoria"]
+        subcategoria = p.get("subcategoria")
         tags = p["programas_tags"] or []
 
         if cat == "passagens" and usuario["passagens"]:
             resultado.append(p)
         elif cat == "milhas" and usuario["milhas"]:
+            # Respeita alerta_promocao (transferência) e alerta_award_space (clubes)
+            if subcategoria == "transferencia" and not usuario["alerta_promocao"]:
+                continue
+            if subcategoria == "clube" and not usuario["alerta_award_space"]:
+                continue
+            # Filtro por programa: exige ao menos um selecionado com match
             prefs_prog = usuario["programas"] or []
-            # Só envia milhas se o usuário selecionou ao menos um programa
-            # e a promoção tem tag em comum (ou não tem tags — promoção genérica)
             if prefs_prog and (not tags or any(t in prefs_prog for t in tags)):
                 resultado.append(p)
 
@@ -247,13 +269,13 @@ def main():
     conn = db_connect()
     print("✅  Conectado ao banco.")
 
-    promos = buscar_promocoes_novas(conn)
+    promos = buscar_promocoes_validas(conn)
     if not promos:
-        print("📭  Nenhuma promoção nova para notificar.")
+        print("📭  Nenhuma promoção válida encontrada.")
         conn.close()
         return
 
-    print(f"📬  {len(promos)} promoção(ões) nova(s) encontrada(s).")
+    print(f"📬  {len(promos)} promoção(ões) válida(s) disponível(is).")
 
     usuarios = buscar_preferencias_usuarios(conn)
     if not usuarios:
@@ -263,11 +285,14 @@ def main():
 
     print(f"👥  {len(usuarios)} usuário(s) com notificações ativas.\n")
 
-    ids_notificados: set[int] = set()
+    total_enviados = 0
 
     for u in usuarios:
-        email = u["email"]
-        selecionadas = promos_para_usuario(u, promos)
+        email   = u["email"]
+        user_id = str(u["user_id"])
+
+        ja_enviadas  = buscar_promos_ja_enviadas(conn, user_id)
+        selecionadas = promos_para_usuario(u, promos, ja_enviadas)
         if not selecionadas:
             continue
 
@@ -278,13 +303,12 @@ def main():
         ok = enviar_email(email, subject, html)
         if ok:
             print(f"   ✅ Enviado.")
-            for p in selecionadas:
-                ids_notificados.add(p["id"])
+            registrar_envio(conn, user_id, [p["id"] for p in selecionadas])
+            total_enviados += len(selecionadas)
         time.sleep(RATE_SLEEP)
 
-    if ids_notificados:
-        marcar_notificado(conn, list(ids_notificados))
-        print(f"\n🏁  {len(ids_notificados)} promoção(ões) marcada(s) como notificada(s).")
+    if total_enviados:
+        print(f"\n🏁  {total_enviados} envio(s) registrado(s) no log.")
     else:
         print("\n📭  Nenhum e-mail enviado.")
 
