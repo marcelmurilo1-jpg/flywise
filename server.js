@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import cron from 'node-cron';
 import { chromium as chromiumExtra } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import pLimit from 'p-limit';
@@ -721,9 +722,118 @@ app.get('/api/checkout/status/:id', async (req, res) => {
     }
 });
 
+// ─── Seats.aero Award Price Sync ─────────────────────────────────────────────
+// Roda toda segunda-feira às 04:00 BRT.
+// Consulta os dias 1, 15 e 30 dos próximos 2 meses para cada rota de referência.
+// Salva os preços médios em milhas na tabela `award_prices_cache` do Supabase.
+
+const REFERENCE_ROUTES = [
+    { origin: 'GRU', destination: 'SDU', category: 'dom_short' },
+    { origin: 'GRU', destination: 'CGH', category: 'dom_short' },
+    { origin: 'GRU', destination: 'SSA', category: 'dom_medium' },
+    { origin: 'GRU', destination: 'BSB', category: 'dom_medium' },
+    { origin: 'GRU', destination: 'BEL', category: 'dom_long' },
+    { origin: 'GRU', destination: 'REC', category: 'dom_long' },
+    { origin: 'GRU', destination: 'BOG', category: 'latam_short' },
+    { origin: 'GRU', destination: 'SCL', category: 'latam_short' },
+    { origin: 'GRU', destination: 'MEX', category: 'latam_medium' },
+    { origin: 'GRU', destination: 'CDG', category: 'transatlantic' },
+    { origin: 'GRU', destination: 'JFK', category: 'transatlantic' },
+    { origin: 'GRU', destination: 'NRT', category: 'longhaul' },
+];
+
+function getSampleDates() {
+    const dates = [];
+    const now = new Date();
+    for (let m = 0; m < 2; m++) {
+        const base = new Date(now.getFullYear(), now.getMonth() + m + 1, 1);
+        for (const day of [1, 15, 28]) {
+            const d = new Date(base.getFullYear(), base.getMonth(), day);
+            dates.push(d.toISOString().slice(0, 10));
+        }
+    }
+    return dates;
+}
+
+async function syncAwardPrices() {
+    if (!SEATS_AERO_API_KEY || !supabase) {
+        console.log('[AwardSync] Skipped — SEATS_AERO_API_KEY ou Supabase não configurado');
+        return;
+    }
+    console.log('[AwardSync] Iniciando sincronização semanal de preços de milhas...');
+    const dates = getSampleDates();
+    const results = {};  // { category: { economy: [], business: [] } }
+
+    for (const route of REFERENCE_ROUTES) {
+        for (const date of dates) {
+            try {
+                const data = await fetchSeatsAeroAPI(route.origin, route.destination, date);
+                const trips = data.data ?? [];
+                for (const trip of trips) {
+                    if (!results[route.category]) results[route.category] = { economy: [], business: [] };
+                    if (trip.YAvailable && trip.YMileageCost > 0) results[route.category].economy.push(trip.YMileageCost);
+                    if (trip.JAvailable && trip.JMileageCost > 0) results[route.category].business.push(trip.JMileageCost);
+                }
+                await new Promise(r => setTimeout(r, 300)); // rate limit gentile
+            } catch (e) {
+                console.warn(`[AwardSync] Erro ${route.origin}-${route.destination} ${date}: ${e.message}`);
+            }
+        }
+    }
+
+    // Calcular médias e salvar no Supabase
+    const rows = Object.entries(results).map(([category, { economy, business }]) => ({
+        category,
+        economy_avg: economy.length ? Math.round(economy.reduce((a, b) => a + b, 0) / economy.length) : null,
+        business_avg: business.length ? Math.round(business.reduce((a, b) => a + b, 0) / business.length) : null,
+        sample_count: economy.length + business.length,
+        updated_at: new Date().toISOString(),
+    }));
+
+    if (rows.length > 0) {
+        const { error } = await supabase.from('award_prices_cache').upsert(rows, { onConflict: 'category' });
+        if (error) console.error('[AwardSync] Erro ao salvar:', error.message);
+        else console.log(`[AwardSync] ${rows.length} categorias salvas com sucesso.`);
+    } else {
+        console.log('[AwardSync] Nenhum dado retornado pelo Seats.aero.');
+    }
+}
+
+// GET /api/award-prices — retorna preços médios cacheados do Supabase
+app.get('/api/award-prices', async (req, res) => {
+    if (!supabase) return res.json({ data: [], lastUpdated: null });
+    try {
+        const { data, error } = await supabase
+            .from('award_prices_cache')
+            .select('category, economy_avg, business_avg, sample_count, updated_at')
+            .order('updated_at', { ascending: false });
+        if (error) throw error;
+        const lastUpdated = data?.[0]?.updated_at ?? null;
+        res.json({ data: data ?? [], lastUpdated });
+    } catch (err) {
+        res.status(500).json({ error: err.message, data: [], lastUpdated: null });
+    }
+});
+
+// POST /api/award-prices/sync — dispara sync manual (protegido por header)
+app.post('/api/award-prices/sync', async (req, res) => {
+    const secret = req.headers['x-sync-secret'] ?? '';
+    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
+        return res.status(401).json({ error: 'Não autorizado' });
+    }
+    syncAwardPrices().catch(console.error);
+    res.json({ message: 'Sincronização iniciada em background' });
+});
+
 // Localmente: inicia o servidor Express normalmente.
 // Na Vercel: o arquivo é importado como módulo serverless — app.listen não é chamado.
 if (process.env.VERCEL !== '1') {
+    // Toda segunda-feira às 04:00 BRT (07:00 UTC)
+    cron.schedule('0 7 * * 1', () => {
+        console.log('[Cron] Disparando sync semanal de preços de milhas (Seats.aero)...');
+        syncAwardPrices().catch(console.error);
+    });
+
     const PORT = process.env.PORT || 3001;
     app.listen(PORT, () => {
         console.log(`\n======================================================`);

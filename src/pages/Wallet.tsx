@@ -49,6 +49,7 @@ export default function Wallet() {
 
     // Clubes ativos do usuário (salvo em user_metadata)
     const [activeClubs, setActiveClubs] = useState<string[]>([])
+    const [awardsLastUpdated, setAwardsLastUpdated] = useState<string | undefined>(undefined)
 
     useEffect(() => {
         if (!user) return
@@ -58,6 +59,13 @@ export default function Wallet() {
         setActiveClubs(clubs)
         setLoading(false)
     }, [user])
+
+    useEffect(() => {
+        fetch('/api/award-prices')
+            .then(r => r.json())
+            .then(d => { if (d.lastUpdated) setAwardsLastUpdated(d.lastUpdated) })
+            .catch(() => {})
+    }, [])
 
     const saveMiles = async (updated: MilesMap) => {
         setSaving(true)
@@ -336,7 +344,7 @@ export default function Wallet() {
                     {/* ── Tab: Simulador ── */}
                     {activeTab === 'simulador' && (
                         <motion.div key="simulador" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
-                            <TransferSimulator activeClubs={activeClubs} />
+                            <TransferSimulator activeClubs={activeClubs} awardsLastUpdated={awardsLastUpdated} />
                         </motion.div>
                     )}
 

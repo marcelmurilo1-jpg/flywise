@@ -1,27 +1,35 @@
 // ─── Transfer Data ────────────────────────────────────────────────────────────
-// All data is public knowledge from official bank/program terms.
-// Promotions should be reviewed periodically.
+// Taxas e programas baseados em dados oficiais dos bancos/programas (mar/2026).
+// Promoções são campanhas periódicas — atualizar conforme novos anúncios.
+//
+// IMPORTANTE sobre ratios:
+//   ratio = quantos pontos do cartão para 1 milha/ponto no programa destino.
+//   Ex: ratio 1.0 → 1.000 pontos do cartão = 1.000 milhas (1:1)
+//       ratio 2.5 → 2.500 pontos do cartão = 1.000 milhas
+//
+// A maioria dos programas modernos (Iupp, C6, Nubank, Esfera) opera em 1:1.
 
 export interface TransferTier {
     clubId: string | null       // null = sem clube necessário
-    label: string               // "Sem clube" | "Smiles Club" etc.
-    ratio: number               // pontos do cartão por 1 milha (quanto maior, pior)
-    bonusPercent: number        // bônus adicional em milhas (0 = sem bônus)
+    label: string
+    ratio: number               // pontos cartão por 1 milha
+    bonusPercent: number        // bônus adicional em campanhas
 }
 
 export interface TransferPartner {
     program: string
-    tiers: TransferTier[]       // do melhor para o pior
-    minPoints: number           // mínimo para transferência
-    transferTime: string        // tempo de crédito
-    url: string                 // link para transferência
+    tiers: TransferTier[]       // melhor tier primeiro
+    minPoints: number
+    minPointsLabel: string      // formatado para exibição
+    transferTime: string
+    url: string
 }
 
 export interface CreditCard {
     id: string
     name: string
-    currency: string            // nome dos pontos do cartão
-    color: string               // cor do cartão no UI
+    currency: string
+    color: string
     initials: string
     partners: TransferPartner[]
 }
@@ -31,20 +39,23 @@ export interface MilesClub {
     name: string
     program: string
     color: string
-    monthlyFee: string          // custo mensal aproximado
+    monthlyFee: string
     description: string
     benefits: string[]
+    tiers?: { name: string; monthlyFee: string; bonus: string }[]
 }
 
 export interface TransferPromotion {
     cardId: string
     program: string
-    bonusPercent: number        // ex: 100 = dobro de milhas
-    clubRequired: string | null // null = válido para todos
-    validUntil: string          // "2026-04-30" ou "Campanha periódica"
+    bonusPercent: number        // para não-clube
+    clubBonusPercent: number    // para assinantes do clube
+    clubRequired: string | null
+    validUntil: string
     description: string
+    isPeriodic: boolean
+    lastConfirmed: string       // data da última confirmação oficial
     rules: string[]
-    isPeriodic: boolean         // campanhas que se repetem
 }
 
 export interface RouteCategory {
@@ -56,118 +67,137 @@ export interface RouteCategory {
     economy: number
     business: number
     cashBRL: number
-    programs: string[]          // programas que cobrem essa rota
+    programs: string[]
 }
 
-// ─── Clubes disponíveis ───────────────────────────────────────────────────────
+// ─── Clubes ───────────────────────────────────────────────────────────────────
 
 export const MILES_CLUBS: MilesClub[] = [
     {
         id: 'smiles_club',
-        name: 'Smiles Club',
+        name: 'Clube Smiles',
         program: 'Smiles',
         color: '#FF6B00',
-        monthlyFee: '~R$ 29,90/mês',
-        description: 'Programa de assinatura da Smiles com bônus de 80–100% em transferências parceiras',
+        monthlyFee: 'A partir de R$ 39,90/mês',
+        description: 'Assinatura mensal da Smiles com compra garantida de milhas + bônus diferencial em promoções de transferência',
+        tiers: [
+            { name: 'Plano 1.000 mi', monthlyFee: '~R$ 39,90/mês', bonus: 'Bônus diferencial em promos' },
+            { name: 'Plano 2.000 mi', monthlyFee: '~R$ 69,90/mês', bonus: 'Bônus diferencial em promos' },
+            { name: 'Plano 5.000 mi', monthlyFee: '~R$ 149,90/mês', bonus: 'Bônus diferencial em promos' },
+            { name: 'Plano 10.000 mi', monthlyFee: '~R$ 259,90/mês', bonus: 'Bônus diferencial + lounge' },
+            { name: 'Plano 20.000 mi / Diamante', monthlyFee: '~R$ 449,90/mês', bonus: 'Máximo bônus em promos' },
+        ],
         benefits: [
-            'Bônus de 80% a 100% em transferências de cartão',
-            'Milhas extras em voos Gol',
-            'Upgrade de cabine com mais facilidade',
-            'Acesso a tarifas exclusivas',
+            'Milhas garantidas todo mês (1.000 a 20.000 conforme plano)',
+            'Bônus diferencial em promoções de transferência de cartão',
+            'Compra de milhas com desconto',
+            'Acesso a tarifas exclusivas de resgate',
+            'Clientes Diamante recebem bônus máximo em campanhas',
         ],
     },
     {
-        id: 'tudoazul_clube',
-        name: 'TudoAzul Clube',
+        id: 'azul_fidelidade_clube',
+        name: 'Clube Azul Fidelidade',
         program: 'TudoAzul',
         color: '#003DA5',
-        monthlyFee: '~R$ 24,90/mês',
-        description: 'Assinatura TudoAzul com bônus garantido em compras e transferências',
+        monthlyFee: 'A partir de R$ 35,00/mês',
+        description: 'Assinatura do Azul Fidelidade com pontos mensais + bônus progressivo por tempo de assinatura',
+        tiers: [
+            { name: 'Plano 1.000 pts (6+ meses)', monthlyFee: '~R$ 35,00/mês', bonus: '+5% em transferências' },
+            { name: 'Plano 1.000–5.000 pts (12+ meses)', monthlyFee: 'R$ 35–149/mês', bonus: '+10% em transferências' },
+            { name: 'Plano 10.000–20.000 pts (12+ meses)', monthlyFee: 'R$ 250–449/mês', bonus: '+20% em transferências' },
+            { name: '5+ anos de assinatura', monthlyFee: 'Plano ativo', bonus: '+30% a +133% em promos especiais' },
+        ],
         benefits: [
-            'Bônus de 50% a 100% em transferências',
-            'Pontuação em dobro em compras Azul',
-            'Resgate a partir de 10.000 pontos',
+            'Pontos mensais garantidos (1.000 a 20.000)',
+            'Bônus progressivo por tempo de assinatura (5%, 10% ou 20%)',
+            'Bônus de até 133% durante campanhas Livelo (assinantes 5+ anos)',
             'Pontos não expiram com assinatura ativa',
+            'Resgate a partir de 5.000 pontos',
         ],
     },
     {
-        id: 'latam_pass_black',
-        name: 'LATAM Pass Black',
+        id: 'latam_pass_status',
+        name: 'LATAM Pass Silver/Gold/Black',
         program: 'LATAM Pass',
         color: '#E3000F',
-        monthlyFee: 'Por status de voo',
-        description: 'Status Diamante/Black da LATAM que concede bônus em acúmulo e benefícios premium',
+        monthlyFee: 'Obtido por voos (sem custo direto)',
+        description: 'Status de elite da LATAM obtido por quilometragem voada — concede bônus de acúmulo e benefícios premium',
+        tiers: [
+            { name: 'Silver', monthlyFee: '6.000 QV/ano', bonus: '+50% em acúmulo de pontos' },
+            { name: 'Gold', monthlyFee: '12.000 QV/ano', bonus: '+75% em acúmulo de pontos' },
+            { name: 'Black', monthlyFee: '24.000 QV/ano', bonus: '+100% em acúmulo de pontos' },
+            { name: 'Black Signature', monthlyFee: '50.000 QV/ano', bonus: '+125% em acúmulo + benefícios premium' },
+        ],
         benefits: [
-            'Bônus de 50–100% em acúmulo de pontos',
-            'Transferências sem taxa',
-            'Acesso a salas VIP',
-            'Upgrades prioritários',
+            'Bônus de 50 a 125% em acúmulo de pontos por voo',
+            'Acesso a lounges LATAM (Gold/Black)',
+            'Upgrades prioritários e assento premium',
+            'Bagagem extra incluída',
+            'Check-in prioritário',
         ],
     },
     {
-        id: 'livelo_turbo',
-        name: 'Livelo Turbo',
+        id: 'livelo_clube',
+        name: 'Clube Livelo',
         program: 'Livelo',
         color: '#8B5CF6',
-        monthlyFee: '~R$ 19,90/mês',
-        description: 'Programa de aceleração Livelo com pontuação em dobro em parceiros selecionados',
+        monthlyFee: 'Gratuito (via banco parceiro)',
+        description: 'Programa de benefícios Livelo com transferência imediata gratuita e acesso a promoções exclusivas de parceiros',
         benefits: [
-            'Pontos em dobro em lojas parceiras',
-            'Bônus em transferências periódicas',
-            'Acesso a ofertas exclusivas',
+            'Transferência imediata para Smiles e Azul Fidelidade (sem aguardar 72h)',
+            'Acesso a promoções exclusivas de bônus',
             'Pontos nunca expiram',
+            'Resgate em produtos, passagens e experiências',
+            'Parceria com Bradesco, Santander e Banco do Brasil',
         ],
     },
 ]
 
-// ─── Cartões e parceiros ──────────────────────────────────────────────────────
+// ─── Cartões ─────────────────────────────────────────────────────────────────
+// Ratios corrigidos — fontes: Passageiro de Primeira, Melhores Destinos (mar/2026)
+// Iupp (Itaú), C6 Átomos, Nubank, Esfera (Santander): transferência 1:1
 
 export const CREDIT_CARDS: CreditCard[] = [
     {
-        id: 'itaucard_personnalite',
-        name: 'Itaucard / Personnalité',
-        currency: 'Pontos Itaú',
+        id: 'iupp_itau',
+        name: 'Iupp Itaú / Personnalité',
+        currency: 'Pontos Iupp',
         color: '#EC7000',
         initials: 'IT',
         partners: [
             {
                 program: 'Smiles',
                 tiers: [
-                    { clubId: 'smiles_club', label: 'Smiles Club ativo', ratio: 2.5, bonusPercent: 100 },
-                    { clubId: null, label: 'Sem clube', ratio: 2.5, bonusPercent: 0 },
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
                 ],
-                minPoints: 5000,
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts',
                 transferTime: 'Até 5 dias úteis',
-                url: 'https://www.itau.com.br/cartoes/vantagens/milhas',
+                url: 'https://www.itau.com.br/cartoes/iupp',
             },
             {
                 program: 'LATAM Pass',
                 tiers: [
-                    { clubId: 'latam_pass_black', label: 'LATAM Black', ratio: 2.5, bonusPercent: 50 },
-                    { clubId: null, label: 'Sem status', ratio: 2.5, bonusPercent: 0 },
+                    { clubId: 'latam_pass_status', label: 'LATAM Black', ratio: 1.0, bonusPercent: 100 },
+                    { clubId: null, label: 'Sem status', ratio: 1.0, bonusPercent: 0 },
                 ],
-                minPoints: 5000,
-                transferTime: 'Até 3 dias úteis',
-                url: 'https://www.itau.com.br/cartoes/vantagens/milhas',
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://latampass.latam.com/pt_br/promocao/itau-milhas-extras',
             },
             {
                 program: 'TudoAzul',
                 tiers: [
-                    { clubId: 'tudoazul_clube', label: 'TudoAzul Clube', ratio: 2.5, bonusPercent: 100 },
-                    { clubId: null, label: 'Sem clube', ratio: 2.5, bonusPercent: 0 },
-                ],
-                minPoints: 5000,
-                transferTime: 'Até 5 dias úteis',
-                url: 'https://www.itau.com.br/cartoes/vantagens/milhas',
-            },
-            {
-                program: 'Livelo',
-                tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 1.0, bonusPercent: 20 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                transferTime: 'Instantâneo',
-                url: 'https://www.livelo.com.br',
+                minPointsLabel: '1.000 pts',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://www.itau.com.br/cartoes/iupp',
             },
         ],
     },
@@ -181,10 +211,11 @@ export const CREDIT_CARDS: CreditCard[] = [
             {
                 program: 'Smiles',
                 tiers: [
-                    { clubId: 'smiles_club', label: 'Smiles Club ativo', ratio: 1.0, bonusPercent: 80 },
-                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
                 ],
                 minPoints: 2500,
+                minPointsLabel: '2.500 Núcleos',
                 transferTime: 'Até 2 dias úteis',
                 url: 'https://nubank.com.br/nucleo',
             },
@@ -194,18 +225,61 @@ export const CREDIT_CARDS: CreditCard[] = [
                     { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 2500,
+                minPointsLabel: '2.500 Núcleos',
                 transferTime: 'Até 2 dias úteis',
                 url: 'https://nubank.com.br/nucleo',
             },
             {
                 program: 'TudoAzul',
                 tiers: [
-                    { clubId: 'tudoazul_clube', label: 'TudoAzul Clube', ratio: 1.0, bonusPercent: 100 },
+                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 1.0, bonusPercent: 20 },
                     { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 2500,
+                minPointsLabel: '2.500 Núcleos',
                 transferTime: 'Até 2 dias úteis',
                 url: 'https://nubank.com.br/nucleo',
+            },
+        ],
+    },
+    {
+        id: 'c6_atomos',
+        name: 'C6 Bank Carbon / Carbono',
+        currency: 'Átomos',
+        color: '#222222',
+        initials: 'C6',
+        partners: [
+            {
+                program: 'Smiles',
+                tiers: [
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 Átomos',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://www.c6bank.com.br/atomos',
+            },
+            {
+                program: 'LATAM Pass',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 Átomos',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://www.c6bank.com.br/atomos',
+            },
+            {
+                program: 'TudoAzul',
+                tiers: [
+                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 1.0, bonusPercent: 20 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 0 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 Átomos',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://www.c6bank.com.br/atomos',
             },
             {
                 program: 'Livelo',
@@ -213,13 +287,55 @@ export const CREDIT_CARDS: CreditCard[] = [
                     { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                transferTime: 'Instantâneo',
-                url: 'https://nubank.com.br/nucleo',
+                minPointsLabel: '1.000 Átomos',
+                transferTime: 'Até 3 dias úteis',
+                url: 'https://www.livelo.com.br',
             },
         ],
     },
     {
-        id: 'xp_visa_infinite',
+        id: 'santander_esfera',
+        name: 'Santander Infinite / Esfera',
+        currency: 'Pontos Esfera',
+        color: '#EC0000',
+        initials: 'SN',
+        partners: [
+            {
+                program: 'Smiles',
+                tiers: [
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
+                    { clubId: null, label: 'Sem clube (promo permanente)', ratio: 1.0, bonusPercent: 20 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts Esfera',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://esfera.com.vc',
+            },
+            {
+                program: 'LATAM Pass',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts Esfera',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://esfera.com.vc',
+            },
+            {
+                program: 'TudoAzul',
+                tiers: [
+                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 1.0, bonusPercent: 20 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 0 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts Esfera',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://esfera.com.vc',
+            },
+        ],
+    },
+    {
+        id: 'xp_visa',
         name: 'XP Visa Infinite',
         currency: 'XP Pontos',
         color: '#000000',
@@ -228,134 +344,42 @@ export const CREDIT_CARDS: CreditCard[] = [
             {
                 program: 'Smiles',
                 tiers: [
-                    { clubId: 'smiles_club', label: 'Smiles Club ativo', ratio: 1.5, bonusPercent: 100 },
-                    { clubId: null, label: 'Sem clube', ratio: 1.5, bonusPercent: 0 },
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
                 ],
-                minPoints: 3000,
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://www.xpi.com.br/cartao',
             },
             {
                 program: 'LATAM Pass',
-                tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 1.5, bonusPercent: 0 },
-                ],
-                minPoints: 3000,
-                transferTime: 'Até 5 dias úteis',
-                url: 'https://www.xpi.com.br/cartao',
-            },
-            {
-                program: 'Livelo',
                 tiers: [
                     { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                transferTime: 'Instantâneo',
+                minPointsLabel: '1.000 pts',
+                transferTime: 'Até 5 dias úteis',
                 url: 'https://www.xpi.com.br/cartao',
             },
         ],
     },
     {
-        id: 'c6_carbon',
-        name: 'C6 Bank Carbon',
-        currency: 'Átomos',
-        color: '#222222',
-        initials: 'C6',
-        partners: [
-            {
-                program: 'Smiles',
-                tiers: [
-                    { clubId: 'smiles_club', label: 'Smiles Club ativo', ratio: 2.5, bonusPercent: 100 },
-                    { clubId: null, label: 'Sem clube', ratio: 2.5, bonusPercent: 0 },
-                ],
-                minPoints: 5000,
-                transferTime: 'Até 5 dias úteis',
-                url: 'https://www.c6bank.com.br/atomos',
-            },
-            {
-                program: 'LATAM Pass',
-                tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 2.5, bonusPercent: 0 },
-                ],
-                minPoints: 5000,
-                transferTime: 'Até 5 dias úteis',
-                url: 'https://www.c6bank.com.br/atomos',
-            },
-            {
-                program: 'TudoAzul',
-                tiers: [
-                    { clubId: 'tudoazul_clube', label: 'TudoAzul Clube', ratio: 2.5, bonusPercent: 100 },
-                    { clubId: null, label: 'Sem clube', ratio: 2.5, bonusPercent: 0 },
-                ],
-                minPoints: 5000,
-                transferTime: 'Até 5 dias úteis',
-                url: 'https://www.c6bank.com.br/atomos',
-            },
-        ],
-    },
-    {
-        id: 'santander_infinite',
-        name: 'Santander Infinite',
-        currency: 'Esfera',
-        color: '#EC0000',
-        initials: 'SN',
-        partners: [
-            {
-                program: 'Smiles',
-                tiers: [
-                    { clubId: 'smiles_club', label: 'Smiles Club ativo', ratio: 2.2, bonusPercent: 100 },
-                    { clubId: null, label: 'Sem clube', ratio: 2.2, bonusPercent: 20 },
-                ],
-                minPoints: 4400,
-                transferTime: 'Até 5 dias úteis',
-                url: 'https://esfera.com.vc',
-            },
-            {
-                program: 'LATAM Pass',
-                tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 2.2, bonusPercent: 0 },
-                ],
-                minPoints: 4400,
-                transferTime: 'Até 5 dias úteis',
-                url: 'https://esfera.com.vc',
-            },
-            {
-                program: 'TudoAzul',
-                tiers: [
-                    { clubId: 'tudoazul_clube', label: 'TudoAzul Clube', ratio: 2.2, bonusPercent: 80 },
-                    { clubId: null, label: 'Sem clube', ratio: 2.2, bonusPercent: 0 },
-                ],
-                minPoints: 4400,
-                transferTime: 'Até 5 dias úteis',
-                url: 'https://esfera.com.vc',
-            },
-        ],
-    },
-    {
-        id: 'bradesco_diners',
-        name: 'Bradesco / Diners',
-        currency: 'Livelo',
+        id: 'bradesco_livelo',
+        name: 'Bradesco / Banco do Brasil',
+        currency: 'Pontos Livelo',
         color: '#D40040',
         initials: 'BD',
         partners: [
             {
                 program: 'Livelo',
                 tiers: [
-                    { clubId: 'livelo_turbo', label: 'Livelo Turbo', ratio: 1.0, bonusPercent: 50 },
-                    { clubId: null, label: 'Sem programa', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: 'livelo_clube', label: 'Clube Livelo (via banco)', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: null, label: 'Acúmulo padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
-                minPoints: 1000,
-                transferTime: 'Instantâneo',
-                url: 'https://www.livelo.com.br',
-            },
-            {
-                program: 'Smiles',
-                tiers: [
-                    { clubId: 'smiles_club', label: 'Smiles Club ativo', ratio: 1.0, bonusPercent: 80 },
-                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 0 },
-                ],
-                minPoints: 2500,
-                transferTime: 'Até 3 dias úteis',
+                minPoints: 15000,
+                minPointsLabel: '15.000 pts',
+                transferTime: 'Imediato (Clube) ou até 72h',
                 url: 'https://www.livelo.com.br',
             },
         ],
@@ -368,21 +392,23 @@ export const CREDIT_CARDS: CreditCard[] = [
         initials: 'BT',
         partners: [
             {
-                program: 'Smiles',
-                tiers: [
-                    { clubId: 'smiles_club', label: 'Smiles Club ativo', ratio: 1.5, bonusPercent: 100 },
-                    { clubId: null, label: 'Sem clube', ratio: 1.5, bonusPercent: 0 },
-                ],
-                minPoints: 3000,
-                transferTime: 'Até 3 dias úteis',
-                url: 'https://www.btgpactual.com/cartao',
-            },
-            {
                 program: 'LATAM Pass',
                 tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 1.5, bonusPercent: 0 },
+                    { clubId: null, label: 'Promo ativa (25% bônus)', ratio: 1.0, bonusPercent: 25 },
                 ],
-                minPoints: 3000,
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts',
+                transferTime: 'Até 3 dias úteis',
+                url: 'https://latampass.latam.com/pt_br/junte-milhas',
+            },
+            {
+                program: 'Smiles',
+                tiers: [
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts',
                 transferTime: 'Até 3 dias úteis',
                 url: 'https://www.btgpactual.com/cartao',
             },
@@ -392,8 +418,9 @@ export const CREDIT_CARDS: CreditCard[] = [
                     { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                transferTime: 'Instantâneo',
-                url: 'https://www.btgpactual.com/cartao',
+                minPointsLabel: '1.000 pts',
+                transferTime: 'Até 3 dias úteis',
+                url: 'https://www.livelo.com.br',
             },
         ],
     },
@@ -405,172 +432,240 @@ export const CREDIT_CARDS: CreditCard[] = [
         initials: 'IN',
         partners: [
             {
-                program: 'Smiles',
+                program: 'TudoAzul',
                 tiers: [
-                    { clubId: 'smiles_club', label: 'Smiles Club ativo', ratio: 1.0, bonusPercent: 100 },
-                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 1.0, bonusPercent: 130 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 80 },
                 ],
-                minPoints: 2500,
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts',
                 transferTime: 'Até 2 dias úteis',
                 url: 'https://inter.co/inter-loop',
+            },
+            {
+                program: 'Smiles',
+                tiers: [
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts',
+                transferTime: 'Até 2 dias úteis',
+                url: 'https://inter.co/inter-loop',
+            },
+        ],
+    },
+    {
+        id: 'caixa_uau',
+        name: 'Caixa Econômica (UAU)',
+        currency: 'Pontos UAU',
+        color: '#00529B',
+        initials: 'CX',
+        partners: [
+            {
+                program: 'Smiles',
+                tiers: [
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://uau.caixa.gov.br',
+            },
+            {
+                program: 'LATAM Pass',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://uau.caixa.gov.br',
             },
             {
                 program: 'TudoAzul',
                 tiers: [
                     { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
-                minPoints: 2500,
-                transferTime: 'Até 2 dias úteis',
-                url: 'https://inter.co/inter-loop',
-            },
-        ],
-    },
-    {
-        id: 'porto_seguro',
-        name: 'Porto Seguro / Itaú',
-        currency: 'Porto+ Pontos',
-        color: '#0066CC',
-        initials: 'PS',
-        partners: [
-            {
-                program: 'Smiles',
-                tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 2.5, bonusPercent: 0 },
-                ],
-                minPoints: 5000,
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts',
                 transferTime: 'Até 5 dias úteis',
-                url: 'https://portoseguro.com.br',
-            },
-            {
-                program: 'TudoAzul',
-                tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 2.5, bonusPercent: 0 },
-                ],
-                minPoints: 5000,
-                transferTime: 'Até 5 dias úteis',
-                url: 'https://portoseguro.com.br',
+                url: 'https://uau.caixa.gov.br',
             },
         ],
     },
 ]
 
-// ─── Promoções ativas ─────────────────────────────────────────────────────────
-// Atualizar periodicamente com campanhas reais.
+// ─── Livelo como HUB de transferência ────────────────────────────────────────
+// Pontos Livelo → programas aéreos na proporção 1:1 (nacional)
+// Mínimo: 15.000 pontos Livelo por transferência
+
+export const LIVELO_AIRLINE_PARTNERS = [
+    { program: 'Smiles', ratio: 1.0, minPoints: 15000, label: 'Livelo → Smiles (1:1)' },
+    { program: 'LATAM Pass', ratio: 1.0, minPoints: 15000, label: 'Livelo → LATAM Pass (1:1)' },
+    { program: 'TudoAzul', ratio: 1.0, minPoints: 15000, label: 'Livelo → Azul Fidelidade (1:1)' },
+]
+
+// ─── Promoções periódicas ─────────────────────────────────────────────────────
+// Baseado em campanhas recentes (ago/2024 – mar/2026).
+// Estas campanhas se repetem com frequência, geralmente com 30–60 dias de intervalo.
+// ⚠️ SEMPRE confirme na página oficial antes de transferir.
 
 export const ACTIVE_PROMOTIONS: TransferPromotion[] = [
     {
-        cardId: 'itaucard_personnalite',
+        cardId: 'iupp_itau',
         program: 'Smiles',
-        bonusPercent: 100,
+        bonusPercent: 30,
+        clubBonusPercent: 60,
         clubRequired: 'smiles_club',
-        validUntil: 'Campanha periódica',
+        validUntil: 'Campanha periódica (confirme em smiles.com.br)',
+        lastConfirmed: 'Mar/2026',
         isPeriodic: true,
-        description: '100% de bônus Itaucard → Smiles com Smiles Club',
+        description: 'Bônus de 30% para todos e 60% para Clube Smiles — Itaú → Smiles',
         rules: [
-            'Válido exclusivamente para assinantes do Smiles Club',
-            'Sem Smiles Club: sem bônus (taxa base 2.5:1)',
-            'Mínimo de 5.000 pontos por transferência',
-            'Transferências em múltiplos de 1.000 pontos',
-            'Prazo de crédito: até 5 dias úteis',
-            'Não é possível cancelar transferência após confirmação',
+            '⚠️ Cadastre-se na página da promoção ANTES de transferir — sem cadastro, sem bônus',
+            'Clientes sem clube: 30% de bônus sobre a transferência',
+            'Assinantes do Clube Smiles (qualquer plano) ou Diamante: 60% de bônus',
+            'Limite de 300.000 milhas bônus por CPF ou Conta Família',
+            'Milhas bônus creditadas em até 15 dias após encerramento da campanha',
+            'Validade das milhas bônus: 12 meses após creditação',
+            'Não é possível cancelar a transferência após confirmação',
         ],
     },
     {
         cardId: 'nubank_ultravioleta',
         program: 'Smiles',
-        bonusPercent: 80,
+        bonusPercent: 30,
+        clubBonusPercent: 60,
         clubRequired: 'smiles_club',
-        validUntil: 'Campanha periódica',
+        validUntil: 'Campanha periódica (confirme em smiles.com.br)',
+        lastConfirmed: 'Mar/2026',
         isPeriodic: true,
-        description: '80% de bônus Nubank → Smiles com Smiles Club',
+        description: 'Bônus de 30% para todos e 60% para Clube Smiles — Nubank → Smiles',
         rules: [
-            'Válido para assinantes do Smiles Club',
-            'Sem Smiles Club: transferência 1:1 sem bônus',
+            '⚠️ Cadastre-se na página da promoção ANTES de transferir',
+            'Sem cadastro prévio = sem bônus (sem exceções)',
             'Mínimo de 2.500 Núcleos por transferência',
-            'Taxa de câmbio fixa no momento da transferência',
-            'Prazo de crédito: até 2 dias úteis',
+            'Clientes Clube Smiles ou Diamante: 60% de bônus',
+            'Limite: 300.000 milhas bônus por CPF',
+            'Validade das milhas bônus: 12 meses',
         ],
     },
     {
-        cardId: 'nubank_ultravioleta',
-        program: 'TudoAzul',
-        bonusPercent: 100,
-        clubRequired: 'tudoazul_clube',
-        validUntil: 'Campanha periódica',
+        cardId: 'c6_atomos',
+        program: 'Smiles',
+        bonusPercent: 30,
+        clubBonusPercent: 60,
+        clubRequired: 'smiles_club',
+        validUntil: 'Campanha periódica (confirme em smiles.com.br)',
+        lastConfirmed: 'Mar/2026',
         isPeriodic: true,
-        description: '100% de bônus Nubank → TudoAzul com TudoAzul Clube',
+        description: 'Bônus de 30% para todos e 60% para Clube Smiles — C6 Bank → Smiles',
         rules: [
-            'Válido apenas para assinantes do TudoAzul Clube',
-            'Sem clube: transferência 1:1 sem bônus',
-            'Mínimo de 2.500 Núcleos',
-            'Prazo de crédito: até 2 dias úteis',
+            '⚠️ Cadastre-se na página da promoção ANTES de transferir',
+            'Clientes sem clube: 30% de bônus',
+            'Assinantes Clube Smiles ou Diamante: 60% de bônus',
+            'Limite: 300.000 milhas bônus por CPF',
+            'Prazo de creditação: até 5 dias úteis para a transferência base',
         ],
     },
     {
-        cardId: 'santander_infinite',
+        cardId: 'santander_esfera',
         program: 'Smiles',
         bonusPercent: 20,
-        clubRequired: null,
-        validUntil: 'Permanente',
+        clubBonusPercent: 60,
+        clubRequired: 'smiles_club',
+        validUntil: 'Bônus de 20% permanente + campanhas periódicas para clube',
+        lastConfirmed: 'Mar/2026',
         isPeriodic: false,
-        description: '20% de bônus Esfera → Smiles (todos os clientes)',
+        description: '20% permanente para todos (Esfera) + 60% em promos para Clube Smiles',
         rules: [
-            'Bônus de 20% disponível para todos os clientes Santander',
-            'Assinantes do Smiles Club recebem 100% de bônus',
-            'Mínimo de 4.400 pontos Esfera por transferência',
-            'Transferências em múltiplos de 4.400 pontos',
+            'Bônus de 20% é permanente para todos os clientes Santander via Esfera',
+            'Assinantes do Clube Smiles recebem 60% de bônus durante campanhas',
+            'Para campanhas extras: cadastre-se na página da promoção antes',
+            'Mínimo: 1.000 pontos Esfera por transferência',
             'Prazo de crédito: até 5 dias úteis',
         ],
     },
     {
-        cardId: 'xp_visa_infinite',
+        cardId: 'xp_visa',
         program: 'Smiles',
-        bonusPercent: 100,
+        bonusPercent: 30,
+        clubBonusPercent: 60,
         clubRequired: 'smiles_club',
-        validUntil: 'Campanha periódica',
+        validUntil: 'Campanha periódica (confirme em smiles.com.br)',
+        lastConfirmed: 'Mar/2026',
         isPeriodic: true,
-        description: '100% de bônus XP → Smiles com Smiles Club',
+        description: 'Bônus de 30% para todos e 60% para Clube Smiles — XP → Smiles',
         rules: [
-            'Promoção válida para assinantes do Smiles Club',
-            'Taxa base: 1,5 XP Pontos = 1 milha Smiles',
-            'Com bônus de 100%: 1,5 XP Pontos = 2 milhas Smiles',
-            'Mínimo de 3.000 pontos por transferência',
-        ],
-    },
-    {
-        cardId: 'c6_carbon',
-        program: 'TudoAzul',
-        bonusPercent: 100,
-        clubRequired: 'tudoazul_clube',
-        validUntil: 'Campanha periódica',
-        isPeriodic: true,
-        description: '100% de bônus C6 Bank → TudoAzul com TudoAzul Clube',
-        rules: [
-            'Válido para assinantes do TudoAzul Clube',
-            'Taxa base: 2,5 Átomos = 1 ponto TudoAzul',
-            'Com bônus: dobro de pontos na transferência',
-            'Mínimo de 5.000 Átomos',
+            '⚠️ Cadastre-se na página da promoção antes de transferir',
+            'Mínimo de 1.000 XP Pontos por transferência',
+            'Limite: 300.000 milhas bônus por CPF',
         ],
     },
     {
         cardId: 'btg_pactual',
-        program: 'Smiles',
-        bonusPercent: 100,
-        clubRequired: 'smiles_club',
-        validUntil: 'Campanha periódica',
+        program: 'LATAM Pass',
+        bonusPercent: 25,
+        clubBonusPercent: 25,
+        clubRequired: null,
+        validUntil: 'Campanha periódica (confirme em latampass.latam.com)',
+        lastConfirmed: 'Mar/2026 — válido até 05/03/2026',
         isPeriodic: true,
-        description: '100% de bônus BTG → Smiles com Smiles Club',
+        description: '25% de bônus + 1.000 milhas extras na primeira transferência BTG → LATAM Pass',
         rules: [
-            'Válido para assinantes do Smiles Club',
-            'Taxa base: 1,5 BTG+ Pontos = 1 milha',
-            'Com bônus: 1,5 BTG+ Pontos = 2 milhas',
-            'Mínimo de 3.000 pontos BTG+',
-            'Prazo de crédito: até 3 dias úteis',
+            '⚠️ Registre-se na página da promoção antes de transferir',
+            'Bônus de 25% válido para todos os clientes BTG Pactual',
+            '1.000 milhas extras na primeira transferência do período',
+            'Milhas bônus creditadas em até 30 dias',
+            'Validade das milhas bônus: 36 meses',
+        ],
+    },
+    {
+        cardId: 'inter_black',
+        program: 'TudoAzul',
+        bonusPercent: 80,
+        clubBonusPercent: 130,
+        clubRequired: 'azul_fidelidade_clube',
+        validUntil: 'Campanha periódica (confirme em tudoazul.voeazul.com.br)',
+        lastConfirmed: 'Mar/2026 — válido até 05/03/2026',
+        isPeriodic: true,
+        description: '80% para todos e até 130% para Clube Azul — Inter → TudoAzul',
+        rules: [
+            '⚠️ Cadastre-se na página da promoção antes de transferir',
+            'Todos os clientes Inter: 80% de bônus',
+            'Assinantes do Clube Azul Fidelidade: 103% de bônus',
+            'Assinantes há 5+ anos: 130% ou mais de bônus',
+            'Limite: 300.000 pontos bônus por CPF',
+            'Creditação em até 15 dias úteis',
+            'Validade dos pontos bônus: 6 meses',
+        ],
+    },
+    {
+        cardId: 'bradesco_livelo',
+        program: 'Livelo',
+        bonusPercent: 0,
+        clubBonusPercent: 0,
+        clubRequired: null,
+        validUntil: 'Transferência padrão (sem campanha ativa no momento)',
+        lastConfirmed: 'Mar/2026',
+        isPeriodic: false,
+        description: 'Bradesco/BB → Livelo: transferência 1:1, sem bônus atualmente. Da Livelo para aéreas também 1:1.',
+        rules: [
+            'Transferência de Bradesco/BB para Livelo: taxa 1:1',
+            'Depois, de Livelo para Smiles/LATAM/TudoAzul: também 1:1',
+            'Mínimo de 15.000 pontos por transferência Livelo → aérea',
+            'Transferência imediata disponível para membros do Clube Livelo',
+            'Sem bônus de campanha ativo no momento — aguarde promoções periódicas',
         ],
     },
 ]
 
 // ─── Rotas de referência ──────────────────────────────────────────────────────
+// ⚠️ Preços MÉDIOS estimados com base em tabelas de resgate dos programas.
+// Valores reais variam por data, disponibilidade e categoria.
+// O FlyWise atualiza esses dados semanalmente via Seats.aero.
 
 export const ROUTE_CATEGORIES: RouteCategory[] = [
     {
@@ -582,18 +677,18 @@ export const ROUTE_CATEGORIES: RouteCategory[] = [
         economy: 6000,
         business: 15000,
         cashBRL: 480,
-        programs: ['Smiles', 'LATAM Pass', 'TudoAzul'],
+        programs: ['Smiles', 'LATAM Pass', 'TudoAzul', 'Livelo'],
     },
     {
         id: 'dom_medium',
         label: 'Doméstico médio',
         description: 'Voos de 2h a 3h30',
         icon: '✈️',
-        example: 'GRU ↔ SSA / GRU ↔ FOR',
+        example: 'GRU ↔ SSA / GRU ↔ BSB',
         economy: 10000,
         business: 25000,
         cashBRL: 780,
-        programs: ['Smiles', 'LATAM Pass', 'TudoAzul'],
+        programs: ['Smiles', 'LATAM Pass', 'TudoAzul', 'Livelo'],
     },
     {
         id: 'dom_long',
@@ -604,7 +699,7 @@ export const ROUTE_CATEGORIES: RouteCategory[] = [
         economy: 15000,
         business: 35000,
         cashBRL: 1100,
-        programs: ['Smiles', 'LATAM Pass', 'TudoAzul'],
+        programs: ['Smiles', 'LATAM Pass', 'TudoAzul', 'Livelo'],
     },
     {
         id: 'latam_short',
@@ -654,18 +749,15 @@ export const ROUTE_CATEGORIES: RouteCategory[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Calcula milhas resultantes dado pontos, ratio e bônus% */
 export function computeMiles(points: number, ratio: number, bonusPercent: number): number {
     const base = Math.floor(points / ratio)
     return Math.floor(base * (1 + bonusPercent / 100))
 }
 
-/** Encontra promoção ativa para um par cartão+programa */
 export function findPromotion(cardId: string, program: string): TransferPromotion | null {
     return ACTIVE_PROMOTIONS.find(p => p.cardId === cardId && p.program === program) ?? null
 }
 
-/** Avalia CPM (centavos por milha) */
 export function rateCPM(cpm: number): { label: string; color: string; rating: string } {
     if (cpm >= 4.0) return { label: 'Excelente', color: '#6366F1', rating: 'excelente' }
     if (cpm >= 2.5) return { label: 'Bom', color: '#16A34A', rating: 'bom' }
