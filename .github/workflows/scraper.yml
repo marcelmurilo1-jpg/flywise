@@ -2,8 +2,8 @@ name: 🛫 FlyWise Scraper — Passageiro de Primeira
 
 on:
   schedule:
-    # Roda a cada hora (minuto 0) — horário UTC (= UTC-3 + 3h)
-    - cron: '0 * * * *'
+    # Roda 2x por dia — 08h e 18h horário de Brasília (UTC-3)
+    - cron: '0 11,21 * * *'
   workflow_dispatch:
     # Permite rodar manualmente pela aba Actions do GitHub
 
