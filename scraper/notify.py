@@ -64,7 +64,8 @@ def buscar_promocoes_novas(conn) -> list[dict]:
 def buscar_preferencias_usuarios(conn) -> list[dict]:
     """
     Retorna usuários com notificações ativas, junto ao e-mail deles.
-    Faz JOIN entre notification_preferences e auth.users.
+    Faz JOIN entre notification_preferences, user_profiles e auth.users.
+    Respeita os toggles de notifications_email e notifications_promotions do perfil.
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -79,8 +80,11 @@ def buscar_preferencias_usuarios(conn) -> list[dict]:
                 np.alerta_award_space
             FROM notification_preferences np
             JOIN auth.users u ON u.id = np.user_id
+            LEFT JOIN user_profiles up ON up.id = np.user_id
             WHERE np.notificacoes_ativas = TRUE
               AND u.email IS NOT NULL
+              AND COALESCE(up.notifications_email, TRUE) = TRUE
+              AND COALESCE(up.notifications_promotions, TRUE) = TRUE
             """
         )
         return cur.fetchall()
@@ -111,9 +115,10 @@ def promos_para_usuario(usuario: dict, promos: list[dict]) -> list[dict]:
         if cat == "passagens" and usuario["passagens"]:
             resultado.append(p)
         elif cat == "milhas" and usuario["milhas"]:
-            # Verifica se tem algum programa em comum
             prefs_prog = usuario["programas"] or []
-            if not prefs_prog or any(t in prefs_prog for t in tags):
+            # Só envia milhas se o usuário selecionou ao menos um programa
+            # e a promoção tem tag em comum (ou não tem tags — promoção genérica)
+            if prefs_prog and (not tags or any(t in prefs_prog for t in tags)):
                 resultado.append(p)
 
     return resultado[:MAX_PROMOS]
