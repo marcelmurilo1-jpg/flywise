@@ -627,7 +627,7 @@ app.post('/api/checkout', async (req, res) => {
         const customerPayload = {
             name: customerName || 'FlyWise User',
             email: customerEmail || 'user@flywise.app',
-            taxId: customerTaxId || '00000000000',
+            taxId: customerTaxId || '52998224725', // CPF de teste válido (ambiente dev)
             cellphone: '11999999999',
         };
 
