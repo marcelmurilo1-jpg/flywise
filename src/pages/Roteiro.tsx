@@ -12,6 +12,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePlan } from '@/hooks/usePlan'
 import { Header } from '@/components/Header'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -116,6 +117,7 @@ const BLANK_DAY = (dia: number): ItineraryDay => ({
 export default function Roteiro() {
     const { user } = useAuth()
     const navigate = useNavigate()
+    const { canGenerateRoteiro, roteiroUsed, roteiroLimit, plan: userPlan, refresh: refreshPlan } = usePlan()
 
     // Form state
     const [destination, setDestination] = useState('')
@@ -165,6 +167,13 @@ export default function Roteiro() {
         if (!destination.trim()) return setError('Informe o destino da viagem.')
         if (travelStyle.length === 0) return setError('Selecione ao menos um estilo de viagem.')
         if (!user) return setError('Faça login para gerar roteiros.')
+        if (!canGenerateRoteiro) {
+            return setError(
+                userPlan === 'free'
+                    ? 'Roteiros não estão disponíveis no plano gratuito. Assine um plano para desbloquear.'
+                    : `Limite de ${roteiroLimit} roteiro(s) mensal atingido. Faça upgrade ou aguarde o próximo ciclo.`
+            )
+        }
 
         setStep('loading')
         setIsSaved(false)
@@ -203,6 +212,7 @@ export default function Roteiro() {
             setItinerary(result)
             setActiveTab('gastronomia')
             setCollapsedDays((result.dias ?? []).map((_: unknown, i: number) => i !== 0))
+            refreshPlan()
             setStep('result')
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Erro inesperado.')

@@ -4,6 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, ArrowLeft, Loader2, RefreshCw, Copy, Check, Clock } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import confetti from 'canvas-confetti'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
+import { normalizePlan } from '@/lib/planLimits'
 
 interface CheckoutState {
     planName: string
@@ -21,6 +24,7 @@ interface CheckoutState {
 export default function Checkout() {
     const navigate = useNavigate()
     const location = useLocation()
+    const { user } = useAuth()
     const state = location.state as CheckoutState | undefined
 
     const [billingId, setBillingId] = useState<string | null>(null)
@@ -83,6 +87,17 @@ export default function Checkout() {
                 const r = await fetch(`/api/checkout/status/${billingId}`)
                 const d = await r.json()
                 if (d.status === 'PAID' || d.status === 'COMPLETED') {
+                    // Activate plan in user_profiles
+                    if (user && state) {
+                        const daysToAdd = state.billing === 'anual' ? 365 : 30
+                        const expiresAt = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000).toISOString()
+                        await supabase.from('user_profiles').upsert({
+                            id: user.id,
+                            plan: normalizePlan(state.planName),
+                            plan_expires_at: expiresAt,
+                            plan_billing: state.billing,
+                        })
+                    }
                     setPaymentStatus('PAID')
                     clearInterval(pollRef.current!)
                     confetti({ particleCount: 200, spread: 120, origin: { y: 0.5 }, colors: ['#16A34A', '#4ADE80', '#2A60C2', '#fff', '#4A90E2'] })

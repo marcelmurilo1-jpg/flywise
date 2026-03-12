@@ -1,73 +1,135 @@
-# React + TypeScript + Vite
+# FlyWise
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+FlyWise é um assistente inteligente de viagens para o viajante brasileiro. A plataforma reúne busca de voos, gerenciamento de milhas, monitoramento de promoções, estratégias geradas por IA e planejamento de roteiros — tudo em um único lugar.
 
-Currently, two official plugins are available:
+## Servicos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### Busca de Voos
+Busca de passagens aéreas em tempo real via Amadeus API. Suporta voos de ida, ida e volta, filtros por cabine, número de escalas e datas. Os resultados são salvos por busca, permitindo comparação histórica.
 
-## React Compiler
+### Estratégia com IA
+Para qualquer voo encontrado, o usuário pode acionar uma análise gerada por GPT-4o-mini. A IA considera o voo selecionado, as promoções ativas no banco e o saldo de milhas do usuário para recomendar o melhor programa de fidelidade, estimar a economia em relação ao preço cash e gerar um plano passo a passo para emissão do bilhete. As estratégias geradas podem ser salvas no histórico.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Carteira de Milhas
+Painel para o usuário registrar e visualizar seus saldos nos principais programas de fidelidade brasileiros: Smiles, LATAM Pass, TudoAzul, Livelo, entre outros. O saldo é usado como contexto pela IA ao gerar estratégias.
 
-## Expanding the ESLint configuration
+### Promoções em Tempo Real
+Scraper diário que coleta promoções de passagens e milhas de sites especializados (ex: Passageiro de Primeira). As promoções são classificadas por programa, categoria e validade, e ficam disponíveis na aba de promoções do app.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Alertas por E-mail
+Sistema de notificação que cruza as promoções novas com as preferências de cada usuário (categorias de interesse, programas favoritos) e envia e-mails personalizados via Resend. Cada usuário recebe apenas o que é relevante para ele.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Roteiro Inteligente
+Geração de roteiros de viagem via IA com base no destino e nas preferências do usuário. O roteiro é salvo e pode ser consultado posteriormente.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Busca Avancada
+Wizard de busca com controles mais detalhados para usuários que querem refinar origem, destino, datas e preferências antes de iniciar a pesquisa.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Planos e Assinatura
+Pagina de planos com diferentes níveis de acesso à plataforma, com fluxo de checkout integrado.
+
+### Onboarding
+Fluxo de configuração inicial para novos usuários, coletando preferências de programas de fidelidade e tipo de viagem para personalizar a experiência desde o primeiro acesso.
+
+## Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Frontend | React 18 + TypeScript + Vite |
+| Animacoes | Framer Motion |
+| Backend/BaaS | Supabase (auth, banco, storage) |
+| Edge Functions | Deno (Supabase Functions) |
+| IA | OpenAI GPT-4o-mini |
+| Voos | Amadeus Self-Service API |
+| Scraper | Python + Railway (cron diario) |
+| E-mail | Resend |
+
+## Estrutura do projeto
+
+```
+flywise/
+├── src/
+│   ├── pages/          # Landing, Auth, Home, Resultados, Promotions,
+│   │                   # Wallet, SavedStrategies, Roteiro, Configuracoes,
+│   │                   # SearchWizard, Planos, Checkout, Onboarding
+│   ├── components/     # StrategyPanel, FlightResultsGrouped, BottomNav, ...
+│   ├── lib/
+│   │   ├── amadeus.ts              # Busca de voos
+│   │   ├── supabase.ts             # Client e tipos
+│   │   ├── airlineMilesMapping.ts  # Mapa companhia -> programas aceitos
+│   │   └── llm/                   # Builders de contexto para prompts de IA
+│   └── contexts/       # AuthContext, ThemeContext
+├── supabase/
+│   ├── functions/
+│   │   ├── strategy/       # Gera estrategia de milhas com GPT-4o-mini
+│   │   ├── itinerary/      # Gera roteiro de viagem com IA
+│   │   └── refresh-extras/ # Atualiza dados auxiliares
+│   └── migrations/         # Schema SQL versionado
+└── scraper/
+    ├── scrape_passageiro.py        # Coleta promocoes de sites especializados
+    ├── notify.py                   # Envia alertas de email via Resend
+    ├── run.py                      # Entry point do scraper
+    ├── migrate_db.py               # Migrations do banco do scraper
+    ├── delete_expired_dryrun.py    # Lista promocoes expiradas (dry-run)
+    ├── delete_expired_with_backup.py
+    └── backend/                    # FastAPI hospedado no Railway
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Configuracao local
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Frontend
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
+
+Crie `.env.local`:
+
+```env
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+VITE_AMADEUS_CLIENT_ID=...
+VITE_AMADEUS_CLIENT_SECRET=...
+```
+
+### Scraper
+
+```bash
+cd scraper
+pip install -r requirements.txt
+cp .env.example .env   # preencha DATABASE_URL, RESEND_API_KEY, FROM_EMAIL
+python run.py          # scraper manual
+python notify.py       # notificacoes manual
+```
+
+### Edge Functions
+
+```bash
+supabase functions deploy strategy
+supabase functions deploy itinerary
+supabase functions deploy refresh-extras
+```
+
+Secret necessario no Supabase Dashboard:
+
+```
+OPENAI_API_KEY
+```
+
+## Banco de dados
+
+Migrations em `supabase/migrations/`, aplicadas em ordem.
+
+| Tabela | Descricao |
+|---|---|
+| `buscas` | Buscas realizadas pelos usuarios |
+| `resultados_voos` | Voos retornados pela Amadeus |
+| `strategies` | Estrategias de milhas geradas pela IA |
+| `promocoes` | Promocoes coletadas pelo scraper |
+| `notification_preferences` | Preferencias de alerta por usuario |
+| `user_profiles` | Perfil e plano do usuario |
+
+## CI/CD
+
+O scraper roda automaticamente via GitHub Actions com schedule diario, hospedado no Railway.

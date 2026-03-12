@@ -131,7 +131,75 @@ serve(async (req) => {
         const { data: flight, error: fErr } = await sb.from('resultados_voos').select('*').eq('id', flightId).single()
         if (fErr || !flight) return new Response(JSON.stringify({ error: 'Flight not found' }), { status: 404, headers: corsHeaders })
 
-        // 2. Build context pieces
+        // 2. Enforce plan limits (server-side)
+        if (userId) {
+            const { data: profile } = await sb
+                .from('user_profiles')
+                .select('plan, plan_expires_at')
+                .eq('id', userId)
+                .single()
+
+            const rawPlan = (profile?.plan ?? 'free').toLowerCase()
+            const isExpired = profile?.plan_expires_at && new Date(profile.plan_expires_at) < new Date()
+            const plan = isExpired ? 'free' : rawPlan
+
+            const LIMITS: Record<string, { lifetime: number | null; perMonth: number | null }> = {
+                free:      { lifetime: 1,    perMonth: null },
+                essencial: { lifetime: null, perMonth: 3   },
+                pro:       { lifetime: null, perMonth: 5   },
+                elite:     { lifetime: null, perMonth: 10  },
+            }
+            const limit = LIMITS[plan] ?? LIMITS['free']
+
+            if (limit.lifetime !== null) {
+                const { count } = await sb
+                    .from('strategies')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('user_id', userId)
+                if ((count ?? 0) >= limit.lifetime) {
+                    return new Response(JSON.stringify({ error: 'plan_limit_reached', plan }), {
+                        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                    })
+                }
+            } else if (limit.perMonth !== null) {
+                const monthStart = new Date()
+                monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
+                const { count } = await sb
+                    .from('strategies')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('user_id', userId)
+                    .gte('created_at', monthStart.toISOString())
+                if ((count ?? 0) >= limit.perMonth) {
+                    return new Response(JSON.stringify({ error: 'plan_limit_reached', plan }), {
+                        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                    })
+                }
+            }
+        }
+
+        // 3. Check cache — return existing strategy if generated in the last 24h
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        const { data: cached } = await sb
+            .from('strategies')
+            .select('structured_result, tokens_used')
+            .eq('flight_id', flightId)
+            .gte('created_at', oneDayAgo)
+            .not('structured_result', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+
+        if (cached?.structured_result) {
+            console.log(`[strategy] Cache hit for flight ${flightId}`)
+            return new Response(JSON.stringify({
+                ok: true,
+                strategy: cached.structured_result,
+                tokens_used: cached.tokens_used ?? 0,
+                cached: true,
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
+
+        // 3. Build context pieces (cache miss)
         const iata = extractIata(flight.companhia)
         const programs = AIRLINE_PROGRAMS[iata] ?? ['Livelo']
         const priceMilesEst = flight.preco_brl ? Math.round((flight.preco_brl * 55) / 1000) * 1000 : 0
@@ -142,7 +210,7 @@ serve(async (req) => {
             userId ? buildUserString(userId, priceMilesEst, sb) : Promise.resolve(''),
         ])
 
-        // 3. Assemble prompt
+        // 4. Assemble prompt
         const sections = [
             '=== VOO SELECIONADO ===', flightStr,
             '\n=== PROMOÇÕES ATIVAS ===', promoStr,
@@ -154,7 +222,7 @@ serve(async (req) => {
         const approxTokens = Math.ceil(userPrompt.length / 4)
         console.log(`[strategy] Flight ${flightId} | ~${approxTokens} input tokens`)
 
-        // 4. Call OpenAI
+        // 5. Call OpenAI
         const openaiKey = Deno.env.get('OPENAI_API_KEY')
         if (!openaiKey) throw new Error('OPENAI_API_KEY not set in Edge Function secrets')
 
@@ -181,7 +249,7 @@ serve(async (req) => {
         let parsed: Record<string, unknown> = {}
         try { parsed = JSON.parse(strategyJson) } catch { /* raw fallback */ }
 
-        // 5. Save to strategies table
+        // 6. Save to strategies table
         if (userId) {
             const busca = await sb.from('buscas').select('id').eq('user_id', userId)
                 .order('created_at', { ascending: false }).limit(1).single()

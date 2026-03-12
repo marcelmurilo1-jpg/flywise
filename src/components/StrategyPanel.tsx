@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { X, Zap, TrendingDown, ArrowRight, Save, CheckCircle, Loader2, AlertTriangle, Tag, Sparkles } from 'lucide-react'
+import { X, Zap, TrendingDown, ArrowRight, Save, CheckCircle, Loader2, AlertTriangle, Tag, Sparkles, Lock } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import type { ResultadoVoo } from '@/lib/supabase'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePlan } from '@/hooks/usePlan'
 import type { StrategyResult } from '@/lib/llm/buildPrompt'
 
 interface StrategyPanelProps {
@@ -13,6 +15,8 @@ interface StrategyPanelProps {
 
 export function StrategyPanel({ open, onClose, flight, buscaId, cashPrice = 0 }: StrategyPanelProps) {
     const { user } = useAuth()
+    const navigate = useNavigate()
+    const { canGenerateStrategy, strategiesUsed, strategyLimit, plan, refresh: refreshPlan } = usePlan()
     const [saved, setSaved] = useState(false)
     const [saving, setSaving] = useState(false)
     const [msg, setMsg] = useState('')
@@ -37,10 +41,12 @@ export function StrategyPanel({ open, onClose, flight, buscaId, cashPrice = 0 }:
             })
 
             if (res.error) throw new Error(res.error.message)
-            const json = res.data as { ok: boolean; strategy: StrategyResult; tokens_used: number }
+            const json = res.data as { ok: boolean; strategy: StrategyResult; tokens_used: number; error?: string }
+            if (json?.error === 'plan_limit_reached') throw new Error('Limite do plano atingido.')
             if (!json?.ok || !json.strategy) throw new Error('Resposta inválida da LLM.')
             setStrategy(json.strategy)
             setTokensUsed(json.tokens_used ?? null)
+            refreshPlan()
         } catch (err: any) {
             setLlmError(err?.message ?? 'Erro ao gerar estratégia.')
         } finally {
@@ -119,33 +125,63 @@ export function StrategyPanel({ open, onClose, flight, buscaId, cashPrice = 0 }:
                             {/* ── Not yet generated ────────────────────────────────── */}
                             {!strategy && !loading && !llmError && (
                                 <div style={{ textAlign: 'center', padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-                                    <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #EEF2FF, #E0E7FF)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Sparkles size={26} color="#4A90E2" />
+                                    <div style={{ width: 56, height: 56, borderRadius: 16, background: canGenerateStrategy ? 'linear-gradient(135deg, #EEF2FF, #E0E7FF)' : 'linear-gradient(135deg, #FEF3C7, #FDE68A)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {canGenerateStrategy ? <Sparkles size={26} color="#4A90E2" /> : <Lock size={26} color="#D97706" />}
                                     </div>
-                                    <div>
-                                        <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
-                                            Analisar estratégia com IA
-                                        </p>
-                                        <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 320 }}>
-                                            A IA vai analisar o voo, verificar promoções ativas e calcular o melhor programa de milhas para esta rota.
-                                        </p>
-                                    </div>
-                                    <button
-                                        onClick={generateStrategy}
-                                        style={{
-                                            background: 'linear-gradient(135deg, #2A60C2, #4A90E2)',
-                                            color: '#fff', border: 'none', borderRadius: 12,
-                                            padding: '12px 28px', fontFamily: 'inherit',
-                                            fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', gap: 8,
-                                            boxShadow: '0 4px 16px rgba(42,96,194,0.35)',
-                                        }}
-                                    >
-                                        <Zap size={15} /> Gerar estratégia
-                                    </button>
-                                    <p style={{ fontSize: 11, color: '#94A3B8' }}>
-                                        ~1.500 tokens · R$ 0,015 por análise
-                                    </p>
+                                    {canGenerateStrategy ? (
+                                        <>
+                                            <div>
+                                                <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                                                    Analisar estratégia com IA
+                                                </p>
+                                                <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 320 }}>
+                                                    A IA vai analisar o voo, verificar promoções ativas e calcular o melhor programa de milhas para esta rota.
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={generateStrategy}
+                                                style={{
+                                                    background: 'linear-gradient(135deg, #2A60C2, #4A90E2)',
+                                                    color: '#fff', border: 'none', borderRadius: 12,
+                                                    padding: '12px 28px', fontFamily: 'inherit',
+                                                    fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                                                    display: 'flex', alignItems: 'center', gap: 8,
+                                                    boxShadow: '0 4px 16px rgba(42,96,194,0.35)',
+                                                }}
+                                            >
+                                                <Zap size={15} /> Gerar estratégia
+                                            </button>
+                                            <p style={{ fontSize: 11, color: '#94A3B8' }}>
+                                                {strategiesUsed}/{strategyLimit} {plan === 'free' ? 'estratégia usada' : 'estratégias usadas este mês'}
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div>
+                                                <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                                                    Limite de estratégias atingido
+                                                </p>
+                                                <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 300 }}>
+                                                    {plan === 'free'
+                                                        ? 'O plano gratuito inclui 1 estratégia. Faça upgrade para gerar mais.'
+                                                        : `Você usou ${strategiesUsed} de ${strategyLimit} estratégias do mês. Faça upgrade ou aguarde o próximo ciclo.`}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => { onClose(); navigate('/planos') }}
+                                                style={{
+                                                    background: 'linear-gradient(135deg, #D97706, #F59E0B)',
+                                                    color: '#fff', border: 'none', borderRadius: 12,
+                                                    padding: '12px 28px', fontFamily: 'inherit',
+                                                    fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                                                    display: 'flex', alignItems: 'center', gap: 8,
+                                                    boxShadow: '0 4px 16px rgba(217,119,6,0.35)',
+                                                }}
+                                            >
+                                                <Zap size={15} /> Ver planos
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             )}
 
