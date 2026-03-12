@@ -192,19 +192,22 @@ const inputStyle: React.CSSProperties = {
     fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s',
 }
 
-function SaveButton({ saving, saved, onClick }: { saving: boolean; saved: boolean; onClick: () => void }) {
+// Applied on top of inputStyle while loadingProfile
+const loadingInputClass = 'settings-input loading-field'
+
+function SaveButton({ saving, saved, onClick, disabled }: { saving: boolean; saved: boolean; onClick: () => void; disabled?: boolean }) {
     return (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
             <button
                 onClick={onClick}
-                disabled={saving}
+                disabled={saving || disabled}
                 style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
                     padding: '11px 24px', borderRadius: '12px',
-                    background: saved ? 'rgba(34,197,94,0.1)' : 'var(--blue-medium)',
-                    color: saved ? '#16a34a' : '#fff',
+                    background: saved ? 'rgba(34,197,94,0.1)' : disabled ? '#e2eaf5' : 'var(--blue-medium)',
+                    color: saved ? '#16a34a' : disabled ? '#94a3b8' : '#fff',
                     border: saved ? '1.5px solid #86efac' : '1.5px solid transparent',
-                    fontSize: '14px', fontWeight: 700, cursor: saving ? 'wait' : 'pointer',
+                    fontSize: '14px', fontWeight: 700, cursor: saving || disabled ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s',
                 }}
             >
@@ -457,8 +460,10 @@ export default function Configuracoes() {
 
             <style>{`
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
                 input:focus, select:focus, textarea:focus { border-color: var(--blue-medium) !important; }
                 .settings-input:focus { border-color: var(--blue-medium) !important; }
+                .loading-field { pointer-events: none; background: linear-gradient(90deg,#f0f4f8 25%,#e2eaf5 50%,#f0f4f8 75%) !important; background-size: 400px 100% !important; animation: shimmer 1.2s ease-in-out infinite !important; color: transparent !important; border-color: transparent !important; }
             `}</style>
 
             <main className="config-page-padding" style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px 80px' }}>
@@ -547,23 +552,15 @@ export default function Configuracoes() {
                     </div>
 
                     {/* ── Right content ─────────────────────────────────────── */}
-                    {loadingProfile ? (
-                        <div style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            minHeight: '300px', color: 'var(--text-muted)', fontSize: '14px', gap: '10px',
-                        }}>
-                            <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-                            Carregando perfil…
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    {(
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', position: 'relative' }}>
 
                             {/* ── Perfil ─────────────────────────────────────── */}
                             <SectionCard id="perfil" title="Perfil" description="Suas informações pessoais" Icon={User}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                                     <Field label="Nome completo">
                                         <input
-                                            className="settings-input"
+                                            className={loadingProfile ? loadingInputClass : 'settings-input'}
                                             style={inputStyle}
                                             value={profile.full_name}
                                             onChange={e => setProfile(p => ({ ...p, full_name: e.target.value }))}
@@ -573,7 +570,7 @@ export default function Configuracoes() {
 
                                     <Field label="Telefone">
                                         <input
-                                            className="settings-input"
+                                            className={loadingProfile ? loadingInputClass : 'settings-input'}
                                             style={inputStyle}
                                             value={profile.phone}
                                             onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))}
@@ -583,7 +580,7 @@ export default function Configuracoes() {
 
                                     <Field label="Data de nascimento">
                                         <input
-                                            className="settings-input"
+                                            className={loadingProfile ? loadingInputClass : 'settings-input'}
                                             style={inputStyle}
                                             type="date"
                                             value={profile.birth_date}
@@ -619,6 +616,7 @@ export default function Configuracoes() {
                                 <SaveButton
                                     saving={savingSection === 'perfil'}
                                     saved={savedSection === 'perfil'}
+                                    disabled={loadingProfile}
                                     onClick={() => saveSection('perfil')}
                                 />
                             </SectionCard>
@@ -629,7 +627,7 @@ export default function Configuracoes() {
                                     <Field label="Nova senha" hint="Mínimo de 8 caracteres.">
                                         <div style={{ position: 'relative' }}>
                                             <input
-                                                className="settings-input"
+                                                className={loadingProfile ? loadingInputClass : 'settings-input'}
                                                 style={{ ...inputStyle, paddingRight: '44px' }}
                                                 type={showPasswords.new ? 'text' : 'password'}
                                                 value={newPassword}
@@ -650,7 +648,7 @@ export default function Configuracoes() {
                                     <Field label="Confirmar nova senha">
                                         <div style={{ position: 'relative' }}>
                                             <input
-                                                className="settings-input"
+                                                className={loadingProfile ? loadingInputClass : 'settings-input'}
                                                 style={{ ...inputStyle, paddingRight: '44px' }}
                                                 type={showPasswords.confirm ? 'text' : 'password'}
                                                 value={confirmPassword}
@@ -755,6 +753,7 @@ export default function Configuracoes() {
                                 <SaveButton
                                     saving={savingSection === 'viagem'}
                                     saved={savedSection === 'viagem'}
+                                    disabled={loadingProfile}
                                     onClick={() => saveSection('viagem')}
                                 />
                             </SectionCard>
