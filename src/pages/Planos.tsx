@@ -1,54 +1,66 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Crown, Zap, Star, Check, ChevronLeft, Loader2 } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, Loader2 } from 'lucide-react'
+import confetti from 'canvas-confetti'
+import NumberFlow from '@number-flow/react'
 
 const PLANS = [
     {
-        id: 'pro',
-        name: 'Pro',
-        price: 2990,
-        priceFmt: 'R$ 29,90',
-        period: '/mês',
-        Icon: Zap,
-        color: '#2A60C2',
-        highlight: false,
-        description: 'Para quem viaja com frequência e quer economizar mais.',
-        features: [
-            '50 buscas por mês',
-            'Alertas de promoções',
-            'Análise de milhas por IA',
-            'Acesso a estratégias salvas',
-        ],
+        name: 'Free', price: 'Grátis', priceAnual: 'Grátis',
+        priceVal: null as number | null, priceAnualVal: null as number | null,
+        period: '', featured: false,
+        desc: 'Para dar o primeiro passo com milhas.',
+        features: ['Janela de 30 dias de pesquisa', '1 estratégia', 'Sem roteiro', 'Sem notificações'],
     },
     {
-        id: 'premium',
-        name: 'Premium',
-        price: 4990,
-        priceFmt: 'R$ 49,90',
-        period: '/mês',
-        Icon: Star,
-        color: '#7C3AED',
-        highlight: true,
-        description: 'O máximo em economia de passagens e milhas.',
-        features: [
-            'Buscas ilimitadas',
-            'Todos os alertas em tempo real',
-            'Roteiros gerados por IA',
-            'Award space monitoring',
-            'Suporte prioritário',
-        ],
+        name: 'Essencial', price: 'R$ 19', priceAnual: 'R$ 12',
+        priceVal: 19, priceAnualVal: 12,
+        period: '/mês', featured: false,
+        desc: 'Para quem quer começar a viajar melhor.',
+        features: ['Buscas ilimitadas de passagens', '3 estratégias/mês', '1 roteiro/mês', 'Sem notificações'],
+    },
+    {
+        name: 'Pro', price: 'R$ 39', priceAnual: 'R$ 25',
+        priceVal: 39, priceAnualVal: 25,
+        period: '/mês', featured: true,
+        desc: 'Para viajantes frequentes e estratégicos.',
+        features: ['Buscas ilimitadas de passagens', '5 estratégias/mês', '3 roteiros/mês', 'Alertas de promoções por e-mail'],
+    },
+    {
+        name: 'Elite', price: 'R$ 69', priceAnual: 'R$ 45',
+        priceVal: 69, priceAnualVal: 45,
+        period: '/mês', featured: false,
+        desc: 'Para quem não quer perder nenhuma promoção.',
+        features: ['Buscas ilimitadas de passagens', '10 estratégias/mês', '5 roteiros/mês', 'Alertas por e-mail e WhatsApp'],
     },
 ]
 
 export default function Planos() {
     const navigate = useNavigate()
+    const [billing, setBilling] = useState<'mensal' | 'anual'>('mensal')
     const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
 
+    const switchToAnual = useCallback(() => {
+        if (billing === 'mensal') {
+            setBilling('anual')
+            confetti({
+                particleCount: 120,
+                spread: 80,
+                origin: { y: 0.55 },
+                colors: ['#2A60C2', '#4A90E2', '#67e8f9', '#fff'],
+            })
+        } else {
+            setBilling('mensal')
+        }
+    }, [billing])
+
     async function handleCheckout(plan: typeof PLANS[number]) {
-        setLoadingPlan(plan.id)
+        if (!plan.priceVal) return
+        setLoadingPlan(plan.name)
         setError(null)
+        const priceVal = billing === 'anual' ? plan.priceAnualVal! : plan.priceVal
         try {
             const res = await fetch('/api/checkout', {
                 method: 'POST',
@@ -56,7 +68,7 @@ export default function Planos() {
                 body: JSON.stringify({
                     origin: 'PLANO',
                     destination: plan.name.toUpperCase(),
-                    totalBrl: plan.price / 100,
+                    totalBrl: priceVal,
                     outboundCompany: `FlyWise ${plan.name}`,
                 }),
             })
@@ -71,24 +83,10 @@ export default function Planos() {
     }
 
     return (
-        <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', flexDirection: 'column' }}>
-            <style>{`
-                @keyframes shimmer { 0%,100%{opacity:1} 50%{opacity:0.6} }
-                @media(max-width:680px){
-                    .plans-grid { flex-direction: column !important; }
-                    .plan-card { max-width: 100% !important; }
-                }
-            `}</style>
+        <div style={{ minHeight: '100vh', background: '#F7F9FC', fontFamily: 'Inter, system-ui, sans-serif' }}>
 
             {/* ── Header ── */}
-            <div style={{
-                background: '#fff',
-                borderBottom: '1px solid #E2EAF5',
-                padding: '16px 24px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-            }}>
+            <div style={{ background: '#fff', borderBottom: '1px solid #E2EAF5', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
                 <button
                     onClick={() => navigate(-1)}
                     style={{
@@ -102,178 +100,159 @@ export default function Planos() {
                 </button>
             </div>
 
-            {/* ── Content ── */}
-            <div style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '48px 24px',
-                gap: 32,
-            }}>
-                {/* Title */}
-                <motion.div
-                    initial={{ opacity: 0, y: -12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}
-                >
-                    <div style={{
-                        width: 52, height: 52, borderRadius: 16,
-                        background: 'linear-gradient(135deg, #0E2A55 0%, #2A60C2 100%)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                        <Crown size={26} color="#fff" />
+            {/* ── Pricing section (idêntico à Landing) ── */}
+            <section style={{ padding: '80px 60px' }}>
+                <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
+
+                    {/* Title */}
+                    <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+                        <div style={{ display: 'inline-block', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '16px' }}>Planos</div>
+                        <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em', margin: '0 0 14px' }}>Para Viajantes Estratégicos</h2>
+                        <p style={{ color: '#6B7A99', fontSize: '17px', maxWidth: '440px', margin: '0 auto 32px', lineHeight: 1.65 }}>Escolha o plano que melhor se adapta ao seu ritmo de viagem.</p>
+
+                        {/* Billing toggle */}
+                        <div style={{ display: 'inline-flex', alignItems: 'center', background: '#F1F5F9', borderRadius: '999px', padding: '5px', gap: '2px', position: 'relative' }}>
+                            {(['mensal', 'anual'] as const).map(freq => (
+                                <button
+                                    key={freq}
+                                    onClick={freq === 'anual' ? switchToAnual : () => setBilling('mensal')}
+                                    style={{
+                                        position: 'relative', padding: '8px 20px', borderRadius: '999px',
+                                        border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                                        fontSize: '13px', fontWeight: 700, transition: 'color 0.2s',
+                                        background: 'transparent',
+                                        color: billing === freq ? '#0E2A55' : '#94A3B8',
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        zIndex: 1,
+                                    }}
+                                >
+                                    {billing === freq && (
+                                        <motion.span
+                                            layoutId="billing-pill-planos"
+                                            transition={{ type: 'spring', duration: 0.4, bounce: 0.2 }}
+                                            style={{
+                                                position: 'absolute', inset: 0, borderRadius: '999px',
+                                                background: '#fff',
+                                                boxShadow: '0 1px 6px rgba(14,42,85,0.10)',
+                                                zIndex: -1,
+                                            }}
+                                        />
+                                    )}
+                                    <span style={{ position: 'relative', zIndex: 1, textTransform: 'capitalize' }}>{freq}</span>
+                                    {freq === 'anual' && (
+                                        <span style={{
+                                            position: 'relative', zIndex: 1,
+                                            background: billing === 'anual' ? '#EEF2F8' : '#2A60C2',
+                                            color: billing === 'anual' ? '#2A60C2' : '#fff',
+                                            fontSize: '10px', fontWeight: 800,
+                                            padding: '2px 8px', borderRadius: '999px',
+                                            letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                                            transition: 'background 0.3s, color 0.3s',
+                                        }}>Economize 35%</span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em' }}>
-                        Escolha seu plano
-                    </h1>
-                    <p style={{ margin: 0, fontSize: 15, color: '#64748B', maxWidth: 400 }}>
-                        Desbloqueie buscas ilimitadas, alertas de milhas e roteiros personalizados por IA.
-                    </p>
-                </motion.div>
 
-                {/* Cards */}
-                <motion.div
-                    className="plans-grid"
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    style={{ display: 'flex', gap: 20, width: '100%', maxWidth: 720, alignItems: 'stretch' }}
-                >
-                    {PLANS.map((plan, i) => (
-                        <motion.div
-                            key={plan.id}
-                            className="plan-card"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.15 + i * 0.08 }}
-                            style={{
-                                flex: 1,
-                                background: '#fff',
-                                borderRadius: 20,
-                                border: plan.highlight ? `2px solid ${plan.color}` : '1.5px solid #E2EAF5',
-                                boxShadow: plan.highlight
-                                    ? `0 8px 32px ${plan.color}22`
-                                    : '0 2px 12px rgba(14,42,85,0.06)',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                overflow: 'hidden',
-                                position: 'relative' as const,
-                            }}
-                        >
-                            {plan.highlight && (
-                                <div style={{
-                                    position: 'absolute' as const, top: 16, right: 16,
-                                    background: plan.color, color: '#fff',
-                                    fontSize: 10, fontWeight: 800, letterSpacing: '0.06em',
-                                    padding: '3px 10px', borderRadius: 999,
-                                }}>
-                                    MAIS POPULAR
+                    {/* Cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', alignItems: 'start' }}>
+                        {PLANS.map((plan, i) => (
+                            <motion.div
+                                key={plan.name}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 + i * 0.1 }}
+                                style={{
+                                    background: plan.featured ? '#0E2A55' : '#fff',
+                                    borderRadius: '20px',
+                                    padding: '36px 32px',
+                                    border: plan.featured ? '2px solid #4A90E2' : '1px solid #E2EAF5',
+                                    boxShadow: plan.featured ? '0 16px 48px rgba(14,42,85,0.25)' : '0 4px 16px rgba(14,42,85,0.06)',
+                                    position: 'relative',
+                                }}
+                            >
+                                {plan.featured && (
+                                    <div style={{ position: 'absolute', top: '-14px', left: '50%', transform: 'translateX(-50%)', background: '#2A60C2', color: '#fff', fontSize: '11px', fontWeight: 800, padding: '5px 16px', borderRadius: '999px', whiteSpace: 'nowrap', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Mais Popular</div>
+                                )}
+                                <div style={{ marginBottom: '8px', fontSize: '13px', fontWeight: 700, color: plan.featured ? 'rgba(255,255,255,0.6)' : '#6B7A99', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{plan.name}</div>
+                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '8px', minHeight: '52px' }}>
+                                    {plan.priceVal !== null ? (
+                                        <>
+                                            <span style={{ fontSize: '42px', fontWeight: 900, color: plan.featured ? '#4A90E2' : '#0E2A55', letterSpacing: '-0.04em', lineHeight: 1 }}>R$&nbsp;</span>
+                                            <NumberFlow
+                                                value={billing === 'anual' ? plan.priceAnualVal! : plan.priceVal}
+                                                transformTiming={{ duration: 700, easing: 'ease-out' }}
+                                                spinTiming={{ duration: 700, easing: 'ease-out' }}
+                                                opacityTiming={{ duration: 350, easing: 'ease-out' }}
+                                                style={{
+                                                    fontSize: '42px', fontWeight: 900,
+                                                    color: plan.featured ? '#4A90E2' : '#0E2A55',
+                                                    letterSpacing: '-0.04em', lineHeight: 1,
+                                                    fontVariantNumeric: 'tabular-nums',
+                                                }}
+                                            />
+                                        </>
+                                    ) : (
+                                        <span style={{ fontSize: '42px', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.04em', lineHeight: 1 }}>Grátis</span>
+                                    )}
+                                    {plan.period && <span style={{ fontSize: '14px', color: plan.featured ? 'rgba(255,255,255,0.5)' : '#6B7A99' }}>{plan.period}</span>}
                                 </div>
-                            )}
-
-                            {/* Card header */}
-                            <div style={{
-                                padding: '28px 28px 20px',
-                                background: `linear-gradient(135deg, ${plan.color}12 0%, ${plan.color}06 100%)`,
-                                borderBottom: `1px solid ${plan.color}20`,
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                                    <div style={{
-                                        width: 42, height: 42, borderRadius: 12,
-                                        background: plan.color,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    }}>
-                                        <plan.Icon size={20} color="#fff" />
-                                    </div>
-                                    <span style={{ fontSize: 18, fontWeight: 800, color: plan.color }}>
-                                        FlyWise {plan.name}
-                                    </span>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, marginBottom: 6 }}>
-                                    <span style={{ fontSize: 32, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em' }}>
-                                        {plan.priceFmt}
-                                    </span>
-                                    <span style={{ fontSize: 14, color: '#94A3B8', fontWeight: 500 }}>{plan.period}</span>
-                                </div>
-                                <p style={{ margin: 0, fontSize: 13, color: '#64748B' }}>{plan.description}</p>
-                            </div>
-
-                            {/* Features */}
-                            <div style={{ padding: '20px 28px', flex: 1 }}>
-                                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                {billing === 'anual' && plan.price !== 'Grátis' && (
+                                    <div style={{ fontSize: '12px', color: plan.featured ? 'rgba(255,255,255,0.45)' : '#A0AECB', marginBottom: '4px', textDecoration: 'line-through' }}>{plan.price}/mês</div>
+                                )}
+                                <p style={{ fontSize: '14px', color: plan.featured ? 'rgba(255,255,255,0.65)' : '#6B7A99', marginBottom: '28px', lineHeight: 1.6 }}>{plan.desc}</p>
+                                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                     {plan.features.map(f => (
-                                        <li key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                                            <div style={{
-                                                width: 20, height: 20, borderRadius: 6,
-                                                background: `${plan.color}18`,
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                flexShrink: 0, marginTop: 1,
-                                            }}>
-                                                <Check size={12} color={plan.color} strokeWidth={3} />
-                                            </div>
-                                            <span style={{ fontSize: 14, color: '#374151', fontWeight: 500 }}>{f}</span>
+                                        <li key={f} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: plan.featured ? 'rgba(255,255,255,0.85)' : '#2C3E6B', fontWeight: 500 }}>
+                                            <CheckCircle2 size={16} color={plan.featured ? '#4A90E2' : '#2A60C2'} />
+                                            {f}
                                         </li>
                                     ))}
                                 </ul>
-                            </div>
-
-                            {/* CTA */}
-                            <div style={{ padding: '0 28px 28px' }}>
                                 <button
                                     onClick={() => handleCheckout(plan)}
-                                    disabled={loadingPlan === plan.id}
+                                    disabled={!plan.priceVal || loadingPlan === plan.name}
                                     style={{
-                                        width: '100%',
-                                        padding: '14px 0',
-                                        borderRadius: 12,
-                                        border: 'none',
-                                        background: plan.color,
-                                        color: '#fff',
-                                        fontSize: 15,
-                                        fontWeight: 800,
-                                        cursor: loadingPlan === plan.id ? 'not-allowed' : 'pointer',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                                        width: '100%', textAlign: 'center', padding: '14px', borderRadius: '12px',
+                                        fontWeight: 700, fontSize: '14px', transition: 'all 0.2s',
+                                        background: plan.featured ? '#2A60C2' : 'transparent',
+                                        color: plan.featured ? '#fff' : '#2A60C2',
+                                        border: plan.featured ? 'none' : '2px solid #2A60C2',
+                                        boxShadow: plan.featured ? '0 4px 16px rgba(42,96,194,0.40)' : 'none',
+                                        cursor: (!plan.priceVal || loadingPlan === plan.name) ? 'not-allowed' : 'pointer',
+                                        opacity: loadingPlan === plan.name ? 0.75 : 1,
                                         fontFamily: 'inherit',
-                                        opacity: loadingPlan === plan.id ? 0.75 : 1,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: 8,
-                                        transition: 'opacity 0.15s, transform 0.1s',
                                     }}
-                                    onMouseEnter={e => { if (loadingPlan !== plan.id) (e.currentTarget as HTMLButtonElement).style.opacity = '0.9' }}
-                                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = loadingPlan === plan.id ? '0.75' : '1' }}
                                 >
-                                    {loadingPlan === plan.id
-                                        ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Aguarde...</>
-                                        : <>Assinar {plan.name} com PIX ✦</>
+                                    {loadingPlan === plan.name
+                                        ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Aguarde...</>
+                                        : plan.price === 'Grátis' ? 'Plano atual' : 'Assinar agora'
                                     }
                                 </button>
-                            </div>
+                            </motion.div>
+                        ))}
+                    </div>
+
+                    {/* Error */}
+                    {error && (
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                            style={{ marginTop: 24, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '10px 18px', fontSize: 13, color: '#DC2626', maxWidth: 720, margin: '24px auto 0' }}
+                        >
+                            {error}
                         </motion.div>
-                    ))}
-                </motion.div>
+                    )}
 
-                {/* Error */}
-                {error && (
-                    <motion.div
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                        style={{
-                            background: '#FEF2F2', border: '1px solid #FECACA',
-                            borderRadius: 10, padding: '10px 18px',
-                            fontSize: 13, color: '#DC2626', maxWidth: 720, width: '100%',
-                        }}
-                    >
-                        {error}
-                    </motion.div>
-                )}
+                    {/* Footer note */}
+                    <p style={{ marginTop: 32, textAlign: 'center', fontSize: 13, color: '#94A3B8' }}>
+                        Pagamento via PIX · Cancele a qualquer momento · Sem fidelidade
+                    </p>
+                </div>
+            </section>
 
-                {/* Footer note */}
-                <p style={{ margin: 0, fontSize: 12, color: '#94A3B8', textAlign: 'center' }}>
-                    Pagamento via PIX · Cancele a qualquer momento · Sem fidelidade
-                </p>
-            </div>
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
     )
 }
