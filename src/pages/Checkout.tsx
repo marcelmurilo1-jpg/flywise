@@ -93,7 +93,6 @@ export default function Checkout() {
 
     if (!state) return null
 
-    const isFeatured = state.planName === 'Pro'
 
     return (
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: 'Inter, system-ui, sans-serif' }}>
