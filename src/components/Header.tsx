@@ -1,11 +1,9 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Search, Tag, Wallet, Plane, User, Settings, LogOut, Map } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { useTheme } from '@/contexts/ThemeContext'
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ExpandableTabs } from '@/components/ui/expandable-tabs'
-import { ThemeToggle } from '@/components/ThemeToggle'
 
 interface HeaderProps {
     variant?: 'landing' | 'app'
@@ -21,7 +19,6 @@ const NAV_ITEMS = [
 
 export function Header({ variant = 'app' }: HeaderProps) {
     const { user, signOut } = useAuth()
-    const { isDark } = useTheme()
     const navigate = useNavigate()
     const location = useLocation()
     const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -52,8 +49,8 @@ export function Header({ variant = 'app' }: HeaderProps) {
     return (
         <>
         <header style={{
-            background: isDark ? 'rgba(15,17,23,0.95)' : 'rgba(255,255,255,0.95)',
-            borderBottom: isDark ? '1px solid #1e293b' : '1px solid rgba(14,42,85,0.08)',
+            background: 'rgba(255,255,255,0.95)',
+            borderBottom: '1px solid rgba(14,42,85,0.08)',
             position: 'relative',
             zIndex: 30,
             backdropFilter: 'blur(12px)',
@@ -77,9 +74,8 @@ export function Header({ variant = 'app' }: HeaderProps) {
                     </div>
                 ) : <div />}
 
-                {/* Right: Theme Toggle + User Menu */}
+                {/* Right: User Menu */}
                 <div className="fly-right-slot" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px' }}>
-                    <span className="flywise-header-theme-toggle"><ThemeToggle /></span>
                     {!user ? (
                         <div style={{ display: 'flex', gap: '8px' }}>
                             <Link to="/auth" className="btn btn-outline-white btn-sm fly-hide-xs">Entrar</Link>

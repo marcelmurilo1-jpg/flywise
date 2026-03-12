@@ -1,11 +1,9 @@
-import { createContext, useContext, useEffect, useState } from 'react'
-
-type Theme = 'light' | 'dark'
+import { createContext, useContext, useEffect } from 'react'
 
 interface ThemeContextValue {
-    theme: Theme
+    theme: 'light'
     toggleTheme: () => void
-    isDark: boolean
+    isDark: false
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
@@ -15,21 +13,13 @@ const ThemeContext = createContext<ThemeContextValue>({
 })
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-    const [theme, setTheme] = useState<Theme>(() => {
-        const saved = localStorage.getItem('flywise-theme')
-        if (saved === 'dark' || saved === 'light') return saved
-        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    })
-
     useEffect(() => {
-        document.documentElement.setAttribute('data-theme', theme)
-        localStorage.setItem('flywise-theme', theme)
-    }, [theme])
-
-    const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
+        document.documentElement.setAttribute('data-theme', 'light')
+        localStorage.removeItem('flywise-theme')
+    }, [])
 
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme, isDark: theme === 'dark' }}>
+        <ThemeContext.Provider value={{ theme: 'light', toggleTheme: () => {}, isDark: false }}>
             {children}
         </ThemeContext.Provider>
     )
