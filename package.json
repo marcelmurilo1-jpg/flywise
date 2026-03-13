@@ -5,12 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "node server.js",
+    "server": "npx playwright install chromium --with-deps && node server.js",
     "dev:all": "node server.js & vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "postinstall": "playwright install chromium --with-deps || true"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@number-flow/react": "^0.6.0",
