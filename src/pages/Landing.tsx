@@ -1034,25 +1034,27 @@ export default function Landing() {
                     {/* Mockup de notificações */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                         {/* Ícones Gmail + WhatsApp */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', padding: '8px 14px' }}>
-                                {/* Gmail icon */}
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                    <path d="M2 6C2 4.9 2.9 4 4 4H20C21.1 4 22 4.9 22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6Z" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5"/>
-                                    <path d="M2 6L12 13L22 6" stroke="#60A5FA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                                    <path d="M2 6L8.5 12M22 6L15.5 12" stroke="#60A5FA" strokeWidth="1.4" strokeLinecap="round" strokeOpacity="0.5"/>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>Receba via</span>
+                            {/* Gmail */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(234,67,53,0.18)', border: '1.5px solid rgba(234,67,53,0.45)', borderRadius: '12px', padding: '8px 14px', boxShadow: '0 0 14px rgba(234,67,53,0.15)' }}>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <rect width="24" height="24" rx="4" fill="none"/>
+                                    {/* Gmail M shape */}
+                                    <path d="M2 6.5C2 5.4 2.9 4.5 4 4.5H20C21.1 4.5 22 5.4 22 6.5V17.5C22 18.6 21.1 19.5 20 19.5H4C2.9 19.5 2 18.6 2 17.5V6.5Z" fill="rgba(234,67,53,0.12)" stroke="rgba(234,67,53,0.6)" strokeWidth="1.5"/>
+                                    <path d="M2 6.5L12 13.5L22 6.5" stroke="#EA4335" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M2 6.5L7 11M22 6.5L17 11" stroke="#EA4335" strokeWidth="1.3" strokeLinecap="round" strokeOpacity="0.6"/>
                                 </svg>
-                                <span style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255,255,255,0.75)' }}>Gmail</span>
+                                <span style={{ fontSize: '13px', fontWeight: 800, color: '#fff' }}>Gmail</span>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', padding: '8px 14px' }}>
-                                {/* WhatsApp icon */}
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                    <path d="M12 2C6.477 2 2 6.477 2 12C2 13.89 2.525 15.655 3.438 17.168L2.073 21.927L6.832 20.562C8.345 21.475 10.11 22 12 22C17.523 22 22 17.523 22 12C22 6.477 17.523 2 12 2Z" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5"/>
-                                    <path d="M8.5 8.5C8.5 8.5 9 10 10.5 11.5C12 13 13.5 13.5 13.5 13.5L15 12.5C15 12.5 15.8 12.8 17 13.5C17 13.5 17 15.5 15.5 16C14 16.5 10 15 8 13C6 11 4.5 7 5 5.5C5.5 4 7.5 4 7.5 4L8.5 5.5C8.5 5.5 8.5 7 8.5 8.5Z" fill="#60A5FA" stroke="none"/>
+                            {/* WhatsApp */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(37,211,102,0.18)', border: '1.5px solid rgba(37,211,102,0.45)', borderRadius: '12px', padding: '8px 14px', boxShadow: '0 0 14px rgba(37,211,102,0.12)' }}>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12C2 13.85 2.51 15.58 3.39 17.07L2 22L7.06 20.63C8.52 21.49 10.21 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2Z" fill="rgba(37,211,102,0.15)" stroke="rgba(37,211,102,0.6)" strokeWidth="1.5"/>
+                                    <path d="M9 8.5C9 8.5 9.5 9.8 10.8 11C12.1 12.2 13.5 12.8 13.5 12.8L14.8 11.8C14.8 11.8 15.6 12.1 16.5 12.7C16.5 12.7 16.5 14.5 15.2 15C13.9 15.5 10.3 14.2 8.5 12.5C6.7 10.8 5.3 7.5 5.8 6.1C6.3 4.7 8 4.8 8 4.8L9.3 6.5C9.3 6.5 9 7.8 9 8.5Z" fill="#25D366"/>
                                 </svg>
-                                <span style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255,255,255,0.75)' }}>WhatsApp</span>
+                                <span style={{ fontSize: '13px', fontWeight: 800, color: '#fff' }}>WhatsApp</span>
                             </div>
-                            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: 500 }}>Receba por aqui</div>
                         </div>
                         {(alertCards.length > 0 ? alertCards : [
                             { prog: 'Smiles', deal: 'GRU → MIA a partir de 18.000 pts', time: 'agora mesmo', badge: 'Novo', badgeColor: '#34D399', badgeBg: 'rgba(52,211,153,0.15)' },
