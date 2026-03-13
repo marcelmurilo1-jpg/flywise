@@ -9,7 +9,8 @@
     "dev:all": "node server.js & vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "playwright install chromium --with-deps || true"
   },
   "dependencies": {
     "@number-flow/react": "^0.6.0",
