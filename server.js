@@ -5,10 +5,26 @@ import cron from 'node-cron';
 import { chromium as chromiumExtra } from 'playwright';
 import pLimit from 'p-limit';
 import { createClient } from '@supabase/supabase-js';
+import { execSync } from 'child_process';
+import fs from 'fs';
 
 // Carrega variáveis do ambiente (tenta .env.local e .env globalmente)
 dotenv.config({ path: '.env.local' });
 dotenv.config();
+
+// ─── Garante que o Chromium está instalado (Railway usa usuário diferente no build vs runtime) ───
+try {
+    const execPath = chromiumExtra.executablePath();
+    if (!fs.existsSync(execPath)) {
+        console.log('[Playwright] Chromium não encontrado. Instalando agora...');
+        execSync('npx playwright install chromium', { stdio: 'inherit' });
+        console.log('[Playwright] Chromium instalado com sucesso.');
+    } else {
+        console.log('[Playwright] Chromium ok:', execPath);
+    }
+} catch (e) {
+    console.warn('[Playwright] Não foi possível instalar Chromium:', e.message);
+}
 
 const app = express();
 app.use(cors());
