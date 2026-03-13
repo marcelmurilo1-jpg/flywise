@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { supabase } from '@/lib/supabase'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
 import {
     Search, ArrowRight, ArrowRightLeft, Users,
@@ -7,6 +8,9 @@ import {
     Twitter, Instagram, Linkedin, Youtube, Flame, Lock, ChevronUp,
     Info, MapPin, CreditCard, BookOpen, ChevronLeft, Bell, CalendarDays
 } from 'lucide-react'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import { NavBar } from '@/components/ui/tubelight-navbar'
 import { FeaturesSectionWithHoverEffects } from '@/components/ui/feature-section-with-hover-effects'
 import { PromotionsSection } from '@/components/PromotionsSection'
@@ -600,6 +604,31 @@ function DestinationsCarousel() {
     )
 }
 
+// ─── Mapa do Roteiro (Landing) ────────────────────────────────────────────────
+const PARIS_PINS = [
+    { lat: 48.8584, lng: 2.2945, color: '#F59E0B', label: 'Torre Eiffel',         period: 'Manhã', time: '09:00', local: 'Champ de Mars' },
+    { lat: 48.8606, lng: 2.3376, color: '#4A90E2', label: 'Museu do Louvre',       period: 'Tarde', time: '14:00', local: 'Rue de Rivoli' },
+    { lat: 48.8867, lng: 2.3431, color: '#7C3AED', label: 'Jantar em Montmartre',  period: 'Noite', time: '20:00', local: 'Butte Montmartre' },
+]
+
+function buildLandingPin(color: string, n: number) {
+    return L.divIcon({
+        html: `<div style="width:26px;height:26px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.28);font-family:Inter,system-ui,sans-serif">${n}</div>`,
+        className: '',
+        iconSize: [26, 26],
+        iconAnchor: [13, 13],
+    })
+}
+
+function FitParisBounds({ positions }: { positions: [number, number][] }) {
+    const map = useMap()
+    useEffect(() => {
+        if (positions.length > 1) map.fitBounds(L.latLngBounds(positions), { padding: [28, 28], maxZoom: 14 })
+        else if (positions.length === 1) map.setView(positions[0], 14)
+    }, [map]) // eslint-disable-line react-hooks/exhaustive-deps
+    return null
+}
+
 // ─── Landing Page Principal ───────────────────────────────────────────────────
 export default function Landing() {
     const [billing, setBilling] = useState<'mensal' | 'anual'>('mensal')
@@ -613,6 +642,49 @@ export default function Landing() {
         }, 4000)
         return () => clearTimeout(id)
     }, [titleNumber, heroTitles])
+
+    // ── Alertas reais do banco ──
+    const [alertCards, setAlertCards] = useState<Array<{
+        prog: string
+        deal: string
+        time: string
+        badge: string
+        badgeColor: string
+        badgeBg: string
+    }>>([])
+
+    useEffect(() => {
+        supabase
+            .from('promocoes')
+            .select('titulo, programas_tags, subcategoria, categoria, valid_until, created_at')
+            .not('categoria', 'is', null)
+            .or('valid_until.is.null,valid_until.gt.' + new Date().toISOString())
+            .order('created_at', { ascending: false })
+            .limit(4)
+            .then(({ data }) => {
+                if (!data?.length) return
+                const now = Date.now()
+                setAlertCards(data.map(p => {
+                    const prog = p.programas_tags?.[0]
+                        ?? (p.subcategoria === 'clube' ? 'Clube' : p.categoria === 'passagens' ? 'Passagens' : 'Milhas')
+                    const created = new Date(p.created_at).getTime()
+                    const diffMin = Math.round((now - created) / 60000)
+                    const time = diffMin < 2 ? 'agora mesmo'
+                        : diffMin < 60 ? `${diffMin} min atrás`
+                        : diffMin < 1440 ? `${Math.round(diffMin / 60)}h atrás`
+                        : `${Math.round(diffMin / 1440)}d atrás`
+                    const isUrgent = p.valid_until && (new Date(p.valid_until).getTime() - now) < 86400000
+                    return {
+                        prog,
+                        deal: p.titulo ?? 'Promoção disponível',
+                        time,
+                        badge: isUrgent ? 'Urgente' : 'Novo',
+                        badgeColor: isUrgent ? '#F87171' : '#34D399',
+                        badgeBg: isUrgent ? 'rgba(248,113,113,0.15)' : 'rgba(52,211,153,0.15)',
+                    }
+                }))
+            })
+    }, [])
 
     const switchToAnual = useCallback(() => {
         if (billing === 'mensal') {
@@ -961,12 +1033,12 @@ export default function Landing() {
 
                     {/* Mockup de notificações */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                        {[
+                        {(alertCards.length > 0 ? alertCards : [
                             { prog: 'Smiles', deal: 'GRU → MIA a partir de 18.000 pts', time: 'agora mesmo', badge: 'Novo', badgeColor: '#34D399', badgeBg: 'rgba(52,211,153,0.15)' },
                             { prog: 'TudoAzul', deal: 'Transferência com bônus de 100% — só hoje', time: '5 min atrás', badge: 'Urgente', badgeColor: '#F87171', badgeBg: 'rgba(248,113,113,0.15)' },
                             { prog: 'LATAM Pass', deal: 'Buenos Aires ida e volta por 25.000 pts', time: '2h atrás', badge: 'Novo', badgeColor: '#34D399', badgeBg: 'rgba(52,211,153,0.15)' },
                             { prog: 'Livelo', deal: 'Bônus de 80% na transferência para Smiles', time: '4h atrás', badge: 'Novo', badgeColor: '#34D399', badgeBg: 'rgba(52,211,153,0.15)' },
-                        ].map((n, i) => (
+                        ]).map((n, i) => (
                             <motion.div
                                 key={i}
                                 initial={{ opacity: 0, x: 20 }}
@@ -1093,15 +1165,54 @@ export default function Landing() {
                             </motion.div>
                         ))}
 
-                        {/* Mapa placeholder */}
-                        <motion.div
-                            whileHover={{ scale: 1.02 }}
-                            transition={{ type: 'tween', duration: 0.2 }}
-                            style={{ borderRadius: '12px', overflow: 'hidden', height: '100px', background: 'linear-gradient(135deg, #dce8f8 0%, #b8d0f0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}
-                        >
-                            <MapPin size={20} color="#2A60C2" />
-                            <span style={{ color: '#2A60C2', fontWeight: 700, fontSize: '13px' }}>Mapa interativo dos locais</span>
-                        </motion.div>
+                        {/* Mapa real */}
+                        <div style={{ borderRadius: '14px', overflow: 'hidden', border: '1px solid #E2EAF5', boxShadow: '0 2px 12px rgba(14,42,85,0.07)' }}>
+                            <div style={{ padding: '10px 14px', background: '#fff', borderBottom: '1px solid #E2EAF5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <MapPin size={13} color="#2A60C2" />
+                                    <span style={{ fontWeight: 800, color: '#0E2A55', fontSize: '13px' }}>Mapa do Roteiro</span>
+                                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#6B7A99' }}>({PARIS_PINS.length} locais)</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    {[{ label: 'Manhã', color: '#F59E0B' }, { label: 'Tarde', color: '#4A90E2' }, { label: 'Noite', color: '#7C3AED' }].map(p => (
+                                        <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.color }} />
+                                            <span style={{ fontSize: '10px', color: '#6B7A99', fontWeight: 600 }}>{p.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div style={{ height: '220px' }}>
+                                <MapContainer
+                                    center={[48.868, 2.325]}
+                                    zoom={13}
+                                    style={{ height: '100%', width: '100%' }}
+                                    zoomControl={true}
+                                    scrollWheelZoom={false}
+                                    dragging={true}
+                                    touchZoom={true}
+                                    doubleClickZoom={true}
+                                    keyboard={false}
+                                    attributionControl={false}
+                                >
+                                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                                    <FitParisBounds positions={PARIS_PINS.map(p => [p.lat, p.lng])} />
+                                    {PARIS_PINS.map((pin, i) => (
+                                        <Marker key={i} position={[pin.lat, pin.lng]} icon={buildLandingPin(pin.color, i + 1)}>
+                                            <Popup>
+                                                <div style={{ fontFamily: 'Inter, system-ui, sans-serif', minWidth: '140px' }}>
+                                                    <div style={{ fontSize: '10px', fontWeight: 700, color: pin.color, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
+                                                        {pin.period} · {pin.time}
+                                                    </div>
+                                                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#0E2A55', marginBottom: '3px' }}>{pin.label}</div>
+                                                    <div style={{ fontSize: '11px', color: '#6B7A99' }}>{pin.local}</div>
+                                                </div>
+                                            </Popup>
+                                        </Marker>
+                                    ))}
+                                </MapContainer>
+                            </div>
+                        </div>
                     </motion.div>
 
                     {/* Texto direita */}
