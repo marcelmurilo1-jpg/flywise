@@ -157,13 +157,22 @@ export const MILES_CLUBS: MilesClub[] = [
         name: 'Clube Livelo',
         program: 'Livelo',
         color: '#8B5CF6',
-        monthlyFee: 'Gratuito (via banco parceiro)',
-        signupUrl: 'https://www.livelo.com.br',
-        description: 'Programa de benefícios Livelo com transferência imediata gratuita e acesso a promoções exclusivas de parceiros',
+        monthlyFee: 'Gratuito (via banco parceiro) ou pago',
+        signupUrl: 'https://www.livelo.com.br/clube',
+        description: 'Clube Livelo gratuito (via Bradesco/BB/Santander) com transferência imediata; planos pagos com pontos mensais garantidos e benefícios extras',
+        tiers: [
+            { name: 'Clube Livelo Grátis', monthlyFee: 'Gratuito (via banco parceiro)', bonusLabel: 'Transferência imediata para aéreas' },
+            { name: 'Plano Classic', monthlyFee: '~R$ 44,90/mês · 1.000 pts', bonusLabel: 'Pontos mensais + benefícios clube' },
+            { name: 'Plano Special', monthlyFee: '~R$ 89,90/mês · 2.000 pts', bonusLabel: 'Pontos mensais + benefícios clube' },
+            { name: 'Plano Plus', monthlyFee: '~R$ 149,90/mês · 5.000 pts', bonusLabel: 'Pontos mensais + benefícios clube' },
+            { name: 'Plano Super', monthlyFee: '~R$ 269,90/mês · 10.000 pts', bonusLabel: 'Pontos mensais + benefícios clube' },
+            { name: 'Plano Mega', monthlyFee: '~R$ 449,90/mês · 15.000 pts', bonusLabel: 'Pontos mensais + benefícios clube' },
+            { name: 'Plano Top', monthlyFee: '~R$ 799,90/mês · 20.000 pts', bonusLabel: 'Máximo benefícios + bônus exclusivos' },
+        ],
         benefits: [
             'Transferência imediata para Smiles e Azul Fidelidade (sem aguardar 72h)',
-            'Acesso a promoções exclusivas de bônus',
-            'Pontos nunca expiram',
+            'Acesso a promoções exclusivas de bônus em campanhas',
+            'Pontos nunca expiram com clube ativo',
             'Resgate em produtos, passagens e experiências',
             'Parceria com Bradesco, Santander e Banco do Brasil',
         ],
@@ -374,7 +383,7 @@ export const CREDIT_CARDS: CreditCard[] = [
     {
         id: 'xp_visa',
         name: 'XP Visa Infinite',
-        currency: 'XP Pontos',
+        currency: 'Pontos XP',
         color: '#000000',
         initials: 'XP',
         partners: [
@@ -424,7 +433,7 @@ export const CREDIT_CARDS: CreditCard[] = [
     {
         id: 'btg_pactual',
         name: 'BTG Pactual',
-        currency: 'BTG+ Pontos',
+        currency: 'Pontos BTG',
         color: '#005B99',
         initials: 'BT',
         partners: [
@@ -464,7 +473,7 @@ export const CREDIT_CARDS: CreditCard[] = [
     {
         id: 'inter_black',
         name: 'Inter Black / One',
-        currency: 'Interpoints',
+        currency: 'Pontos Loop (Inter)',
         color: '#FF6B00',
         initials: 'IN',
         partners: [
@@ -495,7 +504,7 @@ export const CREDIT_CARDS: CreditCard[] = [
     {
         id: 'caixa_uau',
         name: 'Caixa Econômica (UAU)',
-        currency: 'Pontos UAU',
+        currency: 'Pontos Uau Caixa',
         color: '#00529B',
         initials: 'CX',
         partners: [

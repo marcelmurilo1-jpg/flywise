@@ -9,6 +9,7 @@ export interface PlanConfig {
     roteiroPerMonth: number
     notifications: boolean
     unlimitedSearch: boolean
+    transferSimulator: boolean
 }
 
 export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
@@ -19,6 +20,7 @@ export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
         roteiroPerMonth: 0,
         notifications: false,
         unlimitedSearch: false,
+        transferSimulator: false,
     },
     essencial: {
         label: 'Essencial',
@@ -27,6 +29,7 @@ export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
         roteiroPerMonth: 1,
         notifications: false,
         unlimitedSearch: true,
+        transferSimulator: false,
     },
     pro: {
         label: 'Pro',
@@ -35,6 +38,7 @@ export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
         roteiroPerMonth: 3,
         notifications: true,
         unlimitedSearch: true,
+        transferSimulator: true,
     },
     elite: {
         label: 'Elite',
@@ -43,6 +47,7 @@ export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
         roteiroPerMonth: 5,
         notifications: true,
         unlimitedSearch: true,
+        transferSimulator: true,
     },
 }
 

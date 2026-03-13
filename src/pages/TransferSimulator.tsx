@@ -23,10 +23,9 @@ function fmt(n: number) { return n.toLocaleString('pt-BR') }
 interface Props {
     activeClubs: string[]
     activeClubTiers: Record<string, string>   // clubId → tier name saved in wallet
-    awardsLastUpdated?: string
 }
 
-export default function TransferSimulator({ activeClubs, activeClubTiers, awardsLastUpdated }: Props) {
+export default function TransferSimulator({ activeClubs, activeClubTiers }: Props) {
     const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
     const [points, setPoints] = useState<string>('')
     const [selectedProgram, setSelectedProgram] = useState<string | null>(null)
@@ -35,14 +34,28 @@ export default function TransferSimulator({ activeClubs, activeClubTiers, awards
     const [expandedClubInfo, setExpandedClubInfo] = useState(false)
     const [liveloTarget, setLiveloTarget] = useState<string | null>(null)
     const [livePromos, setLivePromos] = useState<TransferPromotion[] | null>(null)
+    const [viewClass, setViewClass] = useState<'economy' | 'business'>('economy')
+    // Live award prices from Seats.aero weekly sync: { category_id → { economy_avg, business_avg, updated_at } }
+    const [liveAwardPrices, setLiveAwardPrices] = useState<Record<string, { economy_avg: number | null; business_avg: number | null; updated_at: string }>>({})
+    const [awardPricesDate, setAwardPricesDate] = useState<string | null>(null)
 
-    // Fetch live promotions from API (updated daily at noon from Supabase)
+    // Fetch live promotions + award prices on mount
     useEffect(() => {
         fetch('/api/transfer-promotions')
             .then(r => r.json())
+            .then(d => { if (Array.isArray(d.promotions) && d.promotions.length > 0) setLivePromos(d.promotions) })
+            .catch(() => {})
+
+        fetch('/api/award-prices')
+            .then(r => r.json())
             .then(d => {
-                if (Array.isArray(d.promotions) && d.promotions.length > 0) {
-                    setLivePromos(d.promotions)
+                if (Array.isArray(d.data) && d.data.length > 0) {
+                    const map: Record<string, { economy_avg: number | null; business_avg: number | null; updated_at: string }> = {}
+                    for (const row of d.data) {
+                        map[row.category] = { economy_avg: row.economy_avg, business_avg: row.business_avg, updated_at: row.updated_at }
+                    }
+                    setLiveAwardPrices(map)
+                    if (d.lastUpdated) setAwardPricesDate(d.lastUpdated)
                 }
             })
             .catch(() => {})
@@ -679,17 +692,38 @@ export default function TransferSimulator({ activeClubs, activeClubTiers, awards
                         {/* O que consigo com essas milhas? */}
                         {finalMiles > 0 && finalProgram && (
                             <div>
+                                {/* Header com toggle e disclaimer */}
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.10em', textTransform: 'uppercase' }}>
-                                        O que você consegue com {fmt(finalMiles)} milhas
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.10em', textTransform: 'uppercase' }}>
+                                            O que você consegue
+                                        </div>
+                                        {/* Toggle econômica / executiva */}
+                                        <div style={{ display: 'flex', background: 'var(--snow)', border: '1.5px solid var(--border-light)', borderRadius: 8, padding: 2, gap: 2 }}>
+                                            {(['economy', 'business'] as const).map(cls => (
+                                                <button
+                                                    key={cls}
+                                                    onClick={() => setViewClass(cls)}
+                                                    style={{
+                                                        padding: '4px 12px', borderRadius: 6, border: 'none',
+                                                        background: viewClass === cls ? finalColor : 'transparent',
+                                                        color: viewClass === cls ? '#fff' : 'var(--text-muted)',
+                                                        fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                                        fontFamily: 'inherit', transition: 'all .15s',
+                                                    }}
+                                                >
+                                                    {cls === 'economy' ? '✈ Econômica' : '💺 Executiva'}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
+                                    {/* Disclaimer */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#F8FAFC', border: '1px solid var(--border-light)', borderRadius: 8, padding: '4px 10px' }}>
                                         <Info size={11} color="var(--text-muted)" />
                                         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>
-                                            Preços médios estimados
-                                            {awardsLastUpdated
-                                                ? ` · Seats.aero ${new Date(awardsLastUpdated).toLocaleDateString('pt-BR')}`
-                                                : ' · FlyWise atualiza semanalmente via Seats.aero'}
+                                            {Object.keys(liveAwardPrices).length > 0
+                                                ? `Seats.aero ${awardPricesDate ? new Date(awardPricesDate).toLocaleDateString('pt-BR') : ''} · preços médios reais`
+                                                : 'Preços médios estimados · atualiza semanalmente'}
                                         </span>
                                         <RefreshCw size={10} color="var(--text-muted)" />
                                     </div>
@@ -698,40 +732,87 @@ export default function TransferSimulator({ activeClubs, activeClubTiers, awards
                                     {ROUTE_CATEGORIES
                                         .filter(r => r.programs.includes(finalProgram))
                                         .map(r => {
-                                            const canBiz = r.business > 0 && finalMiles >= r.business
-                                            const canEco = finalMiles >= r.economy
-                                            const missingEco = Math.max(0, r.economy - finalMiles)
-                                            const cpm = r.cashBRL > 0 && r.economy > 0 ? (r.cashBRL / r.economy) * 100 : 0
+                                            // Prefer live Seats.aero data, fallback to hardcoded
+                                            const liveData = liveAwardPrices[r.id]
+                                            const ecoMiles = (liveData?.economy_avg ?? r.economy) || r.economy
+                                            const bizMiles = (liveData?.business_avg ?? r.business) || r.business
+                                            const isLiveData = !!liveData?.economy_avg
+
+                                            const showMiles = viewClass === 'economy' ? ecoMiles : bizMiles
+                                            const canAfford = finalMiles >= showMiles
+                                            const missing = Math.max(0, showMiles - finalMiles)
+                                            const cpm = r.cashBRL > 0 && ecoMiles > 0 ? (r.cashBRL / ecoMiles) * 100 : 0
                                             const cpmInfo = rateCPM(cpm)
+                                            const activeColor = viewClass === 'business' ? '#16A34A' : finalColor
                                             return (
-                                                <div key={r.id} style={{ background: (canEco || canBiz) ? 'var(--bg-white)' : 'var(--snow)', border: `1.5px solid ${canBiz ? '#86EFAC' : canEco ? `${finalColor}40` : 'var(--border-light)'}`, borderRadius: 14, padding: '14px 16px', opacity: (canEco || canBiz) ? 1 : 0.7 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                                        <span style={{ fontSize: 20 }}>{r.icon}</span>
-                                                        <div>
-                                                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-dark)' }}>{r.label}</div>
-                                                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{r.example}</div>
+                                                <div key={r.id} style={{ background: canAfford ? 'var(--bg-white)' : 'var(--snow)', border: `1.5px solid ${canAfford ? `${activeColor}40` : 'var(--border-light)'}`, borderRadius: 14, padding: '14px 16px', opacity: canAfford ? 1 : 0.75 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 10 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                            <span style={{ fontSize: 20 }}>{r.icon}</span>
+                                                            <div>
+                                                                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-dark)' }}>{r.label}</div>
+                                                                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{r.example}</div>
+                                                            </div>
                                                         </div>
+                                                        {isLiveData && (
+                                                            <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 5, padding: '2px 6px', fontSize: 9, fontWeight: 800, color: '#15803D', flexShrink: 0 }}>
+                                                                REAL
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    {canBiz ? (
-                                                        <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: '6px 10px', marginBottom: 6 }}>
-                                                            <div style={{ fontSize: 11, fontWeight: 800, color: '#15803D', display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> Executiva</div>
-                                                            <div style={{ fontSize: 12, fontWeight: 700, color: '#16A34A' }}>{fmt(r.business)} mi</div>
-                                                        </div>
-                                                    ) : canEco ? (
-                                                        <div style={{ background: `${finalColor}10`, border: `1px solid ${finalColor}30`, borderRadius: 8, padding: '6px 10px', marginBottom: 6 }}>
-                                                            <div style={{ fontSize: 11, fontWeight: 800, color: finalColor, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11} /> Econômica</div>
-                                                            <div style={{ fontSize: 12, fontWeight: 700, color: finalColor }}>{fmt(r.economy)} mi</div>
+
+                                                    {/* Econômica e Executiva side by side */}
+                                                    <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                                                        {/* Econômica */}
+                                                        <button
+                                                            onClick={() => setViewClass('economy')}
+                                                            style={{
+                                                                flex: 1, borderRadius: 8, padding: '6px 8px',
+                                                                background: viewClass === 'economy' && canAfford ? `${finalColor}12` : viewClass === 'economy' ? '#FEF2F2' : 'var(--snow)',
+                                                                border: `1.5px solid ${viewClass === 'economy' ? (canAfford ? finalColor : '#FECACA') : 'var(--border-light)'}`,
+                                                                cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                                                                transition: 'all .15s',
+                                                            }}
+                                                        >
+                                                            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 2 }}>✈ Econômica</div>
+                                                            <div style={{ fontSize: 13, fontWeight: 900, color: viewClass === 'economy' ? (canAfford ? finalColor : '#DC2626') : 'var(--text-muted)' }}>
+                                                                {fmt(ecoMiles)} mi
+                                                            </div>
+                                                        </button>
+                                                        {/* Executiva */}
+                                                        <button
+                                                            onClick={() => setViewClass('business')}
+                                                            style={{
+                                                                flex: 1, borderRadius: 8, padding: '6px 8px',
+                                                                background: viewClass === 'business' && finalMiles >= bizMiles ? '#F0FDF4' : viewClass === 'business' ? '#FEF2F2' : 'var(--snow)',
+                                                                border: `1.5px solid ${viewClass === 'business' ? (finalMiles >= bizMiles ? '#86EFAC' : '#FECACA') : 'var(--border-light)'}`,
+                                                                cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                                                                transition: 'all .15s',
+                                                            }}
+                                                        >
+                                                            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 2 }}>💺 Executiva</div>
+                                                            <div style={{ fontSize: 13, fontWeight: 900, color: viewClass === 'business' ? (finalMiles >= bizMiles ? '#16A34A' : '#DC2626') : 'var(--text-muted)' }}>
+                                                                {bizMiles ? `${fmt(bizMiles)} mi` : '—'}
+                                                            </div>
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Status da classe selecionada */}
+                                                    {canAfford ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: activeColor }}>
+                                                            <CheckCircle2 size={12} />
+                                                            Você tem milhas suficientes!
                                                         </div>
                                                     ) : (
-                                                        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '6px 10px', marginBottom: 6 }}>
-                                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#DC2626' }}>Faltam {fmt(missingEco)} mi</div>
-                                                            <div style={{ fontSize: 11, color: '#EF4444' }}>Econômica: {fmt(r.economy)} mi</div>
+                                                        <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600 }}>
+                                                            Faltam {fmt(missing)} mi para {viewClass === 'economy' ? 'econômica' : 'executiva'}
                                                         </div>
                                                     )}
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                                                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>vs R$ {fmt(r.cashBRL)}</div>
+
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border-light)' }}>
+                                                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>vs R$ {fmt(r.cashBRL)} em dinheiro</div>
                                                         <div style={{ fontSize: 10, fontWeight: 800, color: cpmInfo.color, background: `${cpmInfo.color}15`, borderRadius: 4, padding: '2px 6px' }}>
-                                                            R$ {cpm.toFixed(2)}/mi · {cpmInfo.label}
+                                                            R$ {cpm.toFixed(2)}/mi
                                                         </div>
                                                     </div>
                                                 </div>

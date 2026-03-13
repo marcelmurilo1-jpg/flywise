@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Wallet as WalletIcon, Plus, Pencil, Check, X, Trash2, Loader2, ArrowLeftRight, Crown } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Wallet as WalletIcon, Plus, Pencil, Check, X, Trash2, Loader2, ArrowLeftRight, Crown, ChevronDown, ChevronUp, Lock } from 'lucide-react'
 import { Header } from '@/components/Header'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -7,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { PROGRAMS } from '@/lib/airlineMilesMapping'
 import { MILES_CLUBS } from '@/lib/transferData'
 import TransferSimulator from '@/pages/TransferSimulator'
+import { usePlan } from '@/hooks/usePlan'
 
 type MilesMap = Record<string, number>
 type Tab = 'carteira' | 'simulador'
@@ -37,6 +39,9 @@ function programInitials(name: string): string {
 
 export default function Wallet() {
     const { user } = useAuth()
+    const navigate = useNavigate()
+    const { plan, loading: planLoading } = usePlan()
+    const canUseSimulator = plan === 'pro' || plan === 'elite'
     const [miles, setMiles] = useState<MilesMap>({})
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
@@ -51,7 +56,8 @@ export default function Wallet() {
     const [activeClubs, setActiveClubs] = useState<string[]>([])
     // Plano selecionado por clube (ex: { smiles_club: 'Plano 2.000 mi' })
     const [activeClubTiers, setActiveClubTiers] = useState<Record<string, string>>({})
-    const [awardsLastUpdated, setAwardsLastUpdated] = useState<string | undefined>(undefined)
+    // Colapsar seção de clubes
+    const [clubsExpanded, setClubsExpanded] = useState(false)
 
     useEffect(() => {
         if (!user) return
@@ -64,12 +70,6 @@ export default function Wallet() {
         setLoading(false)
     }, [user])
 
-    useEffect(() => {
-        fetch('/api/award-prices')
-            .then(r => r.json())
-            .then(d => { if (d.lastUpdated) setAwardsLastUpdated(d.lastUpdated) })
-            .catch(() => {})
-    }, [])
 
     const saveMiles = async (updated: MilesMap) => {
         setSaving(true)
@@ -216,15 +216,31 @@ export default function Wallet() {
 
                                     {/* Meus Clubes */}
                                     <div style={{ background: 'var(--bg-white)', border: '1.5px solid var(--border-light)', borderRadius: 20, padding: '20px 24px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                                            <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(234,179,8,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                <Crown size={16} color="#CA8A04" />
+                                        <button
+                                            onClick={() => setClubsExpanded(e => !e)}
+                                            style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: clubsExpanded ? 16 : 0, padding: 0 }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(234,179,8,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Crown size={16} color="#CA8A04" />
+                                                </div>
+                                                <div style={{ textAlign: 'left' }}>
+                                                    <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-dark)' }}>
+                                                        Meus Clubes Ativos
+                                                        {activeClubs.length > 0 && (
+                                                            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: '#CA8A04', background: 'rgba(234,179,8,0.12)', borderRadius: 6, padding: '2px 7px' }}>
+                                                                {activeClubs.length} ativo{activeClubs.length !== 1 ? 's' : ''}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Afeta o bônus no Simulador de Transferência</div>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-dark)' }}>Meus Clubes Ativos</div>
-                                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Afeta o bônus no Simulador de Transferência</div>
-                                            </div>
-                                        </div>
+                                            {clubsExpanded ? <ChevronUp size={18} color="var(--text-muted)" /> : <ChevronDown size={18} color="var(--text-muted)" />}
+                                        </button>
+                                        <AnimatePresence>
+                                        {clubsExpanded && (
+                                        <motion.div key="clubs-list" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                             {MILES_CLUBS.map(club => {
                                                 const isActive = activeClubs.includes(club.id)
@@ -294,6 +310,9 @@ export default function Wallet() {
                                                 )
                                             })}
                                         </div>
+                                        </motion.div>
+                                        )}
+                                        </AnimatePresence>
                                     </div>
 
                                     {/* Lista programas */}
@@ -393,7 +412,28 @@ export default function Wallet() {
                     {/* ── Tab: Simulador ── */}
                     {activeTab === 'simulador' && (
                         <motion.div key="simulador" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
-                            <TransferSimulator activeClubs={activeClubs} activeClubTiers={activeClubTiers} awardsLastUpdated={awardsLastUpdated} />
+                            {!planLoading && !canUseSimulator ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 24px', textAlign: 'center', gap: 20 }}>
+                                    <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'linear-gradient(135deg, #EEF2F8, #D6E0F5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Lock size={32} color="#2A60C2" />
+                                    </div>
+                                    <div>
+                                        <h3 style={{ fontSize: 20, fontWeight: 800, color: '#0E2A55', marginBottom: 8, letterSpacing: '-0.02em' }}>Recurso exclusivo Pro</h3>
+                                        <p style={{ fontSize: 14, color: '#6B7A99', lineHeight: 1.65, maxWidth: 320 }}>
+                                            O Simulador de Transferência de Pontos está disponível nos planos <strong>Pro</strong> e <strong>Elite</strong>. Simule conversões, veja bônus de clube e descubra quantas milhas você consegue.
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => navigate('/planos')}
+                                        style={{ padding: '13px 28px', borderRadius: 12, background: '#0E2A55', color: '#fff', border: 'none', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 16px rgba(14,42,85,0.20)' }}
+                                    >
+                                        <Crown size={16} /> Ver planos
+                                    </button>
+                                    <p style={{ fontSize: 12, color: '#A0AECB' }}>A partir de R$ 39/mês · Cancele a qualquer momento</p>
+                                </div>
+                            ) : (
+                                <TransferSimulator activeClubs={activeClubs} activeClubTiers={activeClubTiers} />
+                            )}
                         </motion.div>
                     )}
 
