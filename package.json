@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "npx playwright install chromium --with-deps && node server.js",
+    "server": "node server.js",
     "dev:all": "node server.js & vite",
     "build": "tsc -b && vite build",
+    "postinstall": "npx playwright install chromium || true",
     "lint": "eslint .",
     "preview": "vite preview"
   },
