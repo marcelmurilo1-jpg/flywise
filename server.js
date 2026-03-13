@@ -250,24 +250,48 @@ app.get('/api/amadeus/airports', async (req, res) => {
 });
 
 // ─── Google Flights Scraper ───────────────────────────────────────────────────
-// Navegador compartilhado: criado uma vez, reutilizado em todas as requisições.
-const scrapeLimit = pLimit(4); // máx. 4 abas simultâneas
-let _browser = null;
+// Navegador compartilhado com pool de contextos, cache e dedup de buscas.
+const scrapeLimit = pLimit(5);          // máx. 5 abas simultâneas
+const CACHE_TTL_MS   = 5 * 60 * 1000;  // resultados válidos por 5 min
+const SCRAPE_TIMEOUT = 50_000;          // timeout global por busca (ms)
+
+const scrapeCache    = new Map();       // cacheKey → { data, expireAt }
+const scrapeInFlight = new Map();       // cacheKey → Promise (dedup)
+
+let _browser        = null;
+let _browserLaunch  = null;             // mutex: Promise de lançamento em curso
 
 async function getBrowser() {
     if (_browser && _browser.isConnected()) return _browser;
-    const opts = {
-        headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-blink-features=AutomationControlled',
-        ],
-    };
-    if (process.env.PROXY_URL) opts.proxy = { server: process.env.PROXY_URL };
-    _browser = await chromiumExtra.launch(opts);
-    console.log('[GFlights] Navegador iniciado.');
-    return _browser;
+
+    // Se já há um lançamento em curso, aguarda ele terminar
+    if (_browserLaunch) return _browserLaunch;
+
+    _browserLaunch = (async () => {
+        if (_browser) { try { await _browser.close(); } catch {} _browser = null; }
+        const opts = {
+            headless: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-blink-features=AutomationControlled',
+                '--disable-dev-shm-usage',          // evita crash por falta de /dev/shm
+                '--disable-gpu',
+                '--memory-pressure-off',
+                '--js-flags=--max-old-space-size=512',
+            ],
+        };
+        if (process.env.PROXY_URL) opts.proxy = { server: process.env.PROXY_URL };
+        _browser = await chromiumExtra.launch(opts);
+        _browser.on('disconnected', () => {
+            console.warn('[GFlights] Navegador desconectado — reiniciará na próxima busca.');
+            _browser = null;
+        });
+        console.log('[GFlights] Navegador iniciado.');
+        return _browser;
+    })().finally(() => { _browserLaunch = null; });
+
+    return _browserLaunch;
 }
 
 // Encerra o navegador no shutdown gracioso
@@ -282,7 +306,48 @@ function addDaysToDate(dateStr, days) {
     return d.toISOString().slice(0, 10);
 }
 
+// Wrapper com cache + dedup + timeout global
 async function scrapeOneway(origin, destination, date) {
+    const cacheKey = `${origin}-${destination}-${date}`;
+
+    // Cache hit
+    const cached = scrapeCache.get(cacheKey);
+    if (cached && Date.now() < cached.expireAt) {
+        console.log(`[GFlights] Cache hit: ${cacheKey}`);
+        return cached.data;
+    }
+
+    // Dedup: se a mesma rota já está sendo buscada, aguarda a mesma promise
+    if (scrapeInFlight.has(cacheKey)) {
+        console.log(`[GFlights] Dedup: aguardando busca em andamento para ${cacheKey}`);
+        return scrapeInFlight.get(cacheKey);
+    }
+
+    const promise = _scrapeOneway(origin, destination, date)
+        .then(data => {
+            scrapeCache.set(cacheKey, { data, expireAt: Date.now() + CACHE_TTL_MS });
+            scrapeInFlight.delete(cacheKey);
+            return data;
+        })
+        .catch(err => {
+            scrapeInFlight.delete(cacheKey);
+            throw err;
+        });
+
+    scrapeInFlight.set(cacheKey, promise);
+    return promise;
+}
+
+async function _scrapeOneway(origin, destination, date) {
+    return Promise.race([
+        _doScrapeOneway(origin, destination, date),
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout após ${SCRAPE_TIMEOUT / 1000}s`)), SCRAPE_TIMEOUT)
+        ),
+    ]);
+}
+
+async function _doScrapeOneway(origin, destination, date) {
     return scrapeLimit(async () => {
         const browser = await getBrowser();
         const context = await browser.newContext({
@@ -297,14 +362,14 @@ async function scrapeOneway(origin, destination, date) {
             const query = encodeURIComponent(`Flights from ${origin} to ${destination} on ${date} one way`);
             const url = `https://www.google.com/travel/flights?q=${query}&curr=BRL&hl=pt-BR`;
 
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
             await Promise.race([
-                page.waitForSelector('li.pIav2d', { timeout: 20000 }),
-                page.waitForSelector('ul[role="list"] li', { timeout: 20000 }),
+                page.waitForSelector('li.pIav2d', { timeout: 15000 }),
+                page.waitForSelector('ul[role="list"] li', { timeout: 15000 }),
             ]).catch(() => console.log(`[GFlights] ${origin}→${destination}: timeout aguardando seletor`));
 
-            await page.waitForTimeout(2000);
+            await page.waitForTimeout(1500);
 
             // Clica nos botões "ver detalhes" via API nativa do Playwright (mais confiável)
             try {
@@ -323,7 +388,7 @@ async function scrapeOneway(origin, destination, date) {
                     if (btns.length > 0) break; // para no primeiro seletor que encontrar botões
                 }
             } catch (_) {}
-            await page.waitForTimeout(2000);
+            await page.waitForTimeout(1500);
 
             const flights = await page.evaluate(() => {
                 const results = [];
@@ -532,12 +597,12 @@ async function scrapeOneway(origin, destination, date) {
                 return results;
             });
 
-            await context.close();
             return flights;
         } catch (err) {
             console.error(`[GFlights] ${origin}→${destination} erro:`, err.message);
-            await context.close();
             return [];
+        } finally {
+            await context.close().catch(() => {});
         }
     });
 }
