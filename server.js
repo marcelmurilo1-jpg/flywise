@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
-import { chromium as chromiumExtra } from 'playwright';
 import pLimit from 'p-limit';
 import { createClient } from '@supabase/supabase-js';
 import { execFileSync } from 'child_process';
@@ -12,18 +11,19 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// ─── PLAYWRIGHT_BROWSERS_PATH: definido AQUI para garantir funcionamento no Railway ─────
-// O Railway pode ignorar o Procfile se tiver Start Command configurado no dashboard.
-// Definindo dentro do server.js, garante que o path é sempre aplicado antes de qualquer
-// chamada ao playwright API (executablePath / launch).
-if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
-    process.env.PLAYWRIGHT_BROWSERS_PATH = '/app/.playwright-browsers';
-}
+// ─── PLAYWRIGHT_BROWSERS_PATH DEVE ser definido ANTES do import do playwright ────────────
+// Playwright cacheia o PLAYWRIGHT_BROWSERS_PATH no momento em que o módulo é importado.
+// Por isso usamos dynamic import (await import) APÓS definir a variável.
+// Testado e confirmado localmente: static import ignora env var definida depois.
+process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, '.playwright-browsers');
 console.log('[Playwright] PLAYWRIGHT_BROWSERS_PATH:', process.env.PLAYWRIGHT_BROWSERS_PATH);
 
 // Carrega variáveis do ambiente (tenta .env.local e .env globalmente)
 dotenv.config({ path: '.env.local' });
 dotenv.config();
+
+// Dynamic import do playwright APÓS definir o env var
+const { chromium: chromiumExtra } = await import('playwright');
 
 // ─── Garante que o Chromium está instalado ───────────────────────────────────
 try {
@@ -32,10 +32,7 @@ try {
     if (!fs.existsSync(execPath)) {
         console.log('[Playwright] Chromium não encontrado. Instalando agora (pode levar ~30s)...');
         const playwrightBin = path.join(__dirname, 'node_modules', '.bin', 'playwright');
-        execFileSync(playwrightBin, ['install', 'chromium'], {
-            stdio: 'inherit',
-            env: { ...process.env },
-        });
+        execFileSync(playwrightBin, ['install', 'chromium'], { stdio: 'inherit', env: { ...process.env } });
         console.log('[Playwright] Chromium instalado com sucesso.');
     } else {
         console.log('[Playwright] Chromium ok.');
@@ -289,6 +286,7 @@ async function getBrowser() {
     if (_browser && _browser.isConnected()) return _browser;
     const opts = {
         headless: true,
+        executablePath: chromiumExtra.executablePath(), // path explícito para garantir binário correto
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
