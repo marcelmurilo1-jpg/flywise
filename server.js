@@ -12,24 +12,31 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// ─── PLAYWRIGHT_BROWSERS_PATH: definido AQUI para garantir funcionamento no Railway ─────
+// O Railway pode ignorar o Procfile se tiver Start Command configurado no dashboard.
+// Definindo dentro do server.js, garante que o path é sempre aplicado antes de qualquer
+// chamada ao playwright API (executablePath / launch).
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = '/app/.playwright-browsers';
+}
+console.log('[Playwright] PLAYWRIGHT_BROWSERS_PATH:', process.env.PLAYWRIGHT_BROWSERS_PATH);
+
 // Carrega variáveis do ambiente (tenta .env.local e .env globalmente)
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 // ─── Garante que o Chromium está instalado ───────────────────────────────────
-// PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers é definido via Procfile/postinstall
-// Isso garante que build e runtime usam o mesmo path dentro do diretório /app do Railway
 try {
     const execPath = chromiumExtra.executablePath();
-    console.log('[Playwright] Path do Chromium:', execPath);
+    console.log('[Playwright] Path do binário:', execPath);
     if (!fs.existsSync(execPath)) {
         console.log('[Playwright] Chromium não encontrado. Instalando agora (pode levar ~30s)...');
         const playwrightBin = path.join(__dirname, 'node_modules', '.bin', 'playwright');
         execFileSync(playwrightBin, ['install', 'chromium'], {
             stdio: 'inherit',
-            env: { ...process.env }, // inclui PLAYWRIGHT_BROWSERS_PATH
+            env: { ...process.env },
         });
-        console.log('[Playwright] Chromium instalado com sucesso em:', execPath);
+        console.log('[Playwright] Chromium instalado com sucesso.');
     } else {
         console.log('[Playwright] Chromium ok.');
     }
