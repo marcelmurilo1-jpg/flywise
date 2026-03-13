@@ -657,7 +657,7 @@ export default function Landing() {
         supabase
             .from('promocoes')
             .select('titulo, programas_tags, subcategoria, categoria, valid_until, created_at')
-            .not('categoria', 'is', null)
+            .in('categoria', ['passagens', 'transferencia'])
             .or('valid_until.is.null,valid_until.gt.' + new Date().toISOString())
             .order('created_at', { ascending: false })
             .limit(4)
@@ -1033,6 +1033,27 @@ export default function Landing() {
 
                     {/* Mockup de notificações */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        {/* Ícones Gmail + WhatsApp */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', padding: '8px 14px' }}>
+                                {/* Gmail icon */}
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M2 6C2 4.9 2.9 4 4 4H20C21.1 4 22 4.9 22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6Z" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5"/>
+                                    <path d="M2 6L12 13L22 6" stroke="#60A5FA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M2 6L8.5 12M22 6L15.5 12" stroke="#60A5FA" strokeWidth="1.4" strokeLinecap="round" strokeOpacity="0.5"/>
+                                </svg>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255,255,255,0.75)' }}>Gmail</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', padding: '8px 14px' }}>
+                                {/* WhatsApp icon */}
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 2C6.477 2 2 6.477 2 12C2 13.89 2.525 15.655 3.438 17.168L2.073 21.927L6.832 20.562C8.345 21.475 10.11 22 12 22C17.523 22 22 17.523 22 12C22 6.477 17.523 2 12 2Z" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5"/>
+                                    <path d="M8.5 8.5C8.5 8.5 9 10 10.5 11.5C12 13 13.5 13.5 13.5 13.5L15 12.5C15 12.5 15.8 12.8 17 13.5C17 13.5 17 15.5 15.5 16C14 16.5 10 15 8 13C6 11 4.5 7 5 5.5C5.5 4 7.5 4 7.5 4L8.5 5.5C8.5 5.5 8.5 7 8.5 8.5Z" fill="#60A5FA" stroke="none"/>
+                                </svg>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255,255,255,0.75)' }}>WhatsApp</span>
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: 500 }}>Receba por aqui</div>
+                        </div>
                         {(alertCards.length > 0 ? alertCards : [
                             { prog: 'Smiles', deal: 'GRU → MIA a partir de 18.000 pts', time: 'agora mesmo', badge: 'Novo', badgeColor: '#34D399', badgeBg: 'rgba(52,211,153,0.15)' },
                             { prog: 'TudoAzul', deal: 'Transferência com bônus de 100% — só hoje', time: '5 min atrás', badge: 'Urgente', badgeColor: '#F87171', badgeBg: 'rgba(248,113,113,0.15)' },
