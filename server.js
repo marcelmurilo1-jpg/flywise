@@ -992,6 +992,9 @@ app.post('/api/transfer-promotions/update', async (req, res) => {
     res.json({ message: 'Cache de promoções atualizado', count: promotionsCache?.length ?? 0 });
 });
 
+// Health check para Railway
+app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
 // Localmente: inicia o servidor Express normalmente.
 // Na Vercel: o arquivo é importado como módulo serverless — app.listen não é chamado.
 if (process.env.VERCEL !== '1') {
