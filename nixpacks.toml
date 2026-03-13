@@ -1,0 +1,5 @@
+[phases.build]
+cmds = ['node scripts/install-playwright.cjs']
+
+[start]
+cmd = 'node server.js'

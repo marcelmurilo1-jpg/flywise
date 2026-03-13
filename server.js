@@ -12,9 +12,8 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── PLAYWRIGHT_BROWSERS_PATH DEVE ser definido ANTES do import do playwright ────────────
-// Playwright cacheia o PLAYWRIGHT_BROWSERS_PATH no momento em que o módulo é importado.
-// Por isso usamos dynamic import (await import) APÓS definir a variável.
-// Testado e confirmado localmente: static import ignora env var definida depois.
+// Playwright cacheia PLAYWRIGHT_BROWSERS_PATH no momento do import (testado e confirmado).
+// Usamos dynamic import (await import) APÓS definir a variável.
 process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, '.playwright-browsers');
 console.log('[Playwright] PLAYWRIGHT_BROWSERS_PATH:', process.env.PLAYWRIGHT_BROWSERS_PATH);
 
@@ -25,20 +24,32 @@ dotenv.config();
 // Dynamic import do playwright APÓS definir o env var
 const { chromium: chromiumExtra } = await import('playwright');
 
-// ─── Garante que o Chromium está instalado ───────────────────────────────────
-try {
-    const execPath = chromiumExtra.executablePath();
-    console.log('[Playwright] Path do binário:', execPath);
-    if (!fs.existsSync(execPath)) {
-        console.log('[Playwright] Chromium não encontrado. Instalando agora (pode levar ~30s)...');
+// ─── Chromium: instalação lazy (não bloqueia startup do servidor) ─────────────
+// A instalação roda em background após o app.listen(). Requisições ao scraper
+// aguardam via chromiumReady antes de tentar lançar o browser.
+let _chromiumInstalling = false;
+let _chromiumReady = fs.existsSync(chromiumExtra.executablePath());
+console.log('[Playwright] Chromium binário encontrado:', _chromiumReady, '→', chromiumExtra.executablePath());
+
+async function ensureChromium() {
+    if (_chromiumReady) return;
+    if (_chromiumInstalling) {
+        // Aguarda instalação já em curso (polling simples)
+        while (_chromiumInstalling) await new Promise(r => setTimeout(r, 500));
+        return;
+    }
+    _chromiumInstalling = true;
+    try {
+        console.log('[Playwright] Instalando Chromium em background (pode levar ~60s)...');
         const playwrightBin = path.join(__dirname, 'node_modules', '.bin', 'playwright');
         execFileSync(playwrightBin, ['install', 'chromium'], { stdio: 'inherit', env: { ...process.env } });
+        _chromiumReady = true;
         console.log('[Playwright] Chromium instalado com sucesso.');
-    } else {
-        console.log('[Playwright] Chromium ok.');
+    } catch (e) {
+        console.warn('[Playwright] Falha ao instalar Chromium:', e.message);
+    } finally {
+        _chromiumInstalling = false;
     }
-} catch (e) {
-    console.warn('[Playwright] Aviso ao verificar/instalar Chromium:', e.message);
 }
 
 const app = express();
@@ -284,9 +295,10 @@ let _browser = null;
 
 async function getBrowser() {
     if (_browser && _browser.isConnected()) return _browser;
+    await ensureChromium(); // aguarda instalação se ainda em curso
     const opts = {
         headless: true,
-        executablePath: chromiumExtra.executablePath(), // path explícito para garantir binário correto
+        executablePath: chromiumExtra.executablePath(),
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -947,6 +959,8 @@ if (process.env.VERCEL !== '1') {
         console.log(`GET  http://localhost:${PORT}/api/amadeus/airports  (Amadeus)`);
         console.log(`GET  http://localhost:${PORT}/api/amadeus/flights   (Google Flights scraper)`);
         console.log(`======================================================\n`);
+        // Inicia instalação do Chromium em background (não bloqueia o servidor)
+        if (!_chromiumReady) ensureChromium();
     });
 }
 
