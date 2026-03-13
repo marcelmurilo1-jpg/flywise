@@ -2,10 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
-import { chromium as chromiumExtra } from 'playwright-extra';
+import { chromium } from 'playwright';
+import { addExtra } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import pLimit from 'p-limit';
 
+const chromiumExtra = addExtra(chromium);
 chromiumExtra.use(StealthPlugin());
 import { createClient } from '@supabase/supabase-js';
 
