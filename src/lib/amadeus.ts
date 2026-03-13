@@ -117,7 +117,7 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
     console.log('[Amadeus] searchFlights:', qp)
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 12000)
+    const timeoutId = setTimeout(() => controller.abort(), 60000)
 
     let data: any
     try {
