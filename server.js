@@ -17,24 +17,24 @@ dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 // ─── Garante que o Chromium está instalado ───────────────────────────────────
-// Usa o binário local do playwright (não depende de npx no PATH do Railway)
+// PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers é definido via Procfile/postinstall
+// Isso garante que build e runtime usam o mesmo path dentro do diretório /app do Railway
 try {
     const execPath = chromiumExtra.executablePath();
+    console.log('[Playwright] Path do Chromium:', execPath);
     if (!fs.existsSync(execPath)) {
-        console.log('[Playwright] Chromium não encontrado em:', execPath);
-        console.log('[Playwright] Instalando agora (pode levar ~30s)...');
+        console.log('[Playwright] Chromium não encontrado. Instalando agora (pode levar ~30s)...');
         const playwrightBin = path.join(__dirname, 'node_modules', '.bin', 'playwright');
-        execFileSync(playwrightBin, ['install', 'chromium'], { stdio: 'inherit' });
-        console.log('[Playwright] Chromium instalado com sucesso.');
+        execFileSync(playwrightBin, ['install', 'chromium'], {
+            stdio: 'inherit',
+            env: { ...process.env }, // inclui PLAYWRIGHT_BROWSERS_PATH
+        });
+        console.log('[Playwright] Chromium instalado com sucesso em:', execPath);
     } else {
         console.log('[Playwright] Chromium ok.');
     }
 } catch (e) {
-    console.warn('[Playwright] Não foi possível instalar Chromium:', e.message);
-    // Tenta fallback com npx
-    try {
-        execFileSync('npx', ['playwright', 'install', 'chromium'], { stdio: 'inherit', shell: true });
-    } catch (_) {}
+    console.warn('[Playwright] Aviso ao verificar/instalar Chromium:', e.message);
 }
 
 const app = express();
