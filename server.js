@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import cron from 'node-cron';
 import pLimit from 'p-limit';
 import { createClient } from '@supabase/supabase-js';
-import { execFileSync } from 'child_process';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,7 +14,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ─── PLAYWRIGHT_BROWSERS_PATH DEVE ser definido ANTES do import do playwright ────────────
 // Playwright cacheia PLAYWRIGHT_BROWSERS_PATH no momento do import (testado e confirmado).
 // Usamos dynamic import (await import) APÓS definir a variável.
-process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, '.playwright-browsers');
+// /tmp é gravável em Railway (/var/task runtime), Lambda, e qualquer ambiente
+process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || '/tmp/.playwright-browsers';
 console.log('[Playwright] PLAYWRIGHT_BROWSERS_PATH:', process.env.PLAYWRIGHT_BROWSERS_PATH);
 
 // Carrega variáveis do ambiente (tenta .env.local e .env globalmente)
@@ -42,7 +43,14 @@ async function ensureChromium() {
     try {
         console.log('[Playwright] Instalando Chromium em background (pode levar ~60s)...');
         const playwrightBin = path.join(__dirname, 'node_modules', '.bin', 'playwright');
-        execFileSync(playwrightBin, ['install', 'chromium'], { stdio: 'inherit', env: { ...process.env } });
+        await new Promise((resolve, reject) => {
+            const child = spawn(playwrightBin, ['install', 'chromium'], {
+                stdio: 'inherit',
+                env: { ...process.env },
+            });
+            child.on('close', code => code === 0 ? resolve() : reject(new Error(`playwright install saiu com código ${code}`)));
+            child.on('error', reject);
+        });
         _chromiumReady = true;
         console.log('[Playwright] Chromium instalado com sucesso.');
     } catch (e) {

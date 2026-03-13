@@ -11,7 +11,7 @@ if (process.env.VERCEL || process.env.CI === 'true' && !process.env.RAILWAY_ENVI
     process.exit(0);
 }
 
-const browsersPath = path.join(process.cwd(), '.playwright-browsers');
+const browsersPath = '/tmp/.playwright-browsers';
 process.env.PLAYWRIGHT_BROWSERS_PATH = browsersPath;
 
 const playwrightBin = path.join(process.cwd(), 'node_modules', '.bin', 'playwright');
