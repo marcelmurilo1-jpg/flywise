@@ -250,13 +250,48 @@ app.get('/api/amadeus/airports', async (req, res) => {
 });
 
 // ─── Google Flights Scraper ───────────────────────────────────────────────────
-// Navegador compartilhado com pool de contextos, cache e dedup de buscas.
+// Navegador compartilhado com pool de proxies rotativos por contexto.
 const scrapeLimit = pLimit(5);          // máx. 5 abas simultâneas
 const CACHE_TTL_MS   = 5 * 60 * 1000;  // resultados válidos por 5 min
 const SCRAPE_TIMEOUT = 50_000;          // timeout global por busca (ms)
 
 const scrapeCache    = new Map();       // cacheKey → { data, expireAt }
 const scrapeInFlight = new Map();       // cacheKey → Promise (dedup)
+
+// ── Pool de proxies rotativos ──────────────────────────────────────────────
+// Configure PROXY_URLS no .env como lista separada por vírgula:
+//   PROXY_URLS=http://user:pass@gate.smartproxy.com:10000,http://user:pass@gate2...
+// Provedores recomendados com gateway rotativo único (1 URL já rotaciona IPs):
+//   Smartproxy: gate.smartproxy.com:10000
+//   Brightdata:  zproxy.lum-superproxy.io:22225
+//   Oxylabs:    pr.oxylabs.io:7777
+// Se PROXY_URLS não estiver configurado, roda sem proxy (dev local).
+const PROXY_POOL = (process.env.PROXY_URLS || process.env.PROXY_URL || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+let _proxyIndex = 0;
+function nextProxy() {
+    if (!PROXY_POOL.length) return null;
+    const url = PROXY_POOL[_proxyIndex % PROXY_POOL.length];
+    _proxyIndex++;
+    return url;
+}
+
+// ── User-agents rotativos ──────────────────────────────────────────────────
+const USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+];
+const VIEWPORTS = [
+    { width: 1440, height: 900 },
+    { width: 1920, height: 1080 },
+    { width: 1366, height: 768 },
+    { width: 1280, height: 800 },
+];
+function randomFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 let _browser        = null;
 let _browserLaunch  = null;             // mutex: Promise de lançamento em curso
@@ -269,25 +304,25 @@ async function getBrowser() {
 
     _browserLaunch = (async () => {
         if (_browser) { try { await _browser.close(); } catch {} _browser = null; }
-        const opts = {
+        // Proxy NÃO vai no browser — vai em cada context individualmente,
+        // permitindo IP diferente por requisição sem reiniciar o browser.
+        _browser = await chromiumExtra.launch({
             headless: true,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-blink-features=AutomationControlled',
-                '--disable-dev-shm-usage',          // evita crash por falta de /dev/shm
+                '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--memory-pressure-off',
                 '--js-flags=--max-old-space-size=512',
             ],
-        };
-        if (process.env.PROXY_URL) opts.proxy = { server: process.env.PROXY_URL };
-        _browser = await chromiumExtra.launch(opts);
+        });
         _browser.on('disconnected', () => {
             console.warn('[GFlights] Navegador desconectado — reiniciará na próxima busca.');
             _browser = null;
         });
-        console.log('[GFlights] Navegador iniciado.');
+        console.log(`[GFlights] Navegador iniciado. Proxies configurados: ${PROXY_POOL.length || 'nenhum (sem proxy)'}`);
         return _browser;
     })().finally(() => { _browserLaunch = null; });
 
@@ -350,12 +385,15 @@ async function _scrapeOneway(origin, destination, date) {
 async function _doScrapeOneway(origin, destination, date) {
     return scrapeLimit(async () => {
         const browser = await getBrowser();
-        const context = await browser.newContext({
-            viewport: { width: 1440, height: 900 },
+        const proxy = nextProxy();
+        const contextOpts = {
+            viewport: randomFrom(VIEWPORTS),
             locale: 'pt-BR',
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            userAgent: randomFrom(USER_AGENTS),
             extraHTTPHeaders: { 'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8' },
-        });
+        };
+        if (proxy) contextOpts.proxy = { server: proxy };
+        const context = await browser.newContext(contextOpts);
         const page = await context.newPage();
 
         try {
