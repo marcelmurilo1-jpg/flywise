@@ -354,6 +354,10 @@ async function scrapeOneway(origin, destination, date) {
 
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
+            // Aceita consentimento de cookies do Google (aparece em IPs de servidor)
+            await page.locator('button:has-text("Accept all"), button:has-text("Aceitar tudo"), button[aria-label*="Accept"]')
+                .first().click({ timeout: 4000 }).catch(() => {});
+
             await Promise.race([
                 page.waitForSelector('li.pIav2d', { timeout: 20000 }),
                 page.waitForSelector('ul[role="list"] li', { timeout: 20000 }),
@@ -642,11 +646,9 @@ app.get('/api/amadeus/flights', async (req, res) => {
     console.log(`[GFlights] Buscando ${origin}→${destination} em ${date}${returnDate ? ` | volta ${destination}→${origin} em ${returnDate}` : ''}`);
 
     try {
-        // Scrape ida e (se round-trip) volta em paralelo
-        const [rawOut, rawIn = []] = await Promise.all([
-            scrapeOneway(origin, destination, date),
-            returnDate ? scrapeOneway(destination, origin, returnDate) : Promise.resolve([]),
-        ]);
+        // Scrape sequencial para economizar memória (Render free = 512MB, 2x Chromium = OOM)
+        const rawOut = await scrapeOneway(origin, destination, date);
+        const rawIn = returnDate ? await scrapeOneway(destination, origin, returnDate) : [];
 
         // Outbound: filtra voos sem preço (geralmente resultados inválidos)
         // Inbound: NÃO filtra por preço — em buscas round-trip o Google Flights
