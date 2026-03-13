@@ -2,11 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
-import { chromium as chromiumExtra } from 'playwright-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { chromium as chromiumExtra } from 'playwright';
 import pLimit from 'p-limit';
-
-chromiumExtra.use(StealthPlugin());
 import { createClient } from '@supabase/supabase-js';
 
 // Carrega variáveis do ambiente (tenta .env.local e .env globalmente)
@@ -292,6 +289,12 @@ async function scrapeOneway(origin, destination, date) {
             extraHTTPHeaders: { 'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8' },
         });
         const page = await context.newPage();
+
+        // Patch anti-detecção: remove navigator.webdriver e chrome runtime
+        await page.addInitScript(() => {
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            window.chrome = { runtime: {} };
+        });
 
         try {
             const query = encodeURIComponent(`Flights from ${origin} to ${destination} on ${date} one way`);
