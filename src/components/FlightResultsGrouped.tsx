@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plane, SlidersHorizontal, X, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plane, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ResultadoVoo } from '@/lib/supabase'
 import { StrategyPanel } from '@/components/StrategyPanel'
@@ -90,25 +90,6 @@ function FlightLeg({
                 </div>
             </div>
         </div>
-    )
-}
-
-// ─── Filter pill button ────────────────────────────────────────────────────────
-function FilterPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            style={{
-                padding: '5px 12px', borderRadius: 999, border: 'none', cursor: 'pointer',
-                fontFamily: 'inherit', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
-                background: active ? '#0E2A55' : '#F1F5F9',
-                color: active ? '#fff' : '#64748B',
-                transition: 'all 0.15s',
-            }}
-        >
-            {label}
-        </button>
     )
 }
 
@@ -237,38 +218,6 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
     const [amadSel, setAmadSel] = useState<ResultadoVoo | null>(null)
     const [amadReturnSel, setAmadReturnSel] = useState<ResultadoVoo | null>(null)
     const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
-    const [checkoutLoading, setCheckoutLoading] = useState(false)
-    const [checkoutError, setCheckoutError] = useState<string | null>(null)
-
-    async function handleCheckout() {
-        if (!amadSel) return
-        setCheckoutLoading(true)
-        setCheckoutError(null)
-        const totalBrl = (amadSel.preco_brl ?? 0) + (amadReturnSel?.preco_brl ?? 0)
-        try {
-            const res = await fetch('/api/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    origin: amadSel.origem,
-                    destination: amadSel.destino,
-                    departureDate: amadSel.partida?.slice(0, 10),
-                    returnDate: amadReturnSel?.partida?.slice(0, 10),
-                    totalBrl,
-                    outboundCompany: amadSel.companhia,
-                    returnCompany: amadReturnSel?.companhia,
-                }),
-            })
-            const data = await res.json()
-            if (!res.ok || !data.url) throw new Error(data.error || 'Erro ao iniciar pagamento')
-            window.open(data.url, '_blank')
-        } catch (err: any) {
-            setCheckoutError(err.message)
-        } finally {
-            setCheckoutLoading(false)
-        }
-    }
-
     function toggleExpand(id: string) {
         setExpandedCards(prev => {
             const next = new Set(prev)
@@ -283,91 +232,42 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
         setAmadSel(null)
     }, [flights])
 
-    // ── Filter state ──────────────────────────────────────────────────────────
-    const [filtersOpen, setFiltersOpen] = useState(false)
-    const [selPrograms, setSelPrograms] = useState<string[]>([])
-    const [selStops, setSelStops] = useState<number | null>(null)   // null=all, 0=direct, 1=1stop, 2=2+
-    const [selAirlines, setSelAirlines] = useState<string[]>([])
-    const [maxPrice, setMaxPrice] = useState<number | null>(null)
+    // (filtros gerenciados pela Sidebar — sem estado interno duplicado)
 
-    // ── Sync sidebar filters → internal filter state ─────────────────────────
-    useEffect(() => {
-        if (!sidebarFilters) return
-
-        // Sync programs
-        setSelPrograms(sidebarFilters.programs)
-
-        // Sync stops: map string values to number
-        if (sidebarFilters.stops.length === 0) {
-            setSelStops(null)
-        } else if (sidebarFilters.stops.includes('direct')) {
-            setSelStops(0)
-        } else if (sidebarFilters.stops.includes('1stop')) {
-            setSelStops(1)
-        } else if (sidebarFilters.stops.includes('2plus')) {
-            setSelStops(2)
-        }
-    }, [sidebarFilters])
-
-    // ── Derived values for filter UI ──────────────────────────────────────────
-    const allAirlines = useMemo(() =>
-        [...new Set(flights.map(f => f.companhia).filter(Boolean) as string[])].sort()
-        , [flights])
-
-    const priceMax = useMemo(() =>
-        Math.max(...flights.map(f => f.preco_brl ?? 0), 0)
-        , [flights])
-
-    const effectiveMaxPrice = maxPrice ?? priceMax
-
-    const activeFilterCount =
-        selPrograms.length +
-        (selStops !== null ? 1 : 0) +
-        selAirlines.length +
-        (maxPrice !== null ? 1 : 0)
-
-    function toggleAirline(a: string) {
-        setSelAirlines(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a])
-    }
-    function toggleStop(val: number) {
-        setSelStops(prev => prev === val ? null : val)
-    }
-    function clearFilters() {
-        setSelPrograms([]); setSelStops(null); setSelAirlines([]); setMaxPrice(null)
-    }
-
-    // ── Filtering and Sorting logic ───────────────────────────────────────────
+    // ── Filtering and Sorting (usa sidebarFilters diretamente) ───────────────
     const sorted = useMemo(() => {
         let base = [...flights]
 
-        // 1. Filter
-        base = base.filter(f => {
-            const det = (f.detalhes as any) ?? {}
-            const iata = extractIata(f.companhia)
+        // Paradas (fix: usa f.paradas, não det.paradas)
+        if (sidebarFilters?.stops && sidebarFilters.stops.length > 0) {
+            base = base.filter(f => {
+                const stops = (f as any).paradas ?? 0
+                if (sidebarFilters.stops.includes('direct') && stops === 0) return true
+                if (sidebarFilters.stops.includes('1stop') && stops === 1) return true
+                if (sidebarFilters.stops.includes('2plus') && stops >= 2) return true
+                return false
+            })
+        }
 
-            if (selPrograms.length > 0 && !airlineMatchesPrograms(iata, selPrograms)) return false
-            if (selStops !== null) {
-                const stops = det.paradas ?? 0
-                if (selStops === 2 ? stops < 2 : stops !== selStops) return false
-            }
-            if (selAirlines.length > 0 && !selAirlines.includes(f.companhia ?? '')) return false
-            if (effectiveMaxPrice < priceMax && (f.preco_brl ?? 0) > effectiveMaxPrice) return false
-            return true
-        })
+        // Companhia aérea
+        if (sidebarFilters?.airlines && sidebarFilters.airlines.length > 0) {
+            base = base.filter(f => sidebarFilters.airlines.includes(f.companhia ?? ''))
+        }
 
-        // 2. Sort
-        const sortCriteria = sidebarFilters?.sortBy ?? 'best'
-        if (sortCriteria === 'price') {
-            base.sort((a, b) => (a.preco_brl ?? 0) - (b.preco_brl ?? 0))
-        } else if (sortCriteria === 'duration') {
+        // Preço máximo
+        if (sidebarFilters?.maxPrice !== null && sidebarFilters?.maxPrice !== undefined) {
+            base = base.filter(f => (f.preco_brl ?? 0) <= sidebarFilters.maxPrice!)
+        }
+
+        // Ordenar
+        if (sidebarFilters?.sortBy === 'duration') {
             base.sort((a, b) => (a.duracao_min ?? 0) - (b.duracao_min ?? 0))
         } else {
-            // 'best' - current default (price) or some weight logic
             base.sort((a, b) => (a.preco_brl ?? 0) - (b.preco_brl ?? 0))
         }
 
         return base
-    }, [flights, selPrograms, selStops, selAirlines, effectiveMaxPrice, priceMax, sidebarFilters?.sortBy])
+    }, [flights, sidebarFilters])
 
     if (flights.length === 0) return (
         <motion.div
@@ -447,130 +347,7 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
                         {sorted.length} de {flights.length} {flights.length === 1 ? 'opção' : 'opções'} · ordenadas por {labelMap[sidebarFilters?.sortBy ?? 'best']}
                     </p>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                        onClick={() => setFiltersOpen(o => !o)}
-                        style={{
-                            background: filtersOpen ? '#0E2A55' : 'none',
-                            border: `1px solid ${filtersOpen ? '#0E2A55' : 'var(--border-light)'}`,
-                            borderRadius: 10, padding: '7px 14px', fontFamily: 'inherit',
-                            fontSize: 12, fontWeight: 600,
-                            color: filtersOpen ? '#fff' : 'var(--text-muted)',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                            transition: 'all 0.15s',
-                        }}
-                    >
-                        <SlidersHorizontal size={12} />
-                        Filtros rápidos
-                        {activeFilterCount > 0 && (
-                            <span style={{
-                                background: filtersOpen ? 'rgba(255,255,255,0.25)' : '#2A60C2',
-                                color: '#fff', borderRadius: 999, fontSize: 10, fontWeight: 800,
-                                padding: '0px 6px', minWidth: 16, textAlign: 'center',
-                            }}>
-                                {activeFilterCount}
-                            </span>
-                        )}
-                    </button>
-                </div>
             </motion.div>
-
-            {/* ── Filter Panel ─────────────────────────────────────────────── */}
-            <AnimatePresence>
-                {filtersOpen && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        style={{ overflow: 'hidden', marginBottom: 12 }}
-                    >
-                        <div style={{
-                            background: '#fff', border: '1px solid #E2EAF5',
-                            borderRadius: 14, padding: '16px 20px',
-                            display: 'flex', flexDirection: 'column', gap: 16,
-                        }}>
-                            {/* Row 2: Stops + Airline */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                                {/* Stops */}
-                                <div>
-                                    <div style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                                        Paradas
-                                    </div>
-                                    <div style={{ display: 'flex', gap: 6 }}>
-                                        {[
-                                            { val: 0, label: 'Direto' },
-                                            { val: 1, label: '1 parada' },
-                                            { val: 2, label: '2+' },
-                                        ].map(opt => (
-                                            <FilterPill
-                                                key={opt.val}
-                                                label={opt.label}
-                                                active={selStops === opt.val}
-                                                onClick={() => toggleStop(opt.val)}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Airlines */}
-                                <div>
-                                    <div style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                                        Companhia aérea
-                                    </div>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                        {allAirlines.map(a => (
-                                            <FilterPill
-                                                key={a}
-                                                label={a}
-                                                active={selAirlines.includes(a)}
-                                                onClick={() => toggleAirline(a)}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Row 3: Price slider */}
-                            <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                    <div style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                                        Preço máximo por pessoa
-                                    </div>
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>
-                                        R$ {effectiveMaxPrice.toLocaleString('pt-BR')}
-                                    </span>
-                                </div>
-                                <input
-                                    type="range"
-                                    min={0}
-                                    max={priceMax}
-                                    step={50}
-                                    value={effectiveMaxPrice}
-                                    onChange={e => setMaxPrice(Number(e.target.value))}
-                                    style={{ width: '100%', accentColor: '#2A60C2' }}
-                                />
-                            </div>
-
-                            {/* Clear */}
-                            {activeFilterCount > 0 && (
-                                <button
-                                    type="button"
-                                    onClick={clearFilters}
-                                    style={{
-                                        alignSelf: 'flex-start', background: 'none',
-                                        border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                                        fontSize: 12, fontWeight: 700, color: '#EF4444',
-                                        display: 'flex', alignItems: 'center', gap: 4, padding: 0,
-                                    }}
-                                >
-                                    <X size={12} /> Limpar filtros rápidos
-                                </button>
-                            )}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
             {/* Empty state after filtering */}
             {sorted.length === 0 && flights.length > 0 && (
@@ -582,20 +359,9 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
                     <p style={{ fontSize: 15, fontWeight: 700, color: '#0E2A55', marginBottom: 8 }}>
                         Nenhum voo com estes filtros
                     </p>
-                    <p style={{ fontSize: 13, color: '#94A3B8', marginBottom: 16 }}>
-                        Tente remover alguns filtros para ver mais resultados.
+                    <p style={{ fontSize: 13, color: '#94A3B8' }}>
+                        Tente remover alguns filtros na barra lateral.
                     </p>
-                    <button
-                        type="button"
-                        onClick={clearFilters}
-                        style={{
-                            background: '#2A60C2', color: '#fff', border: 'none',
-                            borderRadius: 10, padding: '8px 20px', fontFamily: 'inherit',
-                            fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                        }}
-                    >
-                        Limpar filtros
-                    </button>
                 </div>
             )}
 
@@ -857,31 +623,10 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
                                 )}
                                 <div style={{ background: '#0E2A55', borderRadius: 12, padding: '14px 20px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                                     <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total (ida + volta)</span>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                                        <span style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>
-                                            R$ {((amadSel?.preco_brl ?? 0) + (amadReturnSel?.preco_brl ?? 0)).toLocaleString('pt-BR')}
-                                        </span>
-                                        <button
-                                            onClick={handleCheckout}
-                                            disabled={checkoutLoading}
-                                            style={{
-                                                background: checkoutLoading ? '#15803D' : '#16A34A',
-                                                color: '#fff', border: 'none', borderRadius: 10,
-                                                padding: '10px 20px', fontSize: 13, fontWeight: 800,
-                                                cursor: checkoutLoading ? 'not-allowed' : 'pointer',
-                                                fontFamily: 'inherit', whiteSpace: 'nowrap' as const,
-                                                opacity: checkoutLoading ? 0.8 : 1,
-                                            }}
-                                        >
-                                            {checkoutLoading ? 'Aguarde...' : 'Pagar com PIX ✦'}
-                                        </button>
-                                    </div>
+                                    <span style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>
+                                        R$ {((amadSel?.preco_brl ?? 0) + (amadReturnSel?.preco_brl ?? 0)).toLocaleString('pt-BR')}
+                                    </span>
                                 </div>
-                                {checkoutError && (
-                                    <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 12, color: '#DC2626' }}>
-                                        {checkoutError}
-                                    </div>
-                                )}
                                 <button onClick={() => { setAmadPhase('browsing'); setAmadSel(null); setAmadReturnSel(null) }}
                                     style={{ alignSelf: 'flex-start', background: 'none', border: '1px solid #CBD5E1', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#64748B', cursor: 'pointer', fontFamily: 'inherit', marginBottom: 12 }}>
                                     ← Escolher novamente

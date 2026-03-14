@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { AlertCircle, SlidersHorizontal, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react'
 import { supabase, type ResultadoVoo, type Busca } from '@/lib/supabase'
@@ -49,15 +49,16 @@ export default function Resultados() {
     const [seatsDetailOpen, setSeatsDetailOpen] = useState<Set<string>>(new Set())
 
     // Sidebar state
-    const [filters, setFilters] = useState<FilterState>({
-        programs: [],
-        stops: [],
-        cabin: 'economy',
-        minMiles: '',
-        maxMiles: '',
-        sortBy: 'best'
-    })
+    const [filters, setFilters] = useState<FilterState>({ sortBy: 'best', stops: [], airlines: [], maxPrice: null })
     const [showMobileFilters, setShowMobileFilters] = useState(false)
+
+    // Derived values for sidebar
+    const allAirlines = useMemo(() =>
+        [...new Set(flights.map(f => f.companhia).filter(Boolean) as string[])].sort()
+    , [flights])
+    const priceMax = useMemo(() =>
+        Math.max(...flights.map(f => f.preco_brl ?? 0), 0)
+    , [flights])
 
     // Guard: prevent re-running load() for the same buscaId
     const lastBuscaId = useRef<number | null>(null)
@@ -430,7 +431,7 @@ export default function Resultados() {
             <div className="fly-results-outer" style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 28px 80px', display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
 
                 <div className={`fly-sidebar-col${showMobileFilters ? ' open' : ''}`}>
-                    <Sidebar filters={filters} setFilters={setFilters} />
+                    <Sidebar filters={filters} setFilters={setFilters} allAirlines={allAirlines} priceMax={priceMax} />
                 </div>
 
                 <div style={{ flex: 1, minWidth: 0 }}>

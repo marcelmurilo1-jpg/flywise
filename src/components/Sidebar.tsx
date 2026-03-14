@@ -1,87 +1,82 @@
+import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { useState } from 'react'
-import { CheckCircle, ChevronDown, ChevronUp, X } from 'lucide-react'
 
 export interface FilterState {
-    programs: string[]
-    stops: string[]
-    cabin: string
-    minMiles: string
-    maxMiles: string
     sortBy: 'best' | 'price' | 'duration'
+    stops: string[]       // 'direct' | '1stop' | '2plus'
+    airlines: string[]
+    maxPrice: number | null
 }
 
-const PROGRAMS = ['Smiles', 'LATAM Pass', 'TudoAzul']
+interface SidebarProps {
+    filters: FilterState
+    setFilters: (f: FilterState) => void
+    allAirlines?: string[]
+    priceMax?: number
+}
 
-export function Sidebar({ filters, setFilters }: { filters: FilterState, setFilters: (f: FilterState) => void }) {
-    const [sections, setSections] = useState({ sort: true, programs: true, stops: true, cabin: true, miles: false })
+const SectionHeader = ({ label, open, onToggle }: { label: string; open: boolean; onToggle: () => void }) => (
+    <button onClick={onToggle} style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        width: '100%', background: 'none', border: 'none', borderBottom: '1px solid var(--border-light)',
+        padding: '14px 0', cursor: 'pointer', fontFamily: 'inherit',
+    }}>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--graphite)' }}>{label}</span>
+        {open ? <ChevronUp size={15} color="var(--text-muted)" /> : <ChevronDown size={15} color="var(--text-muted)" />}
+    </button>
+)
+
+const FilterPill = ({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) => (
+    <button onClick={onClick} style={{
+        padding: '5px 11px', borderRadius: 8, border: `1px solid ${active ? '#2A60C2' : 'var(--border-light)'}`,
+        background: active ? 'rgba(42,96,194,0.09)' : 'transparent',
+        fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+        color: active ? '#2A60C2' : 'var(--text-body)',
+        cursor: 'pointer', transition: 'all 0.15s',
+    }}>{label}</button>
+)
+
+export function Sidebar({ filters, setFilters, allAirlines = [], priceMax = 0 }: SidebarProps) {
+    const [sections, setSections] = useState({ sort: true, stops: true, airlines: true, price: true })
     const toggle = (k: keyof typeof sections) => setSections(s => ({ ...s, [k]: !s[k] }))
 
-    const toggleProgram = (p: string) => {
-        const next = filters.programs.includes(p)
-            ? filters.programs.filter(x => x !== p)
-            : [...filters.programs, p]
-        setFilters({ ...filters, programs: next })
-    }
-    const toggleStop = (s: string) => {
-        const next = filters.stops.includes(s)
-            ? filters.stops.filter(x => x !== s)
-            : [...filters.stops, s]
+    const toggleStop = (val: string) => {
+        const next = filters.stops.includes(val)
+            ? filters.stops.filter(x => x !== val)
+            : [...filters.stops, val]
         setFilters({ ...filters, stops: next })
     }
 
-    const SectionHeader = ({ label, k }: { label: string, k: keyof typeof sections }) => (
-        <button onClick={() => toggle(k)} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            width: '100%', background: 'none', border: 'none', borderBottom: '1px solid var(--border-light)',
-            padding: '14px 0', cursor: 'pointer', fontFamily: 'inherit',
-        }}>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--graphite)' }}>{label}</span>
-            {sections[k] ? <ChevronUp size={15} color="var(--text-muted)" /> : <ChevronDown size={15} color="var(--text-muted)" />}
-        </button>
-    )
+    const toggleAirline = (a: string) => {
+        const next = filters.airlines.includes(a)
+            ? filters.airlines.filter(x => x !== a)
+            : [...filters.airlines, a]
+        setFilters({ ...filters, airlines: next })
+    }
 
-    const CheckRow = ({ label, checked, onChange }: { label: string, checked: boolean, onChange: () => void }) => (
-        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '6px 0' }}>
-            <div onClick={onChange} style={{
-                width: '17px', height: '17px', borderRadius: '5px', flexShrink: 0,
-                border: `2px solid ${checked ? 'var(--green-strat)' : 'var(--border-mid)'}`,
-                background: checked ? 'var(--green-strat)' : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', transition: 'all 0.15s',
-            }}>
-                {checked && <CheckCircle size={10} color="#fff" strokeWidth={3} />}
-            </div>
-            <span style={{ fontSize: '13px', color: 'var(--text-body)' }}>{label}</span>
-        </label>
-    )
+    const effectiveMax = filters.maxPrice ?? priceMax
+
+    const hasActiveFilters = filters.stops.length > 0 || filters.airlines.length > 0 || filters.maxPrice !== null || filters.sortBy !== 'best'
 
     return (
         <aside style={{
-            width: '230px', flexShrink: 0,
-            background: '#fff',
-            border: '1px solid var(--border-light)',
-            borderRadius: '16px',
-            padding: '20px',
-            height: 'fit-content',
-            position: 'sticky',
-            top: '80px',
-            boxShadow: 'var(--shadow-xs)',
+            width: '230px', flexShrink: 0, background: '#fff',
+            border: '1px solid var(--border-light)', borderRadius: '16px',
+            padding: '20px', height: 'fit-content',
+            position: 'sticky', top: '80px', boxShadow: 'var(--shadow-xs)',
         }}>
             <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>
                 Filtros
             </p>
 
-            {/* Sort By */}
-            <SectionHeader label="Ordenar por" k="sort" />
+            {/* Ordenar por */}
+            <SectionHeader label="Ordenar por" open={sections.sort} onToggle={() => toggle('sort')} />
             {sections.sort && (
                 <div style={{ padding: '8px 0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {[
-                        ['Melhor Estratégia', 'best'],
-                        ['Mais Econômico', 'price'],
-                        ['Mais Rápido', 'duration']
-                    ].map(([label, val]) => (
-                        <button key={val} onClick={() => setFilters({ ...filters, sortBy: val as any })} style={{
-                            padding: '7px 12px', borderRadius: '8px', border: `1px solid ${filters.sortBy === val ? '#2A60C2' : 'var(--border-light)'}`,
+                    {([['Melhor estratégia', 'best'], ['Mais econômico', 'price'], ['Mais rápido', 'duration']] as const).map(([label, val]) => (
+                        <button key={val} onClick={() => setFilters({ ...filters, sortBy: val })} style={{
+                            padding: '7px 12px', borderRadius: '8px',
+                            border: `1px solid ${filters.sortBy === val ? '#2A60C2' : 'var(--border-light)'}`,
                             background: filters.sortBy === val ? 'rgba(42,96,194,0.08)' : 'transparent',
                             fontFamily: 'inherit', fontSize: '13px', fontWeight: 500,
                             color: filters.sortBy === val ? '#2A60C2' : 'var(--text-body)',
@@ -91,47 +86,69 @@ export function Sidebar({ filters, setFilters }: { filters: FilterState, setFilt
                 </div>
             )}
 
-            {/* Programs */}
-            <SectionHeader label="Programas de Milhas" k="programs" />
-            {sections.programs && (
-                <div style={{ padding: '8px 0' }}>
-                    {PROGRAMS.map(p => (
-                        <CheckRow key={p} label={p} checked={filters.programs.includes(p)} onChange={() => toggleProgram(p)} />
-                    ))}
-                </div>
-            )}
-
-            {/* Stops */}
-            <SectionHeader label="Conexões" k="stops" />
+            {/* Conexões */}
+            <SectionHeader label="Conexões" open={sections.stops} onToggle={() => toggle('stops')} />
             {sections.stops && (
-                <div style={{ padding: '8px 0' }}>
-                    {[['Direto', 'direct'], ['1 conexão', '1stop'], ['2+ conexões', '2plus']].map(([label, val]) => (
-                        <CheckRow key={val} label={label} checked={filters.stops.includes(val)} onChange={() => toggleStop(val)} />
+                <div style={{ padding: '8px 0', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {([['Direto', 'direct'], ['1 parada', '1stop'], ['2+', '2plus']] as const).map(([label, val]) => (
+                        <FilterPill key={val} label={label} active={filters.stops.includes(val)} onClick={() => toggleStop(val)} />
                     ))}
                 </div>
             )}
 
-            {/* Cabin */}
-            <SectionHeader label="Classe" k="cabin" />
-            {sections.cabin && (
-                <div style={{ padding: '8px 0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {[['Econômica', 'economy'], ['Executiva', 'business'], ['Primeira', 'first']].map(([label, val]) => (
-                        <button key={val} onClick={() => setFilters({ ...filters, cabin: val })} style={{
-                            padding: '7px 12px', borderRadius: '8px', border: `1px solid ${filters.cabin === val ? 'var(--green-strat)' : 'var(--border-light)'}`,
-                            background: filters.cabin === val ? 'rgba(14,107,87,0.08)' : 'transparent',
-                            fontFamily: 'inherit', fontSize: '13px', fontWeight: 500,
-                            color: filters.cabin === val ? 'var(--green-strat)' : 'var(--text-body)',
-                            cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
-                        }}>{label}</button>
-                    ))}
-                </div>
+            {/* Companhia aérea */}
+            {allAirlines.length > 0 && (
+                <>
+                    <SectionHeader label="Companhia aérea" open={sections.airlines} onToggle={() => toggle('airlines')} />
+                    {sections.airlines && (
+                        <div style={{ padding: '8px 0', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {allAirlines.map(a => (
+                                <button key={a} onClick={() => toggleAirline(a)} style={{
+                                    padding: '6px 10px', borderRadius: 8, textAlign: 'left',
+                                    border: `1px solid ${filters.airlines.includes(a) ? '#2A60C2' : 'var(--border-light)'}`,
+                                    background: filters.airlines.includes(a) ? 'rgba(42,96,194,0.08)' : 'transparent',
+                                    fontFamily: 'inherit', fontSize: 12, fontWeight: 500,
+                                    color: filters.airlines.includes(a) ? '#2A60C2' : 'var(--text-body)',
+                                    cursor: 'pointer', transition: 'all 0.15s',
+                                }}>{a}</button>
+                            ))}
+                        </div>
+                    )}
+                </>
             )}
 
-            {/* Clear */}
-            <button onClick={() => setFilters({ programs: [], stops: [], cabin: 'economy', minMiles: '', maxMiles: '', sortBy: 'best' })}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '16px', background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: '12px', fontFamily: 'inherit', fontWeight: 600 }}>
-                <X size={12} /> Limpar filtros
-            </button>
+            {/* Preço máximo */}
+            {priceMax > 0 && (
+                <>
+                    <SectionHeader label="Preço máximo" open={sections.price} onToggle={() => toggle('price')} />
+                    {sections.price && (
+                        <div style={{ padding: '10px 0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>R$ 0</span>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>
+                                    R$ {effectiveMax.toLocaleString('pt-BR')}
+                                </span>
+                            </div>
+                            <input
+                                type="range" min={0} max={priceMax} step={50}
+                                value={effectiveMax}
+                                onChange={e => setFilters({ ...filters, maxPrice: Number(e.target.value) })}
+                                style={{ width: '100%', accentColor: '#2A60C2' }}
+                            />
+                        </div>
+                    )}
+                </>
+            )}
+
+            {/* Limpar */}
+            {hasActiveFilters && (
+                <button
+                    onClick={() => setFilters({ sortBy: 'best', stops: [], airlines: [], maxPrice: null })}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '16px', background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: '12px', fontFamily: 'inherit', fontWeight: 600 }}
+                >
+                    <X size={12} /> Limpar filtros
+                </button>
+            )}
         </aside>
     )
 }
