@@ -1,5 +1,6 @@
 /**
  * amadeus.ts — Client para o proxy Amadeus rodando no servidor Express (server.js).
+ * Backend: Railway (web-production-c819c.up.railway.app)
  *
  * As credenciais (CLIENT_ID / CLIENT_SECRET) ficam exclusivamente no servidor.
  * O frontend apenas chama o proxy em /api/amadeus/*.
