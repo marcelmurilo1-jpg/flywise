@@ -17,6 +17,8 @@ export interface UsePlanResult {
     refresh: () => void
 }
 
+const TEST_EMAILS = ['teste@gmail.com']
+
 export function usePlan(): UsePlanResult {
     const { user } = useAuth()
     const [plan, setPlan] = useState<Plan>('free')
@@ -75,6 +77,22 @@ export function usePlan(): UsePlanResult {
     }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => { load() }, [load])
+
+    // Test account bypass — always elite with unlimited usage
+    if (user?.email && TEST_EMAILS.includes(user.email)) {
+        return {
+            plan: 'elite',
+            planExpiresAt: null,
+            strategiesUsed: 0,
+            roteiroUsed: 0,
+            loading: false,
+            canGenerateStrategy: true,
+            canGenerateRoteiro: true,
+            strategyLimit: 9999,
+            roteiroLimit: 9999,
+            refresh: load,
+        }
+    }
 
     const strategyLimit = getStrategyLimit(plan)
     const roteiroLimit = getRoteiroLimit(plan)
