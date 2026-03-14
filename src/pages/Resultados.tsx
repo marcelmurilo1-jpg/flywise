@@ -96,11 +96,11 @@ export default function Resultados() {
             setLoading(true)
             setError('')
 
-            // Fail-safe: force loading = false after 15s
+            // Fail-safe: force loading = false after 75s (Google Flights scraper pode levar ~30-60s)
             const loadingTimeout = setTimeout(() => {
-                console.warn('[Resultados] FAIL-SAFE: Forçando carregamento = false após 15s')
+                console.warn('[Resultados] FAIL-SAFE: Forçando carregamento = false após 75s')
                 setLoading(false)
-            }, 15000)
+            }, 75000)
 
             try {
                 // 1. Load busca metadata
