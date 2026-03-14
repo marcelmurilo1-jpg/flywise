@@ -885,12 +885,48 @@ app.post('/api/award-prices/sync', async (req, res) => {
 // ─── Promoções de Transferência ───────────────────────────────────────────────
 // Cache em memória com TTL de 12h. A tabela `transfer_promotions` no Supabase
 // é a fonte de verdade — atualizada manualmente ou via POST /api/transfer-promotions/update.
-// Fallback: se Supabase estiver vazio, a API retorna array vazio e o frontend
-// usa os dados hardcoded em transferData.ts.
+// Se a tabela estiver vazia no startup, os dados default são inseridos automaticamente.
 
 let promotionsCache = null;
 let promotionsCacheAt = 0;
 const PROMOTIONS_CACHE_TTL = 12 * 60 * 60 * 1000; // 12h
+
+// Dados default para seed automático (espelha transferData.ts — atualizar em conjunto)
+const DEFAULT_PROMOTIONS_SEED = [
+    { card_id: 'iupp_itau', program: 'Smiles', bonus_percent: 30, club_bonus_percent: 60, club_tier_bonuses: { 'Plano 1.000 mi': 70, 'Plano 2.000 mi': 80, 'Plano 5.000 mi': 100, 'Plano 10.000 mi': 120, 'Plano 20.000 mi / Diamante': 130 }, club_required: 'smiles_club', valid_until: 'Campanha periódica (confirme em smiles.com.br)', description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% (e mais) — Itaú → Smiles', is_periodic: true, last_confirmed: 'Mar/2026', registration_url: 'https://www.smiles.com.br/promocao-transferencia', rules: ['⚠️ Cadastre-se ANTES de transferir — sem cadastro, sem bônus', 'Sem clube: 30%', 'Plano 1.000 mi: 70%', 'Plano 2.000 mi: 80%', 'Planos maiores: confirmar na campanha vigente', 'Limite: 300.000 milhas bônus por CPF', 'Milhas bônus creditadas em até 15 dias'], active: true },
+    { card_id: 'nubank_ultravioleta', program: 'Smiles', bonus_percent: 30, club_bonus_percent: 60, club_tier_bonuses: { 'Plano 1.000 mi': 70, 'Plano 2.000 mi': 80, 'Plano 5.000 mi': 100, 'Plano 10.000 mi': 120, 'Plano 20.000 mi / Diamante': 130 }, club_required: 'smiles_club', valid_until: 'Campanha periódica (confirme em smiles.com.br)', description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% (e mais) — Nubank → Smiles', is_periodic: true, last_confirmed: 'Mar/2026', registration_url: 'https://www.smiles.com.br/promocao-transferencia', rules: ['⚠️ Cadastre-se ANTES de transferir', 'Sem cadastro prévio = sem bônus', 'Mínimo de 2.500 Pontos Nubank por transferência', 'Plano 1.000 mi: 70%; Plano 2.000 mi: 80%', 'Planos maiores: confirmar na campanha vigente', 'Limite: 300.000 milhas bônus por CPF'], active: true },
+    { card_id: 'c6_atomos', program: 'Smiles', bonus_percent: 30, club_bonus_percent: 60, club_tier_bonuses: { 'Plano 1.000 mi': 70, 'Plano 2.000 mi': 80, 'Plano 5.000 mi': 100, 'Plano 10.000 mi': 120, 'Plano 20.000 mi / Diamante': 130 }, club_required: 'smiles_club', valid_until: 'Campanha periódica (confirme em smiles.com.br)', description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% — C6 Bank → Smiles', is_periodic: true, last_confirmed: 'Mar/2026', registration_url: 'https://www.smiles.com.br/promocao-transferencia', rules: ['⚠️ Cadastre-se ANTES de transferir', 'Plano 1.000 mi: 70%; Plano 2.000 mi: 80%', 'Planos maiores: confirmar na campanha vigente', 'Limite: 300.000 milhas bônus por CPF'], active: true },
+    { card_id: 'santander_esfera', program: 'Smiles', bonus_percent: 20, club_bonus_percent: 60, club_tier_bonuses: { 'Plano 1.000 mi': 70, 'Plano 2.000 mi': 80, 'Plano 5.000 mi': 100, 'Plano 10.000 mi': 120, 'Plano 20.000 mi / Diamante': 130 }, club_required: 'smiles_club', valid_until: 'Bônus de 20% permanente + campanhas periódicas para clube', description: '20% permanente para todos (Esfera) + por plano Clube Smiles em campanhas', is_periodic: false, last_confirmed: 'Mar/2026', registration_url: 'https://esfera.com.vc', rules: ['Bônus de 20% é permanente para todos os clientes Santander via Esfera', 'Clube Smiles ativo: bônus extra durante campanhas periódicas', 'Plano 1.000 mi: 70%; Plano 2.000 mi: 80% (em campanhas)', 'Para campanhas extras: cadastre-se antes', 'Mínimo: 1.000 pontos Esfera', 'Prazo de crédito: até 5 dias úteis'], active: true },
+    { card_id: 'xp_visa', program: 'Smiles', bonus_percent: 30, club_bonus_percent: 60, club_tier_bonuses: { 'Plano 1.000 mi': 70, 'Plano 2.000 mi': 80, 'Plano 5.000 mi': 100, 'Plano 10.000 mi': 120, 'Plano 20.000 mi / Diamante': 130 }, club_required: 'smiles_club', valid_until: 'Campanha periódica (confirme em smiles.com.br)', description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% — XP → Smiles', is_periodic: true, last_confirmed: 'Mar/2026', registration_url: 'https://www.smiles.com.br/promocao-transferencia', rules: ['⚠️ Cadastre-se antes de transferir', 'Mínimo de 1.000 pts XP', 'Plano 1.000 mi: 70%; Plano 2.000 mi: 80%', 'Limite: 300.000 milhas bônus por CPF'], active: true },
+    { card_id: 'btg_pactual', program: 'LATAM Pass', bonus_percent: 25, club_bonus_percent: 25, club_tier_bonuses: {}, club_required: null, valid_until: 'Campanha periódica (confirme em latampass.latam.com)', description: '25% de bônus + 1.000 milhas extras na primeira transferência BTG → LATAM Pass', is_periodic: true, last_confirmed: 'Mar/2026', registration_url: 'https://latampass.latam.com/pt_br/junte-milhas', rules: ['⚠️ Registre-se na página da promoção antes de transferir', 'Bônus de 25% para todos os clientes BTG', '1.000 milhas extras na primeira transferência do período', 'Milhas bônus creditadas em até 30 dias', 'Validade das milhas bônus: 36 meses'], active: true },
+    { card_id: 'inter_black', program: 'TudoAzul', bonus_percent: 80, club_bonus_percent: 130, club_tier_bonuses: { 'Plano 1.000 pts': 103, 'Plano 2.000 pts': 103, 'Plano 5.000 pts': 103, 'Plano 10.000 pts': 103, 'Plano 20.000 pts': 130 }, club_required: 'azul_fidelidade_clube', valid_until: 'Campanha periódica (confirme em tudoazul.voeazul.com.br)', description: '80% para todos; Clube Azul: 103%; 5+ anos assinatura: 130% — Inter → TudoAzul', is_periodic: true, last_confirmed: 'Mar/2026', registration_url: 'https://www.voeazul.com.br/inter-pontos', rules: ['⚠️ Cadastre-se antes de transferir', 'Todos os clientes Inter: 80% de bônus', 'Assinantes do Clube Azul (qualquer plano): 103%', 'Assinantes há 5+ anos (Plano 20.000 pts): 130%', 'Limite: 300.000 pontos bônus por CPF', 'Creditação em até 15 dias úteis', 'Validade dos pontos bônus: 6 meses'], active: true },
+    { card_id: 'inter_black', program: 'Smiles', bonus_percent: 30, club_bonus_percent: 60, club_tier_bonuses: { 'Plano 1.000 mi': 70, 'Plano 2.000 mi': 80, 'Plano 5.000 mi': 100, 'Plano 10.000 mi': 120, 'Plano 20.000 mi / Diamante': 130 }, club_required: 'smiles_club', valid_until: 'Campanha periódica (confirme em smiles.com.br)', description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% (e mais) — Inter → Smiles', is_periodic: true, last_confirmed: 'Mar/2026', registration_url: 'https://www.smiles.com.br/promocao-transferencia', rules: ['⚠️ Cadastre-se ANTES de transferir — sem cadastro, sem bônus', 'Sem clube: 30%', 'Plano 1.000 mi: 70%', 'Plano 2.000 mi: 80%', 'Planos maiores: confirmar na campanha vigente', 'Limite: 300.000 milhas bônus por CPF'], active: true },
+    { card_id: 'bradesco_livelo', program: 'Livelo', bonus_percent: 0, club_bonus_percent: 0, club_tier_bonuses: {}, club_required: null, valid_until: 'Transferência padrão (sem campanha ativa no momento)', description: 'Bradesco/BB → Livelo: transferência 1:1, sem bônus atualmente.', is_periodic: false, last_confirmed: 'Mar/2026', registration_url: null, rules: ['Transferência Bradesco/BB → Livelo: taxa 1:1', 'Livelo → Smiles/LATAM/TudoAzul: também 1:1', 'Mínimo de 2.500 pts Bradesco/BB → Livelo', 'Mínimo de 15.000 pts Livelo → aérea', 'Transferência imediata: membros do Clube Livelo', 'Sem bônus de campanha ativo agora — aguarde promoções'], active: true },
+    { card_id: 'caixa_uau', program: 'Smiles', bonus_percent: 30, club_bonus_percent: 60, club_tier_bonuses: { 'Plano 1.000 mi': 70, 'Plano 2.000 mi': 80, 'Plano 5.000 mi': 100, 'Plano 10.000 mi': 120, 'Plano 20.000 mi / Diamante': 130 }, club_required: 'smiles_club', valid_until: 'Campanha periódica (confirme em smiles.com.br)', description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% — Caixa → Smiles', is_periodic: true, last_confirmed: 'Mar/2026', registration_url: 'https://www.smiles.com.br/promocao-transferencia', rules: ['⚠️ Cadastre-se ANTES de transferir', 'Plano 1.000 mi: 70%; Plano 2.000 mi: 80%', 'Planos maiores: confirmar na campanha vigente', 'Limite: 300.000 milhas bônus por CPF'], active: true },
+    { card_id: 'btg_pactual', program: 'Smiles', bonus_percent: 30, club_bonus_percent: 60, club_tier_bonuses: { 'Plano 1.000 mi': 70, 'Plano 2.000 mi': 80, 'Plano 5.000 mi': 100, 'Plano 10.000 mi': 120, 'Plano 20.000 mi / Diamante': 130 }, club_required: 'smiles_club', valid_until: 'Campanha periódica (confirme em smiles.com.br)', description: 'Bônus de 30% para todos; por plano Clube Smiles: 1k=70%, 2k=80% — BTG → Smiles', is_periodic: true, last_confirmed: 'Mar/2026', registration_url: 'https://www.smiles.com.br/promocao-transferencia', rules: ['⚠️ Cadastre-se antes de transferir', 'Plano 1.000 mi: 70%; Plano 2.000 mi: 80%', 'Planos maiores: confirmar na campanha vigente', 'Limite: 300.000 milhas bônus por CPF'], active: true },
+];
+
+async function seedPromotionsIfEmpty() {
+    if (!supabase) return;
+    try {
+        const { count } = await supabase
+            .from('transfer_promotions')
+            .select('id', { count: 'exact', head: true })
+            .eq('active', true);
+        if (count > 0) {
+            console.log(`[Promotions] Supabase já tem ${count} promoções — seed ignorado`);
+            return;
+        }
+        console.log('[Promotions] Supabase vazio — inserindo dados default...');
+        const { error } = await supabase
+            .from('transfer_promotions')
+            .insert(DEFAULT_PROMOTIONS_SEED);
+        if (error) throw error;
+        console.log(`[Promotions] Seed concluído: ${DEFAULT_PROMOTIONS_SEED.length} promoções inseridas`);
+    } catch (err) {
+        console.error('[Promotions] Erro no seed automático:', err.message);
+    }
+}
 
 async function refreshPromotionsCache() {
     if (!supabase) return;
@@ -918,6 +954,32 @@ async function refreshPromotionsCache() {
             }));
             promotionsCacheAt = Date.now();
             console.log(`[Promotions] Cache atualizado: ${promotionsCache.length} promoções`);
+        } else {
+            // Tabela vazia — tenta seed e re-fetch
+            await seedPromotionsIfEmpty();
+            const { data: seeded } = await supabase
+                .from('transfer_promotions')
+                .select('*')
+                .eq('active', true);
+            if (seeded && seeded.length > 0) {
+                promotionsCache = seeded.map(row => ({
+                    id: row.id,
+                    cardId: row.card_id,
+                    program: row.program,
+                    bonusPercent: row.bonus_percent ?? 0,
+                    clubBonusPercent: row.club_bonus_percent ?? 0,
+                    clubTierBonuses: row.club_tier_bonuses ?? {},
+                    clubRequired: row.club_required ?? null,
+                    validUntil: row.valid_until ?? '',
+                    description: row.description ?? '',
+                    isPeriodic: row.is_periodic ?? true,
+                    lastConfirmed: row.last_confirmed ?? '',
+                    rules: row.rules ?? [],
+                    registrationUrl: row.registration_url ?? undefined,
+                }));
+                promotionsCacheAt = Date.now();
+                console.log(`[Promotions] Cache após seed: ${promotionsCache.length} promoções`);
+            }
         }
     } catch (err) {
         console.error('[Promotions] Erro ao atualizar cache:', err.message);
@@ -946,6 +1008,261 @@ app.post('/api/transfer-promotions/update', async (req, res) => {
     res.json({ message: 'Cache de promoções atualizado', count: promotionsCache?.length ?? 0 });
 });
 
+// POST /api/admin/sync-promotions — força seed + re-fetch (protegido por x-sync-secret)
+app.post('/api/admin/sync-promotions', async (req, res) => {
+    const secret = (req.headers['x-sync-secret'] ?? '');
+    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
+        return res.status(401).json({ error: 'Não autorizado' });
+    }
+    const force = req.query.force === 'true' || req.body?.force === true;
+    if (force && supabase) {
+        // Limpa tabela e re-seed com dados atuais
+        await supabase.from('transfer_promotions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await supabase.from('transfer_promotions').insert(DEFAULT_PROMOTIONS_SEED);
+        console.log('[Admin] Re-seed forçado concluído');
+    } else {
+        await seedPromotionsIfEmpty();
+    }
+    await refreshPromotionsCache();
+    res.json({ message: force ? 'Re-seed forçado + cache atualizado' : 'Seed (se vazio) + cache atualizado', count: promotionsCache?.length ?? 0 });
+});
+
+// ─── Sync automático do Simulador de Transferência ───────────────────────────
+// Scrapa páginas oficiais de TODOS os programas e bancos, envia para Claude API,
+// compara com dados atuais no Supabase e atualiza se necessário.
+// Disparado pelo GitHub Actions cron diário (8h BRT) via POST /api/admin/sync-transfer-data
+
+const TRANSFER_SOURCES = [
+    // Programas aéreos — páginas de transferência de pontos
+    { id: 'smiles_transfer', url: 'https://www.smiles.com.br/acumule-milhas/transferencia-de-pontos', label: 'Smiles — Transferência de Pontos' },
+    { id: 'smiles_clube', url: 'https://www.smiles.com.br/clube-smiles', label: 'Clube Smiles — Planos e preços' },
+    { id: 'tudoazul_transfer', url: 'https://tudoazul.voeazul.com.br/acumule/transferencia-de-pontos', label: 'TudoAzul — Transferência de Pontos' },
+    { id: 'clube_azul', url: 'https://www.voeazul.com.br/clube-azul-fidelidade', label: 'Clube Azul Fidelidade — Planos' },
+    { id: 'latam_transfer', url: 'https://latampass.latam.com/pt_br/junte-milhas/transfira-pontos', label: 'LATAM Pass — Transferência de Pontos' },
+    { id: 'livelo_transfer', url: 'https://www.livelo.com.br/transferencia-de-pontos', label: 'Livelo — Transferência de Pontos' },
+    // Bancos/cartões — páginas de parcerias
+    { id: 'inter_loop', url: 'https://inter.co/inter-loop', label: 'Inter Loop — Transferências e bônus' },
+    { id: 'nubank_rewards', url: 'https://nubank.com.br/rewards', label: 'Nubank Rewards — Parceiros' },
+    // RSS blogs de referência (atualizados em horas após novas campanhas)
+    { id: 'rss_pprimeira', url: 'https://www.passageirodeprimeira.com.br/feed', label: 'RSS Passageiro de Primeira' },
+    { id: 'rss_melhores', url: 'https://www.melhores-destinos.com.br/feed', label: 'RSS Melhores Destinos' },
+];
+
+async function scrapeTransferSource(source) {
+    try {
+        // RSS e páginas simples: fetch direto (sem JS)
+        if (source.id.startsWith('rss_') || source.url.includes('feed')) {
+            const res = await fetch(source.url, {
+                headers: { 'User-Agent': 'FlyWise-Bot/1.0' },
+                signal: AbortSignal.timeout(15000),
+            });
+            if (!res.ok) return null;
+            const text = await res.text();
+            // Extrai só entradas recentes (últimos 30 dias) sobre transferência/bônus
+            const keywords = ['bônus', 'bonus', 'transferência', 'transfer', 'smiles', 'tudoazul', 'latam', 'livelo', 'inter', 'clube'];
+            const lines = text.split('\n');
+            const relevant = lines.filter(l => keywords.some(k => l.toLowerCase().includes(k)));
+            return { id: source.id, label: source.label, content: relevant.slice(0, 100).join('\n') };
+        }
+
+        // Páginas com JS (programas/bancos): usa Playwright
+        await ensureChromium();
+        const browser = await chromiumExtra.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+        const page = await browser.newPage();
+        await page.setExtraHTTPHeaders({ 'Accept-Language': 'pt-BR,pt;q=0.9' });
+        await page.goto(source.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(3000);
+
+        // Tenta aceitar cookies se aparecer
+        try {
+            await page.click('button:has-text("Aceitar"), button:has-text("Accept"), button:has-text("Concordo")', { timeout: 3000 });
+        } catch (_) {}
+
+        // Extrai texto relevante (sem scripts/estilos)
+        const content = await page.evaluate(() => {
+            const remove = document.querySelectorAll('script, style, nav, footer, header');
+            remove.forEach(el => el.remove());
+            return document.body?.innerText?.slice(0, 8000) ?? '';
+        });
+        await browser.close();
+        return { id: source.id, label: source.label, content };
+    } catch (err) {
+        console.warn(`[TransferSync] Falha ao scraper ${source.id}:`, err.message);
+        return null;
+    }
+}
+
+async function analyzeTransferDataWithClaude(scrapedContents, currentPromotions) {
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey) throw new Error('ANTHROPIC_API_KEY não configurada');
+
+    const currentJson = JSON.stringify(currentPromotions, null, 2);
+    const scrapedText = scrapedContents
+        .filter(Boolean)
+        .map(s => `\n### ${s.label}\n${s.content}`)
+        .join('\n');
+
+    const prompt = `Você é especialista em programas de milhas e fidelidade do Brasil. Analise os dados extraídos das páginas oficiais e blogs abaixo e compare com os dados atuais do banco de dados do FlyWise.
+
+## DADOS ATUAIS NO BANCO (JSON):
+${currentJson}
+
+## DADOS EXTRAÍDOS DAS PÁGINAS OFICIAIS:
+${scrapedText}
+
+## TAREFA:
+Analise cuidadosamente e retorne um JSON com as promoções de transferência atualizadas. Mantenha EXATAMENTE a mesma estrutura dos dados atuais. Para cada promoção, verifique:
+1. bonusPercent — bônus para quem não tem clube (%)
+2. clubBonusPercent — bônus genérico para assinantes de clube (%)
+3. clubTierBonuses — bônus específico por plano do clube (objeto com nomes dos planos como chave)
+4. validUntil — validade da promoção (string descritiva)
+5. rules — array de strings com regras importantes
+6. description — descrição resumida
+7. isPeriodic — true se é campanha periódica, false se é permanente
+8. lastConfirmed — "Mar/2026" (mês atual)
+
+REGRAS IMPORTANTES:
+- Se uma informação não foi encontrada nas páginas, mantenha o valor atual do banco
+- Se um bônus claramente terminou (data vencida), ajuste bonusPercent para 0 e isPeriodic para true
+- Santander Esfera: 20% para Smiles é PERMANENTE (não requer campanha)
+- Inter → TudoAzul: 80% base, 103% Clube Azul, 130% para 5+ anos — só altere se encontrar dado contrário EXPLÍCITO
+- Clube Smiles tiers: só atualize se encontrar valores EXPLÍCITOS nas páginas oficiais
+- NÃO invente dados. Se não encontrou, mantenha o existente.
+- NÃO altere card_id, program, club_required
+
+Retorne SOMENTE um JSON válido no formato:
+{
+  "changes_detected": boolean,
+  "summary": "resumo em português do que foi verificado e o que mudou",
+  "promotions": [ ... array completo com TODAS as promoções, atualizadas ou não ... ]
+}`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+            'x-api-key': anthropicKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 4096,
+            messages: [{ role: 'user', content: prompt }],
+        }),
+        signal: AbortSignal.timeout(60000),
+    });
+
+    if (!res.ok) throw new Error(`Anthropic API error: ${res.status}`);
+    const data = await res.json();
+    const text = data.content?.[0]?.text ?? '';
+
+    // Extrai JSON da resposta (pode ter texto antes/depois)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Claude não retornou JSON válido');
+    return JSON.parse(jsonMatch[0]);
+}
+
+async function syncTransferData() {
+    if (!supabase) throw new Error('Supabase não configurado');
+    console.log('[TransferSync] Iniciando sync de dados de transferência...');
+
+    // 1. Busca dados atuais do Supabase
+    const { data: current, error: fetchErr } = await supabase
+        .from('transfer_promotions')
+        .select('*')
+        .eq('active', true);
+    if (fetchErr) throw fetchErr;
+
+    // 2. Scrape todas as fontes em paralelo (com limite de concorrência)
+    const limit = pLimit(3); // max 3 simultâneos para não sobrecarregar
+    const scraped = await Promise.all(
+        TRANSFER_SOURCES.map(source => limit(() => scrapeTransferSource(source)))
+    );
+    const validScraped = scraped.filter(Boolean);
+    console.log(`[TransferSync] Scraped ${validScraped.length}/${TRANSFER_SOURCES.length} fontes`);
+
+    // 3. Analisa com Claude
+    const analysis = await analyzeTransferDataWithClaude(validScraped, current);
+    console.log(`[TransferSync] Claude: changes_detected=${analysis.changes_detected}`);
+    console.log(`[TransferSync] Resumo: ${analysis.summary}`);
+
+    // 4. Se há mudanças, atualiza Supabase
+    let updatedCount = 0;
+    if (analysis.changes_detected && Array.isArray(analysis.promotions)) {
+        for (const promo of analysis.promotions) {
+            const existing = current?.find(r => r.card_id === promo.card_id && r.program === promo.program);
+            if (!existing) continue;
+
+            const updates = {
+                bonus_percent: promo.bonus_percent ?? promo.bonusPercent ?? existing.bonus_percent,
+                club_bonus_percent: promo.club_bonus_percent ?? promo.clubBonusPercent ?? existing.club_bonus_percent,
+                club_tier_bonuses: promo.club_tier_bonuses ?? promo.clubTierBonuses ?? existing.club_tier_bonuses,
+                valid_until: promo.valid_until ?? promo.validUntil ?? existing.valid_until,
+                description: promo.description ?? existing.description,
+                is_periodic: promo.is_periodic ?? promo.isPeriodic ?? existing.is_periodic,
+                last_confirmed: promo.last_confirmed ?? promo.lastConfirmed ?? existing.last_confirmed,
+                rules: promo.rules ?? existing.rules,
+                updated_at: new Date().toISOString(),
+            };
+
+            const { error: updateErr } = await supabase
+                .from('transfer_promotions')
+                .update(updates)
+                .eq('id', existing.id);
+
+            if (updateErr) {
+                console.error(`[TransferSync] Erro ao atualizar ${promo.card_id}→${promo.program}:`, updateErr.message);
+            } else {
+                updatedCount++;
+            }
+        }
+    }
+
+    // 5. Salva log no Supabase
+    await supabase.from('transfer_sync_log').insert({
+        synced_at: new Date().toISOString(),
+        sources_scraped: validScraped.length,
+        changes_detected: analysis.changes_detected ?? false,
+        rows_updated: updatedCount,
+        summary: analysis.summary ?? '',
+    }).catch(() => {}); // log failure não bloqueia
+
+    // 6. Invalida cache de promoções para próxima requisição buscar dados frescos
+    if (analysis.changes_detected) {
+        promotionsCacheAt = 0;
+        await refreshPromotionsCache();
+    }
+
+    console.log(`[TransferSync] Concluído. Atualizadas: ${updatedCount} promoções`);
+    return { sourcesScraped: validScraped.length, changesDetected: analysis.changes_detected, rowsUpdated: updatedCount, summary: analysis.summary };
+}
+
+// POST /api/admin/sync-transfer-data — dispara sync completo (chamado pelo GitHub Actions)
+app.post('/api/admin/sync-transfer-data', async (req, res) => {
+    const secret = (req.headers['x-sync-secret'] ?? '');
+    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
+        return res.status(401).json({ error: 'Não autorizado' });
+    }
+    // Roda em background para não segurar a resposta HTTP
+    res.json({ message: 'Sync iniciado em background' });
+    syncTransferData().catch(err => console.error('[TransferSync] Erro:', err.message));
+});
+
+// GET /api/admin/transfer-sync-log — últimas execuções do sync
+app.get('/api/admin/transfer-sync-log', async (req, res) => {
+    const secret = (req.headers['x-sync-secret'] ?? '');
+    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
+        return res.status(401).json({ error: 'Não autorizado' });
+    }
+    if (!supabase) return res.json({ logs: [] });
+    const { data } = await supabase
+        .from('transfer_sync_log')
+        .select('*')
+        .order('synced_at', { ascending: false })
+        .limit(30);
+    res.json({ logs: data ?? [] });
+});
+
 // Localmente: inicia o servidor Express normalmente.
 // Na Vercel: o arquivo é importado como módulo serverless — app.listen não é chamado.
 if (process.env.VERCEL !== '1') {
@@ -961,6 +1278,12 @@ if (process.env.VERCEL !== '1') {
         refreshPromotionsCache().catch(console.error);
     });
 
+    // Todo dia às 11h BRT (14:00 UTC) — sync completo de dados de transferência via Claude
+    cron.schedule('0 14 * * *', () => {
+        console.log('[Cron] Iniciando sync automático de dados de transferência...');
+        syncTransferData().catch(err => console.error('[Cron:TransferSync] Erro:', err.message));
+    });
+
     const PORT = process.env.PORT || 3001;
     app.listen(PORT, () => {
         console.log(`\n======================================================`);
@@ -971,6 +1294,8 @@ if (process.env.VERCEL !== '1') {
         console.log(`======================================================\n`);
         // Inicia instalação do Chromium em background (não bloqueia o servidor)
         if (!_chromiumReady) ensureChromium();
+        // Seed automático de promoções de transferência (se tabela vazia)
+        refreshPromotionsCache().catch(console.error);
     });
 }
 

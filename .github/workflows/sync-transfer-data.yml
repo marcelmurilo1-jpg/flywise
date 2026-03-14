@@ -1,0 +1,46 @@
+name: Sync Transfer Simulator Data
+
+on:
+  schedule:
+    # Todo dia às 11h BRT (14h UTC)
+    - cron: '0 14 * * *'
+  workflow_dispatch:
+    # Permite disparar manualmente pelo GitHub Actions UI
+
+jobs:
+  sync:
+    name: Sync transfer promotions & club data
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger sync on Railway backend
+        run: |
+          echo "Disparando sync de dados de transferência..."
+          RESPONSE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X POST "${{ secrets.RAILWAY_API_URL }}/api/admin/sync-transfer-data" \
+            -H "x-sync-secret: ${{ secrets.SYNC_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --max-time 30)
+
+          echo "HTTP Status: $RESPONSE"
+          echo "Response:"
+          cat /tmp/response.json
+
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Erro: backend retornou status $RESPONSE"
+            exit 1
+          fi
+
+      - name: Wait for sync to complete (background job)
+        run: |
+          echo "Aguardando 90s para o sync em background completar..."
+          sleep 90
+
+      - name: Check sync log
+        run: |
+          echo "Verificando log do último sync..."
+          curl -s \
+            "${{ secrets.RAILWAY_API_URL }}/api/admin/transfer-sync-log" \
+            -H "x-sync-secret: ${{ secrets.SYNC_SECRET }}" \
+            | head -c 2000

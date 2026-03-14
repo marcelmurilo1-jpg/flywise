@@ -40,13 +40,14 @@ export default function TransferSimulator({ activeClubs, activeClubTiers }: Prop
     const [awardPricesDate, setAwardPricesDate] = useState<string | null>(null)
 
     // Fetch live promotions + award prices on mount
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
     useEffect(() => {
-        fetch('/api/transfer-promotions')
+        fetch(`${apiBase}/api/transfer-promotions`)
             .then(r => r.json())
             .then(d => { if (Array.isArray(d.promotions) && d.promotions.length > 0) setLivePromos(d.promotions) })
             .catch(() => {})
 
-        fetch('/api/award-prices')
+        fetch(`${apiBase}/api/award-prices`)
             .then(r => r.json())
             .then(d => {
                 if (Array.isArray(d.data) && d.data.length > 0) {
