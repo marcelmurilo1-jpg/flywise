@@ -1232,14 +1232,14 @@ async function syncTransferData() {
         console.log(`[TransferSync] Concluído. Atualizadas: ${updatedCount} promoções`);
 
         // 6. Salva log de sucesso
-        const logRes = await supabase.from('transfer_sync_log').insert({
+        const { error: logErr } = await supabase.from('transfer_sync_log').insert({
             synced_at: startedAt,
             sources_scraped: validScraped.length,
             changes_detected: analysis.changes_detected ?? false,
             rows_updated: updatedCount,
             summary: analysis.summary ?? '',
         });
-        if (logRes.error) console.error('[TransferSync] Erro ao salvar log:', logRes.error.message);
+        if (logErr) console.error('[TransferSync] Erro ao salvar log:', logErr.message);
 
         return { sourcesScraped: validScraped.length, changesDetected: analysis.changes_detected, rowsUpdated: updatedCount, summary: analysis.summary };
 
@@ -1248,13 +1248,14 @@ async function syncTransferData() {
         console.error('[TransferSync] ERRO:', errorMsg);
 
         // Salva log de erro para diagnóstico
-        await supabase.from('transfer_sync_log').insert({
+        const { error: errLogErr } = await supabase.from('transfer_sync_log').insert({
             synced_at: startedAt,
             sources_scraped: validScraped.length,
             changes_detected: false,
             rows_updated: 0,
             summary: `ERRO: ${errorMsg}`,
-        }).catch(e => console.error('[TransferSync] Falha ao salvar log de erro:', e.message));
+        });
+        if (errLogErr) console.error('[TransferSync] Falha ao salvar log de erro:', errLogErr.message);
 
         throw err;
     }
