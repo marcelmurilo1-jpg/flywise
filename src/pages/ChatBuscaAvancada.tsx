@@ -90,33 +90,48 @@ export default function ChatBuscaAvancada() {
             const { data: { session } } = await supabase.auth.getSession()
             const token = session?.access_token
 
-            const response = await fetch(
-                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-busca`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-                    },
-                    body: JSON.stringify({
-                        messages: history,
-                        wizard_data: conversation.wizard_data,
-                    }),
-                }
-            )
+            const controller = new AbortController()
+            const timer = setTimeout(() => controller.abort(), 45000)
+
+            let response: Response
+            try {
+                response = await fetch(
+                    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-busca`,
+                    {
+                        method: 'POST',
+                        signal: controller.signal,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                        },
+                        body: JSON.stringify({
+                            messages: history,
+                            wizard_data: conversation.wizard_data,
+                        }),
+                    }
+                )
+            } finally {
+                clearTimeout(timer)
+            }
+
+            if (!response.ok) {
+                const errText = await response.text().catch(() => `HTTP ${response.status}`)
+                throw new Error(errText || `HTTP ${response.status}`)
+            }
 
             const json = await response.json()
             if (json.error) throw new Error(json.error)
 
-            const aiMsg: ChatMessage = { role: 'assistant', content: json.reply, created_at: new Date().toISOString() }
+            const aiMsg: ChatMessage = { role: 'assistant', content: json.reply ?? '', created_at: new Date().toISOString() }
             const updated = [...history, aiMsg]
             setMessages(updated)
             await saveMessages(updated)
         } catch (err) {
+            const detail = err instanceof Error ? err.message : String(err)
             const errMsg: ChatMessage = {
                 role: 'assistant',
-                content: 'Erro ao conectar com a IA. Verifique sua conexão e tente novamente.',
+                content: `Erro ao conectar com a IA: ${detail}`,
                 created_at: new Date().toISOString(),
             }
             setMessages(prev => [...prev, errMsg])
