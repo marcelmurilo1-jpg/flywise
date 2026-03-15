@@ -1299,6 +1299,24 @@ app.post('/api/admin/sync-transfer-data-sync', async (req, res) => {
     }
 });
 
+// GET /api/admin/test-anthropic — testa a API da Anthropic com prompt mínimo
+app.get('/api/admin/test-anthropic', async (_req, res) => {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY não configurada' });
+    try {
+        const r = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+            body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 64, messages: [{ role: 'user', content: 'Diga apenas: OK' }] }),
+            signal: AbortSignal.timeout(30000),
+        });
+        const body = await r.json();
+        res.json({ status: r.status, body });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/admin/transfer-sync-diag — diagnóstico sem rodar o sync completo
 app.get('/api/admin/transfer-sync-diag', async (_req, res) => {
     const diag = {
