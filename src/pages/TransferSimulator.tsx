@@ -23,9 +23,10 @@ function fmt(n: number) { return n.toLocaleString('pt-BR') }
 interface Props {
     activeClubs: string[]
     activeClubTiers: Record<string, string>   // clubId → tier name saved in wallet
+    activeCards?: string[]                    // cardId[] saved in wallet
 }
 
-export default function TransferSimulator({ activeClubs, activeClubTiers }: Props) {
+export default function TransferSimulator({ activeClubs, activeClubTiers, activeCards = [] }: Props) {
     const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
     const [points, setPoints] = useState<string>('')
     const [selectedProgram, setSelectedProgram] = useState<string | null>(null)
@@ -158,24 +159,40 @@ export default function TransferSimulator({ activeClubs, activeClubTiers }: Prop
                 <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 14 }}>
                     1 · Selecione seu cartão
                 </div>
+                {activeCards.length > 0 && (
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, letterSpacing: '0.05em' }}>
+                        ★ = cartão salvo na sua carteira
+                    </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
-                    {CREDIT_CARDS.map(c => {
+                    {[...CREDIT_CARDS].sort((a, b) => {
+                        // Cartões ativos do usuário aparecem primeiro
+                        const aOwned = activeCards.includes(a.id)
+                        const bOwned = activeCards.includes(b.id)
+                        if (aOwned && !bOwned) return -1
+                        if (!aOwned && bOwned) return 1
+                        return 0
+                    }).map(c => {
                         const isSelected = selectedCardId === c.id
+                        const isOwned = activeCards.includes(c.id)
                         return (
                             <button
                                 key={c.id}
                                 onClick={() => onSelectCard(c.id)}
                                 style={{
-                                    background: isSelected ? `${c.color}18` : 'var(--bg-white)',
-                                    border: `2px solid ${isSelected ? c.color : 'var(--border-light)'}`,
+                                    background: isSelected ? `${c.color}18` : isOwned ? `${c.color}08` : 'var(--bg-white)',
+                                    border: `2px solid ${isSelected ? c.color : isOwned ? `${c.color}50` : 'var(--border-light)'}`,
                                     borderRadius: 14, padding: '14px 12px',
                                     cursor: 'pointer', fontFamily: 'inherit',
                                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
                                     transition: 'all .18s', textAlign: 'center', position: 'relative',
                                 }}
                                 onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = `${c.color}80` }}
-                                onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--border-light)' }}
+                                onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = isOwned ? `${c.color}50` : 'var(--border-light)' }}
                             >
+                                {isOwned && !isSelected && (
+                                    <div style={{ position: 'absolute', top: 7, right: 7, fontSize: 10, color: c.color, fontWeight: 900 }}>★</div>
+                                )}
                                 <div style={{ width: 40, height: 40, borderRadius: 10, background: c.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <span style={{ fontSize: 13, fontWeight: 900, color: '#fff' }}>{c.initials}</span>
                                 </div>

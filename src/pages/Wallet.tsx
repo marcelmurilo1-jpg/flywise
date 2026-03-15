@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PROGRAMS } from '@/lib/airlineMilesMapping'
-import { MILES_CLUBS } from '@/lib/transferData'
+import { MILES_CLUBS, CREDIT_CARDS } from '@/lib/transferData'
 import TransferSimulator from '@/pages/TransferSimulator'
 import { usePlan } from '@/hooks/usePlan'
 
@@ -54,19 +54,24 @@ export default function Wallet() {
 
     // Clubes ativos do usuário (salvo em user_metadata)
     const [activeClubs, setActiveClubs] = useState<string[]>([])
-    // Plano selecionado por clube (ex: { smiles_club: 'Plano 2.000 mi' })
+    // Plano selecionado por clube (ex: { smiles_club: 'Plano 2.000' })
     const [activeClubTiers, setActiveClubTiers] = useState<Record<string, string>>({})
-    // Colapsar seção de clubes
+    // Bancos/cartões ativos do usuário
+    const [activeCards, setActiveCards] = useState<string[]>([])
+    // Colapsar seções
     const [clubsExpanded, setClubsExpanded] = useState(false)
+    const [cardsExpanded, setCardsExpanded] = useState(false)
 
     useEffect(() => {
         if (!user) return
         const stored: MilesMap = (user.user_metadata?.miles as MilesMap) ?? {}
         const clubs: string[] = (user.user_metadata?.activeClubs as string[]) ?? []
         const tiers: Record<string, string> = (user.user_metadata?.activeClubTiers as Record<string, string>) ?? {}
+        const cards: string[] = (user.user_metadata?.activeCards as string[]) ?? []
         setMiles(stored)
         setActiveClubs(clubs)
         setActiveClubTiers(tiers)
+        setActiveCards(cards)
         setLoading(false)
     }, [user])
 
@@ -79,6 +84,14 @@ export default function Wallet() {
 
     const saveClubs = async (clubs: string[], tiers: Record<string, string>) => {
         await supabase.auth.updateUser({ data: { activeClubs: clubs, activeClubTiers: tiers } })
+    }
+
+    const toggleCard = async (cardId: string) => {
+        const updated = activeCards.includes(cardId)
+            ? activeCards.filter(c => c !== cardId)
+            : [...activeCards, cardId]
+        setActiveCards(updated)
+        await supabase.auth.updateUser({ data: { activeCards: updated } })
     }
 
     const toggleClub = async (clubId: string) => {
@@ -315,6 +328,70 @@ export default function Wallet() {
                                         </AnimatePresence>
                                     </div>
 
+                                    {/* ── Meus Bancos Ativos ── */}
+                                    <div style={{ background: 'var(--bg-white)', border: '1px solid var(--border-light)', borderRadius: '16px', padding: '16px 18px', marginBottom: '12px' }}>
+                                        <button
+                                            onClick={() => setCardsExpanded(e => !e)}
+                                            style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: cardsExpanded ? 16 : 0, padding: 0 }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(59,130,246,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                                                </div>
+                                                <div style={{ textAlign: 'left' }}>
+                                                    <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-dark)' }}>
+                                                        Meus Bancos Ativos
+                                                        {activeCards.length > 0 && (
+                                                            <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: '#2563EB', background: 'rgba(59,130,246,0.12)', borderRadius: 6, padding: '2px 7px' }}>
+                                                                {activeCards.length} ativo{activeCards.length !== 1 ? 's' : ''}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usados para estratégias personalizadas na busca de voos</div>
+                                                </div>
+                                            </div>
+                                            {cardsExpanded ? <ChevronUp size={18} color="var(--text-muted)" /> : <ChevronDown size={18} color="var(--text-muted)" />}
+                                        </button>
+                                        <AnimatePresence>
+                                        {cardsExpanded && (
+                                        <motion.div key="cards-list" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                            {CREDIT_CARDS.map(card => {
+                                                const isActive = activeCards.includes(card.id)
+                                                return (
+                                                    <button
+                                                        key={card.id}
+                                                        onClick={() => toggleCard(card.id)}
+                                                        style={{
+                                                            width: '100%',
+                                                            background: isActive ? `${card.color}12` : 'var(--snow)',
+                                                            border: `2px solid ${isActive ? card.color : 'var(--border-light)'}`,
+                                                            borderRadius: 12,
+                                                            padding: '11px 14px',
+                                                            cursor: 'pointer', fontFamily: 'inherit',
+                                                            display: 'flex', alignItems: 'center', gap: 10,
+                                                            transition: 'all .18s', textAlign: 'left',
+                                                        }}
+                                                    >
+                                                        <div style={{ width: 32, height: 32, borderRadius: 8, background: card.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                            <span style={{ fontSize: 10, fontWeight: 900, color: '#fff' }}>{card.initials}</span>
+                                                        </div>
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? card.color : 'var(--text-dark)', lineHeight: 1.2 }}>{card.name}</div>
+                                                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{card.currency} · {card.partners.map(p => p.program).join(', ')}</div>
+                                                        </div>
+                                                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: isActive ? card.color : 'var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background .18s' }}>
+                                                            {isActive && <Check size={11} color="#fff" />}
+                                                        </div>
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                        </motion.div>
+                                        )}
+                                        </AnimatePresence>
+                                    </div>
+
                                     {/* Lista programas */}
                                     {programs.length === 0 ? (
                                         <div style={{ background: 'var(--bg-white)', border: '1px solid var(--border-light)', borderRadius: '16px', padding: '48px 40px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
@@ -432,7 +509,7 @@ export default function Wallet() {
                                     <p style={{ fontSize: 12, color: '#A0AECB' }}>A partir de R$ 39/mês · Cancele a qualquer momento</p>
                                 </div>
                             ) : (
-                                <TransferSimulator activeClubs={activeClubs} activeClubTiers={activeClubTiers} />
+                                <TransferSimulator activeClubs={activeClubs} activeClubTiers={activeClubTiers} activeCards={activeCards} />
                             )}
                         </motion.div>
                     )}
