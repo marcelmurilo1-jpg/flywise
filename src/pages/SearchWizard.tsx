@@ -280,8 +280,9 @@ export default function SearchWizard() {
                                     ))}
                                 </div>
 
-                                {/* DateRangePicker — igual ao busca normal */}
+                                {/* DateRangePicker — inline (sem portal) */}
                                 <DateRangePicker
+                                    inline
                                     dateGo={data.dateGo}
                                     dateBack={data.dateReturn}
                                     tripType={data.tripType}

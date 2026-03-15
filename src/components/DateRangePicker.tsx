@@ -10,6 +10,7 @@ interface DateRangePickerProps {
     tripType: 'one-way' | 'round-trip'
     onDateGoChange: (val: string) => void
     onDateBackChange: (val: string) => void
+    inline?: boolean       // render calendar inline (no portal/fixed)
 }
 
 function parseLocal(s: string): Date | null {
@@ -178,7 +179,7 @@ function Calendar({ viewDate, selectedStart, selectedEnd, hoverDate, onDayClick,
     )
 }
 
-export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, onDateBackChange }: DateRangePickerProps) {
+export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, onDateBackChange, inline = false }: DateRangePickerProps) {
     const [open, setOpen] = useState(false)
     const [selecting, setSelecting] = useState<'start' | 'end'>('start')
     const [tempStart, setTempStart] = useState<Date | null>(parseLocal(dateGo))
@@ -248,26 +249,19 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
     const displayGo = formatDisplay(dateGo)
     const displayBack = formatDisplay(dateBack)
 
-    const panel = open && dropRect ? (
-        <div
-            data-drp-panel="true"
-            style={{
-                position: 'fixed',
-                top: dropRect.top - window.scrollY,
-                left: dropRect.left - window.scrollX,
-                zIndex: 999998,
-                background: '#fff',
-                border: '1px solid #D4E2F4',
-                borderRadius: 20,
-                boxShadow: '0 24px 80px rgba(14,42,85,0.18)',
-                padding: '20px 24px 24px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 16,
-                minWidth: 600,
-                fontFamily: 'Manrope, Inter, sans-serif',
-            }}
-        >
+    // ── Shared calendar panel content ──────────────────────────────────────────
+    const calendarPanel = (
+        <div data-drp-panel="true" style={{
+            background: '#fff',
+            border: '1px solid #D4E2F4',
+            borderRadius: 20,
+            boxShadow: '0 24px 80px rgba(14,42,85,0.18)',
+            padding: '20px 24px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            fontFamily: 'Manrope, Inter, sans-serif',
+        }}>
             {/* Top bar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <div style={{ display: 'flex', gap: 16 }}>
@@ -299,17 +293,19 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
                         </>
                     )}
                 </div>
-                <button
-                    type="button"
-                    onClick={() => setOpen(false)}
-                    style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: '#F1F5F9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                    <X size={14} color="#64748B" />
-                </button>
+                {!inline && (
+                    <button
+                        type="button"
+                        onClick={() => setOpen(false)}
+                        style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: '#F1F5F9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <X size={14} color="#64748B" />
+                    </button>
+                )}
             </div>
 
             {/* Calendars */}
-            <div style={{ display: 'flex', gap: 24 }}>
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
                 <Calendar
                     viewDate={viewLeft}
                     selectedStart={tempStart}
@@ -341,6 +337,24 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
             <div style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center' }}>
                 {selecting === 'start' ? 'Clique para selecionar a data de ida' : 'Clique para selecionar a data de volta'}
             </div>
+        </div>
+    )
+
+    // ── Inline mode: always visible, no portal ──────────────────────────────
+    if (inline) {
+        return <div>{calendarPanel}</div>
+    }
+
+    // ── Normal (portal) mode ────────────────────────────────────────────────
+    const panel = open && dropRect ? (
+        <div style={{
+            position: 'fixed',
+            top: dropRect.top - window.scrollY,
+            left: dropRect.left - window.scrollX,
+            zIndex: 999998,
+            minWidth: 600,
+        }}>
+            {calendarPanel}
         </div>
     ) : null
 
