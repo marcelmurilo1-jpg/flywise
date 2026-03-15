@@ -2,10 +2,178 @@ import { useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
-import { X, ArrowRight, Search, Tag, Wallet, Plane, Minus, Plus, Check, Zap, Shield, Sparkles, Loader2 } from 'lucide-react'
+import { X, ArrowRight, Search, Tag, Wallet, Plane, Minus, Plus, Check, Zap, Shield, Sparkles, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
-import { DateRangePicker } from '@/components/DateRangePicker'
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isAfter, isBefore, isToday, startOfDay, getDay } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
+
+// ─── Inline date picker just for the wizard ───────────────────────────────────
+const DAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+function parseYMD(s: string): Date | null {
+    if (!s) return null
+    const [y, m, d] = s.split('-').map(Number)
+    return new Date(y, m - 1, d)
+}
+function toYMD(d: Date) { return format(d, 'yyyy-MM-dd') }
+function fmtPt(s: string) {
+    const d = parseYMD(s)
+    return d ? format(d, "d 'de' MMM yyyy", { locale: ptBR }) : ''
+}
+
+function WizardDatePicker({ dateGo, dateReturn, tripType, onDateGoChange, onDateReturnChange }: {
+    dateGo: string; dateReturn: string
+    tripType: 'one-way' | 'round-trip'
+    onDateGoChange: (v: string) => void
+    onDateReturnChange: (v: string) => void
+}) {
+    const today = startOfDay(new Date())
+    const [viewMonth, setViewMonth] = useState(startOfMonth(parseYMD(dateGo) || today))
+
+    const days = eachDayOfInterval({ start: startOfMonth(viewMonth), end: endOfMonth(viewMonth) })
+    const startPad = getDay(startOfMonth(viewMonth))
+    const selGo = parseYMD(dateGo)
+    const selRet = parseYMD(dateReturn)
+
+    // What to select next: ida first, then volta
+    const phase: 'go' | 'return' = (!dateGo || (dateGo && dateReturn)) ? 'go' : 'return'
+
+    function handleDay(d: Date) {
+        if (isBefore(d, today)) return
+        if (phase === 'go') {
+            onDateGoChange(toYMD(d))
+            onDateReturnChange('')
+        } else {
+            // return date must be after go
+            if (selGo && (isBefore(d, selGo) || isSameDay(d, selGo))) {
+                // clicked before go → reset go
+                onDateGoChange(toYMD(d))
+                onDateReturnChange('')
+            } else {
+                onDateReturnChange(toYMD(d))
+            }
+        }
+    }
+
+    function isInRange(d: Date) {
+        if (!selGo || !selRet) return false
+        return (isAfter(d, selGo) || isSameDay(d, selGo)) && (isBefore(d, selRet) || isSameDay(d, selRet))
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Selected dates display */}
+            <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{
+                    flex: 1, padding: '10px 14px', borderRadius: 12,
+                    border: `2px solid ${phase === 'go' ? '#2A60C2' : '#e2e8f0'}`,
+                    background: phase === 'go' ? '#EEF4FF' : '#fff',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                }} onClick={() => { onDateGoChange(''); onDateReturnChange('') }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>Ida</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: dateGo ? '#0E2A55' : '#CBD5E1' }}>
+                        {fmtPt(dateGo) || 'Selecione'}
+                    </div>
+                </div>
+                {tripType !== 'one-way' && (
+                    <div style={{
+                        flex: 1, padding: '10px 14px', borderRadius: 12,
+                        border: `2px solid ${phase === 'return' ? '#2A60C2' : '#e2e8f0'}`,
+                        background: phase === 'return' ? '#EEF4FF' : '#fff',
+                        transition: 'all 0.15s',
+                    }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>Volta</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: dateReturn ? '#0E2A55' : '#CBD5E1' }}>
+                            {fmtPt(dateReturn) || (dateGo ? 'Selecione' : '—')}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Hint */}
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                {!dateGo ? 'Selecione a data de ida' : tripType !== 'one-way' && !dateReturn ? 'Agora selecione a data de volta' : '✓ Datas selecionadas'}
+            </p>
+
+            {/* Calendar */}
+            <div style={{ background: '#fff', border: '1px solid #D4E2F4', borderRadius: 16, padding: '16px 20px' }}>
+                {/* Month nav */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                    <button type="button" onClick={() => setViewMonth(v => subMonths(v, 1))}
+                        style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: '#F1F5F9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ChevronLeft size={16} color="#64748B" />
+                    </button>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#0E2A55', textTransform: 'capitalize' }}>
+                        {format(viewMonth, 'MMMM yyyy', { locale: ptBR })}
+                    </span>
+                    <button type="button" onClick={() => setViewMonth(v => addMonths(v, 1))}
+                        style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: '#F1F5F9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ChevronRight size={16} color="#64748B" />
+                    </button>
+                </div>
+
+                {/* Day labels */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 6 }}>
+                    {DAYS_PT.map(d => (
+                        <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#94A3B8', paddingBottom: 4 }}>{d}</div>
+                    ))}
+                </div>
+
+                {/* Days */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+                    {Array.from({ length: startPad }).map((_, i) => <div key={`p${i}`} />)}
+                    {days.map(day => {
+                        const isPast = isBefore(day, today)
+                        const isGo = selGo ? isSameDay(day, selGo) : false
+                        const isRet = selRet ? isSameDay(day, selRet) : false
+                        const inRange = isInRange(day)
+                        const isT = isToday(day)
+                        const dow = getDay(day)
+
+                        let bg = 'transparent'
+                        let color = '#1E293B'
+                        let borderRadius = '10px'
+
+                        if (isGo || isRet) {
+                            bg = '#2A60C2'; color = '#fff'
+                            borderRadius = isGo && isRet ? '10px' : isGo ? '10px 0 0 10px' : '0 10px 10px 0'
+                        } else if (inRange) {
+                            bg = '#EEF4FF'; color = '#2A60C2'; borderRadius = dow === 0 ? '10px 0 0 10px' : dow === 6 ? '0 10px 10px 0' : '0'
+                        }
+
+                        return (
+                            <button key={day.toISOString()} type="button"
+                                disabled={isPast}
+                                onClick={() => handleDay(day)}
+                                style={{
+                                    padding: 0, border: 'none', background: 'none',
+                                    cursor: isPast ? 'default' : 'pointer',
+                                }}>
+                                <div style={{
+                                    margin: '1px 0',
+                                    background: inRange && !isGo && !isRet ? '#EEF4FF' : 'transparent',
+                                    borderRadius: inRange && !isGo && !isRet ? (dow === 0 ? '10px 0 0 10px' : dow === 6 ? '0 10px 10px 0' : '0') : undefined,
+                                }}>
+                                    <div style={{
+                                        height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        borderRadius, background: bg, color,
+                                        fontSize: 13, fontWeight: isGo || isRet ? 700 : 500,
+                                        opacity: isPast ? 0.3 : 1,
+                                        ...(isT && !isGo && !isRet ? { outline: '1.5px solid #2A60C2', outlineOffset: '-1px', borderRadius: '10px' } : {}),
+                                        transition: 'background 0.1s',
+                                    }}>
+                                        {format(day, 'd')}
+                                    </div>
+                                </div>
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+        </div>
+    )
+}
 
 const CABIN_CLASSES = [
     { id: 'economy', label: 'Econômica', desc: 'Melhor custo-benefício' },
@@ -280,14 +448,12 @@ export default function SearchWizard() {
                                     ))}
                                 </div>
 
-                                {/* DateRangePicker — inline (sem portal) */}
-                                <DateRangePicker
-                                    inline
+                                <WizardDatePicker
                                     dateGo={data.dateGo}
-                                    dateBack={data.dateReturn}
+                                    dateReturn={data.dateReturn}
                                     tripType={data.tripType}
-                                    onDateGoChange={v => setData({ ...data, dateGo: v })}
-                                    onDateBackChange={v => setData({ ...data, dateReturn: v })}
+                                    onDateGoChange={v => setData(d => ({ ...d, dateGo: v }))}
+                                    onDateReturnChange={v => setData(d => ({ ...d, dateReturn: v }))}
                                 />
 
                                 <WizardNav onBack={prevStep} onNext={nextStep} nextDisabled={nextDisabled} />
