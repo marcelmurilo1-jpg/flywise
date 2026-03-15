@@ -31,6 +31,9 @@ export default function SavedStrategies() {
         ]).then(([{ data: strats }, { data: convs }]) => {
             if (strats) setStrategies(strats)
             if (convs) setConversations(convs as ChatConversation[])
+        }).catch(err => {
+            console.error('[SavedStrategies]', err)
+        }).finally(() => {
             setLoading(false)
         })
     }, [user])
@@ -247,8 +250,12 @@ export default function SavedStrategies() {
                                     <AnimatePresence>
                                         {conversations.map((c, i) => {
                                             const w = c.wizard_data as any
-                                            const msgCount = c.messages?.length ?? 0
-                                            const lastMsg = c.messages?.[msgCount - 1]
+                                            const msgs = Array.isArray(c.messages) ? c.messages : []
+                                            const lastMsg = msgs[msgs.length - 1]
+                                            const msgCount = msgs.length
+                                            const lastPreview = lastMsg?.role === 'assistant' && typeof lastMsg?.content === 'string'
+                                                ? lastMsg.content.replace(/[#*]/g, '').slice(0, 80)
+                                                : null
 
                                             return (
                                                 <motion.div
@@ -303,9 +310,9 @@ export default function SavedStrategies() {
                                                                     <span style={{ fontSize: '11px', color: '#94a3b8' }}>· {formatRelative(lastMsg.created_at || c.updated_at)}</span>
                                                                 )}
                                                             </div>
-                                                            {lastMsg?.role === 'assistant' && (
+                                                            {lastPreview && (
                                                                 <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                    {lastMsg.content.replace(/[#*]/g, '').slice(0, 80)}...
+                                                                    {lastPreview}...
                                                                 </p>
                                                             )}
                                                         </div>
