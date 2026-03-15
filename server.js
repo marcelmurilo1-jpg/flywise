@@ -22,8 +22,10 @@ console.log('[Playwright] PLAYWRIGHT_BROWSERS_PATH:', process.env.PLAYWRIGHT_BRO
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
-// Dynamic import do playwright APÓS definir o env var
-const { chromium: chromiumExtra } = await import('playwright');
+// Dynamic import do playwright-extra com stealth APÓS definir o env var
+const { chromium: chromiumExtra } = await import('playwright-extra');
+const { default: StealthPlugin } = await import('puppeteer-extra-plugin-stealth');
+chromiumExtra.use(StealthPlugin());
 
 // ─── Chromium: instalação lazy (não bloqueia startup do servidor) ─────────────
 // A instalação roda em background após o app.listen(). Requisições ao scraper
@@ -302,6 +304,40 @@ app.get('/api/amadeus/airports', async (req, res) => {
 const scrapeLimit = pLimit(4); // máx. 4 abas simultâneas
 let _browser = null;
 
+// ── Fase 2: Pool de User-Agents reais do Chrome 120-124 ──────────────────────
+const UA_POOL = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+];
+
+// Extrai versão major do Chrome a partir do UA (ex: "124")
+function getChromeVersion(ua) {
+    return ua.match(/Chrome\/(\d+)/)?.[1] ?? '124';
+}
+
+// Detecta plataforma a partir do UA para sec-ch-ua-platform
+function getPlatform(ua) {
+    if (/Macintosh/i.test(ua)) return 'macOS';
+    if (/X11|Linux/i.test(ua)) return 'Linux';
+    return 'Windows';
+}
+
+// ── Fase 2: Pool de timezones ────────────────────────────────────────────────
+const TIMEZONE_POOL = [
+    'America/Sao_Paulo', 'America/Sao_Paulo', 'America/Sao_Paulo', // peso maior BR
+    'America/New_York', 'America/Chicago', 'America/Los_Angeles',
+    'Europe/Lisbon', 'Europe/Madrid',
+];
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
 async function getBrowser() {
     if (_browser && _browser.isConnected()) return _browser;
     await ensureChromium(); // aguarda instalação se ainda em curso
@@ -312,11 +348,12 @@ async function getBrowser() {
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-blink-features=AutomationControlled',
+            '--disable-features=IsolateOrigins,site-per-process',
         ],
     };
     if (process.env.PROXY_URL) opts.proxy = { server: process.env.PROXY_URL };
     _browser = await chromiumExtra.launch(opts);
-    console.log('[GFlights] Navegador iniciado.');
+    console.log('[GFlights] Navegador iniciado (stealth ativo).');
     return _browser;
 }
 
@@ -335,19 +372,43 @@ function addDaysToDate(dateStr, days) {
 async function scrapeOneway(origin, destination, date) {
     return scrapeLimit(async () => {
         const browser = await getBrowser();
+
+        // ── Fase 2: fingerprint rotation ─────────────────────────────────────
+        const ua       = pick(UA_POOL);
+        const timezone = pick(TIMEZONE_POOL);
+        const vw       = randInt(1366, 1920);
+        const vh       = randInt(768, 1080);
+        const chromeV  = getChromeVersion(ua);
+        const platform = getPlatform(ua);
+        const isMac    = platform === 'macOS';
+
+        // ── Fase 4: headers HTTP consistentes com o UA ────────────────────────
+        const secChUa = `"Chromium";v="${chromeV}", "Google Chrome";v="${chromeV}", "Not-A.Brand";v="99"`;
+
         const context = await browser.newContext({
-            viewport: { width: 1440, height: 900 },
+            viewport: { width: vw, height: vh },
             locale: 'pt-BR',
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            extraHTTPHeaders: { 'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8' },
+            timezoneId: timezone,
+            userAgent: ua,
+            extraHTTPHeaders: {
+                'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                'sec-ch-ua': secChUa,
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': `"${platform}"`,
+                'sec-fetch-dest': 'document',
+                'sec-fetch-mode': 'navigate',
+                'sec-fetch-site': 'same-origin',
+                'Referer': 'https://www.google.com/',
+            },
         });
         const page = await context.newPage();
 
-        // Patch anti-detecção: remove navigator.webdriver e chrome runtime
-        await page.addInitScript(() => {
+        // Patch complementar (stealth plugin já cobre a maioria, mas reforçamos)
+        await page.addInitScript((mac) => {
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            window.chrome = { runtime: {} };
-        });
+            Object.defineProperty(navigator, 'platform', { get: () => mac ? 'MacIntel' : 'Win32' });
+            window.chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
+        }, isMac);
 
         try {
             const query = encodeURIComponent(`Flights from ${origin} to ${destination} on ${date} one way`);
@@ -503,12 +564,27 @@ function mapToFlightOffer(item, origin, destination, date, idx) {
     };
 }
 
+// ── Fase 5: Cache em memória para Google Flights (TTL 4h) ─────────────────────
+const _gfCache = new Map(); // key → { data, inbound, expiresAt }
+const GF_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 horas
+
+function gfCacheKey(origin, dest, date, returnDate) {
+    return `${origin}|${dest}|${date}|${returnDate ?? ''}`;
+}
+
 // GET /api/amadeus/flights — scraper do Google Flights (ida e volta em paralelo)
 app.get('/api/amadeus/flights', async (req, res) => {
     const { originLocationCode: origin, destinationLocationCode: destination, departureDate: date, returnDate } = req.query;
 
     if (!origin || !destination || !date) {
         return res.status(400).json({ errors: [{ detail: 'origin, destination e departureDate são obrigatórios' }] });
+    }
+
+    const cacheKey = gfCacheKey(origin, destination, date, returnDate);
+    const cached = _gfCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+        console.log(`[GFlights] Cache hit (${origin}→${destination} ${date}) — ${cached.data.length} voos`);
+        return res.json({ data: cached.data, inbound: cached.inbound, meta: { count: cached.data.length, source: 'cache' } });
     }
 
     console.log(`[GFlights] Buscando ${origin}→${destination} em ${date}${returnDate ? ` | volta ${destination}→${origin} em ${returnDate}` : ''}`);
@@ -525,6 +601,12 @@ app.get('/api/amadeus/flights', async (req, res) => {
         const inbound  = rawIn.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
 
         console.log(`[GFlights] Ida: ${outbound.length} | Volta: ${inbound.length}`);
+
+        // Salva no cache apenas se encontrou voos
+        if (outbound.length > 0) {
+            _gfCache.set(cacheKey, { data: outbound, inbound, expiresAt: Date.now() + GF_CACHE_TTL_MS });
+        }
+
         res.json({ data: outbound, inbound, meta: { count: outbound.length, source: 'google-flights-scraper' } });
     } catch (err) {
         console.error('[GFlights] Erro:', err.message);
