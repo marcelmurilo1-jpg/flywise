@@ -267,6 +267,7 @@ export default function SearchWizard() {
                 .single()
 
             if (error) throw error
+            if (!conv?.id) throw new Error('Conversa não foi criada. Tente novamente.')
 
             navigate(`/chat/${conv.id}`)
         } catch (err: unknown) {

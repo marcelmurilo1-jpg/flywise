@@ -59,9 +59,14 @@ export default function ChatBuscaAvancada() {
             .single()
             .then(({ data, error }) => {
                 if (error || !data) { navigate('/saved-strategies'); return }
-                setConv(data as ChatConversation)
-                setMessages((data.messages as ChatMessage[]) ?? [])
+                const msgs = (data.messages as ChatMessage[]) ?? []
+                const conversation = data as ChatConversation
+                setConv(conversation)
+                setMessages(msgs)
+                // If new conversation, start typing immediately (no blank flash)
+                if (msgs.length === 0) setAiTyping(true)
                 setLoading(false)
+                if (msgs.length === 0) sendToAI([], conversation)
             })
     }, [id, user])
 
@@ -69,12 +74,6 @@ export default function ChatBuscaAvancada() {
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [messages, aiTyping])
-
-    // Trigger first AI message if conversation is new (no messages yet)
-    useEffect(() => {
-        if (!conv || messages.length > 0 || loading) return
-        sendToAI([], conv)
-    }, [conv, loading])
 
     async function saveMessages(msgs: ChatMessage[]) {
         if (!id) return
