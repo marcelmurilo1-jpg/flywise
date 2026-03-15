@@ -358,235 +358,102 @@ async function scrapeOneway(origin, destination, date) {
             await page.locator('button:has-text("Accept all"), button:has-text("Aceitar tudo"), button[aria-label*="Accept"]')
                 .first().click({ timeout: 4000 }).catch(() => {});
 
-            await Promise.race([
-                page.waitForSelector('li.pIav2d', { timeout: 20000 }),
-                page.waitForSelector('ul[role="list"] li', { timeout: 20000 }),
-            ]).catch(() => console.log(`[GFlights] ${origin}→${destination}: timeout aguardando seletor`));
+            // Aguarda os cards de voo aparecerem (div[data-id] com aria-label de voo)
+            await page.waitForFunction(
+                () => [...document.querySelectorAll('div[data-id]')].some(el => {
+                    const link = el.querySelector('[aria-label]');
+                    const a = link?.getAttribute('aria-label') ?? '';
+                    return /Reais brasileiros/i.test(a) || /Voo da /i.test(a);
+                }),
+                { timeout: 20000 }
+            ).catch(() => console.log(`[GFlights] ${origin}→${destination}: timeout aguardando cards de voo`));
 
-            await page.waitForTimeout(2000);
-
-            // Clica nos botões "ver detalhes" via API nativa do Playwright (mais confiável)
-            try {
-                const expandSelectors = [
-                    'button[jsname="sTDI0"]',
-                    'button[aria-label*="etalhes"]',
-                    'button[aria-label*="Details"]',
-                    'button[aria-label*="details"]',
-                    '[jsaction*="flight.detail"]',
-                ];
-                for (const sel of expandSelectors) {
-                    const btns = await page.$$(sel);
-                    for (const btn of btns) {
-                        await btn.click({ force: true }).catch(() => {});
-                    }
-                    if (btns.length > 0) break; // para no primeiro seletor que encontrar botões
-                }
-            } catch (_) {}
-            await page.waitForTimeout(2000);
+            await page.waitForTimeout(1500);
 
             const flights = await page.evaluate(() => {
-                const results = [];
-                const selectors = ['li.pIav2d', 'li[data-id]', 'ul[jsname] > li'];
-                let items = [];
-                for (const sel of selectors) {
-                    items = [...document.querySelectorAll(sel)];
-                    if (items.length > 0) break;
+                // Parser baseado em aria-label — formato estável e estruturado do Google Flights
+                // Exemplo: "A partir de 2276 Reais brasileiros. Voo da COPA com 1 parada.
+                //   Sai do aeroporto ... às 05:25 do dia ... e chega ... às 16:40 do dia ...
+                //   Duração total: 12h 15 min. Parada (1 de 1) de 2h 12 min ... em Cidade do Panamá."
+                function parseAriaLabel(aria) {
+                    if (!aria) return null;
+
+                    // Preço: "A partir de 2276 Reais brasileiros"
+                    const priceM = aria.match(/A partir de (\d[\d\s]*) Reais/i);
+                    const preco_brl = priceM ? parseInt(priceM[1].replace(/\s/g, ''), 10) : 0;
+                    if (!preco_brl) return null;
+
+                    // Companhia: "Voo da COPA" ou "Voo da LATAM" (até ponto/vírgula/espaço+com)
+                    const airlineM = aria.match(/Voo da ([^,.]+?)(?:\s+com\s+|\.|,|Operado)/i);
+                    const companhia = airlineM ? airlineM[1].trim() : '';
+
+                    // Paradas: "com 1 parada" ou "Sem escalas"
+                    const paradas = /Sem escalas/i.test(aria) ? 0
+                        : (aria.match(/com (\d+) parada/i)?.[1] ? parseInt(aria.match(/com (\d+) parada/i)[1]) : 1);
+
+                    // Horários: "às 05:25 do dia" — primeira = partida, segunda = chegada
+                    const times = [...aria.matchAll(/às (\d{1,2}:\d{2}) do dia/gi)];
+                    const partida = times[0]?.[1] ?? '';
+                    const chegada = times[1]?.[1] ?? '';
+
+                    // Offset de chegada: detecta se data de chegada > data de partida pelo texto do dia
+                    // "quinta-feira, abril 16" vs "quarta-feira, abril 15" → offset = 1
+                    const dayNumbers = [...aria.matchAll(/dia \w+-feira, \w+ (\d+)|dia \w+, \w+ (\d+)|dia (\d{1,2}) de \w+/gi)];
+                    let chegadaOffset = 0;
+                    if (dayNumbers.length >= 2) {
+                        const d1 = parseInt(dayNumbers[0][1] ?? dayNumbers[0][2] ?? dayNumbers[0][3] ?? '0');
+                        const d2 = parseInt(dayNumbers[1][1] ?? dayNumbers[1][2] ?? dayNumbers[1][3] ?? '0');
+                        if (d2 > d1) chegadaOffset = d2 - d1;
+                    }
+
+                    // Duração total: "Duração total: 12h 15 min"
+                    const durM = aria.match(/Dura[çc][aã]o total: (\d+)h(?:\s*(\d+)\s*min)?/i);
+                    const duracao_min = durM ? parseInt(durM[1]) * 60 + (durM[2] ? parseInt(durM[2]) : 0) : 0;
+
+                    // Cidade de conexão: "Parada (N de N) de Xh Ymin ... em CIDADE."
+                    // Google às vezes escreve "emCidade" sem espaço, outras "em Cidade"
+                    const layoverM = aria.match(/Parada \(\d+ de \d+\) de [^.]+?em\s*([A-ZÀ-Ú][^.]+?)\./i);
+                    const layoverCity = layoverM ? layoverM[1].replace(/\s*\([A-Z]{3}\)/, '').trim() : '';
+
+                    // Duração da conexão: "de 2h 12 min no aeroporto"
+                    const layoverDurMs = [...aria.matchAll(/Parada \(\d+ de \d+\) de (\d+)h(?:\s*(\d+)\s*min)?/gi)];
+                    const layoverDurations = layoverDurMs.map(m => parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0));
+
+                    return {
+                        companhia,
+                        partida,
+                        chegada,
+                        chegadaOffset,
+                        duracao_min,
+                        paradas,
+                        layoverCity,
+                        layoverDurations,
+                        preco_brl,
+                        segmentos: [],
+                        numeroVoos: [],
+                        aeronaves: [],
+                    };
                 }
 
-                // Após clicar em "Detalhes", o Google Flights substitui o card compacto pelo
-                // formato expandido. O card expandido tem estrutura completamente diferente:
-                // - Linha "Partida" (header da UI)
-                // - "HH:MM[+N]Nome do Aeroporto (IATA)" — tempo concatenado com aeroporto
-                // - "Tempo de viagem: Xh Ymin..." — duração do segmento
-                // - "AirlineEconômicaBoeing 787AB 123" — cia+classe+aeronave+nº_voo numa linha
-                // - "Parada em [Cidade]: Xh Ymin" — conexão
-                // - "R$ X.XXX" — preço
-                //
-                // Quando NÃO expandido (fallback), formato compacto:
-                // "HH:MM" / "–" / "HH:MM[+N]" / "Airline" / "Xh Ymin" / "GRU–LIS" / "Sem escalas" / "R$ X.XXX"
+                const results = [];
+                const divs = [...document.querySelectorAll('div[data-id]')];
+                for (const el of divs) {
+                    // Encontra o elemento filho com aria-label de voo
+                    const links = [...el.querySelectorAll('[aria-label]')];
+                    const flightLink = links.find(l => {
+                        const a = l.getAttribute('aria-label') ?? '';
+                        return /Reais brasileiros/i.test(a) || /Voo da /i.test(a);
+                    });
+                    if (!flightLink) continue;
 
-                items.slice(0, 15).forEach((node) => {
-                    const lines = (node.innerText ?? '').split('\n').map(l => l.trim()).filter(Boolean);
-                    if (lines.length < 3) return;
-
-                    // Detecta formato expandido: alguma linha começa com "HH:MM" seguido imediatamente de letra maiúscula (nome do aeroporto)
-                    const timeAirportRx = /^(\d{1,2}:\d{2})(\s*\+(\d+))?([A-Z].*)/;
-                    const isExpanded = lines.some(l => timeAirportRx.test(l));
-
-                    let departure = '', arrival = '', arrivalOffset = 0;
-                    let durationMin = 0, stops = 0, layoverCity = '';
-                    let airlineName = '';
-                    const layoverDurations = [];
-                    const segments = [];
-
-                    if (isExpanded) {
-                        // ─ Formato EXPANDIDO ─
-                        // Identifica todas as linhas "HH:MMNome do Aeroporto (IATA)"
-                        const timeEntries = [];
-                        for (let i = 0; i < lines.length; i++) {
-                            const m = lines[i].match(timeAirportRx);
-                            if (m) {
-                                const iataM = m[4].match(/\(([A-Z]{3})\)/);
-                                timeEntries.push({ idx: i, time: m[1], offset: m[3] ? parseInt(m[3]) : 0, iata: iataM ? iataM[1] : '' });
-                            }
-                        }
-
-                        // Preço
-                        const priceLine = lines.find(l => /R\$/.test(l) && /\d/.test(l));
-                        const price = priceLine ? parseInt(priceLine.replace(/[^\d]/g, ''), 10) || 0 : 0;
-
-                        // Conexões: "Parada de XhYminCidade (IATA)" ou "Parada em Cidade: Xh Ymin"
-                        const layoverLines = lines.filter(l => /^Parada (de|em)\s/i.test(l));
-                        // Fallback: usa número de segmentos se não encontrar linhas de conexão explícitas
-                        stops = Math.max(layoverLines.length, Math.floor(timeEntries.length / 2) - 1);
-                        layoverLines.forEach((ll, li) => {
-                            // Duração da conexão
-                            const dm = ll.match(/(\d+)h(?:\s*(\d+)\s*min)?/);
-                            if (dm) layoverDurations.push(parseInt(dm[1]) * 60 + (dm[2] ? parseInt(dm[2]) : 0));
-                            // Cidade de conexão: remove "Parada de/em " e a duração, extrai nome da cidade
-                            if (li === 0) {
-                                const withoutPrefix = ll.replace(/^Parada (de|em)\s+/i, '');
-                                const withoutDuration = withoutPrefix.replace(/\d+h(?:\s*\d+\s*min)?/g, '').trim();
-                                layoverCity = withoutDuration.replace(/\s*\([A-Z]{3}\).*$/, '').replace(/:.*$/, '').trim();
-                            }
-                        });
-
-                        // Horários globais: primeiro e último time-entry
-                        if (timeEntries.length >= 2) {
-                            departure = timeEntries[0].time;
-                            const lastEntry = timeEntries[timeEntries.length - 1];
-                            arrival = lastEntry.time;
-                            arrivalOffset = lastEntry.offset;
-                        }
-
-                        // Segmentos: pares consecutivos de time-entries — (0,1), (2,3), etc.
-                        for (let si = 0; si + 1 < timeEntries.length; si += 2) {
-                            const dep = timeEntries[si];
-                            const arr = timeEntries[si + 1];
-
-                            // Duração do segmento: linha com "Tempo de viagem" ou /\d+h/ entre dep e arr
-                            let segDur = 0;
-                            for (let li = dep.idx + 1; li < arr.idx; li++) {
-                                const dl = lines[li];
-                                if (!/R\$/.test(dl)) {
-                                    const dm = dl.match(/(\d+)h(?:\s*(\d+)(?:\s*min)?)?/);
-                                    if (dm) { segDur = parseInt(dm[1]) * 60 + (dm[2] ? parseInt(dm[2]) : 0); break; }
-                                }
-                            }
-                            durationMin += segDur;
-
-                            // Linha de info do segmento: logo após o arr time-entry (se não for "Parada em")
-                            const infoLine = lines[arr.idx + 1] ?? '';
-                            const segInfo = /^Parada em /i.test(infoLine) ? '' : infoLine;
-
-                            // Extrai nº de voo (2-3 letras + dígitos no final da linha)
-                            const flightNumM = segInfo.match(/([A-Z]{1,3}\s?\d{1,5})$/);
-                            // Extrai aeronave (para antes do código do voo)
-                            const aircraftRaw = segInfo.match(/(Boeing|Airbus|Embraer|CRJ|ATR)[^\n]*/i);
-                            const aircraftM = aircraftRaw ? [aircraftRaw[0].replace(/[A-Z]{1,3}\s?\d{1,5}$/, '').trim()] : null;
-                            // Extrai companhia (antes de "Econômica", "Business", "Executiva", "Primeira")
-                            const airlineM = segInfo.split(/(Econômica|Business|Executiva|Primeira|Premium Economy)/)[0].trim();
-
-                            if (!airlineName && airlineM) airlineName = airlineM;
-
-                            segments.push({
-                                partida: dep.time,
-                                chegada: arr.time,
-                                origem: dep.iata,
-                                destino: arr.iata,
-                                duracao_min: segDur,
-                                numero: flightNumM ? flightNumM[1] : '',
-                                aeronave: aircraftM ? aircraftM[0] : '',
-                                companhia_seg: airlineM,
-                            });
-                        }
-
-                        // Adiciona duração das conexões ao total
-                        durationMin += layoverDurations.reduce((a, b) => a + b, 0);
-
-                        results.push({
-                            companhia: airlineName,
-                            partida: departure,
-                            chegada: arrival,
-                            chegadaOffset: arrivalOffset,
-                            duracao_min: durationMin,
-                            paradas: stops,
-                            layoverCity,
-                            layoverDurations,
-                            preco_brl: price,
-                            segmentos: segments,
-                            numeroVoos: segments.map(s => s.numero).filter(Boolean),
-                            aeronaves: segments.map(s => s.aeronave).filter(Boolean),
-                        });
-
-                    } else {
-                        // ─ Formato COMPACTO (expand não funcionou) ─
-                        // "HH:MM" / "–" / "HH:MM[+N]" em linhas separadas
-                        const headerLines = lines.slice(0, 12);
-                        const parsedTimes = [];
-                        for (let i = 0; i < headerLines.length; i++) {
-                            const l = headerLines[i];
-                            if (/^\d{1,2}:\d{2}$/.test(l)) {
-                                const nextLine = (headerLines[i + 1] ?? '').trim();
-                                const offset = nextLine.match(/^\+(\d+)$/) ? parseInt(nextLine.slice(1)) : 0;
-                                parsedTimes.push({ time: l, offset });
-                            } else if (/^\d{1,2}:\d{2}\s*\+\d+$/.test(l)) {
-                                const m = l.match(/^(\d{1,2}:\d{2})\s*\+(\d+)$/);
-                                if (m) parsedTimes.push({ time: m[1], offset: parseInt(m[2]) });
-                            }
-                        }
-                        if (parsedTimes.length >= 2) {
-                            departure = parsedTimes[0].time;
-                            arrival = parsedTimes[1].time;
-                            arrivalOffset = parsedTimes[1].offset;
-                        }
-
-                        const durLine = lines.find(l => /\d+h(\s*\d+\s*min)?/.test(l) && !/R\$/.test(l));
-                        if (durLine) {
-                            const m = durLine.match(/(\d+)h(?:\s*(\d+)\s*min)?/);
-                            if (m) durationMin = parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0);
-                        }
-
-                        const stopsLine = lines.find(l => /sem\s*escala|direto|nonstop|\d\s*parada/i.test(l)) ?? '';
-                        stops = /sem\s*escala|direto|nonstop/i.test(stopsLine) ? 0
-                            : (stopsLine.match(/(\d+)/) ? parseInt(stopsLine.match(/(\d+)/)[1]) : 0);
-
-                        const emMatch = stopsLine.match(/em\s+([A-Za-záéíóú\s]+)/i);
-                        if (emMatch) layoverCity = emMatch[1].trim();
-
-                        const routeLine = lines.find(l => /^[A-Z]{3}[–\-][A-Z]{3}/.test(l)) ?? '';
-                        if (!layoverCity && routeLine) {
-                            const parts = routeLine.split(/[–\-]/);
-                            if (parts.length > 2) layoverCity = parts.slice(1, -1).join(', ');
-                        }
-
-                        airlineName = lines.find(l =>
-                            !/\d{1,2}:\d{2}/.test(l) && !/R\$/.test(l) &&
-                            !/^\d+h/.test(l) && !/sem\s*escala|direto|parada|nonstop|partida/i.test(l) &&
-                            !/^\+\d/.test(l) && !/^[–\-]$/.test(l) &&
-                            !/^[A-Z]{3}[–\-]/.test(l) && !/^\d+\s*kg/.test(l) &&
-                            l.length > 2 && l.length < 60
-                        ) ?? '';
-
-                        const priceLine = lines.find(l => /R\$/.test(l) && /\d/.test(l));
-                        const price = priceLine ? parseInt(priceLine.replace(/[^\d]/g, ''), 10) || 0 : 0;
-
-                        results.push({
-                            companhia: airlineName,
-                            partida: departure,
-                            chegada: arrival,
-                            chegadaOffset: arrivalOffset,
-                            duracao_min: durationMin,
-                            paradas: stops,
-                            layoverCity,
-                            layoverDurations,
-                            preco_brl: price,
-                            segmentos: segments,
-                            numeroVoos: [],
-                            aeronaves: [],
-                        });
+                    const aria = flightLink.getAttribute('aria-label') ?? '';
+                    const parsed = parseAriaLabel(aria);
+                    if (parsed && parsed.preco_brl > 0 && parsed.partida) {
+                        results.push(parsed);
                     }
-                });
+
+                    if (results.length >= 15) break;
+                }
 
                 return results;
             });
