@@ -30,7 +30,7 @@ const DESTINATIONS = [
     { name: 'PARIS',      country: 'França',          route: 'GRU → CDG', miles: '89.500',  price: 'R$ 3.700', class: 'Executiva · Ida',          classKey: 'business', img: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&q=80' },
     { name: 'TÓQUIO',    country: 'Japão',            route: 'GRU → NRT', miles: '85.000',  price: 'R$ 4.600', class: 'Executiva · Ida',          classKey: 'business', img: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=600&q=80' },
     { name: 'LISBOA',     country: 'Portugal',         route: 'GRU → LIS', miles: '74.000',  price: 'R$ 1.560', class: 'Econômica · Ida e Volta',  classKey: 'economy',  img: 'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=600&q=80' },
-    { name: 'MIAMI',      country: 'Estados Unidos',   route: 'GRU → MIA', miles: '58.000',  price: 'R$ 1.570', class: 'Econômica · Ida e Volta',  classKey: 'economy',  img: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80' },
+    { name: 'MIAMI',      country: 'Estados Unidos',   route: 'GRU → MIA', miles: '58.000',  price: 'R$ 1.570', class: 'Econômica · Ida e Volta',  classKey: 'economy',  img: 'https://images.unsplash.com/photo-1535498730771-e735b998cd64?w=600&q=80' },
     { name: 'CANCÚN',    country: 'México',            route: 'GRU → CUN', miles: '26.600',  price: 'R$ 1.680', class: 'Econômica · Ida e Volta',  classKey: 'economy',  img: 'https://images.unsplash.com/photo-1552074284-5e88ef1aef18?w=600&q=80' },
     { name: 'DUBAI',      country: 'Emirados Árabes',  route: 'GRU → DXB', miles: '85.000',  price: 'R$ 5.500', class: 'Executiva · Ida',          classKey: 'business', img: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=600&q=80' },
     { name: 'LONDRES',    country: 'Reino Unido',       route: 'GRU → LHR', miles: '110.000', price: 'R$ 3.450', class: 'Executiva · Ida',          classKey: 'business', img: 'https://images.unsplash.com/photo-1529655683826-aba9b3e77383?w=600&q=80' },
@@ -659,7 +659,7 @@ export default function Landing() {
         supabase
             .from('promocoes')
             .select('titulo, programas_tags, subcategoria, categoria, valid_until, created_at')
-            .in('categoria', ['passagens', 'transferencia'])
+            .in('categoria', ['passagens', 'transferencia', 'clube'])
             .or('valid_until.is.null,valid_until.gt.' + new Date().toISOString())
             .order('created_at', { ascending: false })
             .limit(4)
@@ -676,14 +676,12 @@ export default function Landing() {
                         : diffMin < 1440 ? `${Math.round(diffMin / 60)}h atrás`
                         : `${Math.round(diffMin / 1440)}d atrás`
                     const isUrgent = p.valid_until && (new Date(p.valid_until).getTime() - now) < 86400000
-                    return {
-                        prog,
-                        deal: p.titulo ?? 'Promoção disponível',
-                        time,
-                        badge: isUrgent ? 'Urgente' : 'Novo',
-                        badgeColor: isUrgent ? '#F87171' : '#34D399',
-                        badgeBg: isUrgent ? 'rgba(248,113,113,0.15)' : 'rgba(52,211,153,0.15)',
-                    }
+                    const isClube = p.subcategoria === 'clube' || p.categoria === 'clube'
+                    const isTransfer = p.categoria === 'transferencia'
+                    const badge = isUrgent ? 'Urgente' : isClube ? 'Clube' : isTransfer ? 'Transferência' : 'Passagem'
+                    const badgeColor = isUrgent ? '#F87171' : isClube ? '#A78BFA' : isTransfer ? '#34D399' : '#60A5FA'
+                    const badgeBg = isUrgent ? 'rgba(248,113,113,0.15)' : isClube ? 'rgba(167,139,250,0.15)' : isTransfer ? 'rgba(52,211,153,0.15)' : 'rgba(96,165,250,0.15)'
+                    return { prog, deal: p.titulo ?? 'Promoção disponível', time, badge, badgeColor, badgeBg }
                 }))
             })
     }, [])
@@ -1007,9 +1005,9 @@ export default function Landing() {
                         </p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                             {[
-                                { icon: <Bell size={17} color="#60A5FA" />, title: 'Alertas personalizados', desc: 'Escolha entre promoções de passagens aéreas ou transferências de milhas' },
-                                { icon: <Zap size={17} color="#60A5FA" />, title: 'Notificação imediata', desc: 'Receba no e-mail assim que a promoção for detectada automaticamente' },
-                                { icon: <CheckCircle2 size={17} color="#60A5FA" />, title: 'Filtro por programa', desc: 'Smiles, TudoAzul, LATAM Pass, Livelo, Esfera e muito mais' },
+                                { icon: <Zap size={17} color="#60A5FA" />, title: 'Passagens aéreas em promoção', desc: 'Alertas de voos baratos em milhas: nacionais, internacionais, ida e volta' },
+                                { icon: <Bell size={17} color="#60A5FA" />, title: 'Bônus de transferência', desc: 'Saiba na hora quando surgirem bônus para transferir pontos para milhas aéreas' },
+                                { icon: <CheckCircle2 size={17} color="#60A5FA" />, title: 'Promoções de clube', desc: 'Clube Smiles, Clube Livelo e benefícios por plano — sem perder nenhum prazo' },
                             ].map((item, i) => (
                                 <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
                                     <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1059,10 +1057,10 @@ export default function Landing() {
                             </div>
                         </div>
                         {(alertCards.length > 0 ? alertCards : [
-                            { prog: 'Smiles', deal: 'GRU → MIA a partir de 18.000 pts', time: 'agora mesmo', badge: 'Novo', badgeColor: '#34D399', badgeBg: 'rgba(52,211,153,0.15)' },
-                            { prog: 'TudoAzul', deal: 'Transferência com bônus de 100% — só hoje', time: '5 min atrás', badge: 'Urgente', badgeColor: '#F87171', badgeBg: 'rgba(248,113,113,0.15)' },
-                            { prog: 'LATAM Pass', deal: 'Buenos Aires ida e volta por 25.000 pts', time: '2h atrás', badge: 'Novo', badgeColor: '#34D399', badgeBg: 'rgba(52,211,153,0.15)' },
-                            { prog: 'Livelo', deal: 'Bônus de 80% na transferência para Smiles', time: '4h atrás', badge: 'Novo', badgeColor: '#34D399', badgeBg: 'rgba(52,211,153,0.15)' },
+                            { prog: 'Smiles', deal: 'GRU → MIA · 29.000 pts · Econômica Ida e Volta', time: 'agora mesmo', badge: 'Passagem', badgeColor: '#60A5FA', badgeBg: 'rgba(96,165,250,0.15)' },
+                            { prog: 'Itaú Iupp → Smiles', deal: 'Bônus 100% na transferência · só hoje 23:59', time: '12 min atrás', badge: 'Urgente', badgeColor: '#F87171', badgeBg: 'rgba(248,113,113,0.15)' },
+                            { prog: 'Clube Smiles', deal: 'Plano 1k com 70% de bônus · válido até 31/03', time: '1h atrás', badge: 'Clube', badgeColor: '#A78BFA', badgeBg: 'rgba(167,139,250,0.15)' },
+                            { prog: 'LATAM Pass', deal: 'GRU → EZE ida e volta · 25.000 pts · Econômica', time: '3h atrás', badge: 'Passagem', badgeColor: '#60A5FA', badgeBg: 'rgba(96,165,250,0.15)' },
                         ]).map((n, i) => (
                             <motion.div
                                 key={i}
