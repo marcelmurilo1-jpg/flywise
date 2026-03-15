@@ -1032,6 +1032,68 @@ app.post('/api/admin/sync-promotions', async (req, res) => {
 // compara com dados atuais no Supabase e atualiza se necessário.
 // Disparado pelo GitHub Actions cron diário (8h BRT) via POST /api/admin/sync-transfer-data
 
+// Tenta extrair data explícita de um campo valid_until (texto ou ISO).
+// Retorna Date ou null.
+function parsePromoDate(validUntil) {
+    if (!validUntil) return null;
+    const s = validUntil.toLowerCase();
+
+    // "até hoje" / "acaba hoje"
+    if (/\b(hoje|today|acaba hoje|até hoje)\b/.test(s)) {
+        const d = new Date();
+        d.setHours(23, 59, 59, 999);
+        return d;
+    }
+
+    // ISO: 2026-03-23
+    const iso = validUntil.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return new Date(`${iso[1]}-${iso[2]}-${iso[3]}T23:59:59`);
+
+    // Brasileiro: 23/03/2026
+    const br = validUntil.match(/(\d{1,2})\/(\d{2})\/(\d{4})/);
+    if (br) return new Date(`${br[3]}-${br[2]}-${br[1].padStart(2, '0')}T23:59:59`);
+
+    // "23 de março de 2026"
+    const MONTHS = { janeiro:'01', fevereiro:'02', 'março':'03', marco:'03', abril:'04',
+        maio:'05', junho:'06', julho:'07', agosto:'08', setembro:'09',
+        outubro:'10', novembro:'11', dezembro:'12' };
+    const ext = s.match(/(\d{1,2})\s+de\s+([a-zç]+)\s+de\s+(\d{4})/);
+    if (ext && MONTHS[ext[2]]) {
+        return new Date(`${ext[3]}-${MONTHS[ext[2]]}-${ext[1].padStart(2,'0')}T23:59:59`);
+    }
+    return null;
+}
+
+// Verifica promoções com data explícita vencida e zera bonus_percent no Supabase.
+async function checkAndExpirePromotions(promotions) {
+    if (!promotions?.length) return 0;
+    const now = new Date();
+    let expired = 0;
+
+    for (const p of promotions) {
+        const expiry = parsePromoDate(p.valid_until);
+        if (!expiry || now <= expiry) continue;
+        if (p.bonus_percent === 0 && p.club_bonus_percent === 0) continue; // já zerado
+
+        console.log(`[TransferSync] Promoção expirada detectada: ${p.card_id}/${p.program} (até ${p.valid_until})`);
+        const { error } = await supabase
+            .from('transfer_promotions')
+            .update({
+                bonus_percent: 0,
+                club_bonus_percent: 0,
+                club_tier_bonuses: {},
+                valid_until: `Expirado em ${p.valid_until}`,
+                updated_at: now.toISOString(),
+            })
+            .eq('card_id', p.card_id)
+            .eq('program', p.program);
+
+        if (error) console.error(`[TransferSync] Erro ao expirar ${p.card_id}/${p.program}:`, error.message);
+        else expired++;
+    }
+    return expired;
+}
+
 const TRANSFER_SOURCES = [
     // Programas aéreos — páginas de transferência de pontos
     { id: 'smiles_transfer', url: 'https://www.smiles.com.br/acumule-milhas/transferencia-de-pontos', label: 'Smiles — Transferência de Pontos' },
@@ -1125,20 +1187,24 @@ Analise cuidadosamente e retorne um JSON com as promoções de transferência at
 1. bonusPercent — bônus para quem não tem clube (%)
 2. clubBonusPercent — bônus genérico para assinantes de clube (%)
 3. clubTierBonuses — bônus específico por plano do clube (objeto com nomes dos planos como chave)
-4. validUntil — validade da promoção (string descritiva)
-5. rules — array de strings com regras importantes
+4. validUntil — validade da promoção. REGRA CRÍTICA:
+   - Se encontrar uma data EXPLÍCITA de encerramento (ex: "até 23/03/2026", "válido até 15 de abril de 2026", "encerra em 2026-04-15"), coloque a data no início em formato ISO: "2026-04-15 — Campanha encerrada (confirme em ...)"
+   - Se o texto disser "até hoje" ou "encerra hoje", escreva exatamente: "hoje — encerra às 23:59"
+   - Se for campanha periódica sem data fixa, mantenha o texto atual
+5. rules — array de strings com regras importantes (inclua datas de encerramento quando explícitas)
 6. description — descrição resumida
 7. isPeriodic — true se é campanha periódica, false se é permanente
 8. lastConfirmed — "Mar/2026" (mês atual)
 
 REGRAS IMPORTANTES:
 - Se uma informação não foi encontrada nas páginas, mantenha o valor atual do banco
-- Se um bônus claramente terminou (data vencida), ajuste bonusPercent para 0 e isPeriodic para true
+- Se um bônus claramente terminou (data vencida ou site não mostra mais a promoção), ajuste bonusPercent para 0
 - Santander Esfera: 20% para Smiles é PERMANENTE (não requer campanha)
 - Inter → TudoAzul: 80% base, 103% Clube Azul, 130% para 5+ anos — só altere se encontrar dado contrário EXPLÍCITO
 - Clube Smiles tiers: só atualize se encontrar valores EXPLÍCITOS nas páginas oficiais
 - NÃO invente dados. Se não encontrou, mantenha o existente.
 - NÃO altere card_id, program, club_required
+- DATAS: sempre que o site mencionar data de encerramento, extraia no formato YYYY-MM-DD e coloque no início do campo validUntil
 
 Retorne SOMENTE um JSON válido no formato:
 {
@@ -1196,6 +1262,10 @@ async function syncTransferData() {
             .eq('active', true);
         if (fetchErr) throw new Error(`Supabase fetch: ${fetchErr.message}`);
         console.log(`[TransferSync] ${current?.length ?? 0} promoções no Supabase`);
+
+        // 1b. Expira promoções com data explícita vencida
+        const expiredCount = await checkAndExpirePromotions(current ?? []);
+        if (expiredCount > 0) console.log(`[TransferSync] ${expiredCount} promoção(ões) expirada(s) e zerada(s)`);
 
         // 2. Scrape todas as fontes em paralelo (max 3 simultâneos)
         const limiter = pLimit(3);

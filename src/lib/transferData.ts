@@ -537,13 +537,30 @@ export const CREDIT_CARDS: CreditCard[] = [
 ]
 
 // ─── Livelo como HUB de transferência ────────────────────────────────────────
-// Pontos Livelo → programas aéreos na proporção 1:1 (nacional)
-// Mínimo: 15.000 pontos Livelo por transferência
+// Pontos Livelo → programas aéreos na proporção 1:1
+// Mínimo: 15.000 pontos Livelo por transferência (doméstico e internacional)
+// Fontes: livelo.com.br/transferencia (mar/2026)
+// ⚠️ Parceria Livelo ↔ Smiles: verifique status atual em livelo.com.br (houve instabilidade em 2022)
 
-export const LIVELO_AIRLINE_PARTNERS = [
-    { program: 'Smiles', ratio: 1.0, minPoints: 15000, label: 'Livelo → Smiles (1:1)' },
+export const LIVELO_AIRLINE_PARTNERS: Array<{
+    program: string
+    ratio: number
+    minPoints: number
+    label: string
+    international?: boolean
+    note?: string
+}> = [
+    // ── Doméstico ──────────────────────────────────────────────────────────────
+    { program: 'Smiles', ratio: 1.0, minPoints: 15000, label: 'Livelo → Smiles (1:1)', note: 'Confirme disponibilidade em livelo.com.br' },
     { program: 'LATAM Pass', ratio: 1.0, minPoints: 15000, label: 'Livelo → LATAM Pass (1:1)' },
     { program: 'TudoAzul', ratio: 1.0, minPoints: 15000, label: 'Livelo → Azul Fidelidade (1:1)' },
+    // ── Internacional ──────────────────────────────────────────────────────────
+    { program: 'Flying Blue', ratio: 1.0, minPoints: 15000, label: 'Livelo → Flying Blue AF/KLM (1:1)', international: true },
+    { program: 'British Airways', ratio: 1.0, minPoints: 15000, label: 'Livelo → British Airways Avios (1:1)', international: true },
+    { program: 'TAP Miles&Go', ratio: 1.0, minPoints: 15000, label: 'Livelo → TAP Miles&Go (1:1)', international: true },
+    { program: 'Emirates Skywards', ratio: 1.0, minPoints: 15000, label: 'Livelo → Emirates Skywards (1:1)', international: true, note: 'Confirme vigência da parceria em livelo.com.br' },
+    { program: 'Iberia Plus', ratio: 1.0, minPoints: 15000, label: 'Livelo → Iberia Plus Avios (1:1)', international: true },
+    { program: 'ConnectMiles', ratio: 1.0, minPoints: 15000, label: 'Livelo → Copa ConnectMiles (1:1)', international: true },
 ]
 
 // ─── Promoções periódicas ─────────────────────────────────────────────────────
@@ -959,4 +976,59 @@ export function rateCPM(cpm: number): { label: string; color: string; rating: st
     if (cpm >= 2.5) return { label: 'Bom', color: '#16A34A', rating: 'bom' }
     if (cpm >= 1.5) return { label: 'Razoável', color: '#F59E0B', rating: 'ok' }
     return { label: 'Abaixo do ideal', color: '#EF4444', rating: 'ruim' }
+}
+
+// ─── Detecção de validade/expiração ──────────────────────────────────────────
+// Tenta extrair uma data explícita do campo validUntil.
+// Formatos reconhecidos:
+//   ISO:         "2026-03-23" (ou embutido em texto "até 2026-03-23")
+//   Brasileiro:  "23/03/2026" (ou "23 de março de 2026")
+//   "até hoje" / "acaba hoje" → trata o dia atual como expiração
+
+const MONTHS_PT: Record<string, string> = {
+    janeiro: '01', fevereiro: '02', março: '03', marco: '03',
+    abril: '04', maio: '05', junho: '06', julho: '07',
+    agosto: '08', setembro: '09', outubro: '10', novembro: '11', dezembro: '12',
+}
+
+export function parsePromoExpiry(validUntil: string): Date | null {
+    if (!validUntil) return null
+    const s = validUntil.toLowerCase()
+
+    // "até hoje" / "acaba hoje" / "válido hoje"
+    if (/\b(hoje|today|acaba hoje|até hoje)\b/.test(s)) {
+        const d = new Date()
+        d.setHours(23, 59, 59, 999)
+        return d
+    }
+
+    // ISO: 2026-03-23
+    const iso = validUntil.match(/(\d{4})-(\d{2})-(\d{2})/)
+    if (iso) return new Date(`${iso[1]}-${iso[2]}-${iso[3]}T23:59:59`)
+
+    // Brasileiro DD/MM/YYYY
+    const br = validUntil.match(/(\d{1,2})\/(\d{2})\/(\d{4})/)
+    if (br) return new Date(`${br[3]}-${br[2]}-${br[1].padStart(2, '0')}T23:59:59`)
+
+    // "23 de março de 2026"
+    const ext = s.match(/(\d{1,2})\s+de\s+([a-zç]+)\s+de\s+(\d{4})/)
+    if (ext) {
+        const month = MONTHS_PT[ext[2]]
+        if (month) return new Date(`${ext[3]}-${month}-${ext[1].padStart(2, '0')}T23:59:59`)
+    }
+
+    return null
+}
+
+/** Retorna true se a promoção tem data explícita e ela já passou. */
+export function isPromotionExpired(promo: TransferPromotion): boolean {
+    const expiry = parsePromoExpiry(promo.validUntil)
+    if (!expiry) return false
+    return new Date() > expiry
+}
+
+/** Retorna o bônus efetivo respeitando expiração — 0 se expirado. */
+export function getEffectiveBonusPercent(promo: TransferPromotion, clubTier?: string | null): number {
+    if (isPromotionExpired(promo)) return 0
+    return clubTier ? getClubTierBonus(promo, clubTier) : promo.bonusPercent
 }
