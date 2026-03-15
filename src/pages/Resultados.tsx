@@ -129,9 +129,12 @@ export default function Resultados() {
                 if (cacheErr) throw cacheErr
 
                 if (cached && cached.length > 0) {
-                    // Already have results — just wait for animation
+                    // Already have results — split outbound/inbound by isReturn flag
+                    const outbound = cached.filter(f => !(f.detalhes as any)?.isReturn)
+                    const inbound = cached.filter(f => !!(f.detalhes as any)?.isReturn)
                     await new Promise<void>(r => setTimeout(r, MIN_ANIM_MS))
-                    setFlights(cached)
+                    setFlights(outbound)
+                    setInboundFlights(inbound)
                     return
                 }
 
@@ -270,9 +273,13 @@ export default function Resultados() {
                 setFlights(rows)
                 setInboundFlights(inboundRows)
 
-                // Save to Supabase in background (non-blocking)
+                // Save outbound + inbound to Supabase in background (non-blocking)
                 const insertRows = rows.map(r => { const { id, ...rest } = r; return rest })
-                supabase.from('resultados_voos').insert(insertRows).then(({ error: saveErr }) => {
+                const insertInbound = inboundRows.map(r => {
+                    const { id, ...rest } = r
+                    return { ...rest, detalhes: { ...(rest.detalhes as object ?? {}), isReturn: true } }
+                })
+                supabase.from('resultados_voos').insert([...insertRows, ...insertInbound]).then(({ error: saveErr }) => {
                     if (saveErr) console.error('[Resultados] Save error (non-blocking):', saveErr)
                 })
 

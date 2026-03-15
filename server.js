@@ -78,15 +78,15 @@ const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabase
 const SEATS_AERO_API_KEY = process.env.SEATS_AERO_API_KEY;
 const SEATS_AERO_BASE = 'https://seats.aero/partnerapi';
 
-async function fetchSeatsAeroAPI(origin, destination, date) {
+async function fetchSeatsAeroAPI(origin, destination, startDate, endDate) {
     if (!SEATS_AERO_API_KEY) {
         throw new Error('SEATS_AERO_API_KEY não configurada. Adicione ao .env.local');
     }
     const params = new URLSearchParams({
         origin_airport: origin.toUpperCase(),
         destination_airport: destination.toUpperCase(),
-        start_date: date,
-        end_date: date,
+        start_date: startDate,
+        end_date: endDate ?? startDate,
         take: '50',
     });
     const res = await fetch(`${SEATS_AERO_BASE}/search?${params}`, {
@@ -196,6 +196,7 @@ app.post('/api/search-flights', async (req, res) => {
                 .select('dados, criado_em')
                 .eq('origem', origem.toUpperCase())
                 .eq('destino', destino.toUpperCase())
+                .eq('data_ida', data_ida)
                 .gte('criado_em', ttlLimit)
                 .order('criado_em', { ascending: false })
                 .limit(1)
@@ -209,9 +210,21 @@ app.post('/api/search-flights', async (req, res) => {
             console.log('[Express] Cache miss — chamando API Seats.aero.');
         }
 
-        // ── 2. Busca na API em paralelo (ida + volta) ─────────────────────────
-        const promessas = [fetchSeatsAeroAPI(origem, destino, data_ida)];
-        if (data_volta) promessas.push(fetchSeatsAeroAPI(destino, origem, data_volta));
+        // ── 2. Busca na API em paralelo (ida + volta) com janela ±2 dias ──────
+        // Amplia o range para capturar mais disponibilidade (award seats variam por dia)
+        function shiftDate(dateStr, deltaDays) {
+            const d = new Date(dateStr + 'T12:00:00Z');
+            d.setUTCDate(d.getUTCDate() + deltaDays);
+            return d.toISOString().slice(0, 10);
+        }
+        const startIda = shiftDate(data_ida, -2);
+        const endIda   = shiftDate(data_ida, +2);
+        const promessas = [fetchSeatsAeroAPI(origem, destino, startIda, endIda)];
+        if (data_volta) {
+            const startVolta = shiftDate(data_volta, -2);
+            const endVolta   = shiftDate(data_volta, +2);
+            promessas.push(fetchSeatsAeroAPI(destino, origem, startVolta, endVolta));
+        }
 
         const [itemsIda, itemsVolta = []] = await Promise.all(promessas);
         const resultadosFinais = [
@@ -225,10 +238,10 @@ app.post('/api/search-flights', async (req, res) => {
         if (supabase && resultadosFinais.length > 0) {
             const ttlLimit = new Date(Date.now() - TTL_MS).toISOString();
             await supabase.from('seatsaero_searches').delete()
-                .eq('origem', origem.toUpperCase()).eq('destino', destino.toUpperCase())
+                .eq('origem', origem.toUpperCase()).eq('destino', destino.toUpperCase()).eq('data_ida', data_ida)
                 .lt('criado_em', ttlLimit);
             const { error: insertErr } = await supabase.from('seatsaero_searches')
-                .insert([{ origem: origem.toUpperCase(), destino: destino.toUpperCase(), dados: resultadosFinais }]);
+                .insert([{ origem: origem.toUpperCase(), destino: destino.toUpperCase(), data_ida, dados: resultadosFinais }]);
             if (insertErr) console.error('[Express] Erro ao salvar cache:', insertErr.message);
             else console.log(`[Express] Cache salvo: ${resultadosFinais.length} voos.`);
         }
