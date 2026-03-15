@@ -699,24 +699,21 @@ export default function TransferSimulator({ activeClubs, activeClubTiers }: Prop
                                         <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.10em', textTransform: 'uppercase' }}>
                                             O que você consegue
                                         </div>
-                                        {/* Toggle econômica / executiva */}
-                                        <div style={{ display: 'flex', background: 'var(--snow)', border: '1.5px solid var(--border-light)', borderRadius: 8, padding: 2, gap: 2 }}>
-                                            {(['economy', 'business'] as const).map(cls => (
-                                                <button
-                                                    key={cls}
-                                                    onClick={() => setViewClass(cls)}
-                                                    style={{
-                                                        padding: '4px 12px', borderRadius: 6, border: 'none',
-                                                        background: viewClass === cls ? finalColor : 'transparent',
-                                                        color: viewClass === cls ? '#fff' : 'var(--text-muted)',
-                                                        fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                                                        fontFamily: 'inherit', transition: 'all .15s',
-                                                    }}
-                                                >
-                                                    {cls === 'economy' ? '✈ Econômica' : '💺 Executiva'}
-                                                </button>
-                                            ))}
-                                        </div>
+                                        {/* Toggle econômica ↔ executiva — card único clicável */}
+                                        <button
+                                            onClick={() => setViewClass(v => v === 'economy' ? 'business' : 'economy')}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 6,
+                                                padding: '5px 14px', borderRadius: 8, border: 'none',
+                                                background: viewClass === 'business' ? '#F0FDF4' : `${finalColor}18`,
+                                                color: viewClass === 'business' ? '#15803D' : finalColor,
+                                                fontSize: 11, fontWeight: 800, cursor: 'pointer',
+                                                fontFamily: 'inherit', transition: 'all .2s', outline: 'none',
+                                            }}
+                                        >
+                                            {viewClass === 'economy' ? '✈ Econômica' : '💺 Executiva'}
+                                            <ArrowRightLeft size={11} style={{ opacity: 0.6 }} />
+                                        </button>
                                     </div>
                                     {/* Disclaimer */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#F8FAFC', border: '1px solid var(--border-light)', borderRadius: 8, padding: '4px 10px' }}>
@@ -762,51 +759,36 @@ export default function TransferSimulator({ activeClubs, activeClubTiers }: Prop
                                                         )}
                                                     </div>
 
-                                                    {/* Econômica e Executiva side by side */}
-                                                    <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                                                        {/* Econômica */}
-                                                        <button
-                                                            onClick={() => setViewClass('economy')}
-                                                            style={{
-                                                                flex: 1, borderRadius: 8, padding: '6px 8px',
-                                                                background: viewClass === 'economy' && canAfford ? `${finalColor}12` : viewClass === 'economy' ? '#FEF2F2' : 'var(--snow)',
-                                                                border: `1.5px solid ${viewClass === 'economy' ? (canAfford ? finalColor : '#FECACA') : 'var(--border-light)'}`,
-                                                                cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-                                                                transition: 'all .15s',
-                                                            }}
-                                                        >
-                                                            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 2 }}>✈ Econômica</div>
-                                                            <div style={{ fontSize: 13, fontWeight: 900, color: viewClass === 'economy' ? (canAfford ? finalColor : '#DC2626') : 'var(--text-muted)' }}>
-                                                                {fmt(ecoMiles)} mi
+                                                    {/* Milhas necessárias — classe selecionada */}
+                                                    <div style={{ marginBottom: 10 }}>
+                                                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 3 }}>
+                                                            {viewClass === 'economy' ? '✈ Econômica' : '💺 Executiva'}
+                                                        </div>
+                                                        {showMiles === 0 && viewClass === 'business' ? (
+                                                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)' }}>
+                                                                Não disponível neste programa
                                                             </div>
-                                                        </button>
-                                                        {/* Executiva */}
-                                                        <button
-                                                            onClick={() => setViewClass('business')}
-                                                            style={{
-                                                                flex: 1, borderRadius: 8, padding: '6px 8px',
-                                                                background: viewClass === 'business' && finalMiles >= bizMiles ? '#F0FDF4' : viewClass === 'business' ? '#FEF2F2' : 'var(--snow)',
-                                                                border: `1.5px solid ${viewClass === 'business' ? (finalMiles >= bizMiles ? '#86EFAC' : '#FECACA') : 'var(--border-light)'}`,
-                                                                cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-                                                                transition: 'all .15s',
-                                                            }}
-                                                        >
-                                                            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 2 }}>💺 Executiva</div>
-                                                            <div style={{ fontSize: 13, fontWeight: 900, color: viewClass === 'business' ? (finalMiles >= bizMiles ? '#16A34A' : '#DC2626') : 'var(--text-muted)' }}>
-                                                                {bizMiles ? `${fmt(bizMiles)} mi` : '—'}
+                                                        ) : (
+                                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                                                                <span style={{ fontSize: 22, fontWeight: 900, lineHeight: 1, color: canAfford ? activeColor : '#DC2626' }}>
+                                                                    {fmt(showMiles)}
+                                                                </span>
+                                                                <span style={{ fontSize: 11, fontWeight: 700, color: canAfford ? activeColor : '#DC2626', opacity: 0.8 }}>
+                                                                    mi {finalProgram}
+                                                                </span>
                                                             </div>
-                                                        </button>
+                                                        )}
                                                     </div>
 
-                                                    {/* Status da classe selecionada */}
-                                                    {canAfford ? (
+                                                    {/* Status */}
+                                                    {showMiles === 0 && viewClass === 'business' ? null : canAfford ? (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: activeColor }}>
                                                             <CheckCircle2 size={12} />
                                                             Você tem milhas suficientes!
                                                         </div>
                                                     ) : (
                                                         <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600 }}>
-                                                            Faltam {fmt(missing)} mi para {viewClass === 'economy' ? 'econômica' : 'executiva'}
+                                                            Faltam {fmt(missing)} mi {finalProgram}
                                                         </div>
                                                     )}
 
