@@ -1271,6 +1271,20 @@ app.post('/api/admin/sync-transfer-data', async (req, res) => {
     syncTransferData().catch(err => console.error('[TransferSync] Erro:', err.message));
 });
 
+// POST /api/admin/sync-transfer-data-sync — versão síncrona para debug (aguarda resultado)
+app.post('/api/admin/sync-transfer-data-sync', async (req, res) => {
+    const secret = (req.headers['x-sync-secret'] ?? '');
+    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
+        return res.status(401).json({ error: 'Não autorizado' });
+    }
+    try {
+        const result = await syncTransferData();
+        res.json({ ok: true, result });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message, stack: err.stack?.split('\n').slice(0,5) });
+    }
+});
+
 // GET /api/admin/transfer-sync-diag — diagnóstico sem rodar o sync completo
 app.get('/api/admin/transfer-sync-diag', async (_req, res) => {
     const diag = {
