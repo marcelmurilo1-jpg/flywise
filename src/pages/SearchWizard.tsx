@@ -271,7 +271,10 @@ export default function SearchWizard() {
 
             navigate(`/chat/${conv.id}`)
         } catch (err: unknown) {
-            setSubmitError(err instanceof Error ? err.message : 'Erro ao criar conversa.')
+            const msg = err instanceof Error
+                ? err.message
+                : (err as any)?.message ?? JSON.stringify(err)
+            setSubmitError(msg || 'Erro desconhecido')
             setSubmitting(false)
         }
     }
