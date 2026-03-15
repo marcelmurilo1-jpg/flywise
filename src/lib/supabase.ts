@@ -68,6 +68,22 @@ export interface Promocao {
     created_at?: string
 }
 
+export interface ChatMessage {
+    role: 'user' | 'assistant'
+    content: string
+    created_at: string
+}
+
+export interface ChatConversation {
+    id: string
+    user_id: string
+    title: string
+    wizard_data: Record<string, unknown>
+    messages: ChatMessage[]
+    created_at: string
+    updated_at: string
+}
+
 export interface Strategy {
     id?: number
     busca_id?: number

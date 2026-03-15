@@ -5,12 +5,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { X, ArrowRight, Search, Tag, Wallet, Plane, Minus, Plus, Check, Zap, Shield, Sparkles, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
-import { generateMockFlights } from '@/lib/mockFlights'
-
-const MONTHS = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-]
+import { DateRangePicker } from '@/components/DateRangePicker'
 
 const CABIN_CLASSES = [
     { id: 'economy', label: 'Econômica', desc: 'Melhor custo-benefício' },
@@ -44,13 +39,13 @@ type WizardData = {
     destination: string
     origin: string
     flexibleOrigin: boolean
-    dateMode: 'exact' | 'month' | 'any'
-    hackerMode: 'comfort' | 'value' | 'hacker'
+    tripType: 'one-way' | 'round-trip'
     dateGo: string
     dateReturn: string
-    selectedMonths: number[]
     passengers: number
     cabinClass: string
+    hackerMode: 'comfort' | 'value' | 'hacker'
+    observations: string
 }
 
 const TOTAL_STEPS = 5
@@ -73,13 +68,13 @@ export default function SearchWizard() {
         destination: '',
         origin: 'São Paulo (Todas)',
         flexibleOrigin: true,
-        dateMode: 'exact',
-        hackerMode: 'value',
+        tripType: 'round-trip',
         dateGo: '',
         dateReturn: '',
-        selectedMonths: [],
         passengers: 1,
         cabinClass: 'economy',
+        hackerMode: 'value',
+        observations: '',
     })
 
     const nextStep = () => setStep(s => Math.min(s + 1, TOTAL_STEPS))
@@ -90,35 +85,24 @@ export default function SearchWizard() {
         setSubmitting(true)
         setSubmitError('')
         try {
-            // Determine the date to use
-            const dateGoFinal = data.dateMode === 'exact' ? data.dateGo
-                : data.dateMode === 'month' && data.selectedMonths.length > 0
-                    ? `${new Date().getFullYear()}-${String(data.selectedMonths[0] + 1).padStart(2, '0')}-01`
-                    : new Date().toISOString().split('T')[0]
+            const title = `${data.origin.split('(')[0].trim()} → ${data.destination}`
 
-            const { data: buscaData, error: buscaErr } = await supabase
-                .from('buscas')
+            const { data: conv, error } = await supabase
+                .from('chat_conversations')
                 .insert({
                     user_id: user.id,
-                    origem: data.origin,
-                    destino: data.destination,
-                    data_ida: dateGoFinal,
-                    passageiros: data.passengers,
-                    bagagem: 'sem_bagagem',
-                    user_miles: {},
+                    title,
+                    wizard_data: data,
+                    messages: [],
                 })
                 .select()
                 .single()
 
-            if (buscaErr) throw buscaErr
+            if (error) throw error
 
-            const mocks = generateMockFlights(data.origin, data.destination, dateGoFinal, data.passengers, {})
-            const voosToInsert = mocks.map(m => ({ ...m, busca_id: buscaData.id, user_id: user.id }))
-            await supabase.from('resultados_voos').insert(voosToInsert)
-
-            navigate(`/resultados?buscaId=${buscaData.id}`)
+            navigate(`/chat/${conv.id}`)
         } catch (err: unknown) {
-            setSubmitError(err instanceof Error ? err.message : 'Erro ao processar.')
+            setSubmitError(err instanceof Error ? err.message : 'Erro ao criar conversa.')
             setSubmitting(false)
         }
     }
@@ -130,27 +114,16 @@ export default function SearchWizard() {
         }
     }
 
-    const toggleMonth = (idx: number) => {
-        setData(d => ({
-            ...d,
-            selectedMonths: d.selectedMonths.includes(idx)
-                ? d.selectedMonths.filter(m => m !== idx)
-                : [...d.selectedMonths, idx],
-        }))
-    }
-
     const variants = {
         initial: { y: 40, opacity: 0 },
         animate: { y: 0, opacity: 1 },
         exit: { y: -40, opacity: 0 },
     }
 
-
     const nextDisabled =
         (step === 1 && !data.destination.trim()) ||
         (step === 2 && !data.origin.trim()) ||
-        (step === 3 && data.dateMode === 'exact' && !data.dateGo) ||
-        (step === 3 && data.dateMode === 'month' && data.selectedMonths.length === 0)
+        (step === 3 && !data.dateGo)
 
     return (
         <div className="min-h-screen bg-white text-slate-900 flex flex-col font-sans relative overflow-hidden" style={{ overflowX: 'hidden' }}>
@@ -163,7 +136,6 @@ export default function SearchWizard() {
                     .sw-finish-actions button { width: 100% !important; justify-content: center !important; }
                 }
             `}</style>
-            {/* Subtle background blobs */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
                 <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-[#4a90e2]/6 blur-[140px] rounded-full" />
                 <div className="absolute bottom-[-15%] right-[-10%] w-[45%] h-[45%] bg-[#4a90e2]/5 blur-[120px] rounded-full" />
@@ -174,60 +146,42 @@ export default function SearchWizard() {
                 background: 'rgba(255,255,255,0.90)',
                 backdropFilter: 'blur(12px)',
                 borderBottom: '1px solid rgba(14,42,85,0.07)',
-                position: 'sticky',
-                top: 0,
-                zIndex: 30,
+                position: 'sticky', top: 0, zIndex: 30,
             }}>
                 <div className="sw-header-grid" style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto 1fr',
-                    alignItems: 'center',
-                    height: '72px',
-                    padding: '0 16px',
-                    maxWidth: '960px',
-                    margin: '0 auto',
+                    display: 'grid', gridTemplateColumns: '1fr auto 1fr',
+                    alignItems: 'center', height: '72px',
+                    padding: '0 16px', maxWidth: '960px', margin: '0 auto',
                 }}>
-                    {/* Logo */}
                     <Link to="/home" style={{ justifySelf: 'start', display: 'flex', alignItems: 'center' }}>
                         <img src="/logo.png" alt="FlyWise" style={{ height: '56px', objectFit: 'contain' }} />
                     </Link>
-
-                    {/* Nav icons */}
                     {user && (
                         <nav className="sw-nav" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifySelf: 'center' }}>
                             {NAV_ITEMS.map(item => {
                                 const isActive = location.pathname.startsWith(item.to)
                                 return (
-                                    <Link
-                                        key={item.to}
-                                        to={item.to}
-                                        title={item.label}
-                                        style={{
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            width: '38px', height: '38px', borderRadius: '10px',
-                                            textDecoration: 'none', transition: 'all 0.2s',
-                                            background: isActive ? 'rgba(74,144,226,0.10)' : 'rgba(14,42,85,0.04)',
-                                            color: isActive ? '#4a90e2' : 'var(--text-muted)',
-                                            border: isActive ? '1.5px solid rgba(74,144,226,0.25)' : '1px solid transparent',
-                                        }}
-                                    >
+                                    <Link key={item.to} to={item.to} title={item.label} style={{
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        width: '38px', height: '38px', borderRadius: '10px',
+                                        textDecoration: 'none', transition: 'all 0.2s',
+                                        background: isActive ? 'rgba(74,144,226,0.10)' : 'rgba(14,42,85,0.04)',
+                                        color: isActive ? '#4a90e2' : 'var(--text-muted)',
+                                        border: isActive ? '1.5px solid rgba(74,144,226,0.25)' : '1px solid transparent',
+                                    }}>
                                         {item.icon}
                                     </Link>
                                 )
                             })}
                         </nav>
                     )}
-
-                    {/* Close */}
                     <div style={{ justifySelf: 'end' }}>
-                        <button
-                            onClick={() => navigate('/home')}
-                            style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                width: '36px', height: '36px', borderRadius: '50%',
-                                border: 'none', background: 'rgba(14,42,85,0.06)',
-                                cursor: 'pointer', transition: 'background 0.2s', color: 'var(--text-muted)',
-                            }}
+                        <button onClick={() => navigate('/home')} style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: '36px', height: '36px', borderRadius: '50%',
+                            border: 'none', background: 'rgba(14,42,85,0.06)',
+                            cursor: 'pointer', transition: 'background 0.2s', color: 'var(--text-muted)',
+                        }}
                             onMouseEnter={e => e.currentTarget.style.background = 'rgba(14,42,85,0.10)'}
                             onMouseLeave={e => e.currentTarget.style.background = 'rgba(14,42,85,0.06)'}
                         >
@@ -253,16 +207,14 @@ export default function SearchWizard() {
                                     </h1>
                                     <p className="text-slate-400 text-base">Pode ser uma cidade específica, país ou região.</p>
                                 </div>
-                                <div className="relative">
-                                    <input
-                                        type="text" autoFocus
-                                        placeholder="Ex: Paris, Europa, Maldivas..."
-                                        value={data.destination}
-                                        onChange={e => setData({ ...data, destination: e.target.value })}
-                                        onKeyDown={handleKeyDown}
-                                        className="w-full bg-transparent border-b-2 border-slate-200 focus:border-[#4a90e2] text-3xl md:text-4xl text-slate-900 py-4 outline-none transition-colors placeholder:text-slate-300 font-light"
-                                    />
-                                </div>
+                                <input
+                                    type="text" autoFocus
+                                    placeholder="Ex: Paris, Europa, Maldivas..."
+                                    value={data.destination}
+                                    onChange={e => setData({ ...data, destination: e.target.value })}
+                                    onKeyDown={handleKeyDown}
+                                    className="w-full bg-transparent border-b-2 border-slate-200 focus:border-[#4a90e2] text-3xl md:text-4xl text-slate-900 py-4 outline-none transition-colors placeholder:text-slate-300 font-light"
+                                />
                                 <div className="flex justify-end">
                                     <NextBtn disabled={!data.destination.trim()} onClick={nextStep}>Próximo</NextBtn>
                                 </div>
@@ -280,17 +232,14 @@ export default function SearchWizard() {
                                     </h1>
                                     <p className="text-slate-400 text-base">Normalmente o aeroporto mais próximo de você.</p>
                                 </div>
-                                <div className="relative">
-                                    <input
-                                        type="text" autoFocus
-                                        placeholder="Ex: São Paulo, GRU..."
-                                        value={data.origin}
-                                        onChange={e => setData({ ...data, origin: e.target.value })}
-                                        onKeyDown={handleKeyDown}
-                                        className="w-full bg-transparent border-b-2 border-slate-200 focus:border-[#4a90e2] text-3xl md:text-4xl text-slate-900 py-4 outline-none transition-colors placeholder:text-slate-300 font-light"
-                                    />
-                                </div>
-                                {/* Flexible Toggle */}
+                                <input
+                                    type="text" autoFocus
+                                    placeholder="Ex: São Paulo, GRU..."
+                                    value={data.origin}
+                                    onChange={e => setData({ ...data, origin: e.target.value })}
+                                    onKeyDown={handleKeyDown}
+                                    className="w-full bg-transparent border-b-2 border-slate-200 focus:border-[#4a90e2] text-3xl md:text-4xl text-slate-900 py-4 outline-none transition-colors placeholder:text-slate-300 font-light"
+                                />
                                 <ToggleCard
                                     active={data.flexibleOrigin}
                                     onToggle={() => setData({ ...data, flexibleOrigin: !data.flexibleOrigin })}
@@ -310,70 +259,35 @@ export default function SearchWizard() {
                                     <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight leading-tight">
                                         Quando você pretende <span className="font-semibold text-[#4a90e2]">viajar?</span>
                                     </h1>
-                                    <p className="text-slate-400 text-base">Datas flexíveis podem economizar até 70% no valor das passagens.</p>
+                                    <p className="text-slate-400 text-base">Selecione as datas de ida e volta.</p>
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                                    {[
-                                        { id: 'exact', label: 'Datas Exatas', emoji: '📅', desc: 'Férias definidas' },
-                                        { id: 'month', label: 'Mês Específico', emoji: '🗓️', desc: 'Tenho preferência' },
-                                        { id: 'any', label: 'Qualquer Data', emoji: '🌍', desc: 'Maior flexibilidade' },
-                                    ].map(opt => (
-                                        <OptionCard
-                                            key={opt.id}
-                                            selected={data.dateMode === opt.id}
-                                            onClick={() => setData({ ...data, dateMode: opt.id as any })}
-                                            emoji={opt.emoji}
-                                            label={opt.label}
-                                            desc={opt.desc}
-                                        />
+                                {/* Trip type toggle */}
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    {(['round-trip', 'one-way'] as const).map(type => (
+                                        <button key={type}
+                                            onClick={() => setData({ ...data, tripType: type, dateReturn: type === 'one-way' ? '' : data.dateReturn })}
+                                            style={{
+                                                padding: '8px 18px', borderRadius: '10px', border: 'none',
+                                                fontFamily: 'inherit', fontSize: '14px', fontWeight: 600,
+                                                cursor: 'pointer', transition: 'all 0.2s',
+                                                background: data.tripType === type ? '#4a90e2' : 'rgba(14,42,85,0.06)',
+                                                color: data.tripType === type ? '#fff' : '#64748b',
+                                            }}
+                                        >
+                                            {type === 'round-trip' ? 'Ida e Volta' : 'Só Ida'}
+                                        </button>
                                     ))}
                                 </div>
 
-                                <AnimatePresence mode="popLayout">
-                                    {data.dateMode === 'exact' && (
-                                        <motion.div key="exact-dates"
-                                            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}
-                                            className="grid grid-cols-2 gap-4">
-                                            <DateField label="Ida" value={data.dateGo} onChange={v => setData({ ...data, dateGo: v })} />
-                                            <DateField label="Volta (Opcional)" value={data.dateReturn} onChange={v => setData({ ...data, dateReturn: v })} />
-                                        </motion.div>
-                                    )}
-
-                                    {data.dateMode === 'month' && (
-                                        <motion.div key="month-picker"
-                                            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}
-                                            className="flex flex-col gap-3">
-                                            <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Selecione um ou mais meses</p>
-                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                                                {MONTHS.map((m, idx) => {
-                                                    const sel = data.selectedMonths.includes(idx)
-                                                    return (
-                                                        <button key={idx} onClick={() => toggleMonth(idx)}
-                                                            className={`relative py-3 px-2 rounded-xl text-sm font-medium border-2 transition-all duration-200 ${sel ? 'border-[#4a90e2] bg-[#4a90e2]/8 text-[#4a90e2]' : 'border-slate-200 text-slate-600 hover:border-[#4a90e2]/50 hover:bg-[#4a90e2]/5'}`}
-                                                            style={{ background: sel ? 'rgba(74,144,226,0.08)' : undefined }}
-                                                        >
-                                                            {sel && (
-                                                                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[#4a90e2] flex items-center justify-center">
-                                                                    <Check className="w-2.5 h-2.5 text-white" />
-                                                                </span>
-                                                            )}
-                                                            {m}
-                                                        </button>
-                                                    )
-                                                })}
-                                            </div>
-                                        </motion.div>
-                                    )}
-
-                                    {data.dateMode === 'any' && (
-                                        <motion.div key="any-msg"
-                                            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}
-                                            className="p-5 rounded-2xl border border-[#4a90e2]/30 bg-[#4a90e2]/5 text-[#357abd] text-base font-medium">
-                                            🎯 Perfeito! Vamos encontrar a janela mais barata do próximo ano para o seu destino.
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
+                                {/* DateRangePicker — igual ao busca normal */}
+                                <DateRangePicker
+                                    dateGo={data.dateGo}
+                                    dateBack={data.dateReturn}
+                                    tripType={data.tripType}
+                                    onDateGoChange={v => setData({ ...data, dateGo: v })}
+                                    onDateBackChange={v => setData({ ...data, dateReturn: v })}
+                                />
 
                                 <WizardNav onBack={prevStep} onNext={nextStep} nextDisabled={nextDisabled} />
                             </motion.div>
@@ -384,11 +298,9 @@ export default function SearchWizard() {
                             <motion.div key="step4" variants={variants} initial="initial" animate="animate" exit="exit"
                                 transition={{ duration: 0.35, ease: 'easeOut' }} className="flex flex-col gap-8">
                                 <StepDots current={step} total={TOTAL_STEPS} />
-                                <div className="flex flex-col gap-3">
-                                    <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight leading-tight">
-                                        Quem vai <span className="font-semibold text-[#4a90e2]">viajar?</span>
-                                    </h1>
-                                </div>
+                                <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight leading-tight">
+                                    Quem vai <span className="font-semibold text-[#4a90e2]">viajar?</span>
+                                </h1>
 
                                 {/* Passenger counter */}
                                 <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-200 bg-slate-50">
@@ -397,19 +309,15 @@ export default function SearchWizard() {
                                         <p className="text-slate-500 text-sm mt-0.5">Número de adultos</p>
                                     </div>
                                     <div className="flex items-center gap-4">
-                                        <button
-                                            onClick={() => setData(d => ({ ...d, passengers: Math.max(1, d.passengers - 1) }))}
+                                        <button onClick={() => setData(d => ({ ...d, passengers: Math.max(1, d.passengers - 1) }))}
                                             disabled={data.passengers <= 1}
-                                            className="w-10 h-10 rounded-xl border-2 border-slate-200 flex items-center justify-center text-slate-500 hover:border-[#4a90e2] hover:text-[#4a90e2] disabled:opacity-30 transition-all"
-                                        >
+                                            className="w-10 h-10 rounded-xl border-2 border-slate-200 flex items-center justify-center text-slate-500 hover:border-[#4a90e2] hover:text-[#4a90e2] disabled:opacity-30 transition-all">
                                             <Minus className="w-4 h-4" />
                                         </button>
                                         <span className="text-2xl font-semibold text-slate-800 w-8 text-center">{data.passengers}</span>
-                                        <button
-                                            onClick={() => setData(d => ({ ...d, passengers: Math.min(9, d.passengers + 1) }))}
+                                        <button onClick={() => setData(d => ({ ...d, passengers: Math.min(9, d.passengers + 1) }))}
                                             disabled={data.passengers >= 9}
-                                            className="w-10 h-10 rounded-xl border-2 border-slate-200 flex items-center justify-center text-slate-500 hover:border-[#4a90e2] hover:text-[#4a90e2] disabled:opacity-30 transition-all"
-                                        >
+                                            className="w-10 h-10 rounded-xl border-2 border-slate-200 flex items-center justify-center text-slate-500 hover:border-[#4a90e2] hover:text-[#4a90e2] disabled:opacity-30 transition-all">
                                             <Plus className="w-4 h-4" />
                                         </button>
                                     </div>
@@ -423,8 +331,7 @@ export default function SearchWizard() {
                                             const sel = data.cabinClass === c.id
                                             return (
                                                 <button key={c.id} onClick={() => setData({ ...data, cabinClass: c.id })}
-                                                    className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all duration-200 ${sel ? 'border-[#4a90e2] bg-[#4a90e2]/5' : 'border-slate-200 hover:border-slate-300 bg-white'}`}
-                                                >
+                                                    className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all duration-200 ${sel ? 'border-[#4a90e2] bg-[#4a90e2]/5' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
                                                     <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center mt-0.5 transition-all ${sel ? 'border-[#4a90e2] bg-[#4a90e2]' : 'border-slate-300'}`}>
                                                         {sel && <Check className="w-3 h-3 text-white" />}
                                                     </div>
@@ -442,7 +349,7 @@ export default function SearchWizard() {
                             </motion.div>
                         )}
 
-                        {/* STEP 5: HACKER MODE */}
+                        {/* STEP 5: STRATEGY + OBSERVATIONS */}
                         {step === 5 && (
                             <motion.div key="step5" variants={variants} initial="initial" animate="animate" exit="exit"
                                 transition={{ duration: 0.35, ease: 'easeOut' }} className="flex flex-col gap-8">
@@ -451,7 +358,7 @@ export default function SearchWizard() {
                                     <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight leading-tight">
                                         Qual é a sua <span className="font-semibold text-[#4a90e2]">estratégia?</span>
                                     </h1>
-                                    <p className="text-slate-400 text-base">Escolha o perfil da sua busca. Você pode mudar depois.</p>
+                                    <p className="text-slate-400 text-base">Escolha o perfil e diga tudo o que a IA precisa saber.</p>
                                 </div>
 
                                 <div className="flex flex-col gap-3">
@@ -460,8 +367,7 @@ export default function SearchWizard() {
                                         return (
                                             <button key={m.id}
                                                 onClick={() => setData({ ...data, hackerMode: m.id as any })}
-                                                className={`flex items-center gap-4 p-5 rounded-2xl border-2 text-left transition-all duration-200 ${sel ? 'border-[#4a90e2] bg-[#4a90e2]/5 shadow-[0_8px_24px_rgba(74,144,226,0.12)]' : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'}`}
-                                            >
+                                                className={`flex items-center gap-4 p-5 rounded-2xl border-2 text-left transition-all duration-200 ${sel ? 'border-[#4a90e2] bg-[#4a90e2]/5 shadow-[0_8px_24px_rgba(74,144,226,0.12)]' : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'}`}>
                                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-all ${sel ? 'bg-[#4a90e2] text-white' : 'bg-slate-100 text-slate-400'}`}>
                                                     {m.icon}
                                                 </div>
@@ -477,6 +383,31 @@ export default function SearchWizard() {
                                     })}
                                 </div>
 
+                                {/* Observations */}
+                                <div className="flex flex-col gap-2">
+                                    <label style={{ fontSize: '13px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                        Observações e pedidos <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional)</span>
+                                    </label>
+                                    <textarea
+                                        rows={4}
+                                        placeholder="Ex: Tenho 80.000 pontos Smiles, prefiro voo direto, posso viajar qualquer dia do mês, quero ir com minha esposa em lua de mel..."
+                                        value={data.observations}
+                                        onChange={e => setData({ ...data, observations: e.target.value })}
+                                        style={{
+                                            width: '100%', padding: '14px 16px', borderRadius: '14px',
+                                            border: '2px solid #e2e8f0', fontFamily: 'inherit',
+                                            fontSize: '14px', color: '#1e293b', lineHeight: 1.6,
+                                            resize: 'vertical', outline: 'none', transition: 'border-color 0.2s',
+                                            background: '#fafafa', boxSizing: 'border-box',
+                                        }}
+                                        onFocus={e => e.currentTarget.style.borderColor = '#4a90e2'}
+                                        onBlur={e => e.currentTarget.style.borderColor = '#e2e8f0'}
+                                    />
+                                    <p style={{ fontSize: '12px', color: '#94a3b8' }}>
+                                        Quanto mais detalhar, mais precisa será a análise da IA.
+                                    </p>
+                                </div>
+
                                 {submitError && (
                                     <p className="text-sm text-red-500 font-medium">{submitError}</p>
                                 )}
@@ -490,9 +421,9 @@ export default function SearchWizard() {
                                         className="flex items-center gap-2 bg-gradient-to-r from-[#4a90e2] to-[#1a5db5] hover:from-[#357abd] hover:to-[#154fa0] text-white disabled:opacity-60 disabled:cursor-not-allowed rounded-full px-8 py-4 text-base font-semibold shadow-[0_4px_20px_rgba(74,144,226,0.4)] transition-all"
                                     >
                                         {submitting ? (
-                                            <><Loader2 className="w-4 h-4 animate-spin" /> Analisando...</>
+                                            <><Loader2 className="w-4 h-4 animate-spin" /> Criando chat...</>
                                         ) : (
-                                            <>Analisar Estratégia ✨ <ArrowRight className="w-4 h-4" /></>
+                                            <>Iniciar Chat com IA ✨ <ArrowRight className="w-4 h-4" /></>
                                         )}
                                     </button>
                                 </div>
@@ -506,8 +437,6 @@ export default function SearchWizard() {
     )
 }
 
-// ─── Step Dots Progress ──────────────────────────────────────────────────────
-
 function StepDots({ current, total }: { current: number; total: number }) {
     return (
         <div className="flex flex-col gap-2">
@@ -516,19 +445,10 @@ function StepDots({ current, total }: { current: number; total: number }) {
                     const done = i + 1 < current
                     const active = i + 1 === current
                     return (
-                        <motion.div
-                            key={i}
-                            animate={{
-                                width: active ? 28 : 8,
-                                opacity: done ? 0.45 : active ? 1 : 0.2,
-                            }}
+                        <motion.div key={i}
+                            animate={{ width: active ? 28 : 8, opacity: done ? 0.45 : active ? 1 : 0.2 }}
                             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                            style={{
-                                height: 8,
-                                borderRadius: 999,
-                                background: '#4a90e2',
-                                flexShrink: 0,
-                            }}
+                            style={{ height: 8, borderRadius: 999, background: '#4a90e2', flexShrink: 0 }}
                         />
                     )
                 })}
@@ -538,35 +458,19 @@ function StepDots({ current, total }: { current: number; total: number }) {
     )
 }
 
-// ─── Next Button ─────────────────────────────────────────────────────────────
-
-function NextBtn({ onClick, disabled, children, gradient = false }: {
-    onClick: () => void
-    disabled: boolean
-    children: React.ReactNode
-    gradient?: boolean
-}) {
+function NextBtn({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: React.ReactNode }) {
     return (
-        <button
-            onClick={onClick}
-            disabled={disabled}
-            style={{
-                display: 'inline-flex', alignItems: 'center', gap: '8px',
-                padding: '14px 28px',
-                borderRadius: '14px',
-                fontSize: '15px', fontWeight: 600, letterSpacing: '0.01em',
-                color: '#fff',
-                background: gradient
-                    ? 'linear-gradient(135deg, #4a90e2 0%, #1a5db5 100%)'
-                    : '#4a90e2',
-                border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
-                opacity: disabled ? 0.4 : 1,
-                boxShadow: disabled ? 'none' : '0 4px 14px rgba(74,144,226,0.35)',
-                transition: 'all 0.18s ease',
-            }}
-            onMouseEnter={e => { if (!disabled) e.currentTarget.style.boxShadow = '0 6px 20px rgba(74,144,226,0.45)'; if (!disabled) e.currentTarget.style.transform = 'translateY(-1px)' }}
+        <button onClick={onClick} disabled={disabled} style={{
+            display: 'inline-flex', alignItems: 'center', gap: '8px',
+            padding: '14px 28px', borderRadius: '14px',
+            fontSize: '15px', fontWeight: 600, color: '#fff', background: '#4a90e2',
+            border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled ? 0.4 : 1,
+            boxShadow: disabled ? 'none' : '0 4px 14px rgba(74,144,226,0.35)',
+            transition: 'all 0.18s ease',
+        }}
+            onMouseEnter={e => { if (!disabled) { e.currentTarget.style.boxShadow = '0 6px 20px rgba(74,144,226,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)' } }}
             onMouseLeave={e => { e.currentTarget.style.boxShadow = disabled ? 'none' : '0 4px 14px rgba(74,144,226,0.35)'; e.currentTarget.style.transform = 'none' }}
-            onMouseDown={e => { if (!disabled) e.currentTarget.style.transform = 'translateY(0px)' }}
         >
             {children}
             <ArrowRight style={{ width: 16, height: 16, flexShrink: 0 }} />
@@ -574,23 +478,14 @@ function NextBtn({ onClick, disabled, children, gradient = false }: {
     )
 }
 
-// ─── Back Button ─────────────────────────────────────────────────────────────
-
 function BackBtn({ onClick }: { onClick: () => void }) {
     return (
-        <button
-            onClick={onClick}
-            style={{
-                display: 'inline-flex', alignItems: 'center', gap: '6px',
-                padding: '14px 20px',
-                borderRadius: '14px',
-                fontSize: '15px', fontWeight: 500,
-                color: '#94a3b8',
-                background: 'transparent',
-                border: '1.5px solid #e2e8f0',
-                cursor: 'pointer',
-                transition: 'all 0.18s ease',
-            }}
+        <button onClick={onClick} style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            padding: '14px 20px', borderRadius: '14px', fontSize: '15px', fontWeight: 500,
+            color: '#94a3b8', background: 'transparent', border: '1.5px solid #e2e8f0',
+            cursor: 'pointer', transition: 'all 0.18s ease',
+        }}
             onMouseEnter={e => { e.currentTarget.style.color = '#475569'; e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#f8fafc' }}
             onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = 'transparent' }}
         >
@@ -599,50 +494,31 @@ function BackBtn({ onClick }: { onClick: () => void }) {
     )
 }
 
-function WizardNav({ onBack, onNext, nextDisabled, nextLabel = 'Próximo', nextClassName = '' }: {
-    onBack: () => void
-    onNext: () => void
-    nextDisabled: boolean
-    nextLabel?: string
-    nextClassName?: string
-}) {
+function WizardNav({ onBack, onNext, nextDisabled }: { onBack: () => void; onNext: () => void; nextDisabled: boolean }) {
     return (
         <div className="flex justify-between items-center mt-2">
             <BackBtn onClick={onBack} />
-            <NextBtn onClick={onNext} disabled={nextDisabled} gradient={nextClassName.includes('gradient')}>{nextLabel}</NextBtn>
+            <NextBtn onClick={onNext} disabled={nextDisabled}>Próximo</NextBtn>
         </div>
     )
 }
 
-// ─── Toggle Card ─────────────────────────────────────────────────────────────
-
-function ToggleCard({ active, onToggle, title, desc }: {
-    active: boolean; onToggle: () => void; title: string; desc: string
-}) {
+function ToggleCard({ active, onToggle, title, desc }: { active: boolean; onToggle: () => void; title: string; desc: string }) {
     return (
-        <div
-            onClick={onToggle}
-            style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '18px 20px',
-                borderRadius: '16px',
-                border: active ? '1.5px solid rgba(74,144,226,0.6)' : '1.5px solid #e2e8f0',
-                background: active ? 'rgba(74,144,226,0.05)' : '#fafafa',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                gap: '16px',
-            }}
-        >
+        <div onClick={onToggle} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '18px 20px', borderRadius: '16px',
+            border: active ? '1.5px solid rgba(74,144,226,0.6)' : '1.5px solid #e2e8f0',
+            background: active ? 'rgba(74,144,226,0.05)' : '#fafafa',
+            cursor: 'pointer', transition: 'all 0.2s', gap: '16px',
+        }}>
             <div style={{ flex: 1 }}>
                 <p style={{ fontWeight: 600, fontSize: '15px', color: active ? '#4a90e2' : '#1e293b', margin: 0 }}>{title}</p>
                 <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: '3px' }}>{desc}</p>
             </div>
             <div style={{
-                width: 44, height: 26, borderRadius: 999,
-                background: active ? '#4a90e2' : '#cbd5e1',
-                padding: 3, flexShrink: 0,
-                transition: 'background 0.25s',
-                position: 'relative',
+                width: 44, height: 26, borderRadius: 999, background: active ? '#4a90e2' : '#cbd5e1',
+                padding: 3, flexShrink: 0, transition: 'background 0.25s', position: 'relative',
             }}>
                 <motion.div
                     style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }}
@@ -650,60 +526,6 @@ function ToggleCard({ active, onToggle, title, desc }: {
                     transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                 />
             </div>
-        </div>
-    )
-}
-
-
-// ─── Option Card ─────────────────────────────────────────────────────────────
-
-function OptionCard({ selected, onClick, emoji, label, desc }: {
-    selected: boolean; onClick: () => void; emoji: string; label: string; desc: string
-}) {
-    return (
-        <button
-            onClick={onClick}
-            style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                gap: '10px', padding: '18px 16px',
-                borderRadius: '16px',
-                border: selected ? '1.5px solid rgba(74,144,226,0.7)' : '1.5px solid #e2e8f0',
-                background: selected ? 'rgba(74,144,226,0.06)' : '#fff',
-                cursor: 'pointer', textAlign: 'left',
-                boxShadow: selected ? '0 4px 18px rgba(74,144,226,0.12)' : '0 1px 4px rgba(14,42,85,0.04)',
-                transition: 'all 0.2s ease',
-                width: '100%',
-            }}
-        >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                <span style={{ fontSize: '22px', lineHeight: '1' }}>{emoji}</span>
-                <div style={{
-                    width: 20, height: 20, borderRadius: '50%',
-                    border: selected ? '2px solid #4a90e2' : '2px solid #cbd5e1',
-                    background: selected ? '#4a90e2' : 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'all 0.2s', flexShrink: 0,
-                }}>
-                    {selected && <Check style={{ width: 11, height: 11, color: '#fff', strokeWidth: 3 }} />}
-                </div>
-            </div>
-            <p style={{ fontWeight: 600, fontSize: '14px', color: selected ? '#4a90e2' : '#1e293b', margin: 0, lineHeight: '1.3' }}>{label}</p>
-            <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, lineHeight: '1.5' }}>{desc}</p>
-        </button>
-    )
-}
-
-
-function DateField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-    return (
-        <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label}</label>
-            <input
-                type="date"
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                className="w-full bg-slate-50 border-2 border-slate-200 focus:border-[#4a90e2] rounded-xl px-4 py-3 text-slate-700 outline-none transition-all text-sm"
-            />
         </div>
     )
 }

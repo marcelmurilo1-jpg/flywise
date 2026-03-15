@@ -187,7 +187,7 @@ export default function Home() {
                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(74,144,226,0.05)' }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
                         >
-                            ✨ Busca Inteligente
+                            ✨ Busca Inteligente IA
                         </button>
 
                         {error && <p style={{ fontSize: '13px', color: '#f87171', textAlign: 'center', margin: 0 }}>{error}</p>}
