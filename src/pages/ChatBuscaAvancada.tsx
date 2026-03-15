@@ -150,11 +150,11 @@ export default function ChatBuscaAvancada() {
     const w = conv?.wizard_data as any
 
     return (
-        <div style={{ minHeight: '100vh', background: '#F8FAFF', fontFamily: 'Manrope, system-ui, sans-serif', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ height: '100dvh', background: '#F8FAFF', fontFamily: 'Manrope, system-ui, sans-serif', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <Header variant="app" />
 
             {/* Chat container */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', maxWidth: '760px', width: '100%', margin: '0 auto', padding: '0 16px', paddingBottom: '0' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', maxWidth: '760px', width: '100%', margin: '0 auto', padding: '0 16px', paddingBottom: '0', minHeight: 0 }}>
 
                 {/* Top bar */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '20px 0 16px' }}>
