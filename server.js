@@ -565,11 +565,20 @@ function mapToFlightOffer(item, origin, destination, date, idx) {
 }
 
 // ── Fase 5: Cache em memória para Google Flights (TTL 4h) ─────────────────────
-const _gfCache = new Map(); // key → { data, inbound, expiresAt }
+const _gfCache = new Map();    // key → { data, inbound, expiresAt }
+const _gfInflight = new Map(); // key → Promise (deduplicação de requests simultâneos)
 const GF_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 horas
 
 function gfCacheKey(origin, dest, date, returnDate) {
     return `${origin}|${dest}|${date}|${returnDate ?? ''}`;
+}
+
+async function doScrape(origin, destination, date, returnDate) {
+    const rawOut = await scrapeOneway(origin, destination, date);
+    const rawIn = returnDate ? await scrapeOneway(destination, origin, returnDate) : [];
+    const outbound = rawOut.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
+    const inbound  = rawIn.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
+    return { outbound, inbound };
 }
 
 // GET /api/amadeus/flights — scraper do Google Flights (ida e volta em paralelo)
@@ -581,32 +590,43 @@ app.get('/api/amadeus/flights', async (req, res) => {
     }
 
     const cacheKey = gfCacheKey(origin, destination, date, returnDate);
+
+    // 1. Cache hit
     const cached = _gfCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
         console.log(`[GFlights] Cache hit (${origin}→${destination} ${date}) — ${cached.data.length} voos`);
         return res.json({ data: cached.data, inbound: cached.inbound, meta: { count: cached.data.length, source: 'cache' } });
     }
 
+    // 2. Deduplicação: se já há um scrape em andamento para esta chave, aguarda ele
+    if (_gfInflight.has(cacheKey)) {
+        console.log(`[GFlights] Dedup hit (${origin}→${destination} ${date}) — aguardando scrape em andamento`);
+        try {
+            const { outbound, inbound } = await _gfInflight.get(cacheKey);
+            return res.json({ data: outbound, inbound, meta: { count: outbound.length, source: 'dedup' } });
+        } catch (err) {
+            return res.status(500).json({ errors: [{ detail: err.message }] });
+        }
+    }
+
+    // 3. Novo scrape — registra promise no mapa de in-flight
     console.log(`[GFlights] Buscando ${origin}→${destination} em ${date}${returnDate ? ` | volta ${destination}→${origin} em ${returnDate}` : ''}`);
 
+    const promise = doScrape(origin, destination, date, returnDate)
+        .then(result => {
+            const { outbound } = result;
+            if (outbound.length > 0) {
+                _gfCache.set(cacheKey, { data: outbound, inbound: result.inbound, expiresAt: Date.now() + GF_CACHE_TTL_MS });
+            }
+            console.log(`[GFlights] Ida: ${outbound.length} | Volta: ${result.inbound.length}`);
+            return result;
+        })
+        .finally(() => _gfInflight.delete(cacheKey));
+
+    _gfInflight.set(cacheKey, promise);
+
     try {
-        // Scrape sequencial para economizar memória (Render free = 512MB, 2x Chromium = OOM)
-        const rawOut = await scrapeOneway(origin, destination, date);
-        const rawIn = returnDate ? await scrapeOneway(destination, origin, returnDate) : [];
-
-        // Outbound: filtra voos sem preço (geralmente resultados inválidos)
-        // Inbound: NÃO filtra por preço — em buscas round-trip o Google Flights
-        // muitas vezes não mostra preço individual nos cards de volta
-        const outbound = rawOut.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
-        const inbound  = rawIn.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
-
-        console.log(`[GFlights] Ida: ${outbound.length} | Volta: ${inbound.length}`);
-
-        // Salva no cache apenas se encontrou voos
-        if (outbound.length > 0) {
-            _gfCache.set(cacheKey, { data: outbound, inbound, expiresAt: Date.now() + GF_CACHE_TTL_MS });
-        }
-
+        const { outbound, inbound } = await promise;
         res.json({ data: outbound, inbound, meta: { count: outbound.length, source: 'google-flights-scraper' } });
     } catch (err) {
         console.error('[GFlights] Erro:', err.message);
