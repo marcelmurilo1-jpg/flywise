@@ -194,6 +194,7 @@ export const MILES_CLUBS: MilesClub[] = [
         description: 'Clube Livelo gratuito (via Bradesco/BB/Santander) com transferência imediata; planos pagos com pontos mensais garantidos e benefícios extras',
         tiers: [
             { name: 'Clube Livelo Grátis', monthlyFee: 'Gratuito (via banco parceiro)', bonusLabel: 'Transferência imediata para aéreas' },
+            { name: 'Clube Mini', monthlyFee: 'R$ 19,90/mês · 500 pts', bonusLabel: 'Pontos mensais + benefícios clube' },
             { name: 'Clube Classic', monthlyFee: 'R$ 44,90/mês · 1.000 pts', bonusLabel: 'Pontos mensais + benefícios clube' },
             { name: 'Clube Special', monthlyFee: 'R$ 87,90/mês · 2.000 pts', bonusLabel: 'Pontos mensais + benefícios clube' },
             { name: 'Clube Plus', monthlyFee: 'R$ 129,90/mês · 3.000 pts', bonusLabel: 'Pontos mensais + benefícios clube' },
