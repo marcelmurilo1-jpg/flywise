@@ -88,7 +88,7 @@ export default function ChatBuscaAvancada() {
         setAiTyping(true)
         try {
             const { data: { session } } = await supabase.auth.getSession()
-            const token = session?.access_token
+            const token = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY
 
             const controller = new AbortController()
             const timer = setTimeout(() => controller.abort(), 45000)
