@@ -653,37 +653,55 @@ export default function Landing() {
         badge: string
         badgeColor: string
         badgeBg: string
+        categoria: string
     }>>([])
 
     useEffect(() => {
-        supabase
-            .from('promocoes')
-            .select('titulo, programas_tags, subcategoria, categoria, valid_until, created_at')
-            .in('categoria', ['passagens', 'transferencia', 'clube'])
-            .or('valid_until.is.null,valid_until.gt.' + new Date().toISOString())
-            .order('created_at', { ascending: false })
-            .limit(4)
-            .then(({ data }) => {
-                if (!data?.length) return
-                const now = Date.now()
-                setAlertCards(data.map(p => {
-                    const prog = p.programas_tags?.[0]
-                        ?? (p.subcategoria === 'clube' ? 'Clube' : p.categoria === 'passagens' ? 'Passagens' : 'Milhas')
-                    const created = new Date(p.created_at).getTime()
-                    const diffMin = Math.round((now - created) / 60000)
-                    const time = diffMin < 2 ? 'agora mesmo'
-                        : diffMin < 60 ? `${diffMin} min atrás`
-                        : diffMin < 1440 ? `${Math.round(diffMin / 60)}h atrás`
-                        : `${Math.round(diffMin / 1440)}d atrás`
-                    const isUrgent = p.valid_until && (new Date(p.valid_until).getTime() - now) < 86400000
-                    const isClube = p.subcategoria === 'clube' || p.categoria === 'clube'
-                    const isTransfer = p.categoria === 'transferencia'
-                    const badge = isUrgent ? 'Urgente' : isClube ? 'Clube' : isTransfer ? 'Transferência' : 'Passagem'
-                    const badgeColor = isUrgent ? '#F87171' : isClube ? '#A78BFA' : isTransfer ? '#34D399' : '#60A5FA'
-                    const badgeBg = isUrgent ? 'rgba(248,113,113,0.15)' : isClube ? 'rgba(167,139,250,0.15)' : isTransfer ? 'rgba(52,211,153,0.15)' : 'rgba(96,165,250,0.15)'
-                    return { prog, deal: p.titulo ?? 'Promoção disponível', time, badge, badgeColor, badgeBg }
-                }))
-            })
+        const CACHE_KEY = 'fw_alert_cards_v1'
+        const today = new Date().toISOString().split('T')[0]
+        try {
+            const raw = localStorage.getItem(CACHE_KEY)
+            if (raw) {
+                const { date, cards } = JSON.parse(raw)
+                if (date === today && cards?.length) { setAlertCards(cards); return }
+            }
+        } catch {}
+
+        const now = Date.now()
+        const makeCard = (p: Record<string, unknown>, cat: string) => {
+            const tags = p.programas_tags as string[] | null
+            const prog = tags?.[0] ?? (cat === 'clube' ? 'Clube' : cat === 'passagens' ? 'Passagens' : 'Milhas')
+            const created = new Date(p.created_at as string).getTime()
+            const diffMin = Math.round((now - created) / 60000)
+            const time = diffMin < 2 ? 'agora mesmo'
+                : diffMin < 60 ? `${diffMin} min atrás`
+                : diffMin < 1440 ? `${Math.round(diffMin / 60)}h atrás`
+                : `${Math.round(diffMin / 1440)}d atrás`
+            const validUntil = p.valid_until as string | null
+            const isUrgent = validUntil && (new Date(validUntil).getTime() - now) < 86400000
+            const badge = isUrgent ? 'Urgente' : cat === 'clube' ? 'Clube' : cat === 'transferencia' ? 'Transferência' : 'Passagem'
+            const badgeColor = isUrgent ? '#F87171' : cat === 'clube' ? '#A78BFA' : cat === 'transferencia' ? '#34D399' : '#60A5FA'
+            const badgeBg = isUrgent ? 'rgba(248,113,113,0.15)' : cat === 'clube' ? 'rgba(167,139,250,0.15)' : cat === 'transferencia' ? 'rgba(52,211,153,0.15)' : 'rgba(96,165,250,0.15)'
+            return { prog, deal: (p.titulo as string) ?? 'Promoção disponível', time, badge, badgeColor, badgeBg, categoria: cat }
+        }
+
+        const base = 'valid_until.is.null,valid_until.gt.' + new Date().toISOString()
+        const sel = 'titulo, programas_tags, subcategoria, categoria, valid_until, created_at'
+        Promise.all([
+            supabase.from('promocoes').select(sel).eq('categoria', 'passagens').or(base).order('created_at', { ascending: false }).limit(1),
+            supabase.from('promocoes').select(sel).eq('categoria', 'transferencia').or(base).order('created_at', { ascending: false }).limit(1),
+            supabase.from('promocoes').select(sel).in('categoria', ['clube']).or(base).order('created_at', { ascending: false }).limit(1),
+        ]).then(([r1, r2, r3]) => {
+            const cards = [
+                ...(r1.data ?? []).map(p => makeCard(p as Record<string, unknown>, 'passagens')),
+                ...(r2.data ?? []).map(p => makeCard(p as Record<string, unknown>, 'transferencia')),
+                ...(r3.data ?? []).map(p => makeCard(p as Record<string, unknown>, 'clube')),
+            ]
+            if (cards.length > 0) {
+                setAlertCards(cards)
+                try { localStorage.setItem(CACHE_KEY, JSON.stringify({ date: today, cards })) } catch {}
+            }
+        })
     }, [])
 
     const switchToAnual = useCallback(() => {
@@ -1056,43 +1074,41 @@ export default function Landing() {
                                 <span style={{ fontSize: '13px', fontWeight: 800, color: '#fff' }}>WhatsApp</span>
                             </div>
                         </div>
-                        {(alertCards.length > 0 ? alertCards : [
-                            { prog: 'Smiles', deal: 'GRU → MIA · 29.000 pts · Econômica Ida e Volta', time: 'agora mesmo', badge: 'Passagem', badgeColor: '#60A5FA', badgeBg: 'rgba(96,165,250,0.15)' },
-                            { prog: 'Itaú Iupp → Smiles', deal: 'Bônus 100% na transferência · só hoje 23:59', time: '12 min atrás', badge: 'Urgente', badgeColor: '#F87171', badgeBg: 'rgba(248,113,113,0.15)' },
-                            { prog: 'Clube Smiles', deal: 'Plano 1k com 70% de bônus · válido até 31/03', time: '1h atrás', badge: 'Clube', badgeColor: '#A78BFA', badgeBg: 'rgba(167,139,250,0.15)' },
-                            { prog: 'LATAM Pass', deal: 'GRU → EZE ida e volta · 25.000 pts · Econômica', time: '3h atrás', badge: 'Passagem', badgeColor: '#60A5FA', badgeBg: 'rgba(96,165,250,0.15)' },
-                        ]).map((n, i) => (
-                            <motion.div
-                                key={i}
-                                initial={{ opacity: 0, x: 20 }}
-                                whileInView={{ opacity: 1, x: 0 }}
-                                whileHover={{ scale: 1.025, y: -3, boxShadow: '0 8px 32px rgba(0,0,0,0.25)', transition: { type: 'tween', duration: 0.4, delay: 0 } }}
-                                transition={{ delay: i * 0.08, duration: 0.4 }}
-                                viewport={{ once: true }}
-                                style={{
-                                    background: 'rgba(255,255,255,0.05)',
-                                    border: '1px solid rgba(255,255,255,0.09)',
-                                    borderRadius: '14px',
-                                    padding: '16px 18px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '14px',
-                                    cursor: 'pointer',
-                                }}
-                            >
-                                <div style={{ width: '40px', height: '40px', borderRadius: '11px', background: 'rgba(96,165,250,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                    <Bell size={18} color="#60A5FA" />
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
-                                        <span style={{ fontWeight: 700, color: '#fff', fontSize: '13.5px' }}>{n.prog}</span>
-                                        <span style={{ fontSize: '10px', fontWeight: 700, color: n.badgeColor, background: n.badgeBg, padding: '2px 8px', borderRadius: '999px', flexShrink: 0 }}>{n.badge}</span>
+                        {([
+                            { key: 'passagens',    label: 'Passagens Aéreas',      color: '#60A5FA', fallback: { prog: 'Smiles',            deal: 'GRU → MIA · 29.000 pts · Econômica I+V',         time: 'agora mesmo',  badge: 'Passagem',      badgeColor: '#60A5FA', badgeBg: 'rgba(96,165,250,0.15)',   categoria: 'passagens'    } },
+                            { key: 'transferencia', label: 'Bônus de Transferência', color: '#34D399', fallback: { prog: 'Itaú Iupp → Smiles', deal: 'Bônus 100% na transferência · só hoje 23:59',    time: '12 min atrás', badge: 'Urgente',       badgeColor: '#F87171', badgeBg: 'rgba(248,113,113,0.15)', categoria: 'transferencia' } },
+                            { key: 'clube',        label: 'Promoções de Clube',     color: '#A78BFA', fallback: { prog: 'Clube Smiles',        deal: 'Plano 1k com 70% de bônus · válido até 31/03',    time: '1h atrás',     badge: 'Clube',         badgeColor: '#A78BFA', badgeBg: 'rgba(167,139,250,0.15)', categoria: 'clube'        } },
+                        ]).map((cat, ci) => {
+                            const card = alertCards.find(c => c.categoria === cat.key) ?? cat.fallback
+                            return (
+                                <div key={cat.key}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, marginTop: ci > 0 ? 4 : 0 }}>
+                                        <div style={{ width: 3, height: 13, borderRadius: 2, background: cat.color, flexShrink: 0 }} />
+                                        <span style={{ fontSize: 10.5, fontWeight: 700, color: cat.color, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{cat.label}</span>
                                     </div>
-                                    <div className="landing-alert-deal" style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.deal}</div>
+                                    <motion.div
+                                        initial={{ opacity: 0, x: 20 }}
+                                        whileInView={{ opacity: 1, x: 0 }}
+                                        whileHover={{ scale: 1.025, y: -3, boxShadow: '0 8px 32px rgba(0,0,0,0.25)', transition: { type: 'tween', duration: 0.3, delay: 0 } }}
+                                        transition={{ delay: ci * 0.1, duration: 0.4 }}
+                                        viewport={{ once: true }}
+                                        style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${cat.color}30`, borderRadius: '14px', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '13px', cursor: 'pointer' }}
+                                    >
+                                        <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: `${cat.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Bell size={17} color={cat.color} />
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '4px' }}>
+                                                <span style={{ fontWeight: 700, color: '#fff', fontSize: '13px' }}>{card.prog}</span>
+                                                <span style={{ fontSize: '10px', fontWeight: 700, color: card.badgeColor, background: card.badgeBg, padding: '2px 8px', borderRadius: '999px', flexShrink: 0 }}>{card.badge}</span>
+                                            </div>
+                                            <div className="landing-alert-deal" style={{ fontSize: '12px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{card.deal}</div>
+                                        </div>
+                                        <div className="landing-alert-time" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.30)', flexShrink: 0 }}>{card.time}</div>
+                                    </motion.div>
                                 </div>
-                                <div className="landing-alert-time" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.30)', flexShrink: 0 }}>{n.time}</div>
-                            </motion.div>
-                        ))}
+                            )
+                        })}
                         <div style={{ textAlign: 'center', marginTop: '8px' }}>
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', color: 'rgba(255,255,255,0.35)', fontSize: '12px' }}>
                                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#34D399', flexShrink: 0 }} />
