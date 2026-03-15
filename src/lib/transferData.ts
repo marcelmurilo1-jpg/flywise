@@ -201,8 +201,12 @@ export const MILES_CLUBS: MilesClub[] = [
 ]
 
 // ─── Cartões ─────────────────────────────────────────────────────────────────
-// Fontes: Passageiro de Primeira, Melhores Destinos (mar/2026)
-// Ratios: transferência 1:1 para os principais programas.
+// Fontes: Passageiro de Primeira, Melhores Destinos, pontoatel.com.br (mar/2026)
+// Ratios: pontos do cartão necessários para obter 1 milha no programa destino.
+//   Iupp Itaú: 2,5:1 | Santander Esfera: 2,2:1 | Caixa UAU: 2,5:1
+//   Nubank, C6, XP, BTG, Inter: 1:1
+// ⚠️ Inter Loop: programa pode ter sido descontinuado em 2024 — confirmar vigência.
+// ⚠️ Santander → TudoAzul: parceria teve instabilidade — confirmar antes de transferir.
 
 export const CREDIT_CARDS: CreditCard[] = [
     {
@@ -215,32 +219,32 @@ export const CREDIT_CARDS: CreditCard[] = [
             {
                 program: 'Smiles',
                 tiers: [
-                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
-                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 2.5, bonusPercent: 60 },
+                    { clubId: null, label: 'Sem clube', ratio: 2.5, bonusPercent: 30 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts',
+                minPointsLabel: '1.000 pts (2,5 pts Iupp = 1 milha)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://www.itau.com.br/cartoes/iupp',
             },
             {
                 program: 'LATAM Pass',
                 tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: null, label: 'Taxa padrão', ratio: 2.5, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts',
+                minPointsLabel: '1.000 pts (2,5 pts Iupp = 1 milha)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://latampass.latam.com/pt_br/junte-milhas',
             },
             {
                 program: 'TudoAzul',
                 tiers: [
-                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 1.0, bonusPercent: 20 },
-                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 2.5, bonusPercent: 20 },
+                    { clubId: null, label: 'Sem clube', ratio: 2.5, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts',
+                minPointsLabel: '1.000 pts (2,5 pts Iupp = 1 milha)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://www.itau.com.br/cartoes/iupp',
             },
@@ -347,33 +351,33 @@ export const CREDIT_CARDS: CreditCard[] = [
             {
                 program: 'Smiles',
                 tiers: [
-                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
-                    { clubId: 'esfera_clube', label: 'Santander Esfera (sem Clube Smiles)', ratio: 1.0, bonusPercent: 20 },
-                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 20 },
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 2.2, bonusPercent: 60 },
+                    { clubId: 'esfera_clube', label: 'Santander Esfera (sem Clube Smiles)', ratio: 2.2, bonusPercent: 20 },
+                    { clubId: null, label: 'Sem clube', ratio: 2.2, bonusPercent: 20 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts Esfera',
+                minPointsLabel: '1.000 pts Esfera (2,2 pts = 1 milha)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://esfera.com.vc',
             },
             {
                 program: 'LATAM Pass',
                 tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: null, label: 'Taxa padrão', ratio: 2.2, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts Esfera',
+                minPointsLabel: '1.000 pts Esfera (2,2 pts = 1 milha)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://esfera.com.vc',
             },
             {
                 program: 'TudoAzul',
                 tiers: [
-                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 1.0, bonusPercent: 20 },
-                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 2.2, bonusPercent: 20 },
+                    { clubId: null, label: 'Sem clube', ratio: 2.2, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts Esfera',
+                minPointsLabel: '1.000 pts Esfera (2,2 pts = 1 milha)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://esfera.com.vc',
             },
@@ -472,7 +476,7 @@ export const CREDIT_CARDS: CreditCard[] = [
     {
         id: 'inter_black',
         name: 'Inter Black / One',
-        currency: 'Pontos Loop (Inter)',
+        currency: 'Inter Loop (verificar vigência)',
         color: '#FF6B00',
         initials: 'IN',
         partners: [
@@ -510,31 +514,21 @@ export const CREDIT_CARDS: CreditCard[] = [
             {
                 program: 'Smiles',
                 tiers: [
-                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
-                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 2.5, bonusPercent: 60 },
+                    { clubId: null, label: 'Sem clube', ratio: 2.5, bonusPercent: 30 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts',
+                minPointsLabel: '1.000 pts (2,5 pts UAU = 1 milha)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://uau.caixa.gov.br',
             },
             {
                 program: 'LATAM Pass',
                 tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: null, label: 'Taxa padrão', ratio: 2.5, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts',
-                transferTime: 'Até 5 dias úteis',
-                url: 'https://uau.caixa.gov.br',
-            },
-            {
-                program: 'TudoAzul',
-                tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
-                ],
-                minPoints: 1000,
-                minPointsLabel: '1.000 pts',
+                minPointsLabel: '1.000 pts (2,5 pts UAU = 1 milha)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://uau.caixa.gov.br',
             },
