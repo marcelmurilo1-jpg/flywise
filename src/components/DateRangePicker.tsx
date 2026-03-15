@@ -194,6 +194,11 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
     useEffect(() => { setTempStart(parseLocal(dateGo)) }, [dateGo])
     useEffect(() => { setTempEnd(parseLocal(dateBack)) }, [dateBack])
 
+    // In inline mode, reset selecting to 'start' whenever dateGo is cleared externally
+    useEffect(() => {
+        if (inline && !dateGo) setSelecting('start')
+    }, [inline, dateGo])
+
     const viewRight = addMonths(viewLeft, 1)
 
     function openPicker() {
@@ -305,7 +310,7 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
             </div>
 
             {/* Calendars */}
-            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 24 }}>
                 <Calendar
                     viewDate={viewLeft}
                     selectedStart={tempStart}
@@ -342,7 +347,11 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
 
     // ── Inline mode: always visible, no portal ──────────────────────────────
     if (inline) {
-        return <div>{calendarPanel}</div>
+        return (
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+                <div style={{ minWidth: 560 }}>{calendarPanel}</div>
+            </div>
+        )
     }
 
     // ── Normal (portal) mode ────────────────────────────────────────────────
