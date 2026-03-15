@@ -148,7 +148,7 @@ export default function ChatBuscaAvancada() {
         }
     }
 
-    const w = conv?.wizard_data
+    const w = conv?.wizard_data as any
 
     return (
         <div style={{ minHeight: '100vh', background: '#F8FAFF', fontFamily: 'Manrope, system-ui, sans-serif', display: 'flex', flexDirection: 'column' }}>
