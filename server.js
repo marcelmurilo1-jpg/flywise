@@ -210,21 +210,9 @@ app.post('/api/search-flights', async (req, res) => {
             console.log('[Express] Cache miss — chamando API Seats.aero.');
         }
 
-        // ── 2. Busca na API em paralelo (ida + volta) com janela ±2 dias ──────
-        // Amplia o range para capturar mais disponibilidade (award seats variam por dia)
-        function shiftDate(dateStr, deltaDays) {
-            const d = new Date(dateStr + 'T12:00:00Z');
-            d.setUTCDate(d.getUTCDate() + deltaDays);
-            return d.toISOString().slice(0, 10);
-        }
-        const startIda = shiftDate(data_ida, -2);
-        const endIda   = shiftDate(data_ida, +2);
-        const promessas = [fetchSeatsAeroAPI(origem, destino, startIda, endIda)];
-        if (data_volta) {
-            const startVolta = shiftDate(data_volta, -2);
-            const endVolta   = shiftDate(data_volta, +2);
-            promessas.push(fetchSeatsAeroAPI(destino, origem, startVolta, endVolta));
-        }
+        // ── 2. Busca na API em paralelo (ida + volta) ─────────────────────────
+        const promessas = [fetchSeatsAeroAPI(origem, destino, data_ida, data_ida)];
+        if (data_volta) promessas.push(fetchSeatsAeroAPI(destino, origem, data_volta, data_volta));
 
         const [itemsIda, itemsVolta = []] = await Promise.all(promessas);
         const resultadosFinais = [
