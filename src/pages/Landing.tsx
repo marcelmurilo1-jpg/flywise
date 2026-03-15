@@ -864,6 +864,7 @@ export default function Landing() {
 
             </section>
 
+
             {/* SearchPill — floating between hero and destinos */}
             <div style={{ background: '#F7F9FC' }}>
                 <motion.div
