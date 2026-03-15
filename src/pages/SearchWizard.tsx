@@ -198,8 +198,8 @@ const HACKER_MODES = [
     {
         id: 'hacker',
         icon: <Zap className="w-6 h-6" />,
-        label: 'Modo Hacker 🔥',
-        desc: 'Rotas divididas em 2 reservas separadas para máxima economia.',
+        label: 'Estratégia Avançada',
+        desc: 'Rotas divididas em reservas separadas para máxima economia de milhas.',
     },
 ]
 
@@ -470,41 +470,76 @@ export default function SearchWizard() {
                                 </h1>
 
                                 {/* Passenger counter */}
-                                <div className="flex items-center justify-between p-5 rounded-2xl border border-slate-200 bg-slate-50">
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: '20px 24px', borderRadius: '16px',
+                                    border: '1.5px solid rgba(74,144,226,0.25)',
+                                    background: 'rgba(74,144,226,0.04)',
+                                }}>
                                     <div>
-                                        <h3 className="text-slate-800 font-semibold text-base">Passageiros</h3>
-                                        <p className="text-slate-500 text-sm mt-0.5">Número de adultos</p>
+                                        <p style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b', margin: 0 }}>Passageiros</p>
+                                        <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: 3 }}>Adultos (acima de 12 anos)</p>
                                     </div>
-                                    <div className="flex items-center gap-4">
-                                        <button onClick={() => setData(d => ({ ...d, passengers: Math.max(1, d.passengers - 1) }))}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                        <button
+                                            onClick={() => setData(d => ({ ...d, passengers: Math.max(1, d.passengers - 1) }))}
                                             disabled={data.passengers <= 1}
-                                            className="w-10 h-10 rounded-xl border-2 border-slate-200 flex items-center justify-center text-slate-500 hover:border-[#4a90e2] hover:text-[#4a90e2] disabled:opacity-30 transition-all">
-                                            <Minus className="w-4 h-4" />
+                                            style={{
+                                                width: 40, height: 40, borderRadius: '12px',
+                                                border: '1.5px solid #e2e8f0', background: '#fff',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                cursor: data.passengers <= 1 ? 'not-allowed' : 'pointer',
+                                                opacity: data.passengers <= 1 ? 0.3 : 1,
+                                                color: '#4a90e2', transition: 'all 0.15s',
+                                            }}>
+                                            <Minus style={{ width: 16, height: 16 }} />
                                         </button>
-                                        <span className="text-2xl font-semibold text-slate-800 w-8 text-center">{data.passengers}</span>
-                                        <button onClick={() => setData(d => ({ ...d, passengers: Math.min(9, d.passengers + 1) }))}
+                                        <span style={{ fontSize: '28px', fontWeight: 700, color: '#0E2A55', width: 36, textAlign: 'center' }}>{data.passengers}</span>
+                                        <button
+                                            onClick={() => setData(d => ({ ...d, passengers: Math.min(9, d.passengers + 1) }))}
                                             disabled={data.passengers >= 9}
-                                            className="w-10 h-10 rounded-xl border-2 border-slate-200 flex items-center justify-center text-slate-500 hover:border-[#4a90e2] hover:text-[#4a90e2] disabled:opacity-30 transition-all">
-                                            <Plus className="w-4 h-4" />
+                                            style={{
+                                                width: 40, height: 40, borderRadius: '12px',
+                                                border: '1.5px solid #e2e8f0', background: '#fff',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                cursor: data.passengers >= 9 ? 'not-allowed' : 'pointer',
+                                                opacity: data.passengers >= 9 ? 0.3 : 1,
+                                                color: '#4a90e2', transition: 'all 0.15s',
+                                            }}>
+                                            <Plus style={{ width: 16, height: 16 }} />
                                         </button>
                                     </div>
                                 </div>
 
                                 {/* Cabin class */}
-                                <div className="flex flex-col gap-3">
-                                    <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Classe da cabine</p>
-                                    <div className="grid grid-cols-2 gap-3">
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    <p style={{ fontSize: '13px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>Classe da cabine</p>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                         {CABIN_CLASSES.map(c => {
                                             const sel = data.cabinClass === c.id
                                             return (
                                                 <button key={c.id} onClick={() => setData({ ...data, cabinClass: c.id })}
-                                                    className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all duration-200 ${sel ? 'border-[#4a90e2] bg-[#4a90e2]/5' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-                                                    <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center mt-0.5 transition-all ${sel ? 'border-[#4a90e2] bg-[#4a90e2]' : 'border-slate-300'}`}>
-                                                        {sel && <Check className="w-3 h-3 text-white" />}
+                                                    style={{
+                                                        display: 'flex', alignItems: 'center', gap: 16,
+                                                        padding: '16px 20px', borderRadius: '14px',
+                                                        border: `1.5px solid ${sel ? 'rgba(74,144,226,0.6)' : '#e2e8f0'}`,
+                                                        background: sel ? 'rgba(74,144,226,0.05)' : '#fff',
+                                                        cursor: 'pointer', textAlign: 'left',
+                                                        transition: 'all 0.2s', fontFamily: 'inherit',
+                                                        boxShadow: sel ? '0 4px 16px rgba(74,144,226,0.10)' : 'none',
+                                                    }}>
+                                                    <div style={{
+                                                        width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                                                        border: `2px solid ${sel ? '#4a90e2' : '#cbd5e1'}`,
+                                                        background: sel ? '#4a90e2' : 'transparent',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        transition: 'all 0.2s',
+                                                    }}>
+                                                        {sel && <Check style={{ width: 11, height: 11, color: '#fff' }} />}
                                                     </div>
-                                                    <div>
-                                                        <p className={`font-semibold text-sm ${sel ? 'text-[#4a90e2]' : 'text-slate-800'}`}>{c.label}</p>
-                                                        <p className="text-xs text-slate-500 mt-0.5">{c.desc}</p>
+                                                    <div style={{ flex: 1 }}>
+                                                        <p style={{ fontWeight: 700, fontSize: '15px', color: sel ? '#4a90e2' : '#1e293b', margin: 0 }}>{c.label}</p>
+                                                        <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: 2 }}>{c.desc}</p>
                                                     </div>
                                                 </button>
                                             )
@@ -557,7 +592,7 @@ export default function SearchWizard() {
                                     </label>
                                     <textarea
                                         rows={4}
-                                        placeholder="Ex: Tenho 80.000 pontos Smiles, prefiro voo direto, posso viajar qualquer dia do mês, quero ir com minha esposa em lua de mel..."
+                                        placeholder="Descreva suas preferências, restrições ou detalhes importantes para a IA considerar na análise..."
                                         value={data.observations}
                                         onChange={e => setData({ ...data, observations: e.target.value })}
                                         style={{
@@ -579,18 +614,26 @@ export default function SearchWizard() {
                                     <p className="text-sm text-red-500 font-medium">{submitError}</p>
                                 )}
                                 <div className="sw-finish-actions flex justify-between items-center mt-4">
-                                    <button onClick={prevStep} className="text-slate-400 hover:text-slate-700 text-sm font-medium px-3 py-2 rounded-lg hover:bg-slate-100 transition-all">
-                                        ← Voltar
-                                    </button>
+                                    <BackBtn onClick={prevStep} />
                                     <button
                                         onClick={handleFinish}
                                         disabled={submitting}
-                                        className="flex items-center gap-2 bg-gradient-to-r from-[#4a90e2] to-[#1a5db5] hover:from-[#357abd] hover:to-[#154fa0] text-white disabled:opacity-60 disabled:cursor-not-allowed rounded-full px-8 py-4 text-base font-semibold shadow-[0_4px_20px_rgba(74,144,226,0.4)] transition-all"
+                                        style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: '8px',
+                                            padding: '14px 28px', borderRadius: '14px',
+                                            fontSize: '15px', fontWeight: 600, color: '#fff',
+                                            background: submitting ? '#94a3b8' : '#4a90e2',
+                                            border: 'none', cursor: submitting ? 'not-allowed' : 'pointer',
+                                            boxShadow: submitting ? 'none' : '0 4px 14px rgba(74,144,226,0.35)',
+                                            transition: 'all 0.18s ease', fontFamily: 'inherit',
+                                        }}
+                                        onMouseEnter={e => { if (!submitting) { e.currentTarget.style.boxShadow = '0 6px 20px rgba(74,144,226,0.45)'; e.currentTarget.style.transform = 'translateY(-1px)' } }}
+                                        onMouseLeave={e => { e.currentTarget.style.boxShadow = submitting ? 'none' : '0 4px 14px rgba(74,144,226,0.35)'; e.currentTarget.style.transform = 'none' }}
                                     >
                                         {submitting ? (
-                                            <><Loader2 className="w-4 h-4 animate-spin" /> Criando chat...</>
+                                            <><Loader2 style={{ width: 16, height: 16 }} className="animate-spin" /> Criando busca...</>
                                         ) : (
-                                            <>Iniciar Chat com IA ✨ <ArrowRight className="w-4 h-4" /></>
+                                            <>Fazer Busca com IA <ArrowRight style={{ width: 16, height: 16, flexShrink: 0 }} /></>
                                         )}
                                     </button>
                                 </div>
