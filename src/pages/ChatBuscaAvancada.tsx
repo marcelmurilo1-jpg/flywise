@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import type { ChatConversation, ChatMessage } from '@/lib/supabase'
 
 function formatMarkdown(text: string): string {
+    if (!text) return ''
     return text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')

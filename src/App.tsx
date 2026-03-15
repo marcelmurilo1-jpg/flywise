@@ -1,6 +1,26 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import { Component, type ReactNode } from 'react'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  state = { error: null }
+  static getDerivedStateFromError(err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, background: '#F8FAFF', fontFamily: 'Manrope, sans-serif' }}>
+          <p style={{ fontSize: 15, color: '#0E2A55', fontWeight: 700 }}>Erro na página</p>
+          <pre style={{ fontSize: 12, color: '#ef4444', background: '#fff', padding: '12px 16px', borderRadius: 10, border: '1px solid #fecaca', maxWidth: 600, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{this.state.error}</pre>
+          <button onClick={() => { this.setState({ error: null }); window.location.href = '/home' }} style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: '#2A60C2', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Voltar ao início</button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 import Landing from '@/pages/Landing'
 import Auth from '@/pages/Auth'
 import Home from '@/pages/Home'
@@ -95,7 +115,9 @@ export default function App() {
     <ThemeProvider>
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <ErrorBoundary>
+            <AppRoutes />
+          </ErrorBoundary>
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>
