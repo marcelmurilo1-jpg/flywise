@@ -6,8 +6,17 @@
 // IMPORTANTE sobre ratios:
 //   ratio = quantos pontos do cartão para 1 milha/ponto no programa destino.
 //   Ex: ratio 1.0 → 1.000 pontos do cartão = 1.000 milhas (1:1)
+//   Ex: ratio 3.5 → 3.500 pontos = 1.000 milhas (3,5:1)
 //
-// Fontes: Passageiro de Primeira, Melhores Destinos (mar/2026)
+// Fontes pesquisadas em mar/2026:
+//   - passageirodeprimeira.com, melhores-destinos.com.br
+//   - cartoesdecredito.me, cartoeseviagens.com.br, altarendablog.com.br
+//   - Páginas oficiais: esfera.com.vc, livelo.com.br, latampass.latam.com
+//
+// ⚠️ Livelo internacionais: ratios piorados em set/2023 (antes 2:1, agora 3,5:1)
+// ⚠️ Livelo↔TAP encerrado em 19/08/2024 (exceto Bradesco Amex Centurion: 1:1)
+// ⚠️ Esfera adicionou Flying Blue, IHG (set/2025) e TAP, Aeroméxico (out/2025)
+// ⚠️ Inter Loop→Smiles restrito a clientes Win/Black (desde mar/2025)
 
 export interface TransferTier {
     clubId: string | null       // null = sem clube necessário
@@ -201,12 +210,14 @@ export const MILES_CLUBS: MilesClub[] = [
 ]
 
 // ─── Cartões ─────────────────────────────────────────────────────────────────
-// Fontes: Passageiro de Primeira, Melhores Destinos, pontoatel.com.br (mar/2026)
-// Ratios: pontos do cartão necessários para obter 1 milha no programa destino.
-//   Iupp Itaú: 2,5:1 | Santander Esfera: 2,2:1 | Caixa UAU: 2,5:1
-//   Nubank, C6, XP, BTG, Inter: 1:1
-// ⚠️ Inter Loop: programa pode ter sido descontinuado em 2024 — confirmar vigência.
-// ⚠️ Santander → TudoAzul: parceria teve instabilidade — confirmar antes de transferir.
+// Fontes: Passageiro de Primeira, Melhores Destinos, cartoesdecredito.me (mar/2026)
+// Ratios: pontos do cartão necessários para 1 milha/ponto no programa destino.
+//   Iupp Itaú: 1:1 (todos os parceiros)
+//   Santander Esfera: 1:1 (nacional, mín. 15k) | 2:1 (Iberia) | 2,7:1 (TAP) | 3:1–3,5:1 (Flying Blue, AA, Copa, Aeromexico)
+//   Caixa UAU: 1:1 (Smiles/LATAM/Azul) | 2:1 (TAP)
+//   Nubank, C6, XP (via Livelo), BTG, Inter: 1:1
+// ⚠️ Inter Loop: ativo em mar/2026. Smiles restrito a clientes Win/Black.
+// ⚠️ Esfera expandiu parceiros internacionais em set–out/2025.
 
 export const CREDIT_CARDS: CreditCard[] = [
     {
@@ -219,32 +230,42 @@ export const CREDIT_CARDS: CreditCard[] = [
             {
                 program: 'Smiles',
                 tiers: [
-                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 2.5, bonusPercent: 60 },
-                    { clubId: null, label: 'Sem clube', ratio: 2.5, bonusPercent: 30 },
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts (2,5 pts Iupp = 1 milha)',
-                transferTime: 'Até 5 dias úteis',
+                minPointsLabel: '1.000 pts (1:1, sem mínimo oficial declarado)',
+                transferTime: 'Até 48h',
                 url: 'https://www.itau.com.br/cartoes/iupp',
             },
             {
                 program: 'LATAM Pass',
                 tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 2.5, bonusPercent: 0 },
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts (2,5 pts Iupp = 1 milha)',
-                transferTime: 'Até 5 dias úteis',
+                minPointsLabel: '1.000 pts (1:1)',
+                transferTime: 'Até 48h',
                 url: 'https://latampass.latam.com/pt_br/junte-milhas',
             },
             {
                 program: 'TudoAzul',
                 tiers: [
-                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 2.5, bonusPercent: 20 },
-                    { clubId: null, label: 'Sem clube', ratio: 2.5, bonusPercent: 0 },
+                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 0 },
+                ],
+                minPoints: 100,
+                minPointsLabel: '100 pts (1:1)',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://www.itau.com.br/cartoes/iupp',
+            },
+            {
+                program: 'TAP Miles&Go',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts (2,5 pts Iupp = 1 milha)',
+                minPointsLabel: '1.000 pts (1:1)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://www.itau.com.br/cartoes/iupp',
             },
@@ -303,8 +324,8 @@ export const CREDIT_CARDS: CreditCard[] = [
                     { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
                     { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
                 ],
-                minPoints: 1000,
-                minPointsLabel: '1.000 Átomos',
+                minPoints: 5000,
+                minPointsLabel: '5.000 Átomos',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://www.c6bank.com.br/atomos',
             },
@@ -321,21 +342,31 @@ export const CREDIT_CARDS: CreditCard[] = [
             {
                 program: 'TudoAzul',
                 tiers: [
-                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 1.0, bonusPercent: 20 },
+                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 1.0, bonusPercent: 0 },
                     { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 0 },
                 ],
-                minPoints: 1000,
-                minPointsLabel: '1.000 Átomos',
+                minPoints: 100,
+                minPointsLabel: '100 Átomos',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://www.c6bank.com.br/atomos',
+            },
+            {
+                program: 'TAP Miles&Go',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                ],
+                minPoints: 50000,
+                minPointsLabel: '50.000 Átomos (mínimo alto)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://www.c6bank.com.br/atomos',
             },
             {
                 program: 'Livelo',
                 tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: null, label: 'Hub Livelo (acesso a programas internacionais)', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 Átomos',
+                minPointsLabel: '1.000 Átomos → Livelo (depois Livelo→aérea)',
                 transferTime: 'Até 3 dias úteis',
                 url: 'https://www.livelo.com.br',
             },
@@ -348,36 +379,98 @@ export const CREDIT_CARDS: CreditCard[] = [
         color: '#EC0000',
         initials: 'SN',
         partners: [
+            // ── Nacional (1:1) ────────────────────────────────────────────────
             {
                 program: 'Smiles',
                 tiers: [
-                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 2.2, bonusPercent: 60 },
-                    { clubId: 'esfera_clube', label: 'Santander Esfera (sem Clube Smiles)', ratio: 2.2, bonusPercent: 20 },
-                    { clubId: null, label: 'Sem clube', ratio: 2.2, bonusPercent: 20 },
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
+                    { clubId: 'esfera_clube', label: 'Esfera (sem Clube Smiles) — 20% permanente', ratio: 1.0, bonusPercent: 20 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 20 },
                 ],
-                minPoints: 1000,
-                minPointsLabel: '1.000 pts Esfera (2,2 pts = 1 milha)',
+                minPoints: 15000,
+                minPointsLabel: '15.000 pts Esfera (1:1)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://esfera.com.vc',
             },
             {
                 program: 'LATAM Pass',
                 tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 2.2, bonusPercent: 0 },
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
-                minPoints: 1000,
-                minPointsLabel: '1.000 pts Esfera (2,2 pts = 1 milha)',
+                minPoints: 15000,
+                minPointsLabel: '15.000 pts Esfera (1:1)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://esfera.com.vc',
             },
             {
                 program: 'TudoAzul',
                 tiers: [
-                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 2.2, bonusPercent: 20 },
-                    { clubId: null, label: 'Sem clube', ratio: 2.2, bonusPercent: 0 },
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
-                minPoints: 1000,
-                minPointsLabel: '1.000 pts Esfera (2,2 pts = 1 milha)',
+                minPoints: 15000,
+                minPointsLabel: '15.000 pts Esfera (1:1)',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://esfera.com.vc',
+            },
+            // ── Internacional ─────────────────────────────────────────────────
+            {
+                program: 'Iberia Plus',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 2.0, bonusPercent: 0 },
+                ],
+                minPoints: 15000,
+                minPointsLabel: '15.000 pts (2:1 → 7.500 Avios)',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://esfera.com.vc',
+            },
+            {
+                program: 'Flying Blue',
+                tiers: [
+                    { clubId: 'esfera_clube', label: 'Esfera Select/Infinite', ratio: 3.0, bonusPercent: 0 },
+                    { clubId: null, label: 'Taxa padrão', ratio: 3.5, bonusPercent: 0 },
+                ],
+                minPoints: 30000,
+                minPointsLabel: '30.000 pts (3:1 clube / 3,5:1 padrão → ≥8.571 mi)',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://esfera.com.vc',
+            },
+            {
+                program: 'TAP Miles&Go',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 2.7, bonusPercent: 0 },
+                ],
+                minPoints: 15000,
+                minPointsLabel: '15.000 pts (2,7:1 → ≈5.556 milhas TAP)',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://esfera.com.vc',
+            },
+            {
+                program: 'American Airlines',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 3.5, bonusPercent: 0 },
+                ],
+                minPoints: 30000,
+                minPointsLabel: '30.000 pts (3,5:1 → ≈8.571 AAdvantage)',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://esfera.com.vc',
+            },
+            {
+                program: 'ConnectMiles',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 3.5, bonusPercent: 0 },
+                ],
+                minPoints: 30000,
+                minPointsLabel: '30.000 pts (3,5:1 → ≈8.571 milhas Copa)',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://esfera.com.vc',
+            },
+            {
+                program: 'Club Premier',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 3.5, bonusPercent: 0 },
+                ],
+                minPoints: 30000,
+                minPointsLabel: '30.000 pts (3,5:1 → ≈8.571 milhas Aeromexico)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://esfera.com.vc',
             },
@@ -389,6 +482,8 @@ export const CREDIT_CARDS: CreditCard[] = [
         currency: 'Pontos XP',
         color: '#000000',
         initials: 'XP',
+        // ⚠️ XP opera via hub Livelo: pts XP → Livelo (1:1) → programas aéreos.
+        // Ratios internacionais seguem tabela Livelo (Flying Blue 3,5:1, etc.)
         partners: [
             {
                 program: 'Smiles',
@@ -397,7 +492,7 @@ export const CREDIT_CARDS: CreditCard[] = [
                     { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts',
+                minPointsLabel: '1.000 pts (via Livelo → Smiles, 1:1)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://www.xpi.com.br/cartao',
             },
@@ -407,9 +502,29 @@ export const CREDIT_CARDS: CreditCard[] = [
                     { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts',
+                minPointsLabel: '1.000 pts (via Livelo → LATAM, 1:1)',
                 transferTime: 'Até 5 dias úteis',
                 url: 'https://www.xpi.com.br/cartao',
+            },
+            {
+                program: 'TudoAzul',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts (via Livelo → Azul, 1:1)',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://www.xpi.com.br/cartao',
+            },
+            {
+                program: 'Livelo',
+                tiers: [
+                    { clubId: 'livelo_clube', label: 'Hub Livelo (acesso a Flying Blue, BA, etc.)', ratio: 1.0, bonusPercent: 0 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts → Livelo (hub para internacionais)',
+                transferTime: 'Até 5 dias úteis',
+                url: 'https://www.livelo.com.br',
             },
         ],
     },
@@ -419,6 +534,8 @@ export const CREDIT_CARDS: CreditCard[] = [
         currency: 'Pontos Livelo',
         color: '#D40040',
         initials: 'BD',
+        // Acumula diretamente em Livelo. De Livelo: Smiles/LATAM/Azul 1:1 | Flying Blue 3,5:1 | etc.
+        // ⚠️ Bradesco Amex Centurion: mantém TAP 1:1 (parceria Livelo-TAP encerrou em 19/08/2024 para demais)
         partners: [
             {
                 program: 'Livelo',
@@ -427,7 +544,7 @@ export const CREDIT_CARDS: CreditCard[] = [
                     { clubId: null, label: 'Acúmulo padrão (até 72h)', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 2500,
-                minPointsLabel: '2.500 pts (Livelo→aérea: mín. 15.000)',
+                minPointsLabel: '2.500 pts → Livelo (depois Livelo→aérea mín. 10.000)',
                 transferTime: 'Imediato (Clube) ou até 72h',
                 url: 'https://www.livelo.com.br',
             },
@@ -441,33 +558,43 @@ export const CREDIT_CARDS: CreditCard[] = [
         initials: 'BT',
         partners: [
             {
-                program: 'LATAM Pass',
-                tiers: [
-                    { clubId: null, label: 'Promo ativa (25% bônus)', ratio: 1.0, bonusPercent: 25 },
-                ],
-                minPoints: 1000,
-                minPointsLabel: '1.000 pts',
-                transferTime: 'Até 3 dias úteis',
-                url: 'https://latampass.latam.com/pt_br/junte-milhas',
-            },
-            {
                 program: 'Smiles',
                 tiers: [
                     { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
                     { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts',
+                minPointsLabel: '1.000 pts (1:1)',
+                transferTime: 'Até 3 dias úteis',
+                url: 'https://www.btgpactual.com/cartao',
+            },
+            {
+                program: 'LATAM Pass',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts (1:1)',
+                transferTime: 'Até 3 dias úteis',
+                url: 'https://latampass.latam.com/pt_br/junte-milhas',
+            },
+            {
+                program: 'TudoAzul',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                ],
+                minPoints: 1000,
+                minPointsLabel: '1.000 pts (1:1)',
                 transferTime: 'Até 3 dias úteis',
                 url: 'https://www.btgpactual.com/cartao',
             },
             {
                 program: 'Livelo',
                 tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: null, label: 'Hub Livelo (acesso a programas internacionais)', ratio: 1.0, bonusPercent: 0 },
                 ],
                 minPoints: 1000,
-                minPointsLabel: '1.000 pts',
+                minPointsLabel: '1.000 pts → Livelo (hub para internacionais)',
                 transferTime: 'Até 3 dias úteis',
                 url: 'https://www.livelo.com.br',
             },
@@ -476,18 +603,18 @@ export const CREDIT_CARDS: CreditCard[] = [
     {
         id: 'inter_black',
         name: 'Inter Black / One',
-        currency: 'Inter Loop (verificar vigência)',
+        currency: 'Pontos Inter Loop',
         color: '#FF6B00',
         initials: 'IN',
         partners: [
             {
                 program: 'TudoAzul',
                 tiers: [
-                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 1.0, bonusPercent: 130 },
-                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 80 },
+                    { clubId: 'azul_fidelidade_clube', label: 'Clube Azul Fidelidade', ratio: 1.0, bonusPercent: 0 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 0 },
                 ],
-                minPoints: 1000,
-                minPointsLabel: '1.000 pts',
+                minPoints: 3000,
+                minPointsLabel: '3.000 pts (1:1, todos os clientes)',
                 transferTime: 'Até 2 dias úteis',
                 url: 'https://inter.co/inter-loop',
             },
@@ -497,8 +624,8 @@ export const CREDIT_CARDS: CreditCard[] = [
                     { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
                     { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
                 ],
-                minPoints: 1000,
-                minPointsLabel: '1.000 pts',
+                minPoints: 10000,
+                minPointsLabel: '10.000 pts (1:1) — ⚠️ restrito a clientes Win/Black',
                 transferTime: 'Até 2 dias úteis',
                 url: 'https://inter.co/inter-loop',
             },
@@ -514,22 +641,42 @@ export const CREDIT_CARDS: CreditCard[] = [
             {
                 program: 'Smiles',
                 tiers: [
-                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 2.5, bonusPercent: 60 },
-                    { clubId: null, label: 'Sem clube', ratio: 2.5, bonusPercent: 30 },
+                    { clubId: 'smiles_club', label: 'Clube Smiles ativo', ratio: 1.0, bonusPercent: 60 },
+                    { clubId: null, label: 'Sem clube', ratio: 1.0, bonusPercent: 30 },
                 ],
-                minPoints: 1000,
-                minPointsLabel: '1.000 pts (2,5 pts UAU = 1 milha)',
-                transferTime: 'Até 5 dias úteis',
+                minPoints: 4000,
+                minPointsLabel: '4.000 pts UAU (1:1)',
+                transferTime: 'Até 72h',
                 url: 'https://uau.caixa.gov.br',
             },
             {
                 program: 'LATAM Pass',
                 tiers: [
-                    { clubId: null, label: 'Taxa padrão', ratio: 2.5, bonusPercent: 0 },
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
                 ],
-                minPoints: 1000,
-                minPointsLabel: '1.000 pts (2,5 pts UAU = 1 milha)',
-                transferTime: 'Até 5 dias úteis',
+                minPoints: 4000,
+                minPointsLabel: '4.000 pts UAU (1:1)',
+                transferTime: 'Até 72h',
+                url: 'https://uau.caixa.gov.br',
+            },
+            {
+                program: 'TudoAzul',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 1.0, bonusPercent: 0 },
+                ],
+                minPoints: 2000,
+                minPointsLabel: '2.000 pts UAU (1:1)',
+                transferTime: 'Até 72h',
+                url: 'https://uau.caixa.gov.br',
+            },
+            {
+                program: 'TAP Miles&Go',
+                tiers: [
+                    { clubId: null, label: 'Taxa padrão', ratio: 2.0, bonusPercent: 0 },
+                ],
+                minPoints: 10000,
+                minPointsLabel: '10.000 pts UAU (2:1 → 5.000 milhas TAP)',
+                transferTime: 'Até 72h',
                 url: 'https://uau.caixa.gov.br',
             },
         ],
@@ -550,17 +697,22 @@ export const LIVELO_AIRLINE_PARTNERS: Array<{
     international?: boolean
     note?: string
 }> = [
-    // ── Doméstico ──────────────────────────────────────────────────────────────
-    { program: 'Smiles', ratio: 1.0, minPoints: 15000, label: 'Livelo → Smiles (1:1)', note: 'Confirme disponibilidade em livelo.com.br' },
-    { program: 'LATAM Pass', ratio: 1.0, minPoints: 15000, label: 'Livelo → LATAM Pass (1:1)' },
-    { program: 'TudoAzul', ratio: 1.0, minPoints: 15000, label: 'Livelo → Azul Fidelidade (1:1)' },
-    // ── Internacional ──────────────────────────────────────────────────────────
-    { program: 'Flying Blue', ratio: 1.0, minPoints: 15000, label: 'Livelo → Flying Blue AF/KLM (1:1)', international: true },
-    { program: 'British Airways', ratio: 1.0, minPoints: 15000, label: 'Livelo → British Airways Avios (1:1)', international: true },
-    { program: 'TAP Miles&Go', ratio: 1.0, minPoints: 15000, label: 'Livelo → TAP Miles&Go (1:1)', international: true },
-    { program: 'Emirates Skywards', ratio: 1.0, minPoints: 15000, label: 'Livelo → Emirates Skywards (1:1)', international: true, note: 'Confirme vigência da parceria em livelo.com.br' },
-    { program: 'Iberia Plus', ratio: 1.0, minPoints: 15000, label: 'Livelo → Iberia Plus Avios (1:1)', international: true },
-    { program: 'ConnectMiles', ratio: 1.0, minPoints: 15000, label: 'Livelo → Copa ConnectMiles (1:1)', international: true },
+    // ── Doméstico (1:1) ────────────────────────────────────────────────────────
+    { program: 'Smiles', ratio: 1.0, minPoints: 10000, label: 'Livelo → Smiles (1:1, mín. 10.000)' },
+    { program: 'LATAM Pass', ratio: 1.0, minPoints: 15000, label: 'Livelo → LATAM Pass (1:1, mín. 15.000)' },
+    { program: 'TudoAzul', ratio: 1.0, minPoints: 1000, label: 'Livelo → Azul Fidelidade (1:1, mín. 1.000)' },
+    // ── Internacional — ratios piores que doméstico ────────────────────────────
+    // Ratios piorados em set/2023: antes 2:1, agora 3,5:1 para Flying Blue/BA/Etihad/Iberia
+    { program: 'Flying Blue', ratio: 3.5, minPoints: 10000, label: 'Livelo → Flying Blue AF/KLM (3,5:1)', international: true },
+    { program: 'British Airways', ratio: 3.5, minPoints: 10000, label: 'Livelo → British Airways Avios (3,5:1)', international: true },
+    { program: 'Etihad Guest', ratio: 3.5, minPoints: 10000, label: 'Livelo → Etihad Guest (3,5:1)', international: true },
+    { program: 'Iberia Plus', ratio: 3.5, minPoints: 3500, label: 'Livelo → Iberia Plus Avios (3,5:1, mín. 3.500)', international: true },
+    { program: 'Club Premier', ratio: 3.5, minPoints: 10000, label: 'Livelo → Aeroméxico Club Premier (3,5:1)', international: true },
+    { program: 'ConnectMiles', ratio: 3.0, minPoints: 1000, label: 'Livelo → Copa ConnectMiles (3:1, mín. 1.000)', international: true },
+    { program: 'United MileagePlus', ratio: 4.0, minPoints: 10000, label: 'Livelo → United MileagePlus (4:1)', international: true },
+    // ── Encerradas ─────────────────────────────────────────────────────────────
+    // TAP Miles&Go: parceria Livelo↔TAP encerrou em 19/08/2024 (exceto Bradesco Amex Centurion: 1:1)
+    // Emirates Skywards: sem parceria com nenhum programa/cartão brasileiro
 ]
 
 // ─── Promoções periódicas ─────────────────────────────────────────────────────
