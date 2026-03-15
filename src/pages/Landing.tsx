@@ -22,22 +22,24 @@ import NumberFlow from '@number-flow/react'
 
 
 // ─── Dados ───────────────────────────────────────────────────────────────────
+// Preços verificados em passageirodeprimeira.com, melhores-destinos.com.br (2025/2026)
+// Executiva/Econômica: menor preço em milhas encontrado via programas br (Smiles, LATAM, Flying Blue, Avios, ConnectMiles)
+// Cash: passagem mais barata encontrada para o mesmo trecho/período
 const DESTINATIONS = [
-    { name: 'NOVA YORK',  country: 'Estados Unidos', route: 'GRU → JFK', miles: '40.000',  price: 'R$ 1.680', class: 'Executiva · Ida e Volta',      classKey: 'business', img: 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=600&q=80' },
-    { name: 'PARIS',      country: 'França',          route: 'GRU → CDG', miles: '55.000',  price: 'R$ 2.100', class: 'Executiva · Ida e Volta',      classKey: 'business', img: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&q=80' },
-    { name: 'TÓQUIO',    country: 'Japão',            route: 'GRU → NRT', miles: '70.000',  price: 'R$ 2.890', class: 'Executiva · Ida',              classKey: 'business', img: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=600&q=80' },
-    { name: 'LISBOA',     country: 'Portugal',         route: 'GRU → LIS', miles: '28.000',  price: 'R$ 980',   class: 'Econômica · Ida e Volta',     classKey: 'economy',  img: 'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=600&q=80' },
-    { name: 'MIAMI',      country: 'Estados Unidos',   route: 'GRU → MIA', miles: '22.000',  price: 'R$ 840',   class: 'Econômica · Ida e Volta',     classKey: 'economy',  img: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80' },
-    { name: 'CANCÚN',    country: 'México',            route: 'GRU → CUN', miles: '18.000',  price: 'R$ 720',   class: 'Econômica · Ida e Volta',     classKey: 'economy',  img: 'https://images.unsplash.com/photo-1552074284-5e88ef1aef18?w=600&q=80' },
-    { name: 'DUBAI',      country: 'Emirados Árabes',  route: 'GRU → DXB', miles: '120.000', price: 'R$ 6.200', class: 'Primeira Classe · Ida',       classKey: 'first',    img: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=600&q=80' },
-    { name: 'LONDRES',    country: 'Reino Unido',       route: 'GRU → LHR', miles: '48.000',  price: 'R$ 1.900', class: 'Executiva · Ida e Volta',     classKey: 'business', img: 'https://images.unsplash.com/photo-1529655683826-aba9b3e77383?w=600&q=80' },
+    { name: 'NOVA YORK',  country: 'Estados Unidos', route: 'GRU → JFK', miles: '84.200',  price: 'R$ 6.700', class: 'Executiva · Ida e Volta',  classKey: 'business', img: 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=600&q=80' },
+    { name: 'PARIS',      country: 'França',          route: 'GRU → CDG', miles: '89.500',  price: 'R$ 3.700', class: 'Executiva · Ida',          classKey: 'business', img: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&q=80' },
+    { name: 'TÓQUIO',    country: 'Japão',            route: 'GRU → NRT', miles: '85.000',  price: 'R$ 4.600', class: 'Executiva · Ida',          classKey: 'business', img: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=600&q=80' },
+    { name: 'LISBOA',     country: 'Portugal',         route: 'GRU → LIS', miles: '74.000',  price: 'R$ 1.560', class: 'Econômica · Ida e Volta',  classKey: 'economy',  img: 'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=600&q=80' },
+    { name: 'MIAMI',      country: 'Estados Unidos',   route: 'GRU → MIA', miles: '58.000',  price: 'R$ 1.570', class: 'Econômica · Ida e Volta',  classKey: 'economy',  img: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80' },
+    { name: 'CANCÚN',    country: 'México',            route: 'GRU → CUN', miles: '26.600',  price: 'R$ 1.680', class: 'Econômica · Ida e Volta',  classKey: 'economy',  img: 'https://images.unsplash.com/photo-1552074284-5e88ef1aef18?w=600&q=80' },
+    { name: 'DUBAI',      country: 'Emirados Árabes',  route: 'GRU → DXB', miles: '85.000',  price: 'R$ 5.500', class: 'Executiva · Ida',          classKey: 'business', img: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=600&q=80' },
+    { name: 'LONDRES',    country: 'Reino Unido',       route: 'GRU → LHR', miles: '110.000', price: 'R$ 3.450', class: 'Executiva · Ida',          classKey: 'business', img: 'https://images.unsplash.com/photo-1529655683826-aba9b3e77383?w=600&q=80' },
 ]
 
 const CABIN_FILTERS = [
-    { label: 'Todos',           value: 'all' },
-    { label: 'Econômica',       value: 'economy' },
-    { label: 'Executiva',       value: 'business' },
-    { label: 'Primeira Classe', value: 'first' },
+    { label: 'Todos',     value: 'all' },
+    { label: 'Econômica', value: 'economy' },
+    { label: 'Executiva', value: 'business' },
 ]
 
 const STEPS = [
