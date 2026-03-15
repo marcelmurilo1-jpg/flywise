@@ -1082,7 +1082,7 @@ async function scrapeTransferSource(source) {
         const content = await page.evaluate(() => {
             const remove = document.querySelectorAll('script, style, nav, footer, header');
             remove.forEach(el => el.remove());
-            return document.body?.innerText?.slice(0, 8000) ?? '';
+            return document.body?.innerText?.slice(0, 3000) ?? '';
         });
         await browser.close();
         return { id: source.id, label: source.label, content };
@@ -1096,11 +1096,21 @@ async function analyzeTransferDataWithClaude(scrapedContents, currentPromotions)
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
     if (!anthropicKey) throw new Error('ANTHROPIC_API_KEY não configurada');
 
-    const currentJson = JSON.stringify(currentPromotions, null, 2);
+    // Limita JSON atual a campos essenciais para reduzir tokens
+    const currentCompact = (currentPromotions ?? []).map(r => ({
+        card_id: r.card_id, program: r.program,
+        bonus_percent: r.bonus_percent, club_bonus_percent: r.club_bonus_percent,
+        club_tier_bonuses: r.club_tier_bonuses, valid_until: r.valid_until,
+        is_periodic: r.is_periodic, rules: r.rules,
+    }));
+    const currentJson = JSON.stringify(currentCompact, null, 1);
+
+    // Limita cada fonte a 2000 chars e o total a 20.000 chars
     const scrapedText = scrapedContents
         .filter(Boolean)
-        .map(s => `\n### ${s.label}\n${s.content}`)
-        .join('\n');
+        .map(s => `\n### ${s.label}\n${s.content.slice(0, 2000)}`)
+        .join('\n')
+        .slice(0, 20000);
 
     const prompt = `Você é especialista em programas de milhas e fidelidade do Brasil. Analise os dados extraídos das páginas oficiais e blogs abaixo e compare com os dados atuais do banco de dados do FlyWise.
 
@@ -1152,7 +1162,10 @@ Retorne SOMENTE um JSON válido no formato:
         signal: AbortSignal.timeout(60000),
     });
 
-    if (!res.ok) throw new Error(`Anthropic API error: ${res.status}`);
+    if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        throw new Error(`Anthropic API error: ${res.status} — ${errBody.slice(0, 300)}`);
+    }
     const data = await res.json();
     const text = data.content?.[0]?.text ?? '';
 
