@@ -1271,6 +1271,37 @@ app.post('/api/admin/sync-transfer-data', async (req, res) => {
     syncTransferData().catch(err => console.error('[TransferSync] Erro:', err.message));
 });
 
+// GET /api/admin/transfer-sync-diag — diagnóstico sem rodar o sync completo
+app.get('/api/admin/transfer-sync-diag', async (_req, res) => {
+    const diag = {
+        anthropic_key_set: !!process.env.ANTHROPIC_API_KEY,
+        supabase_service_role_set: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        supabase_anon_set: !!process.env.VITE_SUPABASE_ANON_KEY,
+        supabase_client: !!supabase,
+        chromium_ready: _chromiumReady,
+        write_test: null,
+        read_test: null,
+    };
+
+    if (supabase) {
+        // Testa leitura
+        const { data: rd, error: re } = await supabase.from('transfer_promotions').select('id').limit(1);
+        diag.read_test = re ? `ERRO: ${re.message}` : `OK (${rd?.length ?? 0} rows)`;
+
+        // Testa escrita no log
+        const { error: we } = await supabase.from('transfer_sync_log').insert({
+            synced_at: new Date().toISOString(),
+            sources_scraped: 0,
+            changes_detected: false,
+            rows_updated: 0,
+            summary: 'DIAGNÓSTICO — teste de escrita',
+        });
+        diag.write_test = we ? `ERRO: ${we.message}` : 'OK';
+    }
+
+    res.json(diag);
+});
+
 // GET /api/admin/transfer-sync-log — últimas execuções do sync
 app.get('/api/admin/transfer-sync-log', async (req, res) => {
     const secret = (req.headers['x-sync-secret'] ?? '');
