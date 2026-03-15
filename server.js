@@ -1166,75 +1166,98 @@ async function syncTransferData() {
     if (!supabase) throw new Error('Supabase não configurado');
     console.log('[TransferSync] Iniciando sync de dados de transferência...');
 
-    // 1. Busca dados atuais do Supabase
-    const { data: current, error: fetchErr } = await supabase
-        .from('transfer_promotions')
-        .select('*')
-        .eq('active', true);
-    if (fetchErr) throw fetchErr;
-
-    // 2. Scrape todas as fontes em paralelo (com limite de concorrência)
-    const limit = pLimit(3); // max 3 simultâneos para não sobrecarregar
-    const scraped = await Promise.all(
-        TRANSFER_SOURCES.map(source => limit(() => scrapeTransferSource(source)))
-    );
-    const validScraped = scraped.filter(Boolean);
-    console.log(`[TransferSync] Scraped ${validScraped.length}/${TRANSFER_SOURCES.length} fontes`);
-
-    // 3. Analisa com Claude
-    const analysis = await analyzeTransferDataWithClaude(validScraped, current);
-    console.log(`[TransferSync] Claude: changes_detected=${analysis.changes_detected}`);
-    console.log(`[TransferSync] Resumo: ${analysis.summary}`);
-
-    // 4. Se há mudanças, atualiza Supabase
+    const startedAt = new Date().toISOString();
+    let validScraped = [];
     let updatedCount = 0;
-    if (analysis.changes_detected && Array.isArray(analysis.promotions)) {
-        for (const promo of analysis.promotions) {
-            const existing = current?.find(r => r.card_id === promo.card_id && r.program === promo.program);
-            if (!existing) continue;
+    let errorMsg = null;
 
-            const updates = {
-                bonus_percent: promo.bonus_percent ?? promo.bonusPercent ?? existing.bonus_percent,
-                club_bonus_percent: promo.club_bonus_percent ?? promo.clubBonusPercent ?? existing.club_bonus_percent,
-                club_tier_bonuses: promo.club_tier_bonuses ?? promo.clubTierBonuses ?? existing.club_tier_bonuses,
-                valid_until: promo.valid_until ?? promo.validUntil ?? existing.valid_until,
-                description: promo.description ?? existing.description,
-                is_periodic: promo.is_periodic ?? promo.isPeriodic ?? existing.is_periodic,
-                last_confirmed: promo.last_confirmed ?? promo.lastConfirmed ?? existing.last_confirmed,
-                rules: promo.rules ?? existing.rules,
-                updated_at: new Date().toISOString(),
-            };
+    try {
+        // Diagnóstico de env vars
+        console.log('[TransferSync] ANTHROPIC_API_KEY configurada:', !!process.env.ANTHROPIC_API_KEY);
+        console.log('[TransferSync] SUPABASE_SERVICE_ROLE_KEY configurada:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-            const { error: updateErr } = await supabase
-                .from('transfer_promotions')
-                .update(updates)
-                .eq('id', existing.id);
+        // 1. Busca dados atuais do Supabase
+        const { data: current, error: fetchErr } = await supabase
+            .from('transfer_promotions')
+            .select('*')
+            .eq('active', true);
+        if (fetchErr) throw new Error(`Supabase fetch: ${fetchErr.message}`);
+        console.log(`[TransferSync] ${current?.length ?? 0} promoções no Supabase`);
 
-            if (updateErr) {
-                console.error(`[TransferSync] Erro ao atualizar ${promo.card_id}→${promo.program}:`, updateErr.message);
-            } else {
-                updatedCount++;
+        // 2. Scrape todas as fontes em paralelo (max 3 simultâneos)
+        const limiter = pLimit(3);
+        const scraped = await Promise.all(
+            TRANSFER_SOURCES.map(source => limiter(() => scrapeTransferSource(source)))
+        );
+        validScraped = scraped.filter(Boolean);
+        console.log(`[TransferSync] Scraped ${validScraped.length}/${TRANSFER_SOURCES.length} fontes`);
+
+        // 3. Analisa com Claude
+        const analysis = await analyzeTransferDataWithClaude(validScraped, current);
+        console.log(`[TransferSync] Claude: changes_detected=${analysis.changes_detected}`);
+        console.log(`[TransferSync] Resumo: ${analysis.summary}`);
+
+        // 4. Se há mudanças, atualiza Supabase
+        if (analysis.changes_detected && Array.isArray(analysis.promotions)) {
+            for (const promo of analysis.promotions) {
+                const existing = current?.find(r => r.card_id === promo.card_id && r.program === promo.program);
+                if (!existing) continue;
+                const updates = {
+                    bonus_percent: promo.bonus_percent ?? promo.bonusPercent ?? existing.bonus_percent,
+                    club_bonus_percent: promo.club_bonus_percent ?? promo.clubBonusPercent ?? existing.club_bonus_percent,
+                    club_tier_bonuses: promo.club_tier_bonuses ?? promo.clubTierBonuses ?? existing.club_tier_bonuses,
+                    valid_until: promo.valid_until ?? promo.validUntil ?? existing.valid_until,
+                    description: promo.description ?? existing.description,
+                    is_periodic: promo.is_periodic ?? promo.isPeriodic ?? existing.is_periodic,
+                    last_confirmed: promo.last_confirmed ?? promo.lastConfirmed ?? existing.last_confirmed,
+                    rules: promo.rules ?? existing.rules,
+                    updated_at: new Date().toISOString(),
+                };
+                const { error: updateErr } = await supabase
+                    .from('transfer_promotions').update(updates).eq('id', existing.id);
+                if (updateErr) {
+                    console.error(`[TransferSync] Erro ao atualizar ${promo.card_id}→${promo.program}:`, updateErr.message);
+                } else {
+                    updatedCount++;
+                }
             }
         }
+
+        // 5. Invalida cache se houve mudanças
+        if (analysis.changes_detected) {
+            promotionsCacheAt = 0;
+            await refreshPromotionsCache();
+        }
+
+        console.log(`[TransferSync] Concluído. Atualizadas: ${updatedCount} promoções`);
+
+        // 6. Salva log de sucesso
+        const logRes = await supabase.from('transfer_sync_log').insert({
+            synced_at: startedAt,
+            sources_scraped: validScraped.length,
+            changes_detected: analysis.changes_detected ?? false,
+            rows_updated: updatedCount,
+            summary: analysis.summary ?? '',
+        });
+        if (logRes.error) console.error('[TransferSync] Erro ao salvar log:', logRes.error.message);
+
+        return { sourcesScraped: validScraped.length, changesDetected: analysis.changes_detected, rowsUpdated: updatedCount, summary: analysis.summary };
+
+    } catch (err) {
+        errorMsg = err.message;
+        console.error('[TransferSync] ERRO:', errorMsg);
+
+        // Salva log de erro para diagnóstico
+        await supabase.from('transfer_sync_log').insert({
+            synced_at: startedAt,
+            sources_scraped: validScraped.length,
+            changes_detected: false,
+            rows_updated: 0,
+            summary: `ERRO: ${errorMsg}`,
+        }).catch(e => console.error('[TransferSync] Falha ao salvar log de erro:', e.message));
+
+        throw err;
     }
-
-    // 5. Salva log no Supabase
-    await supabase.from('transfer_sync_log').insert({
-        synced_at: new Date().toISOString(),
-        sources_scraped: validScraped.length,
-        changes_detected: analysis.changes_detected ?? false,
-        rows_updated: updatedCount,
-        summary: analysis.summary ?? '',
-    }).catch(() => {}); // log failure não bloqueia
-
-    // 6. Invalida cache de promoções para próxima requisição buscar dados frescos
-    if (analysis.changes_detected) {
-        promotionsCacheAt = 0;
-        await refreshPromotionsCache();
-    }
-
-    console.log(`[TransferSync] Concluído. Atualizadas: ${updatedCount} promoções`);
-    return { sourcesScraped: validScraped.length, changesDetected: analysis.changes_detected, rowsUpdated: updatedCount, summary: analysis.summary };
 }
 
 // POST /api/admin/sync-transfer-data — dispara sync completo (chamado pelo GitHub Actions)
