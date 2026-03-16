@@ -667,8 +667,8 @@ body {
     flex-direction: column !important;
     align-items: center !important;
     gap: 4px !important;
-    padding: 4px 12px !important;
-    min-width: 44px !important;
+    padding: 4px 4px !important;
+    min-width: 40px !important;
     min-height: 44px !important;
     justify-content: center !important;
     border-radius: 12px !important;
@@ -691,6 +691,16 @@ body {
   .bottom-nav-item span {
     font-size: 10px !important;
     line-height: 1 !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .bottom-nav-item span {
+    display: none !important;
+  }
+  .bottom-nav-item {
+    min-height: 48px !important;
+    padding: 4px 6px !important;
   }
 }
 
