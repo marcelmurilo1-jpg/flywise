@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Search, Tag, Wallet, Plane, Map } from 'lucide-react'
+import { Search, Tag, Wallet, Plane, Map, Globe2 } from 'lucide-react'
 
 const NAV_ITEMS = [
     { to: '/home', icon: Search, label: 'Buscar' },
@@ -7,6 +7,7 @@ const NAV_ITEMS = [
     { to: '/wallet', icon: Wallet, label: 'Carteira' },
     { to: '/saved-strategies', icon: Plane, label: 'Estratégias' },
     { to: '/roteiro', icon: Map, label: 'Roteiro' },
+    { to: '/mapa', icon: Globe2, label: 'Mapa' },
 ]
 
 export function BottomNav() {

@@ -35,6 +35,7 @@ import Planos from '@/pages/Planos'
 import Checkout from '@/pages/Checkout'
 import Onboarding from '@/pages/Onboarding'
 import ChatBuscaAvancada from '@/pages/ChatBuscaAvancada'
+import Mapa from '@/pages/Mapa'
 import { BottomNav } from '@/components/BottomNav'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -57,7 +58,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 // Pages that should show BottomNav (authenticated app pages)
-const APP_ROUTES = ['/home', '/resultados', '/promotions', '/wallet', '/saved-strategies', '/roteiro', '/configuracoes', '/busca-avancada', '/chat']
+const APP_ROUTES = ['/home', '/resultados', '/promotions', '/wallet', '/saved-strategies', '/roteiro', '/configuracoes', '/busca-avancada', '/chat', '/mapa']
 
 function AppRoutesInner() {
   const { user } = useAuth()
@@ -103,6 +104,7 @@ function AppRoutes() {
         <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
         <Route path="/chat/:id" element={<ProtectedRoute><ChatBuscaAvancada /></ProtectedRoute>} />
+        <Route path="/mapa" element={<ProtectedRoute><Mapa /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <AppRoutesInner />
