@@ -248,14 +248,14 @@ export default function Mapa() {
                 <ZoomableGroup
                   zoom={zoom}
                   center={center}
-                  onMoveEnd={({ zoom: z, coordinates }) => {
+                  onMoveEnd={({ zoom: z, coordinates }: { zoom: number; coordinates: [number, number] }) => {
                     setZoom(Math.max(1, Math.min(8, z)))
                     setCenter(coordinates as [number, number])
                   }}
                 >
                   <Geographies geography={GEO_URL}>
-                    {({ geographies }) =>
-                      geographies.map(geo => {
+                    {({ geographies }: { geographies: any[] }) =>
+                      geographies.map((geo: any) => {
                         // França (250) é MultiPolygon incluindo Guiana Francesa — renderiza com split dedicado
                         if (Number(geo.id) === 250 && geo.geometry?.type === 'MultiPolygon') {
                           return (
@@ -275,8 +275,8 @@ export default function Mapa() {
                           <Geography
                             key={geo.rsmKey}
                             geography={geo}
-                            onClick={e => handleCountryClick(geo.id, e)}
-                            onMouseEnter={e => handleMouseEnter(geo.id, e)}
+                            onClick={(e: React.MouseEvent<SVGPathElement>) => handleCountryClick(geo.id, e)}
+                            onMouseEnter={(e: React.MouseEvent<SVGPathElement>) => handleMouseEnter(geo.id, e)}
                             onMouseLeave={handleMouseLeave}
                             style={{
                               default: { fill: getDefaultFill(status), stroke: '#fff', strokeWidth: 0.4, outline: 'none', cursor: 'pointer' },

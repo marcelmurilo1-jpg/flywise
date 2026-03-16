@@ -116,7 +116,7 @@ export const ALPHA2_TO_CONTINENT: Record<string, string> = {
   NO: "Europa", PL: "Europa", PT: "Europa", RO: "Europa", RU: "Europa", SM: "Europa",
   RS: "Europa", SK: "Europa", SI: "Europa", ES: "Europa", SE: "Europa", CH: "Europa",
   UA: "Europa", GB: "Europa", VA: "Europa",
-  TW: "Ásia", PS: "Ásia", SG: "Ásia", AE: "Ásia", EH: "África",
+  TW: "Ásia", PS: "Ásia", EH: "África",
   TZ: "África", GL: "América do Norte", FK: "América do Sul",
   NC: "Oceania", PR: "América do Norte", TF: "Antártida", AQ: "Antártida",
   GF: "América do Sul",
