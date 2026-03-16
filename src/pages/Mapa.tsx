@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { ComposableMap, Geographies, Geography, ZoomableGroup } from 'react-simple-maps'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Globe2, Star, CheckCircle2, TrendingUp, MapPin, Plus, Minus, RotateCcw, X, Info } from 'lucide-react'
+import { Globe2, Star, CheckCircle2, TrendingUp, MapPin, Plus, Minus, RotateCcw, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Header } from '@/components/Header'
@@ -367,28 +367,6 @@ export default function Mapa() {
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Como usar */}
-            <div style={{ background: '#eff6ff', borderRadius: '16px', border: '1px solid #bfdbfe', padding: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
-                <Info size={14} color="#2563eb" />
-                <span style={{ fontWeight: 700, fontSize: '12px', color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Como usar</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                {[
-                  { icon: '👆', text: 'Clique em um país para ver as opções' },
-                  { icon: '✅', text: '"Já visitei" marca o país em verde' },
-                  { icon: '⭐', text: '"Quero ir" adiciona à sua wishlist em amarelo' },
-                  { icon: '🔍', text: 'Scroll ou botões +/– para dar zoom' },
-                  { icon: '✋', text: 'Arraste o mapa para navegar' },
-                ].map(({ icon, text }) => (
-                  <div key={text} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: '13px', flexShrink: 0 }}>{icon}</span>
-                    <span style={{ fontSize: '12px', color: '#1e40af', lineHeight: '1.4' }}>{text}</span>
-                  </div>
-                ))}
-              </div>
             </div>
 
             {/* Recomendações */}
