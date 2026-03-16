@@ -6,7 +6,7 @@ import {
     Search, ArrowRight, ArrowRightLeft, Users,
     ChevronDown, CheckCircle2, BarChart3, Globe, Zap, Shield,
     Twitter, Instagram, Linkedin, Youtube, Flame, Lock, ChevronUp,
-    Info, MapPin, CreditCard, BookOpen, ChevronLeft, Bell, CalendarDays
+    MapPin, CreditCard, BookOpen, ChevronLeft, Bell, CalendarDays
 } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
@@ -752,9 +752,9 @@ export default function Landing() {
                         <div className="landing-hero-nav" style={{ justifySelf: 'center' }}>
                             <NavBar items={[
                                 { name: 'Como Funciona', url: '#como-funciona', icon: BookOpen },
+                                { name: 'Promoções', url: '#promocoes', icon: Flame },
                                 { name: 'Destinos', url: '#destinos', icon: MapPin },
                                 { name: 'Planos', url: '#planos', icon: CreditCard },
-                                { name: 'Sobre', url: '#sobre', icon: Info },
                             ]} />
                         </div>
 
@@ -981,7 +981,7 @@ export default function Landing() {
             </section>
 
             {/* ████ 5. ÚLTIMAS PROMOÇÕES ████ */}
-            <section className="landing-section" style={{ padding: '100px 60px', maxWidth: '1280px', margin: '0 auto' }}>
+            <section id="promocoes" className="landing-section" style={{ padding: '100px 60px', maxWidth: '1280px', margin: '0 auto' }}>
                 <div style={{ marginBottom: '48px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
                     <div>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#EEF2F8', color: '#2A60C2', fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: '999px', padding: '5px 14px', marginBottom: '14px' }}>
