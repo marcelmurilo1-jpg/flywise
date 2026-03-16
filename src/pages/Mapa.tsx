@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { ComposableMap, Geographies, Geography, ZoomableGroup } from 'react-simple-maps'
+import { ComposableMap, Geographies, Geography, ZoomableGroup, useMapContext } from 'react-simple-maps'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Globe2, Star, CheckCircle2, TrendingUp, MapPin, Plus, Minus, RotateCcw, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -33,15 +33,58 @@ interface HoverTooltip {
 }
 
 function getDefaultFill(status: CountryStatus | null) {
-  if (status === 'visited') return '#22c55e'
+  if (status === 'visited') return '#2A60C2'
   if (status === 'wishlist') return '#f59e0b'
   return '#cbd5e1'
 }
 
 function getHoverFill(status: CountryStatus | null) {
-  if (status === 'visited') return '#16a34a'
+  if (status === 'visited') return '#1d4fa8'
   if (status === 'wishlist') return '#d97706'
   return '#94a3b8'
+}
+
+// Componente especial para renderizar França dividida em Metro França + Guiana Francesa
+// O Geography padrão usa svgPath pré-computado para o MultiPolygon inteiro,
+// então usamos useMapContext para recomputar o path correto por sub-polígono.
+function FranceSplit({ geo, countries, onCountryClick, onMouseEnter, onMouseLeave }: {
+  geo: any
+  countries: Record<string, CountryStatus>
+  onCountryClick: (id: string, evt: React.MouseEvent<SVGPathElement>) => void
+  onMouseEnter: (id: string, evt: React.MouseEvent<SVGPathElement>) => void
+  onMouseLeave: () => void
+}) {
+  const { path } = useMapContext() as { path: (geo: any) => string | null }
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+  const coords = (geo.geometry?.coordinates ?? []) as number[][][][]
+  return (
+    <>
+      {coords.map((polygonCoords, i) => {
+        const outerRing = polygonCoords[0] ?? []
+        const avgLon = outerRing.length
+          ? outerRing.reduce((s: number, p: number[]) => s + p[0], 0) / outerRing.length
+          : 0
+        const id = avgLon < -20 ? '254' : '250'
+        const alpha2 = ISO_NUMERIC_TO_ALPHA2[id]
+        const status = alpha2 ? (countries[alpha2] ?? null) : null
+        const svgPath = path({ type: 'Polygon', coordinates: polygonCoords }) ?? ''
+        const isHovered = hoveredIdx === i
+        return (
+          <path
+            key={`france-${i}`}
+            d={svgPath}
+            fill={isHovered ? getHoverFill(status) : getDefaultFill(status)}
+            stroke="#fff"
+            strokeWidth={isHovered ? 0.5 : 0.4}
+            style={{ cursor: 'pointer', outline: 'none' }}
+            onClick={e => onCountryClick(id, e as any)}
+            onMouseEnter={e => { setHoveredIdx(i); onMouseEnter(id, e as any) }}
+            onMouseLeave={() => { setHoveredIdx(null); onMouseLeave() }}
+          />
+        )
+      })}
+    </>
+  )
 }
 
 export default function Mapa() {
@@ -55,6 +98,28 @@ export default function Mapa() {
   const [loading, setLoading] = useState(true)
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const isDraggingRef = useRef(false)
+
+  // Pointer-based drag detection with distance threshold (works on touch too)
+  useEffect(() => {
+    const el = mapContainerRef.current
+    if (!el) return
+    let startX = 0, startY = 0
+    const onDown = (e: PointerEvent) => {
+      startX = e.clientX; startY = e.clientY
+      isDraggingRef.current = false
+    }
+    const onMove = (e: PointerEvent) => {
+      if (Math.hypot(e.clientX - startX, e.clientY - startY) > 6) {
+        isDraggingRef.current = true
+      }
+    }
+    el.addEventListener('pointerdown', onDown)
+    el.addEventListener('pointermove', onMove)
+    return () => {
+      el.removeEventListener('pointerdown', onDown)
+      el.removeEventListener('pointermove', onMove)
+    }
+  }, [])
 
   useEffect(() => {
     if (!user) return
@@ -93,7 +158,7 @@ export default function Mapa() {
   const handleCountryClick = useCallback((geoId: string | number, evt: React.MouseEvent) => {
     if (isDraggingRef.current) return
     evt.stopPropagation()
-    const alpha2 = ISO_NUMERIC_TO_ALPHA2[String(geoId)]
+    const alpha2 = ISO_NUMERIC_TO_ALPHA2[String(Number(geoId))]
     if (!alpha2) return
     const rect = mapContainerRef.current?.getBoundingClientRect()
     if (!rect) return
@@ -105,7 +170,7 @@ export default function Mapa() {
 
   const handleMouseEnter = useCallback((geoId: string | number, evt: React.MouseEvent) => {
     if (selectedCard) return
-    const alpha2 = ISO_NUMERIC_TO_ALPHA2[String(geoId)]
+    const alpha2 = ISO_NUMERIC_TO_ALPHA2[String(Number(geoId))]
     if (!alpha2) return
     const rect = mapContainerRef.current?.getBoundingClientRect()
     if (!rect) return
@@ -119,11 +184,14 @@ export default function Mapa() {
   const visitedContinents = [...new Set(visitedList.map(c => ALPHA2_TO_CONTINENT[c]).filter(Boolean))]
   const percentage = ((visitedList.length / TOTAL_COUNTRIES) * 100).toFixed(1)
 
-  // Posição do popup card — fica dentro do container
+  // Posição do popup card — fica dentro do container; em mobile centraliza horizontalmente
   const getCardPosition = (x: number, y: number) => {
-    const W = 210, H = 155
+    const W = 210, H = 160
     const cW = mapContainerRef.current?.clientWidth ?? 600
     const cH = mapContainerRef.current?.clientHeight ?? 400
+    if (cW < 520) {
+      return { left: Math.max(8, (cW - W) / 2), top: cH - H - 12 }
+    }
     let left = x + 16
     let top = y - H / 2
     if (left + W > cW - 8) left = x - W - 8
@@ -136,28 +204,28 @@ export default function Mapa() {
     <div style={{ minHeight: '100vh', background: '#f1f5f9', display: 'flex', flexDirection: 'column' }}>
       <Header variant="app" />
 
-      <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '24px 16px', width: '100%', flex: 1 }}>
+      <div className="mapa-inner" style={{ maxWidth: '1180px', margin: '0 auto', padding: '24px 16px', width: '100%', flex: 1 }}>
 
         {/* Título */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '8px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Globe2 size={22} color="#0e2a55" strokeWidth={2.2} />
-              <h1 style={{ fontSize: '20px', fontWeight: 800, color: '#0e2a55', margin: 0 }}>Meu Mapa de Viagens</h1>
+              <h1 className="mapa-title" style={{ fontSize: '20px', fontWeight: 800, color: '#0e2a55', margin: 0 }}>Meu Mapa de Viagens</h1>
             </div>
-            <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>
-              Clique em qualquer país para marcar ou adicionar à wishlist. Use o scroll ou os botões para dar zoom.
-            </p>
+            {/* Legenda */}
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {[{ color: '#2A60C2', label: 'Visitado' }, { color: '#f59e0b', label: 'Quero ir' }, { color: '#cbd5e1', label: 'Não visitado' }].map(({ color, label }) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: color, flexShrink: 0 }} />
+                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>{label}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          {/* Legenda */}
-          <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
-            {[{ color: '#22c55e', label: 'Visitado' }, { color: '#f59e0b', label: 'Quero ir' }, { color: '#cbd5e1', label: 'Não visitado' }].map(({ color, label }) => (
-              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: color, flexShrink: 0 }} />
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>{label}</span>
-              </div>
-            ))}
-          </div>
+          <p className="mapa-desc" style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>
+            Toque em qualquer país para marcar ou adicionar à wishlist. Use os botões para dar zoom.
+          </p>
         </div>
 
         {/* Layout */}
@@ -166,11 +234,12 @@ export default function Mapa() {
           {/* Mapa */}
           <div
             ref={mapContainerRef}
+            className="mapa-map-container"
             style={{ background: '#dbeafe', borderRadius: '18px', border: '1px solid #bfdbfe', overflow: 'hidden', position: 'relative', minHeight: '480px' }}
             onClick={() => setSelectedCard(null)}
           >
             {loading ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '480px', flexDirection: 'column', gap: '10px' }}>
+              <div className="mapa-loading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '480px', flexDirection: 'column', gap: '10px' }}>
                 <Globe2 size={32} color="#93c5fd" />
                 <span style={{ color: '#94a3b8', fontSize: '14px' }}>Carregando mapa…</span>
               </div>
@@ -179,8 +248,6 @@ export default function Mapa() {
                 <ZoomableGroup
                   zoom={zoom}
                   center={center}
-                  onMoveStart={() => { isDraggingRef.current = false }}
-                  onMove={() => { isDraggingRef.current = true }}
                   onMoveEnd={({ zoom: z, coordinates }) => {
                     setZoom(Math.max(1, Math.min(8, z)))
                     setCenter(coordinates as [number, number])
@@ -189,7 +256,20 @@ export default function Mapa() {
                   <Geographies geography={GEO_URL}>
                     {({ geographies }) =>
                       geographies.map(geo => {
-                        const alpha2 = ISO_NUMERIC_TO_ALPHA2[String(geo.id)]
+                        // França (250) é MultiPolygon incluindo Guiana Francesa — renderiza com split dedicado
+                        if (Number(geo.id) === 250 && geo.geometry?.type === 'MultiPolygon') {
+                          return (
+                            <FranceSplit
+                              key={geo.rsmKey}
+                              geo={geo}
+                              countries={countries}
+                              onCountryClick={handleCountryClick}
+                              onMouseEnter={handleMouseEnter}
+                              onMouseLeave={handleMouseLeave}
+                            />
+                          )
+                        }
+                        const alpha2 = ISO_NUMERIC_TO_ALPHA2[String(Number(geo.id))]
                         const status = alpha2 ? (countries[alpha2] ?? null) : null
                         return (
                           <Geography
@@ -223,11 +303,13 @@ export default function Mapa() {
                   key={i}
                   onClick={e => { e.stopPropagation(); action() }}
                   title={title}
+                  className="mapa-zoom-btn"
                   style={{
-                    width: '32px', height: '32px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.8)',
+                    width: '36px', height: '36px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.8)',
                     background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(6px)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     cursor: 'pointer', color: '#0e2a55', boxShadow: '0 2px 8px rgba(14,42,85,0.1)',
+                    touchAction: 'none',
                   }}
                 >
                   {icon}
@@ -261,7 +343,7 @@ export default function Mapa() {
                   }}
                 >
                   <p style={{ fontWeight: 700, fontSize: '12px', color: '#fff', margin: '0 0 2px' }}>{hoverTooltip.name}</p>
-                  <p style={{ fontSize: '11px', margin: 0, color: countries[hoverTooltip.alpha2] === 'visited' ? '#86efac' : countries[hoverTooltip.alpha2] === 'wishlist' ? '#fcd34d' : '#94a3b8', fontWeight: 500 }}>
+                  <p style={{ fontSize: '11px', margin: 0, color: countries[hoverTooltip.alpha2] === 'visited' ? '#93c5fd' : countries[hoverTooltip.alpha2] === 'wishlist' ? '#fcd34d' : '#94a3b8', fontWeight: 500 }}>
                     {countries[hoverTooltip.alpha2] === 'visited' ? '✓ Visitado' : countries[hoverTooltip.alpha2] === 'wishlist' ? '★ Quero ir' : 'Clique para marcar'}
                   </p>
                 </motion.div>
@@ -298,9 +380,9 @@ export default function Mapa() {
                           <span style={{
                             display: 'inline-block', marginTop: '4px',
                             fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px',
-                            background: status === 'visited' ? '#f0fdf4' : '#fffbeb',
-                            color: status === 'visited' ? '#16a34a' : '#d97706',
-                            border: `1px solid ${status === 'visited' ? '#bbf7d0' : '#fde68a'}`,
+                            background: status === 'visited' ? '#eff6ff' : '#fffbeb',
+                            color: status === 'visited' ? '#1d4fa8' : '#d97706',
+                            border: `1px solid ${status === 'visited' ? '#bfdbfe' : '#fde68a'}`,
                           }}>
                             {status === 'visited' ? '✓ Visitado' : '★ Quero ir'}
                           </span>
@@ -315,7 +397,7 @@ export default function Mapa() {
                       {status !== 'visited' && (
                         <button
                           onClick={() => applyStatus(selectedCard.alpha2, 'visited')}
-                          style={{ width: '100%', padding: '8px', borderRadius: '9px', border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#15803d', fontWeight: 700, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                          style={{ width: '100%', padding: '8px', borderRadius: '9px', border: '1px solid #bfdbfe', background: '#eff6ff', color: '#1d4fa8', fontWeight: 700, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                         >
                           <CheckCircle2 size={14} /> Já visitei!
                         </button>
@@ -353,7 +435,7 @@ export default function Mapa() {
                 <span style={{ fontWeight: 700, fontSize: '12px', color: '#0e2a55', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Suas estatísticas</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <StatRow icon="🌍" value={visitedList.length} label="países visitados" color="#22c55e" />
+                <StatRow icon="🌍" value={visitedList.length} label="países visitados" color="#2A60C2" />
                 <StatRow icon="📊" value={`${percentage}%`} label="do mundo explorado" color="#3b82f6" />
                 <StatRow icon="🗺️" value={visitedContinents.length} label={`de 7 continentes`} color="#8b5cf6" />
                 <StatRow icon="⭐" value={wishlistList.length} label="países na wishlist" color="#f59e0b" />
@@ -362,7 +444,7 @@ export default function Mapa() {
                 <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #f1f5f9' }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                     {visitedContinents.map(c => (
-                      <span key={c} style={{ fontSize: '10px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '2px 7px', fontWeight: 600 }}>{c}</span>
+                      <span key={c} style={{ fontSize: '10px', background: '#eff6ff', color: '#1d4fa8', border: '1px solid #bfdbfe', borderRadius: '6px', padding: '2px 7px', fontWeight: 600 }}>{c}</span>
                     ))}
                   </div>
                 </div>
@@ -422,13 +504,18 @@ export default function Mapa() {
             {/* Visitados */}
             {visitedList.length > 0 && (
               <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '18px', boxShadow: '0 2px 8px rgba(14,42,85,0.05)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '12px' }}>
-                  <CheckCircle2 size={14} color="#22c55e" />
-                  <span style={{ fontWeight: 700, fontSize: '12px', color: '#0e2a55', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Visitados ({visitedList.length})</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <CheckCircle2 size={14} color="#2A60C2" />
+                    <span style={{ fontWeight: 700, fontSize: '12px', color: '#0e2a55', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Visitados</span>
+                  </div>
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#2A60C2' }}>
+                    {visitedList.length} <span style={{ color: '#94a3b8', fontWeight: 500, fontSize: '11px' }}>/ {TOTAL_COUNTRIES} países</span>
+                  </span>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
                   {visitedList.slice(0, 18).map(code => (
-                    <span key={code} style={{ fontSize: '11px', background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '2px 7px', fontWeight: 600 }}>
+                    <span key={code} style={{ fontSize: '11px', background: '#eff6ff', color: '#1d4fa8', border: '1px solid #bfdbfe', borderRadius: '6px', padding: '2px 7px', fontWeight: 600 }}>
                       {ALPHA2_TO_NAME[code] ?? code}
                     </span>
                   ))}
@@ -456,6 +543,18 @@ export default function Mapa() {
         @media (max-width: 800px) {
           .mapa-grid { grid-template-columns: 1fr !important; }
         }
+        @media (max-width: 640px) {
+          .mapa-inner { padding: 14px 12px 80px !important; }
+          .mapa-title { font-size: 17px !important; }
+          .mapa-desc { display: none; }
+          .mapa-map-container { min-height: 320px !important; border-radius: 14px !important; }
+          .mapa-loading { height: 320px !important; }
+          .mapa-zoom-btn { width: 40px !important; height: 40px !important; }
+        }
+        @media (max-width: 400px) {
+          .mapa-map-container { min-height: 280px !important; }
+          .mapa-loading { height: 280px !important; }
+        }
       `}</style>
     </div>
   )
@@ -479,7 +578,7 @@ function RecommendationItem({ code, onAdd }: { code: string; onAdd: (s: CountryS
         <span style={{ fontSize: '12px', color: '#0e2a55', fontWeight: 600 }}>{ALPHA2_TO_NAME[code] ?? code}</span>
       </div>
       <div style={{ display: 'flex', gap: '4px' }}>
-        <button onClick={() => onAdd('visited')} style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '5px', padding: '3px 7px', fontSize: '10px', color: '#15803d', fontWeight: 700, cursor: 'pointer' }}>✓</button>
+        <button onClick={() => onAdd('visited')} style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '5px', padding: '3px 7px', fontSize: '10px', color: '#1d4fa8', fontWeight: 700, cursor: 'pointer' }}>✓</button>
         <button onClick={() => onAdd('wishlist')} style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '5px', padding: '3px 7px', fontSize: '10px', color: '#b45309', fontWeight: 700, cursor: 'pointer' }}>★</button>
       </div>
     </div>

@@ -32,6 +32,10 @@ export const ISO_NUMERIC_TO_ALPHA2: Record<string, string> = {
   "788": "TN", "792": "TR", "795": "TM", "800": "UG", "804": "UA", "807": "MK",
   "818": "EG", "826": "GB", "840": "US", "854": "BF", "858": "UY", "860": "UZ",
   "862": "VE", "882": "WS", "887": "YE", "894": "ZM",
+  // Países/territórios presentes no world-atlas que faltavam no mapeamento original
+  "158": "TW", "275": "PS", "702": "SG", "784": "AE", "732": "EH",
+  "834": "TZ", "304": "GL", "238": "FK", "540": "NC", "630": "PR",
+  "260": "TF", "10": "AQ", "254": "GF",
 }
 
 // Nome do país em português
@@ -76,6 +80,10 @@ export const ALPHA2_TO_NAME: Record<string, string> = {
   UG: "Uganda", UA: "Ucrânia", MK: "Macedônia do Norte", EG: "Egito", GB: "Reino Unido",
   US: "Estados Unidos", BF: "Burkina Faso", UY: "Uruguai", UZ: "Uzbequistão",
   VE: "Venezuela", WS: "Samoa", YE: "Iêmen", ZM: "Zâmbia",
+  TW: "Taiwan", PS: "Palestina", SG: "Singapura", AE: "Emirados Árabes", EH: "Saara Ocidental",
+  TZ: "Tanzânia", GL: "Groenlândia", FK: "Ilhas Malvinas", NC: "Nova Caledônia",
+  PR: "Porto Rico", TF: "Territórios Franceses do Sul", AQ: "Antártida",
+  GF: "Guiana Francesa",
 }
 
 // Continente por alpha-2
@@ -108,6 +116,10 @@ export const ALPHA2_TO_CONTINENT: Record<string, string> = {
   NO: "Europa", PL: "Europa", PT: "Europa", RO: "Europa", RU: "Europa", SM: "Europa",
   RS: "Europa", SK: "Europa", SI: "Europa", ES: "Europa", SE: "Europa", CH: "Europa",
   UA: "Europa", GB: "Europa", VA: "Europa",
+  TW: "Ásia", PS: "Ásia", SG: "Ásia", AE: "Ásia", EH: "África",
+  TZ: "África", GL: "América do Norte", FK: "América do Sul",
+  NC: "Oceania", PR: "América do Norte", TF: "Antártida", AQ: "Antártida",
+  GF: "América do Sul",
   // Oceania
   AU: "Oceania", FJ: "Oceania", KI: "Oceania", MH: "Oceania", FM: "Oceania",
   NR: "Oceania", NZ: "Oceania", PW: "Oceania", PG: "Oceania", WS: "Oceania",
@@ -179,6 +191,7 @@ export const IATA_TO_ALPHA2: Record<string, string> = {
   JNB: "ZA", CPT: "ZA", DUR: "ZA",
   CMN: "MA", RAK: "MA", TUN: "TN", ALG: "DZ",
   ADD: "ET", NBO: "KE", MBA: "KE",
+  DAR: "TZ", JRO: "TZ", ZNZ: "TZ",
   LOS: "NG", ABV: "NG", ACC: "GH", ABJ: "CI",
   DKR: "SN", MRU: "MU", SEZ: "SC",
   // Oceania
