@@ -98,7 +98,7 @@ export default function Home() {
                 {/* Aircraft reveal — full width hero */}
                 <div
                     className="fly-hero-banner"
-                    style={{ height: '420px', width: '100%', display: 'block' }}
+                    style={{ width: '100%', display: 'block', position: 'relative' }}
                 >
                     <AircraftReveal />
                 </div>
