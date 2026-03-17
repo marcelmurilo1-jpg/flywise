@@ -12,6 +12,13 @@ export function AircraftReveal() {
     const [mousePos, setMousePos] = useState({ x: 50, y: 50 })
     const [hovering, setHovering] = useState(false)
     const [hasInteracted, setHasInteracted] = useState(false)
+    const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false)
+    
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth <= 768)
+        window.addEventListener('resize', handleResize)
+        return () => window.removeEventListener('resize', handleResize)
+    }, [])
     
     // Smooth trailing effect using RequestAnimationFrame (lerp)
     const rafRef = useRef<number>(0)
@@ -120,7 +127,7 @@ export function AircraftReveal() {
         >
             {/* BOTTOM LAYER — exterior (Provides the natural container height) */}
             <img
-                src="/aircraft-exterior.jpg"
+                src={isMobile ? "/aircraft-exterior2.jpg" : "/aircraft-exterior.jpg"}
                 alt="Fly Wise exterior"
                 draggable={false}
                 style={{
@@ -131,13 +138,14 @@ export function AircraftReveal() {
                     display: 'block',
                     pointerEvents: 'none',
                     userSelect: 'none',
+                    borderRadius: isMobile ? '24px' : '0',
                 }}
             />
 
             {/* TOP LAYER — interior (Positioned absolute over the exterior) */}
             {/* The CSS mask-image creates a transparent 'hole' over the image based on mouse position */}
             <img
-                src="/aircraft-interior.jpg"
+                src={isMobile ? "/aircraft-interior2.jpg" : "/aircraft-interior.jpg"}
                 alt="Fly Wise interior"
                 draggable={false}
                 style={{
@@ -156,6 +164,7 @@ export function AircraftReveal() {
                     // Smooth fade in/out on hover
                     opacity: hovering ? 1 : 0,
                     transition: 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+                    borderRadius: isMobile ? '24px' : '0',
                 }}
             />
 
