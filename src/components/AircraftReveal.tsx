@@ -11,6 +11,7 @@ export function AircraftReveal() {
     const containerRef = useRef<HTMLDivElement>(null)
     const [mousePos, setMousePos] = useState({ x: 50, y: 50 })
     const [hovering, setHovering] = useState(false)
+    const [hasInteracted, setHasInteracted] = useState(false)
     
     // Smooth trailing effect using RequestAnimationFrame (lerp)
     const rafRef = useRef<number>(0)
@@ -36,15 +37,19 @@ export function AircraftReveal() {
 
     const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         if (!containerRef.current) return
+        if (!hasInteracted) setHasInteracted(true)
+        
         const rect = containerRef.current.getBoundingClientRect()
         targetCoords.current = {
             x: ((e.clientX - rect.left) / rect.width) * 100,
             y: ((e.clientY - rect.top) / rect.height) * 100,
         }
-    }, [])
+    }, [hasInteracted])
 
     const handleMouseEnter = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         if (!containerRef.current) return
+        if (!hasInteracted) setHasInteracted(true)
+        
         const rect = containerRef.current.getBoundingClientRect()
         const x = ((e.clientX - rect.left) / rect.width) * 100
         const y = ((e.clientY - rect.top) / rect.height) * 100
@@ -54,7 +59,7 @@ export function AircraftReveal() {
         currentCoords.current = { x, y }
         setMousePos({ x, y })
         setHovering(true)
-    }, [])
+    }, [hasInteracted])
 
     const handleMouseLeave = () => {
         setHovering(false)
@@ -65,15 +70,19 @@ export function AircraftReveal() {
     // --- Touch Support for Mobile ---
     const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
         if (!containerRef.current || !e.touches[0]) return
+        if (!hasInteracted) setHasInteracted(true)
+        
         const rect = containerRef.current.getBoundingClientRect()
         targetCoords.current = {
             x: ((e.touches[0].clientX - rect.left) / rect.width) * 100,
             y: ((e.touches[0].clientY - rect.top) / rect.height) * 100,
         }
-    }, [])
+    }, [hasInteracted])
 
     const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
         if (!containerRef.current || !e.touches[0]) return
+        if (!hasInteracted) setHasInteracted(true)
+        
         const rect = containerRef.current.getBoundingClientRect()
         const x = ((e.touches[0].clientX - rect.left) / rect.width) * 100
         const y = ((e.touches[0].clientY - rect.top) / rect.height) * 100
@@ -82,14 +91,14 @@ export function AircraftReveal() {
         currentCoords.current = { x, y }
         setMousePos({ x, y })
         setHovering(true)
-    }, [])
+    }, [hasInteracted])
 
     const handleTouchEnd = () => {
         setHovering(false)
     }
 
     // Size of the reveal mask (radius limits)
-    const MASK_SIZE = '18%'
+    const MASK_SIZE = '10%'
 
     return (
         <div
@@ -103,12 +112,8 @@ export function AircraftReveal() {
             style={{
                 position: 'relative',
                 width: '100%',
-                // Fixed aspect ratio cropping top and bottom natively
-                aspectRatio: '16 / 7.5',
-                borderRadius: '24px',
                 overflow: 'hidden',
                 cursor: 'default',
-                boxShadow: '0 32px 80px rgba(14,42,85,0.22)',
                 lineHeight: 0, // Removes phantom bottom spacing
                 touchAction: 'none', // Prevents scrolling while swiping on the plane
             }}
@@ -154,7 +159,7 @@ export function AircraftReveal() {
                 }}
             />
 
-            {/* Hint overlay to encourage interaction (fades on hover) */}
+            {/* Hint overlay to encourage interaction (fades permanently after first interaction) */}
             <div style={{
                 position: 'absolute',
                 inset: 0,
@@ -163,13 +168,10 @@ export function AircraftReveal() {
                 justifyContent: 'center',
                 background: 'rgba(6,15,31,0.08)',
                 pointerEvents: 'none',
-                opacity: hovering ? 0 : 1,
+                opacity: hasInteracted ? 0 : 1,
                 transition: 'opacity 0.5s ease',
             }}>
                 <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
                     background: 'rgba(14,26,50,0.6)',
                     backdropFilter: 'blur(10px)',
                     WebkitBackdropFilter: 'blur(10px)',
@@ -182,9 +184,6 @@ export function AircraftReveal() {
                     letterSpacing: '0.03em',
                     boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
                 }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                    </svg>
                     Passe o mouse ou dedo
                 </div>
             </div>
