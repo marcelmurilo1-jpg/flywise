@@ -83,7 +83,7 @@ export default function Home() {
             <style>{`
                 @media (max-width: 768px) {
                     .fly-hero-banner { height: 260px !important; }
-                    .fly-search-card { margin: -56px 16px 0 !important; padding: 20px !important; border-radius: 16px !important; }
+                    .fly-search-card { margin: -56px auto 0 !important; width: calc(100% - 32px) !important; padding: 20px !important; border-radius: 16px !important; }
                     .fly-search-grid { grid-template-columns: 1fr !important; }
                     .fly-search-grid > * { grid-column: 1 !important; }
                     .fly-recent-cards { flex-direction: column !important; }

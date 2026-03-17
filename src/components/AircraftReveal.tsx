@@ -138,7 +138,6 @@ export function AircraftReveal() {
                     display: 'block',
                     pointerEvents: 'none',
                     userSelect: 'none',
-                    borderRadius: isMobile ? '24px' : '0',
                 }}
             />
 
@@ -164,7 +163,6 @@ export function AircraftReveal() {
                     // Smooth fade in/out on hover
                     opacity: hovering ? 1 : 0,
                     transition: 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
-                    borderRadius: isMobile ? '24px' : '0',
                 }}
             />
 
