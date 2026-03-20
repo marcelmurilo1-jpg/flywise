@@ -381,6 +381,9 @@ function addDaysToDate(dateStr, days) {
 
 async function scrapeOneway(origin, destination, date) {
     return scrapeLimit(async () => {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+        let context;
+        try {
         const browser = await getBrowser();
 
         // ── Fase 2: fingerprint rotation ─────────────────────────────────────
@@ -395,7 +398,7 @@ async function scrapeOneway(origin, destination, date) {
         // ── Fase 4: headers HTTP consistentes com o UA ────────────────────────
         const secChUa = `"Chromium";v="${chromeV}", "Google Chrome";v="${chromeV}", "Not-A.Brand";v="99"`;
 
-        const context = await browser.newContext({
+        context = await browser.newContext({
             viewport: { width: vw, height: vh },
             locale: 'pt-BR',
             timezoneId: timezone,
@@ -411,18 +414,7 @@ async function scrapeOneway(origin, destination, date) {
                 'Referer': 'https://www.google.com/',
             },
         });
-        let page;
-        try {
-            page = await context.newPage();
-        } catch (ctxErr) {
-            // Context/browser died between getBrowser() and newPage() — force reset and retry once
-            console.warn('[GFlights] Contexto fechado inesperadamente, reiniciando browser...');
-            try { await context.close(); } catch (_) {}
-            _browser = null;
-            const freshBrowser = await getBrowser();
-            const freshCtx = await freshBrowser.newContext({ viewport: { width: vw, height: vh }, locale: 'pt-BR', timezoneId: timezone, userAgent: ua });
-            page = await freshCtx.newPage();
-        }
+        const page = await context.newPage();
 
         // Patch complementar (stealth plugin já cobre a maioria, mas reforçamos)
         await page.addInitScript((mac) => {
@@ -431,7 +423,6 @@ async function scrapeOneway(origin, destination, date) {
             window.chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
         }, isMac);
 
-        try {
             const query = encodeURIComponent(`Flights from ${origin} to ${destination} on ${date} one way`);
             const url = `https://www.google.com/travel/flights?q=${query}&curr=BRL&hl=pt-BR`;
 
@@ -544,10 +535,18 @@ async function scrapeOneway(origin, destination, date) {
             await context.close();
             return flights;
         } catch (err) {
+            if (context) { try { await context.close(); } catch (_) {} }
+            const isBrowserDead = /closed|disconnected|Target page|crashed/i.test(err.message ?? '');
+            if (isBrowserDead && attempt < 2) {
+                console.warn(`[GFlights] ${origin}→${destination} — browser morto (tentativa ${attempt}), reiniciando...`);
+                _browser = null;
+                continue;
+            }
             console.error(`[GFlights] ${origin}→${destination} erro:`, err.message);
-            await context.close();
             return [];
         }
+        } // end for
+        return [];
     });
 }
 
