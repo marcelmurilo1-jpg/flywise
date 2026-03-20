@@ -124,17 +124,44 @@ async function buildPromoString(programs: string[], sb: ReturnType<typeof create
 
 async function buildUserString(userId: string, neededMiles: number, sb: ReturnType<typeof createClient>): Promise<string> {
     try {
-        const { data } = await sb.from('buscas').select('user_miles')
-            .eq('user_id', userId).not('user_miles', 'eq', '{}')
-            .order('created_at', { ascending: false }).limit(1).single()
-        if (!data?.user_miles) return ''
-        const balances = Object.entries(data.user_miles as Record<string, number>)
-            .filter(([, pts]) => pts > 0).sort((a, b) => b[1] - a[1])
-        if (!balances.length) return ''
-        const str = balances.map(([prog, pts]) =>
-            `${prog}: ${pts.toLocaleString('pt-BR')} pts${pts >= neededMiles ? ' ✓ suficiente' : ''}`
-        ).join(' | ')
-        return `Saldo do usuário: ${str}`
+        // Lê user_metadata via Admin API (onde a Wallet salva os saldos)
+        const { data: { user }, error } = await sb.auth.admin.getUserById(userId)
+        if (error || !user) return ''
+
+        const meta = user.user_metadata ?? {}
+        const miles = (meta.miles ?? {}) as Record<string, number>
+        const activeCards: string[] = meta.activeCards ?? []
+        const activeClubs: string[] = meta.activeClubs ?? []
+        const clubTiers: Record<string, string> = meta.activeClubTiers ?? {}
+
+        const parts: string[] = []
+
+        // Saldos de milhas
+        const balances = Object.entries(miles)
+            .filter(([, pts]) => pts > 0)
+            .sort((a, b) => b[1] - a[1])
+        if (balances.length > 0) {
+            const balStr = balances
+                .map(([prog, pts]) => `${prog}: ${pts.toLocaleString('pt-BR')} pts${pts >= neededMiles ? ' ✓' : ''}`)
+                .join(' | ')
+            parts.push(`Saldo carteira: ${balStr}`)
+        }
+
+        // Cartões de crédito ativos (relevantes para acúmulo)
+        if (activeCards.length > 0) {
+            parts.push(`Cartões ativos: ${activeCards.slice(0, 4).join(', ')}`)
+        }
+
+        // Clubes de fidelidade e tier
+        if (activeClubs.length > 0) {
+            const clubStr = activeClubs.map(c => {
+                const tier = clubTiers[c]
+                return tier ? `${c} (${tier})` : c
+            }).join(', ')
+            parts.push(`Clubes: ${clubStr}`)
+        }
+
+        return parts.length > 0 ? parts.join('\n') : ''
     } catch { return '' }
 }
 
@@ -276,12 +303,15 @@ serve(async (req) => {
                     {
                         role: 'system',
                         content: `Você é FlyWise, especialista em programas de fidelidade e milhas aéreas do Brasil (Smiles, LATAM Pass, TudoAzul, Livelo, Esfera, Membership Rewards, Elo Mais).
-Sua função: analisar o voo selecionado e gerar a estratégia MAIS ECONÔMICA para emiti-lo com milhas.
+Sua função: analisar o voo selecionado e gerar a estratégia MAIS ECONÔMICA considerando o perfil real do usuário.
 Regras:
+- SE o usuário já tem saldo suficiente (marcado com ✓), priorize esse programa no passo 1
+- SE o usuário tem cartões ativos, cite-os no passo 1 como forma de acúmulo/transferência
+- SE o usuário tem clube (ex: Smiles Diamante), mencione benefícios de tier no passo 3
 - Priorize promoções de transferência ativas para reduzir milhas necessárias
 - Os steps devem ser ACIONÁVEIS e ESPECÍFICOS: mencione nome de cartão, banco, app, prazo
-- Calcule milhas_necessarias com base no programa recomendado (Smiles BR→USA economy: ~35.000-45.000 milhas; business: ~55.000-70.000)
-- taxas_estimadas_brl: Smiles cobra baixas taxas; LATAM Pass cobra combustível (pode ser R$400+)
+- Calcule milhas_necessarias com base no programa recomendado (Smiles BR→USA economy: ~35.000-45.000; business: ~55.000-70.000; BR→EUR economy: ~45.000-60.000)
+- taxas_estimadas_brl: Smiles cobra pouco (~R$50-150); LATAM Pass cobra combustível (~R$300-600+)
 - Responda APENAS em JSON válido sem texto adicional.`,
                     },
                     { role: 'user', content: userPrompt },
