@@ -275,17 +275,21 @@ serve(async (req) => {
             }
         }
 
-        // 3. Check cache — return existing strategy if generated in the last 24h
+        // 3. Check cache — only when flightId is provided (seatsContext flow has no DB flight)
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-        const { data: cached } = await sb
-            .from('strategies')
-            .select('structured_result, tokens_used')
-            .eq('flight_id', flightId)
-            .gte('created_at', oneDayAgo)
-            .not('structured_result', 'is', null)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single()
+        let cached: { structured_result: unknown; tokens_used: number | null } | null = null
+        if (flightId) {
+            const { data } = await sb
+                .from('strategies')
+                .select('structured_result, tokens_used')
+                .eq('flight_id', flightId)
+                .gte('created_at', oneDayAgo)
+                .not('structured_result', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single()
+            cached = data
+        }
 
         if (cached?.structured_result) {
             console.log(`[strategy] Cache hit for flight ${flightId}`)
@@ -389,24 +393,28 @@ REGRAS OBRIGATÓRIAS:
         let parsed: Record<string, unknown> = {}
         try { parsed = JSON.parse(strategyJson) } catch { /* raw fallback */ }
 
-        // 6. Save to strategies table
+        // 6. Save to strategies table (non-blocking — don't let DB errors fail the response)
         if (userId) {
-            const busca = await sb.from('buscas').select('id').eq('user_id', userId)
-                .order('created_at', { ascending: false }).limit(1).single()
+            try {
+                const busca = await sb.from('buscas').select('id').eq('user_id', userId)
+                    .order('created_at', { ascending: false }).limit(1).single()
 
-            await sb.from('strategies').insert({
-                user_id: userId,
-                busca_id: busca.data?.id ?? null,
-                flight_id: flightId,
-                strategy_text: (parsed.steps as string[] ?? []).join('\n\n'),
-                tags: [parsed.programa_recomendado, iata, 'llm'].filter(Boolean),
-                economia_pct: parsed.economia_pct ?? null,
-                preco_cash: flight.preco_brl,
-                preco_estrategia: parsed.taxas_estimadas_brl ?? null,
-                structured_result: parsed,
-                llm_model: 'gpt-4o-mini',
-                tokens_used: tokensUsed,
-            })
+                await sb.from('strategies').insert({
+                    user_id: userId,
+                    busca_id: busca.data?.id ?? null,
+                    flight_id: flightId ?? null,
+                    strategy_text: (parsed.steps as string[] ?? []).join('\n\n'),
+                    tags: [parsed.programa_recomendado, iata, 'llm'].filter(Boolean),
+                    economia_pct: parsed.economia_pct ?? null,
+                    preco_cash: flight.preco_brl,
+                    preco_estrategia: parsed.taxas_estimadas_brl ?? null,
+                    structured_result: parsed,
+                    llm_model: 'gpt-4o-mini',
+                    tokens_used: tokensUsed,
+                })
+            } catch (saveErr) {
+                console.error('[strategy] DB save failed (non-blocking):', saveErr)
+            }
         }
 
         return new Response(JSON.stringify({

@@ -158,24 +158,28 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                                 <div style={{ textAlign: 'center', padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
 
                                     {/* Comparação cash vs milhas */}
-                                    {cashPrice > 0 && (
+                                    {(cashPrice > 0 || seatsContext) && (
                                         <div style={{ width: '100%', background: 'linear-gradient(135deg, #F0FDF4, #DCFCE7)', border: '1px solid #BBF7D0', borderRadius: 12, padding: '14px 18px', textAlign: 'left' }}>
                                             <div style={{ fontSize: 11, fontWeight: 700, color: '#16A34A', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Comparação de custo</div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                                                <div>
-                                                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Preço em dinheiro</div>
-                                                    <div style={{ fontSize: 20, fontWeight: 800, color: '#0E2A55' }}>
-                                                        R$ {cashPrice.toLocaleString('pt-BR')}
+                                                {cashPrice > 0 && (
+                                                    <div>
+                                                        <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Preço em dinheiro</div>
+                                                        <div style={{ fontSize: 20, fontWeight: 800, color: '#0E2A55' }}>
+                                                            R$ {cashPrice.toLocaleString('pt-BR')}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <ArrowRight size={16} color="#CBD5E1" />
-                                                <div>
-                                                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Com milhas (est.)</div>
-                                                    <div style={{ fontSize: 20, fontWeight: 800, color: '#16A34A' }}>
-                                                        ~{Math.round(cashPrice * 55 / 1000).toLocaleString('pt-BR')}k pts
+                                                )}
+                                                {cashPrice > 0 && seatsContext && <ArrowRight size={16} color="#CBD5E1" />}
+                                                {seatsContext && (
+                                                    <div>
+                                                        <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Milhas selecionadas ({seatsContext.program})</div>
+                                                        <div style={{ fontSize: 20, fontWeight: 800, color: '#16A34A' }}>
+                                                            {seatsContext.totalMilhas.toLocaleString('pt-BR')} pts
+                                                        </div>
+                                                        {seatsContext.taxas && <div style={{ fontSize: 10, color: '#94A3B8' }}>+ {seatsContext.taxas} taxas</div>}
                                                     </div>
-                                                    <div style={{ fontSize: 10, color: '#94A3B8' }}>+ taxas</div>
-                                                </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}

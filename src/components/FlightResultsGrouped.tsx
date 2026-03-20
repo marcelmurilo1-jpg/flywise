@@ -16,6 +16,10 @@ interface FlightResultsGroupedProps {
     onNewSearch: () => void
     sidebarFilters?: FilterState
     returnDate?: string
+    cashIdaSel?: ResultadoVoo | null
+    onSelectCashIda?: (f: ResultadoVoo | null) => void
+    cashVoltaSel?: ResultadoVoo | null
+    onSelectCashVolta?: (f: ResultadoVoo | null) => void
 }
 
 function formatTime(iso?: string) {
@@ -92,7 +96,7 @@ function FlightLeg({
     )
 }
 
-export function FlightResultsGrouped({ flights, inboundFlights = [], searchInfo, onNewSearch, sidebarFilters }: Omit<FlightResultsGroupedProps, 'buscaId' | 'returnDate'> & { buscaId?: number; returnDate?: string }) {
+export function FlightResultsGrouped({ flights, inboundFlights = [], searchInfo, onNewSearch, sidebarFilters, cashIdaSel, onSelectCashIda, cashVoltaSel, onSelectCashVolta }: Omit<FlightResultsGroupedProps, 'buscaId' | 'returnDate'> & { buscaId?: number; returnDate?: string }) {
     const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
     function toggleExpand(id: string) {
         setExpandedCards(prev => {
@@ -238,6 +242,16 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], searchInfo,
             {/* ── Flight cards ─────────────────────────────────────────────── */}
             {(() => {
                 const hasInbound = inboundFlights.length > 0
+                const canSelect = !!(onSelectCashIda || onSelectCashVolta)
+
+                // Cash selection summary
+                const cashTotal = (() => {
+                    if (!cashIdaSel) return null
+                    const det = (cashIdaSel.detalhes as any) ?? {}
+                    if (det.returnPartida) return cashIdaSel.preco_brl ?? 0
+                    return (cashIdaSel.preco_brl ?? 0) + (cashVoltaSel ? (cashVoltaSel.preco_brl ?? 0) : 0)
+                })()
+
                 function FlightCard({ flight, idx, isReturn = false }: { flight: ResultadoVoo; idx: number; isReturn?: boolean }) {
                     const det = (flight.detalhes as any) ?? {}
                     const segsOut = (flight.segmentos as any[]) ?? []
@@ -253,6 +267,14 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], searchInfo,
                         ? `${det.paradas ?? 1} conexão · ${layoverCity}`
                         : stopCodes(segsOut)
 
+                    const isSelected = isReturn
+                        ? !!cashVoltaSel && cashVoltaSel.flight_key === flight.flight_key
+                        : !!cashIdaSel && cashIdaSel.flight_key === flight.flight_key
+                    const handleSelect = () => {
+                        if (isReturn) onSelectCashVolta?.(isSelected ? null : flight)
+                        else onSelectCashIda?.(isSelected ? null : flight)
+                    }
+
                     return (
                         <motion.div
                             key={cardId}
@@ -262,7 +284,7 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], searchInfo,
                             transition={{ delay: idx * 0.04 }}
                             style={{
                                 background: '#fff',
-                                border: '1px solid var(--border-light)',
+                                border: isSelected ? '2px solid #16A34A' : '1px solid var(--border-light)',
                                 borderRadius: 16,
                                 marginBottom: 12,
                                 overflow: 'hidden',
@@ -301,6 +323,21 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], searchInfo,
                                             <div style={{ fontSize: 9, color: '#94A3B8' }}>{(flight.preco_brl ?? 0) > 0 ? 'preço final' : 'incl. na ida'}</div>
                                         </div>
                                     </div>
+                                    {canSelect && (flight.preco_brl ?? 0) > 0 && (
+                                        <button
+                                            onClick={handleSelect}
+                                            style={{
+                                                background: isSelected ? '#16A34A' : 'none',
+                                                color: isSelected ? '#fff' : '#64748B',
+                                                border: `1px solid ${isSelected ? '#16A34A' : '#CBD5E1'}`,
+                                                borderRadius: 8, padding: '6px 12px',
+                                                fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                                fontFamily: 'inherit', whiteSpace: 'nowrap' as const,
+                                            }}
+                                        >
+                                            {isSelected ? '✓ Selecionado' : isReturn ? 'Selecionar volta' : 'Selecionar ida'}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -407,6 +444,31 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], searchInfo,
 
                 return (
                     <>
+                        {/* Cash selection summary bar */}
+                        {canSelect && cashIdaSel && (
+                            <div style={{ background: '#0E2A55', borderRadius: 12, padding: '12px 18px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                                <div>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                                        {cashVoltaSel ? 'Total selecionado (ida + volta)' : 'Ida selecionada'}
+                                    </div>
+                                    <div style={{ fontSize: 20, fontWeight: 900, color: '#fff' }}>
+                                        R$ {cashTotal?.toLocaleString('pt-BR')}
+                                    </div>
+                                    {!cashVoltaSel && hasInbound && (
+                                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                                            Selecione a volta abaixo para ver o total
+                                        </div>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => { onSelectCashIda?.(null); onSelectCashVolta?.(null) }}
+                                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontFamily: 'inherit' }}
+                                >
+                                    ← Limpar seleção
+                                </button>
+                            </div>
+                        )}
+
                         {/* Voos de ida */}
                         <AnimatePresence>
                             {sorted.map((flight, idx) => (
