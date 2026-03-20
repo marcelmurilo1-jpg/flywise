@@ -36,7 +36,7 @@ export function StrategyPanel({ open, onClose, flight, buscaId, cashPrice = 0 }:
             const token = session?.access_token
 
             const res = await supabase.functions.invoke('strategy', {
-                body: { flightId: flight.id, userId: user?.id },
+                body: { flightId: flight.id, userId: user?.id, cashPrice: cashPrice || undefined },
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             })
 
@@ -125,6 +125,30 @@ export function StrategyPanel({ open, onClose, flight, buscaId, cashPrice = 0 }:
                             {/* ── Not yet generated ────────────────────────────────── */}
                             {!strategy && !loading && !llmError && (
                                 <div style={{ textAlign: 'center', padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+
+                                    {/* Comparação cash vs milhas */}
+                                    {cashPrice > 0 && (
+                                        <div style={{ width: '100%', background: 'linear-gradient(135deg, #F0FDF4, #DCFCE7)', border: '1px solid #BBF7D0', borderRadius: 12, padding: '14px 18px', textAlign: 'left' }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#16A34A', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Comparação de custo</div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                                                <div>
+                                                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Preço em dinheiro</div>
+                                                    <div style={{ fontSize: 20, fontWeight: 800, color: '#0E2A55' }}>
+                                                        R$ {cashPrice.toLocaleString('pt-BR')}
+                                                    </div>
+                                                </div>
+                                                <ArrowRight size={16} color="#CBD5E1" />
+                                                <div>
+                                                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 2 }}>Com milhas (est.)</div>
+                                                    <div style={{ fontSize: 20, fontWeight: 800, color: '#16A34A' }}>
+                                                        ~{Math.round(cashPrice * 55 / 1000).toLocaleString('pt-BR')}k pts
+                                                    </div>
+                                                    <div style={{ fontSize: 10, color: '#94A3B8' }}>+ taxas</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div style={{ width: 56, height: 56, borderRadius: 16, background: canGenerateStrategy ? 'linear-gradient(135deg, #EEF2FF, #E0E7FF)' : 'linear-gradient(135deg, #FEF3C7, #FDE68A)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         {canGenerateStrategy ? <Sparkles size={26} color="#4A90E2" /> : <Lock size={26} color="#D97706" />}
                                     </div>
@@ -135,7 +159,9 @@ export function StrategyPanel({ open, onClose, flight, buscaId, cashPrice = 0 }:
                                                     Analisar estratégia com IA
                                                 </p>
                                                 <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 320 }}>
-                                                    A IA vai analisar o voo, verificar promoções ativas e calcular o melhor programa de milhas para esta rota.
+                                                    {cashPrice > 0
+                                                        ? 'A IA vai calcular quantas milhas você precisa, verificar promoções ativas e mostrar quanto você economiza vs o preço em dinheiro.'
+                                                        : 'A IA vai analisar o voo, verificar promoções ativas e calcular o melhor programa de milhas para esta rota.'}
                                                 </p>
                                             </div>
                                             <button

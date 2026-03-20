@@ -213,6 +213,7 @@ function SelectedFlightCard({
 
 export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, searchInfo, onNewSearch, sidebarFilters, returnDate }: FlightResultsGroupedProps) {
     const [selFlight, setSelFlight] = useState<ResultadoVoo | null>(null)
+    const [selCashPrice, setSelCashPrice] = useState(0)
     const [panelOpen, setPanelOpen] = useState(false)
     const [amadPhase, setAmadPhase] = useState<'browsing' | 'ida-sel' | 'confirmed'>('browsing')
     const [amadSel, setAmadSel] = useState<ResultadoVoo | null>(null)
@@ -459,10 +460,13 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
                                                         Selecionar →
                                                     </button>
                                                 )}
-                                                <button onClick={() => { setSelFlight(flight); setPanelOpen(true) }}
-                                                    style={{ background: 'none', color: '#0E2A55', border: '1px solid #CBD5E1', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
-                                                    Ver Detalhes
-                                                </button>
+                                                {/* Estratégia só aparece aqui para buscas somente ida */}
+                                                {!isRoundTrip && (
+                                                    <button onClick={() => { setSelFlight(flight); setSelCashPrice(flight.preco_brl ?? 0); setPanelOpen(true) }}
+                                                        style={{ background: 'none', color: '#0E2A55', border: '1px solid #CBD5E1', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
+                                                        Ver Detalhes
+                                                    </button>
+                                                )}
                                             </>
                                         )}
                                     </div>
@@ -634,12 +638,39 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
                                 {amadReturnSel && (
                                     <SelectedFlightCard flight={amadReturnSel} label="VOLTA CONFIRMADA" />
                                 )}
-                                <div style={{ background: '#0E2A55', borderRadius: 12, padding: '14px 20px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total (ida + volta)</span>
-                                    <span style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>
-                                        R$ {((amadSel?.preco_brl ?? 0) + (amadReturnSel?.preco_brl ?? 0)).toLocaleString('pt-BR')}
-                                    </span>
-                                </div>
+                                {(() => {
+                                    const totalCash = (amadSel?.preco_brl ?? 0) + (amadReturnSel?.preco_brl ?? 0)
+                                    return (
+                                        <div style={{ background: '#0E2A55', borderRadius: 12, padding: '14px 20px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                                            <div>
+                                                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total (ida + volta)</div>
+                                                <div style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>
+                                                    R$ {totalCash.toLocaleString('pt-BR')}
+                                                </div>
+                                            </div>
+                                            {amadSel && (
+                                                <button
+                                                    onClick={() => {
+                                                        setSelFlight(amadSel)
+                                                        setSelCashPrice(totalCash)
+                                                        setPanelOpen(true)
+                                                    }}
+                                                    style={{
+                                                        background: 'linear-gradient(135deg, #16A34A, #22C55E)',
+                                                        color: '#fff', border: 'none', borderRadius: 10,
+                                                        padding: '10px 20px', fontSize: 13, fontWeight: 700,
+                                                        cursor: 'pointer', fontFamily: 'inherit',
+                                                        display: 'flex', alignItems: 'center', gap: 6,
+                                                        boxShadow: '0 4px 12px rgba(22,163,74,0.4)',
+                                                        whiteSpace: 'nowrap' as const,
+                                                    }}
+                                                >
+                                                    ⚡ Gerar Estratégia com Milhas
+                                                </button>
+                                            )}
+                                        </div>
+                                    )
+                                })()}
                                 <button onClick={() => { setAmadPhase('browsing'); setAmadSel(null); setAmadReturnSel(null) }}
                                     style={{ alignSelf: 'flex-start', background: 'none', border: '1px solid #CBD5E1', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#64748B', cursor: 'pointer', fontFamily: 'inherit', marginBottom: 12 }}>
                                     ← Escolher novamente
@@ -655,6 +686,7 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
                     open={panelOpen}
                     flight={selFlight}
                     buscaId={buscaId}
+                    cashPrice={selCashPrice}
                     onClose={() => setPanelOpen(false)}
                 />
             )}

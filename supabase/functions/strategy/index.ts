@@ -186,7 +186,7 @@ serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
     try {
-        const { flightId, userId } = await req.json()
+        const { flightId, userId, cashPrice } = await req.json()
         if (!flightId) return new Response(JSON.stringify({ error: 'flightId required' }), { status: 400, headers: corsHeaders })
 
         // Init Supabase with service role (can bypass RLS to read flight owned by user)
@@ -281,8 +281,18 @@ serve(async (req) => {
         // 4. Assemble prompt
         const sections = [
             '=== VOO SELECIONADO ===', flightStr,
-            '\n=== PROMOÇÕES ATIVAS ===', promoStr,
         ]
+        // Se o usuário informou o preço cash real da combinação ida+volta selecionada, inclui
+        if (cashPrice && cashPrice > 0) {
+            const totalBrl = Number(cashPrice)
+            const milhasEst = Math.round((totalBrl * 55) / 1000) * 1000
+            sections.push(
+                `\n=== PREÇO CASH DA COMBINAÇÃO SELECIONADA ===`,
+                `Preço total ida+volta em dinheiro: R$ ${totalBrl.toLocaleString('pt-BR')} | Milhas estimadas para cobrir: ~${milhasEst.toLocaleString('pt-BR')} pts`,
+                `Use este valor como base de comparação para calcular economia_pct.`,
+            )
+        }
+        sections.push('\n=== PROMOÇÕES ATIVAS ===', promoStr)
         if (userStr) sections.push('\n=== SALDO DO USUÁRIO ===', userStr)
         sections.push(`\nResponda APENAS com JSON neste formato:\n${JSON_SCHEMA}`)
         const userPrompt = sections.join('\n')
