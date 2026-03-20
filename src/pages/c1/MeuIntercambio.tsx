@@ -713,18 +713,23 @@ const STAGE2_SPECIALTIES = [
 
 // ── Setup Modal ───────────────────────────────────────────────────────────────
 
-function Stage2SetupModal({ intercambio, onConfirm }: {
-    intercambio: Intercambio
+function Stage2SetupModal({ onConfirm }: {
     onConfirm: (specialty: string, hospitals: string[]) => void
 }) {
+    const { state } = useC1()
     const [step, setStep] = useState<'specialty' | 'hospitals'>('specialty')
     const [specialty, setSpecialty] = useState('')
-    const defaultHospitals = [intercambio.hospital.name]
-    const [checkedHospitals, setCheckedHospitals] = useState<string[]>(defaultHospitals)
+
+    // All hospitals of interest (from user's intercambios)
+    const allHospitalNames = state.intercambios.map(i => i.hospital.name)
+    const [checkedHospitals, setCheckedHospitals] = useState<string[]>(allHospitalNames)
 
     function toggleHospital(name: string) {
         setCheckedHospitals(prev => prev.includes(name) ? prev.filter(h => h !== name) : [...prev, name])
     }
+
+    // User's selected specialties (persisted in context)
+    const specialties = state.selectedSpecialties
 
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(4px)' }}>
@@ -742,7 +747,7 @@ function Stage2SetupModal({ intercambio, onConfirm }: {
                         <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Qual especialidade você escolheu?</h2>
                         <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '22px' }}>Especialidade do intercâmbio neste hospital.</p>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '24px' }}>
-                            {STAGE2_SPECIALTIES.map(s => (
+                            {specialties.map(s => (
                                 <button key={s} onClick={() => setSpecialty(s)}
                                     style={{ padding: '10px 14px', borderRadius: '10px', border: `1.5px solid ${specialty === s ? '#2563EB' : '#E2E8F0'}`, background: specialty === s ? '#EFF6FF' : '#FAFAFA', color: specialty === s ? '#2563EB' : '#334155', fontSize: '13px', fontWeight: specialty === s ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'all 0.15s' }}>
                                     {s}
@@ -757,7 +762,7 @@ function Stage2SetupModal({ intercambio, onConfirm }: {
                 ) : (
                     <motion.div key="step-b"
                         initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -8 }}
-                        style={{ background: '#fff', borderRadius: '20px', padding: '32px', width: '480px', maxWidth: '90vw', boxShadow: '0 24px 64px rgba(0,0,0,0.18)' }}
+                        style={{ background: '#fff', borderRadius: '20px', padding: '32px', width: '480px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.18)' }}
                     >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
                             <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={12} color="#fff" strokeWidth={3} /></div>
@@ -765,23 +770,31 @@ function Stage2SetupModal({ intercambio, onConfirm }: {
                             <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: '#fff' }}>2</div>
                         </div>
                         <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', marginBottom: '4px' }}>Hospitais de interesse</h2>
-                        <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '22px' }}>Confirme os hospitais para esta campanha de emails.</p>
+                        <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '22px' }}>Selecione os hospitais para esta campanha de emails.</p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
-                            {defaultHospitals.map(name => (
-                                <label key={name} onClick={() => toggleHospital(name)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '11px', border: `1.5px solid ${checkedHospitals.includes(name) ? '#BFDBFE' : '#E2E8F0'}`, background: checkedHospitals.includes(name) ? '#EFF6FF' : '#FAFAFA', cursor: 'pointer', transition: 'all 0.15s' }}>
-                                    <div style={{ width: 20, height: 20, borderRadius: '6px', flexShrink: 0, border: `2px solid ${checkedHospitals.includes(name) ? '#2563EB' : '#CBD5E1'}`, background: checkedHospitals.includes(name) ? '#2563EB' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
-                                        {checkedHospitals.includes(name) && <Check size={11} color="#fff" strokeWidth={3} />}
-                                    </div>
-                                    <Building2 size={14} color="#64748B" />
-                                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>{name}</span>
-                                </label>
-                            ))}
+                            {state.intercambios.map(i => {
+                                const name = i.hospital.name
+                                const checked = checkedHospitals.includes(name)
+                                return (
+                                    <label key={i.id} onClick={() => toggleHospital(name)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '11px', border: `1.5px solid ${checked ? '#BFDBFE' : '#E2E8F0'}`, background: checked ? '#EFF6FF' : '#FAFAFA', cursor: 'pointer', transition: 'all 0.15s' }}>
+                                        <div style={{ width: 20, height: 20, borderRadius: '6px', flexShrink: 0, border: `2px solid ${checked ? '#2563EB' : '#CBD5E1'}`, background: checked ? '#2563EB' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
+                                            {checked && <Check size={11} color="#fff" strokeWidth={3} />}
+                                        </div>
+                                        <img src={i.hospital.coverImage} alt={name} style={{ width: 28, height: 28, borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>{i.hospital.shortName}</div>
+                                            <div style={{ fontSize: '11px', color: '#94A3B8' }}>{i.hospital.city}, {i.hospital.state}</div>
+                                        </div>
+                                    </label>
+                                )
+                            })}
                         </div>
                         <div style={{ display: 'flex', gap: '10px' }}>
                             <button onClick={() => setStep('specialty')} style={{ padding: '12px 18px', borderRadius: '12px', border: '1.5px solid #E2E8F0', background: '#fff', color: '#64748B', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <ArrowLeft size={14} /> Voltar
                             </button>
-                            <button onClick={() => onConfirm(specialty, checkedHospitals)} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, #2563EB, #7C3AED)', color: '#fff', fontSize: '14px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                            <button onClick={() => onConfirm(specialty, checkedHospitals)} disabled={checkedHospitals.length === 0}
+                                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: checkedHospitals.length > 0 ? 'linear-gradient(135deg, #2563EB, #7C3AED)' : '#F1F5F9', color: checkedHospitals.length > 0 ? '#fff' : '#94A3B8', fontSize: '14px', fontWeight: 700, cursor: checkedHospitals.length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                 <CheckCircle size={15} /> Iniciar Estratégia
                             </button>
                         </div>
@@ -1539,7 +1552,6 @@ function Stage2({ intercambio }: { intercambio: Intercambio }) {
     if (!intercambio.stage2.setupDone) {
         return (
             <Stage2SetupModal
-                intercambio={intercambio}
                 onConfirm={(specialty, hospitals) =>
                     dispatch({ type: 'SETUP_STAGE2', intercambioId: intercambio.id, specialty, hospitals })
                 }
