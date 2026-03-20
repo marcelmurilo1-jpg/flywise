@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Plane, ChevronDown, ChevronUp } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ResultadoVoo } from '@/lib/supabase'
@@ -92,7 +92,7 @@ function FlightLeg({
     )
 }
 
-export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, searchInfo, onNewSearch, sidebarFilters, returnDate }: FlightResultsGroupedProps) {
+export function FlightResultsGrouped({ flights, inboundFlights = [], searchInfo, onNewSearch, sidebarFilters }: Omit<FlightResultsGroupedProps, 'buscaId' | 'returnDate'> & { buscaId?: number; returnDate?: string }) {
     const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
     function toggleExpand(id: string) {
         setExpandedCards(prev => {
@@ -238,7 +238,6 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
             {/* ── Flight cards ─────────────────────────────────────────────── */}
             {(() => {
                 const hasInbound = inboundFlights.length > 0
-                const isRoundTrip = !!returnDate || sorted.some(f => !!(f.detalhes as any)?.returnPartida) || hasInbound
                 function FlightCard({ flight, idx, isReturn = false }: { flight: ResultadoVoo; idx: number; isReturn?: boolean }) {
                     const det = (flight.detalhes as any) ?? {}
                     const segsOut = (flight.segmentos as any[]) ?? []
@@ -303,7 +302,7 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
                                         </div>
                                     </div>
                                     <div className="fly-card-actions" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                        <button onClick={() => toggleExpand(cardKey)}
+                                        <button onClick={() => toggleExpand(cardId)}
                                             style={{ background: 'none', color: '#64748B', border: '1px solid #E2EAF5', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                                             {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                                             Detalhes
