@@ -175,6 +175,95 @@ function WizardDatePicker({ dateGo, dateReturn, tripType, onDateGoChange, onDate
     )
 }
 
+// ─── Month picker for the wizard ──────────────────────────────────────────────
+const MONTHS_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+const MONTHS_FULL_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+
+function fmtMonth(ym: string) {
+    if (!ym) return ''
+    const [y, m] = ym.split('-').map(Number)
+    return `${MONTHS_FULL_PT[m - 1]} ${y}`
+}
+
+function WizardMonthPicker({ selected, onSelect }: {
+    selected: string
+    onSelect: (v: string) => void
+}) {
+    const now = new Date()
+    const [viewYear, setViewYear] = useState(now.getFullYear())
+    const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Selected month display */}
+            <div style={{
+                padding: '10px 14px', borderRadius: 12,
+                border: `2px solid ${selected ? '#2A60C2' : '#e2e8f0'}`,
+                background: selected ? '#EEF4FF' : '#fff',
+            }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>Mês selecionado</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: selected ? '#0E2A55' : '#CBD5E1' }}>
+                    {fmtMonth(selected) || 'Selecione um mês'}
+                </div>
+            </div>
+
+            {/* Month grid */}
+            <div style={{ background: '#fff', border: '1px solid #D4E2F4', borderRadius: 16, padding: '16px 20px' }}>
+                {/* Year nav */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                    <button type="button" onClick={() => setViewYear(y => y - 1)}
+                        disabled={viewYear <= now.getFullYear()}
+                        style={{
+                            width: 32, height: 32, borderRadius: 8, border: 'none',
+                            background: '#F1F5F9', cursor: viewYear <= now.getFullYear() ? 'default' : 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            opacity: viewYear <= now.getFullYear() ? 0.3 : 1,
+                        }}>
+                        <ChevronLeft size={16} color="#64748B" />
+                    </button>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#0E2A55' }}>{viewYear}</span>
+                    <button type="button" onClick={() => setViewYear(y => y + 1)}
+                        disabled={viewYear >= now.getFullYear() + 2}
+                        style={{
+                            width: 32, height: 32, borderRadius: 8, border: 'none',
+                            background: '#F1F5F9', cursor: viewYear >= now.getFullYear() + 2 ? 'default' : 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            opacity: viewYear >= now.getFullYear() + 2 ? 0.3 : 1,
+                        }}>
+                        <ChevronRight size={16} color="#64748B" />
+                    </button>
+                </div>
+
+                {/* Months grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                    {MONTHS_PT.map((label, idx) => {
+                        const ym = `${viewYear}-${String(idx + 1).padStart(2, '0')}`
+                        const isPast = ym < currentYM
+                        const isSel = ym === selected
+
+                        return (
+                            <button key={ym} type="button"
+                                disabled={isPast}
+                                onClick={() => !isPast && onSelect(ym)}
+                                style={{
+                                    padding: '10px 6px', borderRadius: 10, border: 'none',
+                                    fontFamily: 'inherit', fontSize: 13, fontWeight: isSel ? 700 : 500,
+                                    cursor: isPast ? 'default' : 'pointer',
+                                    opacity: isPast ? 0.3 : 1,
+                                    background: isSel ? '#2A60C2' : 'transparent',
+                                    color: isSel ? '#fff' : '#1E293B',
+                                    transition: 'background 0.1s',
+                                }}>
+                                {label}
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+        </div>
+    )
+}
+
 const CABIN_CLASSES = [
     { id: 'economy', label: 'Econômica', desc: 'Melhor custo-benefício' },
     { id: 'premium_economy', label: 'Premium Economy', desc: 'Mais espaço e conforto' },
@@ -208,6 +297,7 @@ type WizardData = {
     origin: string
     flexibleOrigin: boolean
     tripType: 'one-way' | 'round-trip'
+    dateMode: 'specific-date' | 'specific-month' | null
     dateGo: string
     dateReturn: string
     passengers: number
@@ -237,6 +327,7 @@ export default function SearchWizard() {
         origin: 'São Paulo (Todas)',
         flexibleOrigin: true,
         tripType: 'round-trip',
+        dateMode: null,
         dateGo: '',
         dateReturn: '',
         passengers: 1,
@@ -295,7 +386,7 @@ export default function SearchWizard() {
     const nextDisabled =
         (step === 1 && !data.destination.trim()) ||
         (step === 2 && !data.origin.trim()) ||
-        (step === 3 && !data.dateGo)
+        (step === 3 && (!data.dateMode || !data.dateGo))
 
     return (
         <div className="min-h-screen bg-white text-slate-900 flex flex-col font-sans relative overflow-hidden" style={{ overflowX: 'hidden' }}>
@@ -431,36 +522,117 @@ export default function SearchWizard() {
                                     <h1 className="text-4xl md:text-5xl font-light text-slate-800 tracking-tight leading-tight">
                                         Quando você pretende <span className="font-semibold text-[#4a90e2]">viajar?</span>
                                     </h1>
-                                    <p className="text-slate-400 text-base">Selecione as datas de ida e volta.</p>
+                                    <p className="text-slate-400 text-base">
+                                        {data.dateMode === null ? 'Escolha como prefere informar as datas.' : 'Selecione as datas de ida e volta.'}
+                                    </p>
                                 </div>
 
-                                {/* Trip type toggle */}
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    {(['round-trip', 'one-way'] as const).map(type => (
-                                        <button key={type}
-                                            onClick={() => setData({ ...data, tripType: type, dateReturn: type === 'one-way' ? '' : data.dateReturn })}
+                                {/* Date mode selection */}
+                                {data.dateMode === null && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                        {([
+                                            { id: 'specific-date', emoji: '📅', label: 'Data específica', desc: 'Escolha um dia exato no calendário' },
+                                            { id: 'specific-month', emoji: '🗓️', label: 'Mês específico', desc: 'Tenho flexibilidade dentro do mês' },
+                                        ] as const).map(opt => (
+                                            <button key={opt.id}
+                                                onClick={() => setData(d => ({ ...d, dateMode: opt.id, dateGo: '', dateReturn: '' }))}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', gap: 16,
+                                                    padding: '20px 24px', borderRadius: '16px',
+                                                    border: '1.5px solid #e2e8f0', background: '#fff',
+                                                    cursor: 'pointer', textAlign: 'left',
+                                                    fontFamily: 'inherit', transition: 'all 0.2s',
+                                                    boxShadow: '0 2px 8px rgba(14,42,85,0.04)',
+                                                }}
+                                                onMouseEnter={e => { e.currentTarget.style.border = '1.5px solid rgba(74,144,226,0.5)'; e.currentTarget.style.background = 'rgba(74,144,226,0.03)' }}
+                                                onMouseLeave={e => { e.currentTarget.style.border = '1.5px solid #e2e8f0'; e.currentTarget.style.background = '#fff' }}
+                                            >
+                                                <div style={{
+                                                    width: 52, height: 52, borderRadius: '14px',
+                                                    background: 'rgba(74,144,226,0.08)',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: 24, flexShrink: 0,
+                                                }}>
+                                                    {opt.emoji}
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <p style={{ fontWeight: 700, fontSize: '16px', color: '#1e293b', margin: 0 }}>{opt.label}</p>
+                                                    <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: 3 }}>{opt.desc}</p>
+                                                </div>
+                                                <ArrowRight style={{ width: 18, height: 18, color: '#cbd5e1', flexShrink: 0 }} />
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Specific date picker */}
+                                {data.dateMode === 'specific-date' && (
+                                    <>
+                                        <button onClick={() => setData(d => ({ ...d, dateMode: null, dateGo: '', dateReturn: '' }))}
                                             style={{
-                                                padding: '8px 18px', borderRadius: '10px', border: 'none',
-                                                fontFamily: 'inherit', fontSize: '14px', fontWeight: 600,
-                                                cursor: 'pointer', transition: 'all 0.2s',
-                                                background: data.tripType === type ? '#4a90e2' : 'rgba(14,42,85,0.06)',
-                                                color: data.tripType === type ? '#fff' : '#64748b',
-                                            }}
-                                        >
-                                            {type === 'round-trip' ? 'Ida e Volta' : 'Só Ida'}
+                                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                                background: 'none', border: 'none', cursor: 'pointer',
+                                                fontSize: '13px', fontWeight: 600, color: '#94a3b8',
+                                                padding: 0, fontFamily: 'inherit', alignSelf: 'flex-start',
+                                                marginTop: -16,
+                                            }}>
+                                            ← Mudar tipo de data
                                         </button>
-                                    ))}
-                                </div>
+                                        {/* Trip type toggle */}
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            {(['round-trip', 'one-way'] as const).map(type => (
+                                                <button key={type}
+                                                    onClick={() => setData({ ...data, tripType: type, dateReturn: type === 'one-way' ? '' : data.dateReturn })}
+                                                    style={{
+                                                        padding: '8px 18px', borderRadius: '10px', border: 'none',
+                                                        fontFamily: 'inherit', fontSize: '14px', fontWeight: 600,
+                                                        cursor: 'pointer', transition: 'all 0.2s',
+                                                        background: data.tripType === type ? '#4a90e2' : 'rgba(14,42,85,0.06)',
+                                                        color: data.tripType === type ? '#fff' : '#64748b',
+                                                    }}
+                                                >
+                                                    {type === 'round-trip' ? 'Ida e Volta' : 'Só Ida'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <WizardDatePicker
+                                            dateGo={data.dateGo}
+                                            dateReturn={data.dateReturn}
+                                            tripType={data.tripType}
+                                            onDateGoChange={v => setData(d => ({ ...d, dateGo: v }))}
+                                            onDateReturnChange={v => setData(d => ({ ...d, dateReturn: v }))}
+                                        />
+                                    </>
+                                )}
 
-                                <WizardDatePicker
-                                    dateGo={data.dateGo}
-                                    dateReturn={data.dateReturn}
-                                    tripType={data.tripType}
-                                    onDateGoChange={v => setData(d => ({ ...d, dateGo: v }))}
-                                    onDateReturnChange={v => setData(d => ({ ...d, dateReturn: v }))}
-                                />
+                                {/* Specific month picker */}
+                                {data.dateMode === 'specific-month' && (
+                                    <>
+                                        <button onClick={() => setData(d => ({ ...d, dateMode: null, dateGo: '', dateReturn: '' }))}
+                                            style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                                background: 'none', border: 'none', cursor: 'pointer',
+                                                fontSize: '13px', fontWeight: 600, color: '#94a3b8',
+                                                padding: 0, fontFamily: 'inherit', alignSelf: 'flex-start',
+                                                marginTop: -16,
+                                            }}>
+                                            ← Mudar tipo de data
+                                        </button>
+                                        <WizardMonthPicker
+                                            selected={data.dateGo}
+                                            onSelect={v => setData(d => ({ ...d, dateGo: v, dateReturn: '' }))}
+                                        />
+                                    </>
+                                )}
 
-                                <WizardNav onBack={prevStep} onNext={nextStep} nextDisabled={nextDisabled} />
+                                {data.dateMode !== null && (
+                                    <WizardNav onBack={prevStep} onNext={nextStep} nextDisabled={nextDisabled} />
+                                )}
+                                {data.dateMode === null && (
+                                    <div className="flex justify-start">
+                                        <BackBtn onClick={prevStep} />
+                                    </div>
+                                )}
                             </motion.div>
                         )}
 

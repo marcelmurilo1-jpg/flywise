@@ -9,7 +9,6 @@ import {
   ISO_NUMERIC_TO_ALPHA2,
   ALPHA2_TO_NAME,
   ALPHA2_TO_CONTINENT,
-  IATA_TO_ALPHA2,
   TOTAL_COUNTRIES,
 } from '@/lib/country-utils'
 
@@ -124,15 +123,19 @@ export default function Mapa() {
   useEffect(() => {
     if (!user) return
     async function load() {
-      const [{ data: visited }, { data: buscas }] = await Promise.all([
+      const [{ data: visited }, { data: convs }] = await Promise.all([
         supabase.from('visited_countries').select('country_code, status').eq('user_id', user!.id),
-        supabase.from('buscas').select('destino').eq('user_id', user!.id).order('created_at', { ascending: false }).limit(60),
+        supabase.from('chat_conversations').select('wizard_data').eq('user_id', user!.id).order('created_at', { ascending: false }).limit(60),
       ])
       const map: Record<string, CountryStatus> = {}
       for (const row of visited ?? []) map[row.country_code] = row.status
       setCountries(map)
-      const searchedCodes = [...new Set((buscas ?? []).map(b => IATA_TO_ALPHA2[b.destino]).filter(Boolean))]
-      setRecommendations(searchedCodes.filter(c => !map[c]).slice(0, 5))
+      const destinations = [...new Set(
+        (convs ?? [])
+          .map(c => (c.wizard_data as { destination?: string })?.destination?.trim())
+          .filter(Boolean) as string[]
+      )].slice(0, 5)
+      setRecommendations(destinations)
       setLoading(false)
     }
     load()
@@ -458,14 +461,13 @@ export default function Mapa() {
                   <MapPin size={14} color="#f59e0b" />
                   <span style={{ fontWeight: 700, fontSize: '12px', color: '#0e2a55', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Você já buscou</span>
                 </div>
-                <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 12px', lineHeight: 1.4 }}>Destinos das suas pesquisas ainda não marcados</p>
+                <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 12px', lineHeight: 1.4 }}>Destinos das suas pesquisas recentes</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {recommendations.map(code => (
-                    <RecommendationItem key={code} code={code} onAdd={status => {
-                      setCountries(prev => ({ ...prev, [code]: status }))
-                      setRecommendations(prev => prev.filter(c => c !== code))
-                      supabase.from('visited_countries').upsert({ user_id: user!.id, country_code: code, status }, { onConflict: 'user_id,country_code' })
-                    }} />
+                  {recommendations.map(dest => (
+                    <div key={dest} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 10px', borderRadius: '9px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                      <MapPin size={12} color="#94a3b8" />
+                      <span style={{ fontSize: '12px', color: '#0e2a55', fontWeight: 600 }}>{dest}</span>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -570,17 +572,3 @@ function StatRow({ icon, value, label, color }: { icon: string; value: string | 
   )
 }
 
-function RecommendationItem({ code, onAdd }: { code: string; onAdd: (s: CountryStatus) => void }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px', borderRadius: '9px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <MapPin size={12} color="#94a3b8" />
-        <span style={{ fontSize: '12px', color: '#0e2a55', fontWeight: 600 }}>{ALPHA2_TO_NAME[code] ?? code}</span>
-      </div>
-      <div style={{ display: 'flex', gap: '4px' }}>
-        <button onClick={() => onAdd('visited')} style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '5px', padding: '3px 7px', fontSize: '10px', color: '#1d4fa8', fontWeight: 700, cursor: 'pointer' }}>✓</button>
-        <button onClick={() => onAdd('wishlist')} style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '5px', padding: '3px 7px', fontSize: '10px', color: '#b45309', fontWeight: 700, cursor: 'pointer' }}>★</button>
-      </div>
-    </div>
-  )
-}
