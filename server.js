@@ -340,6 +340,11 @@ function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) 
 
 async function getBrowser() {
     if (_browser && _browser.isConnected()) return _browser;
+    // Reset zombie browser before relaunching
+    if (_browser) {
+        try { await _browser.close(); } catch (_) {}
+        _browser = null;
+    }
     await ensureChromium(); // aguarda instalação se ainda em curso
     const opts = {
         headless: true,
@@ -353,6 +358,11 @@ async function getBrowser() {
     };
     if (process.env.PROXY_URL) opts.proxy = { server: process.env.PROXY_URL };
     _browser = await chromiumExtra.launch(opts);
+    // Auto-reset when browser crashes or disconnects
+    _browser.on('disconnected', () => {
+        console.log('[GFlights] Navegador desconectado — será reiniciado na próxima requisição.');
+        _browser = null;
+    });
     console.log('[GFlights] Navegador iniciado (stealth ativo).');
     return _browser;
 }
@@ -401,7 +411,18 @@ async function scrapeOneway(origin, destination, date) {
                 'Referer': 'https://www.google.com/',
             },
         });
-        const page = await context.newPage();
+        let page;
+        try {
+            page = await context.newPage();
+        } catch (ctxErr) {
+            // Context/browser died between getBrowser() and newPage() — force reset and retry once
+            console.warn('[GFlights] Contexto fechado inesperadamente, reiniciando browser...');
+            try { await context.close(); } catch (_) {}
+            _browser = null;
+            const freshBrowser = await getBrowser();
+            const freshCtx = await freshBrowser.newContext({ viewport: { width: vw, height: vh }, locale: 'pt-BR', timezoneId: timezone, userAgent: ua });
+            page = await freshCtx.newPage();
+        }
 
         // Patch complementar (stealth plugin já cobre a maioria, mas reforçamos)
         await page.addInitScript((mac) => {
