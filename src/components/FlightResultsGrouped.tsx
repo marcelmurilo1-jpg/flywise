@@ -301,7 +301,7 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], searchInfo,
                                     <div style={{ width: 4, height: 32, borderRadius: 4, background: '#0E2A55' }} />
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <span style={{ fontSize: 15, fontWeight: 700, color: '#0E2A55' }}>{flight.companhia}</span>
+                                            <span style={{ fontSize: 15, fontWeight: 700, color: '#0E2A55' }}>{flight.companhia && !flight.companhia.startsWith('Companhia') ? flight.companhia : (iata || 'Companhia aérea')}</span>
                                             {det.voo_numero && <span style={{ fontSize: 11, color: '#94A3B8' }}>{det.voo_numero}</span>}
                                         </div>
                                         {iata && (
