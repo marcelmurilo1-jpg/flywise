@@ -274,14 +274,29 @@ export default function Resultados() {
                 setInboundFlights(inboundRows)
 
                 // Save outbound + inbound to Supabase in background (non-blocking)
+                // Use .select() to get back DB-assigned IDs and update local state
                 const insertRows = rows.map(r => { const { id, ...rest } = r; return rest })
                 const insertInbound = inboundRows.map(r => {
                     const { id, ...rest } = r
                     return { ...rest, detalhes: { ...(rest.detalhes as object ?? {}), isReturn: true } }
                 })
-                supabase.from('resultados_voos').insert([...insertRows, ...insertInbound]).then(({ error: saveErr }) => {
-                    if (saveErr) console.error('[Resultados] Save error (non-blocking):', saveErr)
-                })
+                supabase
+                    .from('resultados_voos')
+                    .insert([...insertRows, ...insertInbound])
+                    .select('id, origem, destino, partida, companhia')
+                    .then(({ data: saved, error: saveErr }) => {
+                        if (saveErr) {
+                            console.error('[Resultados] Save error (non-blocking):', saveErr)
+                            return
+                        }
+                        if (!saved?.length) return
+                        // Build lookup: "ORIGEM|DESTINO|PARTIDA|COMPANHIA" → id
+                        const key = (r: { origem?: string | null, destino?: string | null, partida?: string | null, companhia?: string | null }) =>
+                            `${r.origem}|${r.destino}|${r.partida}|${r.companhia}`
+                        const idMap = new Map(saved.map(r => [key(r), r.id as number]))
+                        setFlights(prev => prev.map(f => ({ ...f, id: idMap.get(key(f)) ?? f.id })))
+                        setInboundFlights(prev => prev.map(f => ({ ...f, id: idMap.get(key(f)) ?? f.id })))
+                    })
 
             } catch (e: unknown) {
                 console.error('[Resultados] load error:', e)

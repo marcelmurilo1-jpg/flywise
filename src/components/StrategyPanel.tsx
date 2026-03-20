@@ -140,16 +140,17 @@ export function StrategyPanel({ open, onClose, flight, buscaId, cashPrice = 0 }:
                                             </div>
                                             <button
                                                 onClick={generateStrategy}
+                                                disabled={!flight.id}
                                                 style={{
-                                                    background: 'linear-gradient(135deg, #2A60C2, #4A90E2)',
+                                                    background: flight.id ? 'linear-gradient(135deg, #2A60C2, #4A90E2)' : '#CBD5E1',
                                                     color: '#fff', border: 'none', borderRadius: 12,
                                                     padding: '12px 28px', fontFamily: 'inherit',
-                                                    fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                                                    fontSize: 14, fontWeight: 700, cursor: flight.id ? 'pointer' : 'not-allowed',
                                                     display: 'flex', alignItems: 'center', gap: 8,
-                                                    boxShadow: '0 4px 16px rgba(42,96,194,0.35)',
+                                                    boxShadow: flight.id ? '0 4px 16px rgba(42,96,194,0.35)' : 'none',
                                                 }}
                                             >
-                                                <Zap size={15} /> Gerar estratégia
+                                                {flight.id ? <><Zap size={15} /> Gerar estratégia</> : <><Loader2 size={15} className="spin" /> Preparando...</>}
                                             </button>
                                             <p style={{ fontSize: 11, color: '#94A3B8' }}>
                                                 {strategiesUsed}/{strategyLimit} {plan === 'free' ? 'estratégia usada' : 'estratégias usadas este mês'}

@@ -232,6 +232,19 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
         setAmadSel(null)
     }, [flights])
 
+    // Keep selFlight in sync when flights list is updated with DB-assigned IDs
+    useEffect(() => {
+        if (!selFlight) return
+        const updated = [...flights, ...inboundFlights].find(f =>
+            f.origem === selFlight.origem &&
+            f.destino === selFlight.destino &&
+            f.partida === selFlight.partida &&
+            f.companhia === selFlight.companhia &&
+            f.id !== selFlight.id
+        )
+        if (updated) setSelFlight(updated)
+    }, [flights, inboundFlights, selFlight])
+
     // (filtros gerenciados pela Sidebar — sem estado interno duplicado)
 
     // ── Filtering and Sorting (usa sidebarFilters diretamente) ───────────────
