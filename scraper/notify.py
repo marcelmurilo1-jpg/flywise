@@ -138,9 +138,10 @@ def promos_para_usuario(usuario: dict, promos: list[dict], ja_enviadas: set[int]
                 continue
             if subcategoria == "clube" and not usuario["alerta_award_space"]:
                 continue
-            # Filtro por programa: exige ao menos um selecionado com match
+            # Filtro por programa: se usuário selecionou programas, exige match;
+            # se não selecionou nenhum, recebe todas as promoções de milhas
             prefs_prog = usuario["programas"] or []
-            if prefs_prog and (not tags or any(t in prefs_prog for t in tags)):
+            if not prefs_prog or not tags or any(t in prefs_prog for t in tags):
                 resultado.append(p)
 
     return resultado[:MAX_PROMOS]
@@ -168,6 +169,8 @@ def _promo_block(p: dict) -> str:
     if len(conteudo) == 220:
         conteudo += "…"
 
+    url = p.get("url") or "https://flywisebr.com/promotions"
+
     expira = ""
     if p.get("valid_until"):
         expira = (
@@ -183,7 +186,7 @@ def _promo_block(p: dict) -> str:
       </h3>
       <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5">{conteudo}</p>
       {expira}
-      <a href="https://flywisebr.com/promotions" style="display:inline-block;margin-top:14px;padding:9px 18px;
+      <a href="{url}" style="display:inline-block;margin-top:14px;padding:9px 18px;
          border-radius:10px;background:#2563eb;color:#fff;font-size:13px;
          font-weight:700;text-decoration:none">Ver promoção →</a>
     </div>
@@ -300,11 +303,14 @@ def main():
         html    = build_html(selecionadas)
 
         print(f"📨  Enviando para {email} ({len(selecionadas)} promo(s))…")
-        ok = enviar_email(email, subject, html)
-        if ok:
-            print(f"   ✅ Enviado.")
-            registrar_envio(conn, user_id, [p["id"] for p in selecionadas])
-            total_enviados += len(selecionadas)
+        try:
+            ok = enviar_email(email, subject, html)
+            if ok:
+                print(f"   ✅ Enviado.")
+                registrar_envio(conn, user_id, [p["id"] for p in selecionadas])
+                total_enviados += len(selecionadas)
+        except Exception as exc:
+            print(f"   ⚠️  Erro ao enviar para {email}: {exc}")
         time.sleep(RATE_SLEEP)
 
     if total_enviados:
