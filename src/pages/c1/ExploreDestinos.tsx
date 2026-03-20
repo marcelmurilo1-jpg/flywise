@@ -36,6 +36,7 @@ type City = {
     name: string
     state: string
     gradient: string
+    photo: string
     tagline: string
     hospitals: number
     transport: string[]
@@ -50,6 +51,7 @@ type Hospital = {
     city: string
     state: string
     gradient: string
+    photo: string
     specialty: string[]
     rating: number
     handsOn: number
@@ -65,6 +67,7 @@ const CITIES: City[] = [
         name: 'Boston',
         state: 'MA',
         gradient: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #0ea5e9 100%)',
+        photo: '/c1-photos/city-boston.jpg',
         tagline: 'Capital da medicina americana',
         hospitals: 6,
         transport: ['MBTA (metrô)', 'Ônibus 24h', 'Lyft/Uber', 'Bicicleta (Bluebikes)'],
@@ -87,6 +90,7 @@ const CITIES: City[] = [
         name: 'New York',
         state: 'NY',
         gradient: 'linear-gradient(135deg, #1a1a2e 0%, #7c2d8b 50%, #ec4899 100%)',
+        photo: '/c1-photos/city-nyc.jpg',
         tagline: 'A cidade que nunca dorme (nem você)',
         hospitals: 8,
         transport: ['Metrô 24h', 'Ônibus MTA', 'Citi Bike', 'Ferry'],
@@ -109,6 +113,7 @@ const CITIES: City[] = [
         name: 'Chicago',
         state: 'IL',
         gradient: 'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #10b981 100%)',
+        photo: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=700&q=80&auto=format&fit=crop',
         tagline: 'The Windy City com hospitais de elite',
         hospitals: 5,
         transport: ['CTA (metrô/ônibus)', 'Divvy (bike)', 'Metra (trem)'],
@@ -134,6 +139,7 @@ const HOSPITALS: Hospital[] = [
         name: 'Brigham and Women\'s Hospital',
         city: 'Boston', state: 'MA',
         gradient: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)',
+        photo: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=700&q=80&auto=format&fit=crop',
         specialty: ['Cardiologia', 'Oncologia', 'Neuro'],
         rating: 4.9, handsOn: 82, preceptorRating: 95, reviews: 34,
         flix: [
@@ -152,6 +158,7 @@ const HOSPITALS: Hospital[] = [
         name: 'Massachusetts General Hospital',
         city: 'Boston', state: 'MA',
         gradient: 'linear-gradient(135deg, #0c4a6e 0%, #0284c7 100%)',
+        photo: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=700&q=80&auto=format&fit=crop',
         specialty: ['Neurologia', 'Psiquiatria', 'Cirurgia'],
         rating: 5.0, handsOn: 78, preceptorRating: 98, reviews: 51,
         flix: [
@@ -169,6 +176,7 @@ const HOSPITALS: Hospital[] = [
         name: 'Mount Sinai Hospital',
         city: 'New York', state: 'NY',
         gradient: 'linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%)',
+        photo: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=700&q=80&auto=format&fit=crop',
         specialty: ['Cardiologia', 'Endocrinologia', 'Genética'],
         rating: 4.8, handsOn: 75, preceptorRating: 91, reviews: 28,
         flix: [
@@ -187,6 +195,7 @@ const HOSPITALS: Hospital[] = [
         name: 'Northwestern Memorial Hospital',
         city: 'Chicago', state: 'IL',
         gradient: 'linear-gradient(135deg, #064e3b 0%, #059669 100%)',
+        photo: 'https://images.unsplash.com/photo-1504439468489-c8920d796a29?w=700&q=80&auto=format&fit=crop',
         specialty: ['Hepatologia', 'Transplante', 'Reumatologia'],
         rating: 4.7, handsOn: 80, preceptorRating: 89, reviews: 19,
         flix: [
@@ -204,6 +213,7 @@ const HOSPITALS: Hospital[] = [
         name: 'Columbia University Medical Center',
         city: 'New York', state: 'NY',
         gradient: 'linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%)',
+        photo: 'https://images.unsplash.com/photo-1602526216145-0e2e2f0bcb2e?w=700&q=80&auto=format&fit=crop',
         specialty: ['Neurologia', 'Cardiologia', 'Oncologia'],
         rating: 4.8, handsOn: 70, preceptorRating: 87, reviews: 22,
         flix: [
@@ -221,6 +231,7 @@ const HOSPITALS: Hospital[] = [
         name: 'Boston Children\'s Hospital',
         city: 'Boston', state: 'MA',
         gradient: 'linear-gradient(135deg, #0369a1 0%, #38bdf8 100%)',
+        photo: 'https://images.unsplash.com/photo-1597764690523-15bea4c581c9?w=700&q=80&auto=format&fit=crop',
         specialty: ['Pediatria', 'Cirurgia Pediátrica', 'Neonatologia'],
         rating: 4.9, handsOn: 88, preceptorRating: 96, reviews: 41,
         flix: [
@@ -238,6 +249,7 @@ const HOSPITALS: Hospital[] = [
         name: 'UChicago Medicine',
         city: 'Chicago', state: 'IL',
         gradient: 'linear-gradient(135deg, #1c1917 0%, #78350f 50%, #d97706 100%)',
+        photo: 'https://images.unsplash.com/photo-1551190822-a9333d879b1f?w=700&q=80&auto=format&fit=crop',
         specialty: ['Oncologia', 'Endocrinologia', 'Pesquisa Clínica'],
         rating: 4.6, handsOn: 72, preceptorRating: 90, reviews: 15,
         flix: [
@@ -254,6 +266,7 @@ const HOSPITALS: Hospital[] = [
         name: 'NYU Langone Health',
         city: 'New York', state: 'NY',
         gradient: 'linear-gradient(135deg, #3730a3 0%, #6366f1 100%)',
+        photo: 'https://images.unsplash.com/photo-1538108149393-fbbd81895907?w=700&q=80&auto=format&fit=crop',
         specialty: ['Ortopedia', 'Otorrinolaringologia', 'Cirurgia Plástica'],
         rating: 4.7, handsOn: 68, preceptorRating: 85, reviews: 18,
         flix: [
@@ -288,8 +301,9 @@ function CityGallery({ onSelect }: { onSelect: (c: City) => void }) {
                     }}
                 >
                     {/* Cover */}
-                    <div style={{ height: '160px', background: city.gradient, position: 'relative', flexShrink: 0 }}>
-                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 60%)' }} />
+                    <div style={{ height: '160px', position: 'relative', flexShrink: 0, overflow: 'hidden' }}>
+                        <img src={city.photo} alt={city.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.1) 60%)' }} />
                         <div style={{ position: 'absolute', bottom: '14px', left: '16px', zIndex: 1 }}>
                             <div style={{ fontSize: '22px', fontWeight: 800, color: '#fff', lineHeight: 1 }}>{city.name}</div>
                             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.75)', marginTop: '2px' }}>{city.state} · {city.hospitals} hospitais recomendados</div>
@@ -323,7 +337,8 @@ function CityDetail({ city, onBack }: { city: City; onBack: () => void }) {
     return (
         <motion.div initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.3 }}>
             {/* Hero */}
-            <div style={{ borderRadius: '20px', overflow: 'hidden', marginBottom: '28px', position: 'relative', height: '220px', background: city.gradient }}>
+            <div style={{ borderRadius: '20px', overflow: 'hidden', marginBottom: '28px', position: 'relative', height: '220px' }}>
+                <img src={city.photo} alt={city.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', position: 'absolute', inset: 0, display: 'block' }} />
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 50%)' }} />
                 <button onClick={onBack} style={{ position: 'absolute', top: '16px', left: '16px', zIndex: 2, display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                     <ArrowLeft size={14} /> Voltar
@@ -424,8 +439,9 @@ function HospitalGallery({ onSelect }: { onSelect: (h: Hospital) => void }) {
                     }}
                 >
                     {/* Cover */}
-                    <div style={{ height: '130px', background: h.gradient, position: 'relative', flexShrink: 0 }}>
-                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.45) 0%, transparent 60%)' }} />
+                    <div style={{ height: '130px', position: 'relative', flexShrink: 0, overflow: 'hidden' }}>
+                        <img src={h.photo} alt={h.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }} />
+                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.05) 60%)' }} />
                         <div style={{ position: 'absolute', bottom: '10px', left: '14px', zIndex: 1, display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <Star size={12} fill="#F59E0B" color="#F59E0B" />
                             <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>{h.rating.toFixed(1)}</span>
@@ -483,7 +499,8 @@ function HospitalDetail({ hospital, onBack }: { hospital: Hospital; onBack: () =
     return (
         <motion.div initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.3 }}>
             {/* Hero */}
-            <div style={{ borderRadius: '20px', overflow: 'hidden', marginBottom: '28px', position: 'relative', height: '220px', background: hospital.gradient }}>
+            <div style={{ borderRadius: '20px', overflow: 'hidden', marginBottom: '28px', position: 'relative', height: '220px' }}>
+                <img src={hospital.photo} alt={hospital.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', position: 'absolute', inset: 0, display: 'block' }} />
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 50%)' }} />
                 <button onClick={onBack} style={{ position: 'absolute', top: '16px', left: '16px', zIndex: 2, display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                     <ArrowLeft size={14} /> Voltar

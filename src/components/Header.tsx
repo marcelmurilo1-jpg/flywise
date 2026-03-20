@@ -24,6 +24,7 @@ export function Header({ variant = 'app' }: HeaderProps) {
     const navigate = useNavigate()
     const location = useLocation()
     const [userMenuOpen, setUserMenuOpen] = useState(false)
+    const [isTransitioning, setIsTransitioning] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
 
     const activeIndex = NAV_ITEMS.findIndex(item =>
@@ -40,6 +41,17 @@ export function Header({ variant = 'app' }: HeaderProps) {
         document.addEventListener("mousedown", handleClickOutside)
         return () => document.removeEventListener("mousedown", handleClickOutside)
     }, [])
+
+    // Controle de tempo da animação de transição do C1% em 3D
+    useEffect(() => {
+        if (isTransitioning) {
+            const timer = setTimeout(() => {
+                navigate('/c1')
+                setIsTransitioning(false)
+            }, 2000) // 2.0s (quando a logo começa a sair, o fundo sai junto na mesma duração de 0.5s)
+            return () => clearTimeout(timer)
+        }
+    }, [isTransitioning, navigate])
 
     const handleSignOut = async () => {
         await signOut()
@@ -71,7 +83,14 @@ export function Header({ variant = 'app' }: HeaderProps) {
                         <ExpandableTabs
                             tabs={NAV_ITEMS}
                             activeIndex={activeIndex}
-                            onSelect={(i) => navigate(NAV_ITEMS[i].to)}
+                            onSelect={(i) => {
+                                const item = NAV_ITEMS[i]
+                                if (item.to === '/c1' && location.pathname !== '/c1') {
+                                    setIsTransitioning(true)
+                                } else {
+                                    navigate(item.to)
+                                }
+                            }}
                         />
                     </div>
                 ) : <div />}
@@ -151,6 +170,50 @@ export function Header({ variant = 'app' }: HeaderProps) {
                 </div>
             </div>
         </header>
+
+        {/* --- C1% Fullscreen Transition Overlay --- */}
+        <AnimatePresence>
+            {isTransitioning && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.5, ease: 'easeInOut' }}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 9999,
+                        background: '#000000', // Preto absoluto minimalista
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
+                    <motion.img
+                        src="/c1-logo.png"
+                        alt="C1 Loader"
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ 
+                            opacity: [0, 1, 1, 0], 
+                            scale: [0.95, 1, 1.02, 1.15], 
+                            y: [10, 0, -2, -8]
+                        }}
+                        transition={{ 
+                            duration: 2.5, 
+                            times: [0, 0.25, 0.8, 1], // Entrada(0-0.25), Respiração(0.25-0.8), Saída(0.8-1)
+                            ease: [0.25, 0.1, 0.25, 1] // Curva elegante e suave
+                        }}
+                        style={{
+                            width: '150px', // Menor confere uma vibe mais requintada
+                            height: 'auto',
+                            objectFit: 'contain',
+                            // Sombra sutil branca apenas para soltar levemente do fundo preto
+                            filter: 'drop-shadow(0 15px 30px rgba(255,255,255,0.06))' 
+                        }}
+                    />
+                </motion.div>
+            )}
+        </AnimatePresence>
 
         <style>{`
             @media (max-width: 768px) {
