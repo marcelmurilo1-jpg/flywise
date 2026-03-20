@@ -149,7 +149,7 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
         }
     }
 
-    const mappedFlights = offers.map((offer): FlightOffer => {
+    const mappedFlights = offers.filter((offer: any) => offer?.itineraries?.length).map((offer): FlightOffer => {
         const itin0 = offer.itineraries[0]
         const segs0: any[] = itin0.segments
         const first0 = segs0[0]
