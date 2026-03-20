@@ -433,9 +433,18 @@ async function scrapeOneway(origin, destination, date) {
 
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
+            // Log diagnóstico: título e URL após navegação
+            const pageTitle = await page.title();
+            const pageUrl = page.url();
+            console.log(`[GFlights] ${origin}→${destination}: title="${pageTitle}" url=${pageUrl}`);
+
             // Aceita consentimento de cookies do Google (aparece em IPs de servidor)
-            await page.locator('button:has-text("Accept all"), button:has-text("Aceitar tudo"), button[aria-label*="Accept"]')
-                .first().click({ timeout: 4000 }).catch(() => {});
+            const cookieClicked = await page.locator('button:has-text("Accept all"), button:has-text("Aceitar tudo"), button[aria-label*="Accept"], button:has-text("Agree")')
+                .first().click({ timeout: 5000 }).then(() => true).catch(() => false);
+            if (cookieClicked) {
+                console.log(`[GFlights] ${origin}→${destination}: cookie consent clicado, aguardando...`);
+                await page.waitForTimeout(2000);
+            }
 
             // Aguarda os cards de voo aparecerem (div[data-id] com aria-label de voo)
             // Detecta tanto PT ("Reais brasileiros", "Voo da") quanto EN ("From R$", "flight")
@@ -445,10 +454,21 @@ async function scrapeOneway(origin, destination, date) {
                     const a = link?.getAttribute('aria-label') ?? '';
                     return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(a);
                 }),
-                { timeout: 20000 }
+                { timeout: 25000 }
             ).catch(() => console.log(`[GFlights] ${origin}→${destination}: timeout aguardando cards de voo`));
 
             await page.waitForTimeout(1500);
+
+            // Log diagnóstico: quantos div[data-id] e primeiros aria-labels
+            const diagInfo = await page.evaluate(() => {
+                const divs = [...document.querySelectorAll('div[data-id]')];
+                const labels = divs.slice(0, 3).map(el => {
+                    const link = el.querySelector('[aria-label]');
+                    return (link?.getAttribute('aria-label') ?? '').slice(0, 120);
+                });
+                return { count: divs.length, labels };
+            });
+            console.log(`[GFlights] ${origin}→${destination}: div[data-id]=${diagInfo.count}, primeiros aria-labels:`, JSON.stringify(diagInfo.labels));
 
             const flights = await page.evaluate(() => {
                 // Parser bilíngue PT + EN baseado em aria-label do Google Flights
