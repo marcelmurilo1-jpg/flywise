@@ -67,22 +67,58 @@ function buildFlightString(f: FlightRow): string {
     return lines.join('\n')
 }
 
+function formatPromoLine(p: Record<string, unknown>, i: number): string {
+    const tipo = p.tipo as string | null
+    const tipoLabel = tipo === 'bonus_transferencia' ? '[transferência]'
+        : tipo === 'clube' ? '[clube]'
+        : tipo === 'boas_vindas' ? '[boas-vindas]'
+        : tipo === 'milhas_compra' ? '[compra-milhas]'
+        : '[promoção]'
+    const parts = [`${i + 1}. ${tipoLabel} ${p.programa ?? 'Geral'}`]
+    if (p.bonus_pct) parts.push(`+${p.bonus_pct}% bônus`)
+    if (p.parceiro) parts.push(`via ${p.parceiro}`)
+    parts.push(`— ${String(p.titulo ?? '').slice(0, 80)}`)
+    if (p.valid_until) parts.push(`(expira ${new Date(p.valid_until as string).toLocaleDateString('pt-BR')})`)
+    return parts.join(' ')
+}
+
 async function buildPromoString(programs: string[], sb: ReturnType<typeof createClient>): Promise<string> {
     try {
-        let q = sb.from('promocoes').select('titulo,programa,tipo,bonus_pct,parceiro,valid_until')
-            .or('valid_until.is.null,valid_until.gt.' + new Date().toISOString())
-            .limit(5)
-        if (programs.length > 0) q = q.in('programa', programs)
-        const { data } = await q
-        if (!data?.length) return 'Nenhuma promoção ativa registrada.'
-        return data.map((p: Record<string, unknown>, i: number) => {
-            const parts = [`${i + 1}. ${p.programa ?? 'Geral'}`]
-            if (p.bonus_pct) parts.push(`+${p.bonus_pct}% bônus`)
-            if (p.parceiro) parts.push(`via ${p.parceiro}`)
-            parts.push(`— ${String(p.titulo ?? '').slice(0, 100)}`)
-            if (p.valid_until) parts.push(`(expira ${new Date(p.valid_until as string).toLocaleDateString('pt-BR')})`)
-            return parts.join(' ')
-        }).join('\n')
+        const now = new Date().toISOString()
+
+        // Busca até 12 promos dos programas relevantes, ordenadas por bonus_pct desc e urgência
+        const { data: all } = await sb.from('promocoes')
+            .select('titulo,programa,tipo,bonus_pct,parceiro,valid_until')
+            .or('valid_until.is.null,valid_until.gt.' + now)
+            .in('programa', programs.length > 0 ? programs : ['Smiles', 'LATAM Pass', 'Livelo'])
+            .order('bonus_pct', { ascending: false, nullsFirst: false })
+            .order('valid_until', { ascending: true, nullsFirst: false })
+            .limit(12)
+
+        const rows = all ?? []
+
+        // Prioriza por tipo: transferência (2) → clube/boas-vindas (1) → outros (1) = máx 4
+        const transfer = rows.filter(p => p.tipo === 'bonus_transferencia').slice(0, 2)
+        const clube = rows.filter(p => p.tipo === 'clube' || p.tipo === 'boas_vindas').slice(0, 1)
+        const outros = rows.filter(p =>
+            p.tipo !== 'bonus_transferencia' && p.tipo !== 'clube' && p.tipo !== 'boas_vindas'
+        ).slice(0, 1)
+
+        const selected = [...transfer, ...clube, ...outros]
+
+        // Fallback: qualquer promo ativa se não encontrou nada nos programas
+        if (selected.length === 0) {
+            const { data: fallback } = await sb.from('promocoes')
+                .select('titulo,programa,tipo,bonus_pct,parceiro,valid_until')
+                .or('valid_until.is.null,valid_until.gt.' + now)
+                .order('bonus_pct', { ascending: false, nullsFirst: false })
+                .limit(3)
+            return (fallback ?? []).length
+                ? (fallback ?? []).map(formatPromoLine).join('\n')
+                : 'Nenhuma promoção ativa registrada.'
+        }
+
+        return selected.map(formatPromoLine).join('\n')
     } catch { return 'Nenhuma promoção disponível.' }
 }
 
@@ -103,15 +139,20 @@ async function buildUserString(userId: string, neededMiles: number, sb: ReturnTy
 }
 
 const JSON_SCHEMA = `{
-  "programa_recomendado": "<nome do programa>",
-  "motivo": "<máx 2 frases>",
-  "steps": ["<passo 1>", "<passo 2>", "<passo 3>"],
-  "milhas_necessarias": <número>,
-  "taxas_estimadas_brl": <número>,
-  "economia_pct": <número 0-100>,
-  "promocao_ativa": "<descrição breve ou null>",
-  "alternativa": "<segundo programa ou null>",
-  "aviso": "<aviso importante ou null>"
+  "programa_recomendado": "<ex: Smiles | LATAM Pass | TudoAzul | Livelo>",
+  "motivo": "<máx 2 frases explicando por que este programa é o melhor para esta rota>",
+  "steps": [
+    "<Passo 1 — Acumular: qual cartão de crédito solicitar ou qual parceiro transferir para chegar às milhas necessárias. Inclua o nome do cartão e banco.>",
+    "<Passo 2 — Transferir: quando e como transferir pontos para o programa, aproveitando bônus de transferência se houver promoção ativa.>",
+    "<Passo 3 — Emitir: como emitir o bilhete pelo site/app do programa — rota exata, cabine, dica de disponibilidade.>",
+    "<Passo 4 — Timing: melhor época para reservar, lista de espera se lotado, ou alternativa de programa caso não haja disponibilidade.>"
+  ],
+  "milhas_necessarias": <número inteiro — milhas para emitir este voo no programa recomendado>,
+  "taxas_estimadas_brl": <número inteiro — taxas e sobretaxas em R$ além das milhas>,
+  "economia_pct": <número 0-100 — percentual de economia vs preço cash>,
+  "promocao_ativa": "<se houver promoção de transferência ou bônus relevante, descreva: 'Ex: 80% bônus Nubank→Smiles até 30/04' ou null>",
+  "alternativa": "<segundo programa recomendado caso o principal não tenha disponibilidade, ou null>",
+  "aviso": "<aviso importante: ex: 'Este voo tem cobranças de combustível elevadas no programa X' ou null>"
 }`
 
 serve(async (req) => {
@@ -232,12 +273,22 @@ serve(async (req) => {
             body: JSON.stringify({
                 model: 'gpt-4o-mini',
                 messages: [
-                    { role: 'system', content: 'Você é FlyWise, especialista em milhas aéreas. Responda APENAS em JSON válido sem texto adicional.' },
+                    {
+                        role: 'system',
+                        content: `Você é FlyWise, especialista em programas de fidelidade e milhas aéreas do Brasil (Smiles, LATAM Pass, TudoAzul, Livelo, Esfera, Membership Rewards, Elo Mais).
+Sua função: analisar o voo selecionado e gerar a estratégia MAIS ECONÔMICA para emiti-lo com milhas.
+Regras:
+- Priorize promoções de transferência ativas para reduzir milhas necessárias
+- Os steps devem ser ACIONÁVEIS e ESPECÍFICOS: mencione nome de cartão, banco, app, prazo
+- Calcule milhas_necessarias com base no programa recomendado (Smiles BR→USA economy: ~35.000-45.000 milhas; business: ~55.000-70.000)
+- taxas_estimadas_brl: Smiles cobra baixas taxas; LATAM Pass cobra combustível (pode ser R$400+)
+- Responda APENAS em JSON válido sem texto adicional.`,
+                    },
                     { role: 'user', content: userPrompt },
                 ],
                 response_format: { type: 'json_object' },
-                max_tokens: 500,
-                temperature: 0.3,
+                max_tokens: 600,
+                temperature: 0.2,
             }),
         })
 
