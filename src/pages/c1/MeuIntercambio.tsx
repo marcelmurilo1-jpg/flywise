@@ -7,11 +7,11 @@ import {
     ChevronDown, ChevronRight, Check, MapPin, Trophy,
     Heart, Brain, Scissors, Stethoscope, Activity, Baby, Smile, Zap, RefreshCw, FlaskConical,
     Plus, X, ArrowLeft, ArrowRight, Trash2,
-    UserPlus, ExternalLink, Clock, AlertTriangle, Building2, MoreHorizontal, Send, Inbox, CheckCircle, XCircle,
-    Pencil, CalendarDays, AtSign, StickyNote, Hash, Navigation,
+    ExternalLink, Clock, AlertTriangle, Building2, MoreHorizontal, Send, Inbox, CheckCircle, XCircle,
+    CalendarDays, AtSign, StickyNote, Hash,
 } from 'lucide-react'
 import { Header } from '@/components/Header'
-import { useC1, type ChecklistItem, type Intercambio, type Hospital, type Contact, type Doctor, type HospitalTarget, type DoctorStatus, type OnboardingItemStatus } from '@/contexts/C1Context'
+import { useC1, type ChecklistItem, type Intercambio, type Hospital, type Doctor, type HospitalTarget, type DoctorStatus, type OnboardingItemStatus } from '@/contexts/C1Context'
 import { C1TabBar } from './ExploreDestinos'
 
 // ─── Specialties catalog ──────────────────────────────────────────────────────
@@ -375,7 +375,7 @@ function SpecialtySection({ spec, specIdx, totalSpecs, hospitalIds, hospitalOrde
     const order = hospitalOrderBySpecialty[spec] ?? hospitalIds
     const orderedHospitals = order
         .map(id => intercambios.find(i => i.id === id))
-        .filter((i): i is Intercambio => Boolean(i) && i.hospital.rankingsBySpecialty[spec] !== undefined)
+        .filter((i): i is Intercambio => i != null && i.hospital.rankingsBySpecialty[spec] !== undefined)
 
     if (orderedHospitals.length === 0) return null
 
@@ -695,7 +695,6 @@ const STATUS_CFG: Record<DoctorStatus, { label: string; color: string; bg: strin
 }
 
 const KANBAN_STATUS: DoctorStatus[] = ['not_sent', 'sent_1', 'followup', 'accepted', 'rejected']
-const KANBAN_STATUS_ACTIVE = KANBAN_STATUS // statuses shown in kanban (not idle, not standby)
 
 const KANBAN_COLS_CFG: { id: DoctorStatus; label: string; icon: typeof Send }[] = [
     { id: 'not_sent', label: 'Para Enviar',          icon: Inbox },
@@ -705,11 +704,6 @@ const KANBAN_COLS_CFG: { id: DoctorStatus; label: string; icon: typeof Send }[] 
     { id: 'rejected', label: 'Recusado',             icon: XCircle },
 ]
 
-const STAGE2_SPECIALTIES = [
-    'Internal Medicine', 'Surgery', 'Pediatrics', 'Cardiology',
-    'Neurology', 'Oncology', 'Emergency Medicine', 'Psychiatry',
-    'Radiology', 'Orthopedics', 'Dermatology', 'Gastroenterology',
-]
 
 // ── Setup Modal ───────────────────────────────────────────────────────────────
 
@@ -2375,7 +2369,7 @@ function PipelineView({ specialtyOrder, hospitalOrderBySpecialty, onReorderSpec,
     onAddMore: () => void
     onChangeSpecialties: () => void
 }) {
-    const { state, dispatch, activeIntercambio } = useC1()
+    const { state, activeIntercambio } = useC1()
     const intercambio = activeIntercambio ?? state.intercambios[0]
     const activeStageIdx = intercambio.activeStage - 1
     const activeStageConfig = STAGES[activeStageIdx]
