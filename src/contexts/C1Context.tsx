@@ -115,11 +115,13 @@ interface C1State {
     hospitals: Hospital[]
     intercambios: Intercambio[]
     activeIntercambioId: string | null
+    selectedSpecialties: string[]
 }
 
 type C1Action =
     | { type: 'ADD_INTERCAMBIO'; hospital: Hospital }
     | { type: 'REMOVE_INTERCAMBIO'; id: string }
+    | { type: 'SET_SELECTED_SPECIALTIES'; specialties: string[] }
     | { type: 'SET_ACTIVE_INTERCAMBIO'; id: string }
     | { type: 'SET_ACTIVE_STAGE'; intercambioId: string; stage: 1 | 2 | 3 | 4 }
     | { type: 'TOGGLE_ITEM'; intercambioId: string; doc: 'cv' | 'ps' | 'lor'; itemId: string }
@@ -180,6 +182,8 @@ const STAGE3_TASKS: ChecklistItem[] = [
     { id: 't10', label: 'Manual de orientações (dress code, horários, protocolos) lido', done: false },
 ]
 
+const ONBOARDING_ITEM_IDS = ['ob_s1', 'ob_s2', 'ob_s3', 'ob_sg1', 'ob_sg2', 'ob_v1', 'ob_v2', 'ob_v3', 'ob_v4']
+
 const PACKING: ChecklistItem[] = [
     { id: 'p1', label: 'Estetoscópio (recomendado: Littmann Cardiology IV)', done: false },
     { id: 'p2', label: 'Scrubs — mínimo 3 conjuntos (verificar cor exigida pelo hospital)', done: false },
@@ -193,105 +197,143 @@ const PACKING: ChecklistItem[] = [
     { id: 'p10', label: 'Cartão de crédito internacional sem IOF (Nubank, C6, Wise)', done: false },
 ]
 
-// ─── Hospital catalog ─────────────────────────────────────────────────────────
+// ─── Hospital catalog — US News Best Hospitals 2023-2024 ─────────────────────
+// Rankings: Cardiologia, Neurologia, Cirurgia, Medicina Interna, Oncologia,
+//           Pediatria, Psiquiatria, Gastroenterologia, Transplante,
+//           Endocrinologia, Neurociências
 
 export const HOSPITAL_CATALOG: Hospital[] = [
+
+    // ── #1 Cardiology · #2 Overall ───────────────────────────────────────
     {
         id: 'cleveland',
         name: 'Cleveland Clinic',
         shortName: 'Cleveland',
         city: 'Cleveland', state: 'OH',
         coverImage: 'https://images.unsplash.com/photo-1551076805-e1869033e561?w=600&q=80',
-        specialty: ['Cardiologia', 'Neurologia', 'Cirurgia'],
+        specialty: ['Cardiologia', 'Gastroenterologia', 'Endocrinologia', 'Medicina Interna', 'Cirurgia', 'Oncologia', 'Neurologia'],
         rating: 4.9, reviewCount: 127,
         costOfLiving: 'medium',
-        climate: 'Frio — invernos rigorosos, verão agradável',
-        description: 'Referência mundial em cardiologia, consistentemente #2 nos EUA. Ambiente altamente estruturado para IMGs internacionais.',
+        climate: 'Frio — invernos rigorosos com neve, verão agradável',
+        description: '#1 em Cardiologia nos EUA há mais de 25 anos consecutivos. Referência mundial em cirurgia cardíaca e #2 no ranking geral US News Best Hospitals 2024.',
         shadowing: true, handsOn: true,
-        highlights: ['#2 em Cardiologia (US News)', 'Programa estruturado p/ IMGs', 'Ambiente multicultural'],
+        highlights: ['#1 em Cardiologia (US News 2024)', '#2 em Gastroenterologia e Endocrinologia', 'Programa estruturado para IMGs internacionais'],
         mentorAvailable: true,
-        rankingsBySpecialty: { 'Cardiologia': 2, 'Neurologia': 12, 'Cirurgia': 5 },
+        rankingsBySpecialty: {
+            'Cardiologia': 1, 'Gastroenterologia': 2, 'Endocrinologia': 2,
+            'Medicina Interna': 2, 'Cirurgia': 2, 'Oncologia': 5, 'Neurologia': 10,
+        },
     },
+
+    // ── #1 Overall · Top 3 in 11 specialties ─────────────────────────────
     {
         id: 'mayo',
         name: 'Mayo Clinic',
         shortName: 'Mayo',
         city: 'Rochester', state: 'MN',
         coverImage: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=600&q=80',
-        specialty: ['Medicina Interna', 'Oncologia', 'Endocrinologia'],
+        specialty: ['Medicina Interna', 'Oncologia', 'Endocrinologia', 'Gastroenterologia', 'Neurologia', 'Cardiologia', 'Psiquiatria', 'Cirurgia', 'Transplante', 'Neurociências'],
         rating: 4.9, reviewCount: 98,
         costOfLiving: 'low',
-        climate: 'Muito frio no inverno (-20°C), verão suave',
-        description: 'O hospital mais bem avaliado dos EUA por múltiplos rankings. Modelo de cuidado centrado no paciente reconhecido mundialmente.',
+        climate: 'Inverno rigoroso (até −20 °C), verão suave e ensolarado',
+        description: '#1 hospital dos EUA pelo US News por múltiplos anos. Modelo de medicina integrada, cidade universitária segura e custo de vida muito baixo — ideal para IMGs.',
         shadowing: true, handsOn: false,
-        highlights: ['#1 US News 2024', 'Cidade universitária segura', 'Custo de vida baixo'],
+        highlights: ['#1 US News Best Hospitals 2024', 'Top 3 em Medicina Interna, Gastro e Endocrinologia', 'Rochester, MN — custo de vida baixo'],
         mentorAvailable: true,
-        rankingsBySpecialty: { 'Medicina Interna': 1, 'Oncologia': 3, 'Endocrinologia': 1, 'Gastroenterologia': 1, 'Neurologia': 1 },
+        rankingsBySpecialty: {
+            'Medicina Interna': 1, 'Oncologia': 3, 'Endocrinologia': 1,
+            'Gastroenterologia': 1, 'Neurologia': 1, 'Cardiologia': 2,
+            'Psiquiatria': 3, 'Cirurgia': 1, 'Transplante': 1, 'Neurociências': 1,
+        },
     },
+
+    // ── #3 Overall · #2 Neurology · #2 Psychiatry ────────────────────────
     {
         id: 'jhopkins',
         name: 'Johns Hopkins Hospital',
         shortName: 'Hopkins',
         city: 'Baltimore', state: 'MD',
         coverImage: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=600&q=80',
-        specialty: ['Oncologia', 'Neurologia', 'Pediatria'],
+        specialty: ['Neurologia', 'Psiquiatria', 'Oncologia', 'Gastroenterologia', 'Medicina Interna', 'Cirurgia', 'Endocrinologia', 'Neurociências', 'Pediatria'],
         rating: 4.8, reviewCount: 112,
         costOfLiving: 'medium',
-        climate: 'Quatro estações — verões quentes e úmidos',
-        description: 'Pioneiro em inovação médica e pesquisa clínica. Um dos centros de pesquisa mais influentes do mundo, afiliado à Johns Hopkins University.',
+        climate: 'Quatro estações — verões quentes e úmidos, invernos frios',
+        description: '#3 no ranking geral US News. Pioneiro em inovação médica há 130+ anos, afiliado à Johns Hopkins University — referência em neurocirurgia, psiquiatria e oncologia.',
         shadowing: true, handsOn: true,
-        highlights: ['Top 3 em pesquisa nos EUA', 'Forte cultura acadêmica', 'Próximo a Washington D.C.'],
+        highlights: ['#3 US News Best Hospitals 2024', '#2 em Neurologia e Psiquiatria', 'Baltimore — próximo a Washington D.C.'],
         mentorAvailable: false,
-        rankingsBySpecialty: { 'Oncologia': 7, 'Neurologia': 3, 'Pediatria': 4 },
+        rankingsBySpecialty: {
+            'Neurologia': 2, 'Psiquiatria': 2, 'Oncologia': 6,
+            'Gastroenterologia': 3, 'Medicina Interna': 3, 'Cirurgia': 3,
+            'Endocrinologia': 4, 'Neurociências': 3, 'Pediatria': 10,
+        },
     },
+
+    // ── #5 Overall · #1 Psychiatry ───────────────────────────────────────
     {
         id: 'mgh',
         name: 'Mass General Hospital',
         shortName: 'MGH',
         city: 'Boston', state: 'MA',
         coverImage: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=600&q=80',
-        specialty: ['Cardiologia', 'Psiquiatria', 'Gastroenterologia'],
+        specialty: ['Psiquiatria', 'Neurologia', 'Cardiologia', 'Gastroenterologia', 'Medicina Interna', 'Endocrinologia', 'Oncologia', 'Neurociências'],
         rating: 4.7, reviewCount: 89,
         costOfLiving: 'high',
-        climate: 'Inverno frio com neve, verão agradável',
-        description: 'Hospital afiliado à Harvard Medical School. Um dos mais antigos e prestigiosos dos EUA com enorme volume de pesquisa clínica de ponta.',
+        climate: 'Inverno frio com neve, primavera e verão agradáveis',
+        description: '#5 US News e maior hospital de ensino dos EUA. Afiliado à Harvard Medical School, é o #1 em Psiquiatria e referência em pesquisa neurológica e oncológica.',
         shadowing: true, handsOn: true,
-        highlights: ['Afiliado à Harvard Medical School', 'Forte rede de alumni IMGs', 'Boston — cidade universitária vibrante'],
+        highlights: ['#1 em Psiquiatria (US News 2024)', 'Afiliado à Harvard Medical School', 'Boston — maior cluster de biotech do mundo'],
         mentorAvailable: true,
-        rankingsBySpecialty: { 'Cardiologia': 4, 'Psiquiatria': 1, 'Gastroenterologia': 4 },
+        rankingsBySpecialty: {
+            'Psiquiatria': 1, 'Neurologia': 7, 'Cardiologia': 9,
+            'Gastroenterologia': 4, 'Medicina Interna': 4, 'Endocrinologia': 3,
+            'Oncologia': 9, 'Neurociências': 4,
+        },
     },
+
+    // ── #7 Overall · Dupla afiliação Ivy League ───────────────────────────
     {
         id: 'nyp',
         name: 'NewYork-Presbyterian',
         shortName: 'NYP',
         city: 'New York', state: 'NY',
         coverImage: 'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=600&q=80',
-        specialty: ['Transplante', 'Cirurgia', 'Neurologia'],
+        specialty: ['Neurologia', 'Cirurgia', 'Medicina Interna', 'Transplante', 'Psiquiatria', 'Gastroenterologia'],
         rating: 4.6, reviewCount: 143,
         costOfLiving: 'high',
-        climate: 'Quatro estações — invernos frios, verões quentes',
-        description: 'O maior hospital de Nova York e um dos mais movimentados dos EUA. Dupla afiliação com Columbia e Weill Cornell Medicine (ambas Ivy League).',
+        climate: 'Quatro estações — invernos frios com neve, verões quentes',
+        description: '#7 US News. Maior hospital de NYC com dupla afiliação Ivy League — Columbia University e Weill Cornell Medicine. Volume cirúrgico entre os maiores dos EUA.',
         shadowing: true, handsOn: true,
-        highlights: ['Nova York — experiência única', 'Volume altíssimo de casos', 'Dupla afiliação Ivy League'],
+        highlights: ['#7 US News Best Hospitals 2024', 'Dupla afiliação Ivy League', 'Nova York — maior metrópole do hemisfério'],
         mentorAvailable: true,
-        rankingsBySpecialty: { 'Transplante': 5, 'Cirurgia': 10, 'Neurologia': 6 },
+        rankingsBySpecialty: {
+            'Neurologia': 4, 'Cirurgia': 5, 'Medicina Interna': 8,
+            'Transplante': 5, 'Psiquiatria': 7, 'Gastroenterologia': 6,
+        },
     },
+
+    // ── #8 Overall · #2 Neurosciences ────────────────────────────────────
     {
         id: 'ucsf',
         name: 'UCSF Medical Center',
         shortName: 'UCSF',
         city: 'San Francisco', state: 'CA',
         coverImage: 'https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=600&q=80',
-        specialty: ['Oncologia', 'Neurociências', 'Transplante'],
+        specialty: ['Neurociências', 'Neurologia', 'Oncologia', 'Transplante', 'Psiquiatria', 'Gastroenterologia', 'Endocrinologia'],
         rating: 4.7, reviewCount: 76,
         costOfLiving: 'high',
-        climate: 'Ameno o ano todo (15–22°C) com neblina frequente',
-        description: 'Único campus UC dedicado exclusivamente à área da saúde. Referência mundial em pesquisa oncológica, neurociências e medicina de precisão.',
+        climate: 'Mediterrâneo — ameno o ano todo (15–22 °C), neblina pela manhã',
+        description: '#8 US News. Único campus UC dedicado exclusivamente à saúde, referência em neurociências, oncologia e medicina de precisão. Muito próximo ao Silicon Valley.',
         shadowing: true, handsOn: false,
-        highlights: ['Top 5 em pesquisa biomédica', 'Silicon Valley próximo', 'Clima único em SF'],
+        highlights: ['#2 em Neurociências (US News 2024)', '#3 em Neurologia', 'San Francisco — hub de biotech e inovação'],
         mentorAvailable: false,
-        rankingsBySpecialty: { 'Oncologia': 6, 'Neurociências': 2, 'Transplante': 4 },
+        rankingsBySpecialty: {
+            'Neurociências': 2, 'Neurologia': 3, 'Oncologia': 9,
+            'Transplante': 8, 'Psiquiatria': 6, 'Gastroenterologia': 5, 'Endocrinologia': 5,
+        },
     },
+
+    // ── #1 Oncology — 20+ anos consecutivos ──────────────────────────────
     {
         id: 'mdanderson',
         name: 'MD Anderson Cancer Center',
@@ -301,13 +343,15 @@ export const HOSPITAL_CATALOG: Hospital[] = [
         specialty: ['Oncologia'],
         rating: 4.9, reviewCount: 156,
         costOfLiving: 'medium',
-        climate: 'Quente e úmido o ano todo, verões intensos',
-        description: '#1 em oncologia por 20+ anos consecutivos. Centro dedicado exclusivamente ao câncer com o maior volume de pesquisa oncológica do mundo.',
+        climate: 'Quente e úmido o ano todo, verões intensos com alta umidade',
+        description: '#1 em Oncologia pelo US News por mais de 20 anos consecutivos. O maior centro de pesquisa e tratamento oncológico do mundo — mais de 8.000 ensaios clínicos ativos.',
         shadowing: true, handsOn: true,
-        highlights: ['#1 em Oncologia há 20+ anos', 'Maior centro de pesquisa em câncer', 'Houston — cidade diversa e acessível'],
+        highlights: ['#1 em Oncologia há 20+ anos (US News)', '8.000+ ensaios clínicos ativos', 'Houston — grande comunidade brasileira'],
         mentorAvailable: true,
         rankingsBySpecialty: { 'Oncologia': 1 },
     },
+
+    // ── #2 Oncology ───────────────────────────────────────────────────────
     {
         id: 'msk',
         name: 'Memorial Sloan Kettering',
@@ -317,76 +361,250 @@ export const HOSPITAL_CATALOG: Hospital[] = [
         specialty: ['Oncologia', 'Transplante'],
         rating: 4.8, reviewCount: 134,
         costOfLiving: 'high',
-        climate: 'Quatro estações — invernos frios, verões quentes',
-        description: 'Centro de referência mundial em oncologia clínica e pesquisa translacional. Um dos maiores centros de tratamento de câncer dos EUA.',
+        climate: 'Quatro estações — invernos frios com neve, verões quentes e úmidos',
+        description: '#2 em Oncologia (US News). Centro de referência mundial em oncologia clínica, cirurgia oncológica de alta complexidade e transplante de células-tronco.',
         shadowing: true, handsOn: true,
-        highlights: ['#2 em Oncologia (US News)', 'Pesquisa translacional de ponta', 'Nova York — maior hub médico do país'],
+        highlights: ['#2 em Oncologia (US News 2024)', 'Líder em transplante de células-tronco', 'Nova York — acesso global'],
         mentorAvailable: true,
         rankingsBySpecialty: { 'Oncologia': 2, 'Transplante': 6 },
     },
+
+    // ── #3 Cardiology · Stanford University ──────────────────────────────
+    {
+        id: 'cedars',
+        name: 'Cedars-Sinai Medical Center',
+        shortName: 'Cedars-Sinai',
+        city: 'Los Angeles', state: 'CA',
+        coverImage: 'https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=600&q=80',
+        specialty: ['Cardiologia', 'Oncologia', 'Medicina Interna', 'Cirurgia', 'Neurologia'],
+        rating: 4.7, reviewCount: 119,
+        costOfLiving: 'high',
+        climate: 'Mediterrâneo — ensolarado o ano todo, sem invernos rigorosos',
+        description: '#4 no ranking geral US News e o maior hospital sem fins lucrativos da Costa Oeste dos EUA. Referência nacional em cardiologia e oncologia em Los Angeles.',
+        shadowing: true, handsOn: true,
+        highlights: ['#3 em Cardiologia (US News 2024)', '#4 US News Best Hospitals', 'Los Angeles — clima perfeito o ano todo'],
+        mentorAvailable: true,
+        rankingsBySpecialty: {
+            'Cardiologia': 3, 'Oncologia': 8, 'Medicina Interna': 7, 'Cirurgia': 4, 'Neurologia': 12,
+        },
+    },
+
+    // ── #4 Cardiology · #6 Overall ────────────────────────────────────────
+    {
+        id: 'nyulangone',
+        name: 'NYU Langone Health',
+        shortName: 'NYU Langone',
+        city: 'New York', state: 'NY',
+        coverImage: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600&q=80',
+        specialty: ['Cardiologia', 'Neurologia', 'Oncologia', 'Medicina Interna', 'Psiquiatria', 'Neurociências'],
+        rating: 4.7, reviewCount: 103,
+        costOfLiving: 'high',
+        climate: 'Quatro estações — invernos frios, verões quentes e úmidos',
+        description: '#6 no ranking geral US News. Afiliado à NYU Grossman School of Medicine, com força em cardiologia, neurologia e oncologia em Manhattan.',
+        shadowing: true, handsOn: true,
+        highlights: ['#4 em Cardiologia (US News 2024)', '#6 US News Best Hospitals', 'Manhattan — maior hub médico dos EUA'],
+        mentorAvailable: false,
+        rankingsBySpecialty: {
+            'Cardiologia': 4, 'Neurologia': 6, 'Oncologia': 7,
+            'Medicina Interna': 5, 'Psiquiatria': 5, 'Neurociências': 6,
+        },
+    },
+
+    // ── #5 Cardiology · Silicon Valley ───────────────────────────────────
     {
         id: 'stanford',
         name: 'Stanford Health Care',
         shortName: 'Stanford',
         city: 'Palo Alto', state: 'CA',
-        coverImage: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=600&q=80',
-        specialty: ['Cardiologia', 'Neurologia', 'Cirurgia', 'Transplante'],
+        coverImage: 'https://images.unsplash.com/photo-1582719366942-5b63ad459e23?w=600&q=80',
+        specialty: ['Cardiologia', 'Neurologia', 'Cirurgia', 'Transplante', 'Endocrinologia', 'Neurociências'],
         rating: 4.8, reviewCount: 108,
         costOfLiving: 'high',
-        climate: 'Mediterrâneo — verões secos, invernos amenos',
-        description: 'Afiliado à Stanford University, referência mundial em medicina de precisão e inovação médica no coração do Silicon Valley.',
+        climate: 'Mediterrâneo — verões secos e quentes, invernos amenos e chuvosos',
+        description: 'Afiliado à Stanford University, referência em medicina de precisão, cirurgia robótica e transplante no coração do Silicon Valley.',
         shadowing: true, handsOn: true,
-        highlights: ['Afiliado à Stanford University', 'Medicina de precisão e inovação', 'Silicon Valley — ecosystem único'],
+        highlights: ['#5 em Cardiologia (US News 2024)', 'Afiliado à Stanford University', 'Palo Alto — epicentro do Silicon Valley'],
         mentorAvailable: true,
-        rankingsBySpecialty: { 'Cardiologia': 5, 'Neurologia': 6, 'Cirurgia': 7, 'Transplante': 3 },
+        rankingsBySpecialty: {
+            'Cardiologia': 5, 'Neurologia': 9, 'Cirurgia': 8,
+            'Transplante': 7, 'Endocrinologia': 6, 'Neurociências': 5,
+        },
     },
+
+    // ── #6 Cardiology · #10 Overall ──────────────────────────────────────
     {
         id: 'northwestern',
         name: 'Northwestern Memorial',
         shortName: 'Northwestern',
         city: 'Chicago', state: 'IL',
         coverImage: 'https://images.unsplash.com/photo-1504813184591-01572f98c85f?w=600&q=80',
-        specialty: ['Cardiologia', 'Transplante', 'Neurologia'],
+        specialty: ['Cardiologia', 'Transplante', 'Neurologia', 'Gastroenterologia', 'Psiquiatria', 'Endocrinologia'],
         rating: 4.6, reviewCount: 91,
         costOfLiving: 'high',
-        climate: 'Quatro estações — invernos muito frios, verões quentes',
-        description: 'Principal hospital de Chicago, afiliado à Northwestern University Feinberg School of Medicine. Referência em transplante e cardiologia.',
+        climate: 'Quatro estações — invernos muito frios com neve, verões quentes',
+        description: '#10 no ranking geral US News. Principal hospital de Chicago, afiliado à Northwestern University Feinberg School of Medicine.',
         shadowing: true, handsOn: true,
-        highlights: ['Afiliado à Northwestern University', 'Chicago — cidade vibrante', 'Top 3 em Transplante'],
+        highlights: ['#10 US News Best Hospitals 2024', '#6 em Cardiologia e Transplante', 'Chicago — 3ª maior cidade dos EUA'],
         mentorAvailable: false,
-        rankingsBySpecialty: { 'Cardiologia': 10, 'Transplante': 3, 'Neurologia': 9 },
+        rankingsBySpecialty: {
+            'Cardiologia': 6, 'Transplante': 4, 'Neurologia': 8,
+            'Gastroenterologia': 8, 'Psiquiatria': 9, 'Endocrinologia': 8,
+        },
     },
+
+    // ── #7 Cardiology · #9 Overall ────────────────────────────────────────
     {
         id: 'barnesjewish',
         name: 'Barnes-Jewish Hospital',
         shortName: 'Barnes-Jewish',
         city: 'St. Louis', state: 'MO',
         coverImage: 'https://images.unsplash.com/photo-1538108149393-fbbd81895907?w=600&q=80',
-        specialty: ['Cardiologia', 'Neurologia', 'Medicina Interna', 'Cirurgia'],
+        specialty: ['Cardiologia', 'Neurologia', 'Medicina Interna', 'Cirurgia', 'Psiquiatria', 'Gastroenterologia', 'Endocrinologia', 'Transplante'],
         rating: 4.5, reviewCount: 74,
         costOfLiving: 'low',
-        climate: 'Quatro estações — invernos frios, verões muito quentes',
-        description: 'Afiliado à Washington University School of Medicine, um dos mais fortes programas acadêmicos dos EUA. Excelente custo-benefício para IMGs.',
+        climate: 'Quatro estações — invernos frios, verões muito quentes e úmidos',
+        description: '#9 no ranking geral US News. Afiliado à Washington University School of Medicine, um dos programas acadêmicos mais fortes dos EUA com custo de vida mínimo.',
         shadowing: true, handsOn: true,
-        highlights: ['Afiliado à Washington University', 'Custo de vida muito baixo', 'Forte programa acadêmico'],
+        highlights: ['#9 US News Best Hospitals 2024', '#7 em Cardiologia', 'St. Louis — custo de vida muito baixo'],
         mentorAvailable: true,
-        rankingsBySpecialty: { 'Cardiologia': 7, 'Neurologia': 8, 'Medicina Interna': 5, 'Cirurgia': 6 },
+        rankingsBySpecialty: {
+            'Cardiologia': 7, 'Neurologia': 11, 'Medicina Interna': 9,
+            'Cirurgia': 6, 'Psiquiatria': 8, 'Gastroenterologia': 9,
+            'Endocrinologia': 10, 'Transplante': 10,
+        },
     },
+
+    // ── #8 Oncology · #10 Cardiology ─────────────────────────────────────
     {
         id: 'umichigan',
         name: 'Univ. of Michigan Health',
         shortName: 'U-Michigan',
         city: 'Ann Arbor', state: 'MI',
         coverImage: 'https://images.unsplash.com/photo-1516737488945-78d5a7c1bcb4?w=600&q=80',
-        specialty: ['Cardiologia', 'Oncologia', 'Medicina Interna', 'Pediatria'],
+        specialty: ['Cardiologia', 'Oncologia', 'Medicina Interna', 'Pediatria', 'Gastroenterologia', 'Neurociências'],
         rating: 4.6, reviewCount: 82,
         costOfLiving: 'low',
-        climate: 'Inverno rigoroso com neve, verão agradável',
-        description: 'Hospital universitário de referência nacional, afiliado à University of Michigan. Reconhecido pela qualidade de ensino e pesquisa clínica multidisciplinar.',
+        climate: 'Inverno rigoroso com neve, primavera e verão agradáveis',
+        description: 'Hospital afiliado à University of Michigan. #8 em Oncologia e reconhecido pela qualidade de ensino multidisciplinar em Ann Arbor.',
         shadowing: true, handsOn: true,
-        highlights: ['Afiliado à University of Michigan', 'Ann Arbor — cidade universitária acolhedora', 'Custo de vida baixo'],
+        highlights: ['#8 em Oncologia (US News 2024)', '#10 em Cardiologia', 'Ann Arbor — cidade universitária e acolhedora'],
         mentorAvailable: true,
-        rankingsBySpecialty: { 'Cardiologia': 8, 'Oncologia': 8, 'Medicina Interna': 6, 'Pediatria': 7 },
+        rankingsBySpecialty: {
+            'Cardiologia': 10, 'Oncologia': 10, 'Medicina Interna': 6,
+            'Pediatria': 8, 'Gastroenterologia': 7, 'Neurociências': 10,
+        },
+    },
+
+    // ── #4 Oncology · Afiliado à Harvard ─────────────────────────────────
+    {
+        id: 'danafar',
+        name: 'Dana-Farber Cancer Institute',
+        shortName: 'Dana-Farber',
+        city: 'Boston', state: 'MA',
+        coverImage: 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?w=600&q=80',
+        specialty: ['Oncologia', 'Transplante', 'Pediatria'],
+        rating: 4.8, reviewCount: 88,
+        costOfLiving: 'high',
+        climate: 'Inverno frio com neve, primavera e verão agradáveis',
+        description: '#4 em Oncologia (US News). Afiliado à Harvard Medical School, especializado em oncologia clínica, pesquisa translacional e transplante de medula óssea.',
+        shadowing: true, handsOn: true,
+        highlights: ['#4 em Oncologia (US News 2024)', 'Afiliado à Harvard Medical School', 'Líder mundial em ensaios clínicos oncológicos'],
+        mentorAvailable: false,
+        rankingsBySpecialty: { 'Oncologia': 4, 'Transplante': 3, 'Pediatria': 6 },
+    },
+
+    // ── #3 Transplant · #8 Oncology ──────────────────────────────────────
+    {
+        id: 'ucla',
+        name: 'UCLA Medical Center',
+        shortName: 'UCLA',
+        city: 'Los Angeles', state: 'CA',
+        coverImage: 'https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=600&q=80',
+        specialty: ['Oncologia', 'Transplante', 'Psiquiatria', 'Neurologia', 'Medicina Interna'],
+        rating: 4.6, reviewCount: 97,
+        costOfLiving: 'high',
+        climate: 'Mediterrâneo — ensolarado e ameno o ano todo',
+        description: 'Afiliado à UCLA David Geffen School of Medicine. Referência em transplante hepático, oncologia e saúde mental com um dos maiores volumes de transplantes dos EUA.',
+        shadowing: true, handsOn: true,
+        highlights: ['#3 em Transplante (UNOS/US News)', '#8 em Oncologia (US News 2024)', 'Los Angeles — diversidade e sol o ano todo'],
+        mentorAvailable: false,
+        rankingsBySpecialty: {
+            'Oncologia': 8, 'Transplante': 3, 'Psiquiatria': 4, 'Neurologia': 13, 'Medicina Interna': 10,
+        },
+    },
+
+    // ── #9 Neurology · Research Triangle ─────────────────────────────────
+    {
+        id: 'duke',
+        name: 'Duke University Hospital',
+        shortName: 'Duke',
+        city: 'Durham', state: 'NC',
+        coverImage: 'https://images.unsplash.com/photo-1530893609608-32a9af3aa95c?w=600&q=80',
+        specialty: ['Neurologia', 'Gastroenterologia', 'Oncologia', 'Cirurgia', 'Medicina Interna'],
+        rating: 4.6, reviewCount: 71,
+        costOfLiving: 'low',
+        climate: 'Quatro estações suaves — verões quentes, invernos brandos',
+        description: 'Afiliado à Duke University School of Medicine, referência em neurociências, gastroenterologia e pesquisa translacional no Research Triangle — NC.',
+        shadowing: true, handsOn: true,
+        highlights: ['#9 em Neurologia (US News 2024)', '#10 em Gastroenterologia', 'Durham — custo de vida baixo e clima agradável'],
+        mentorAvailable: true,
+        rankingsBySpecialty: {
+            'Neurologia': 9, 'Gastroenterologia': 10, 'Oncologia': 11, 'Cirurgia': 9, 'Medicina Interna': 11,
+        },
+    },
+
+    // ── #1 Pediatrics ─────────────────────────────────────────────────────
+    {
+        id: 'bostonchildrens',
+        name: "Boston Children's Hospital",
+        shortName: "Boston Children's",
+        city: 'Boston', state: 'MA',
+        coverImage: 'https://images.unsplash.com/photo-1584820927498-cfe5211fd8bf?w=600&q=80',
+        specialty: ['Pediatria'],
+        rating: 4.9, reviewCount: 145,
+        costOfLiving: 'high',
+        climate: 'Inverno frio com neve, primavera e verão agradáveis',
+        description: '#1 em Pediatria pelo US News por múltiplos anos consecutivos. Maior hospital pediátrico da Nova Inglaterra, afiliado à Harvard Medical School.',
+        shadowing: true, handsOn: true,
+        highlights: ['#1 em Pediatria (US News 2024)', 'Afiliado à Harvard Medical School', 'Boston — maior polo de pesquisa pediátrica do mundo'],
+        mentorAvailable: false,
+        rankingsBySpecialty: { 'Pediatria': 1 },
+    },
+
+    // ── #2 Pediatrics ─────────────────────────────────────────────────────
+    {
+        id: 'chop',
+        name: "Children's Hosp. of Philadelphia",
+        shortName: 'CHOP',
+        city: 'Philadelphia', state: 'PA',
+        coverImage: 'https://images.unsplash.com/photo-1555252333-9f8e92e65df9?w=600&q=80',
+        specialty: ['Pediatria'],
+        rating: 4.9, reviewCount: 132,
+        costOfLiving: 'medium',
+        climate: 'Quatro estações — verões quentes, invernos com neve',
+        description: '#2 em Pediatria (US News). Primeiro hospital pediátrico dos EUA (fundado em 1855). Referência em cirurgia pediátrica, oncologia infantil e cardiologia congênita.',
+        shadowing: true, handsOn: true,
+        highlights: ['#2 em Pediatria (US News 2024)', 'Primeiro hospital pediátrico dos EUA (1855)', 'Filadélfia — cidade histórica e acessível'],
+        mentorAvailable: false,
+        rankingsBySpecialty: { 'Pediatria': 2 },
+    },
+
+    // ── #3 Pediatrics ─────────────────────────────────────────────────────
+    {
+        id: 'texaschildrens',
+        name: "Texas Children's Hospital",
+        shortName: "Texas Children's",
+        city: 'Houston', state: 'TX',
+        coverImage: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=600&q=80',
+        specialty: ['Pediatria'],
+        rating: 4.8, reviewCount: 118,
+        costOfLiving: 'medium',
+        climate: 'Quente e úmido, sem invernos rigorosos',
+        description: '#3 em Pediatria (US News). O maior hospital pediátrico dos EUA por volume de pacientes, localizado em Houston — a cidade mais diversa dos Estados Unidos.',
+        shadowing: true, handsOn: true,
+        highlights: ['#3 em Pediatria (US News 2024)', 'Maior hospital pediátrico dos EUA por volume', 'Houston — maior comunidade brasileira do Sul dos EUA'],
+        mentorAvailable: true,
+        rankingsBySpecialty: { 'Pediatria': 3 },
     },
 ]
 
@@ -422,6 +640,9 @@ function c1Reducer(state: C1State, action: C1Action): C1State {
             const remaining = state.intercambios.filter(i => i.id !== action.id)
             return { ...state, intercambios: remaining, activeIntercambioId: remaining[0]?.id ?? null }
         }
+
+        case 'SET_SELECTED_SPECIALTIES':
+            return { ...state, selectedSpecialties: action.specialties }
 
         case 'SET_ACTIVE_INTERCAMBIO':
             return { ...state, activeIntercambioId: action.id }
@@ -672,12 +893,14 @@ function c1Reducer(state: C1State, action: C1Action): C1State {
                 ...state,
                 intercambios: state.intercambios.map(i => {
                     if (i.id !== action.intercambioId) return i
+                    const itemStatuses = { ...i.stage3.itemStatuses, [action.itemId]: action.status }
+                    const allSent = ONBOARDING_ITEM_IDS.every(id => itemStatuses[id] === 'sent')
+                    const unlocked = [...i.unlockedStages] as [boolean, boolean, boolean, boolean]
+                    if (allSent) unlocked[3] = true
                     return {
                         ...i,
-                        stage3: {
-                            ...i.stage3,
-                            itemStatuses: { ...i.stage3.itemStatuses, [action.itemId]: action.status },
-                        },
+                        stage3: { ...i.stage3, itemStatuses, completed: allSent },
+                        unlockedStages: unlocked,
                     }
                 }),
             }
@@ -736,6 +959,7 @@ export function C1Provider({ children }: { children: ReactNode }) {
         hospitals: HOSPITAL_CATALOG,
         intercambios: [],
         activeIntercambioId: null,
+        selectedSpecialties: [],
     })
     const activeIntercambio = state.intercambios.find(i => i.id === state.activeIntercambioId) ?? null
 

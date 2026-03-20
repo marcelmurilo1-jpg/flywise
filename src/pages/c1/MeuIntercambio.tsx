@@ -42,7 +42,7 @@ const STAGES = [
 const DOC_CARDS = [
     { key: 'cv' as const, title: 'Currículo (CV)', subtitle: 'American-style Curriculum Vitae', cover: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=600&q=80', color: '#3B82F6', tag: 'Obrigatório' },
     { key: 'ps' as const, title: 'Personal Statement', subtitle: 'Carta de motivação pessoal', cover: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=600&q=80', color: '#8B5CF6', tag: 'Obrigatório' },
-    { key: 'lor' as const, title: 'Letter of Recommendation', subtitle: 'Carta de recomendação médica', cover: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&q=80', color: '#F59E0B', tag: 'Obrigatório' },
+    { key: 'lor' as const, title: 'Letter of Recommendation', subtitle: 'Carta de recomendação médica', cover: 'https://images.unsplash.com/photo-1471107340929-a87cd0f5b5f3?w=600&q=80', color: '#F59E0B', tag: 'Obrigatório' },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1646,16 +1646,27 @@ function Stage2({ intercambio }: { intercambio: Intercambio }) {
 // ── Onboarding static data ────────────────────────────────────────────────────
 
 const MENTOR_CATALOG: Record<string, { name: string; photo: string; specialty: string; whatsapp: string }> = {
-    cleveland:    { name: 'Dr. Rafael Moura',    photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&q=80', specialty: 'Cardiologia',     whatsapp: '5511991001001' },
-    mayo:         { name: 'Dra. Beatriz Santos',  photo: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&q=80', specialty: 'Med. Interna',    whatsapp: '5511991002002' },
-    jhopkins:     { name: 'Dr. Pedro Alves',      photo: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=200&q=80', specialty: 'Neurologia',     whatsapp: '5511991003003' },
-    mgh:          { name: 'Dra. Ana Lima',         photo: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=200&q=80', specialty: 'Psiquiatria',    whatsapp: '5511991004004' },
-    nyp:          { name: 'Dr. Carlos Souza',     photo: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=200&q=80', specialty: 'Cirurgia',       whatsapp: '5511991005005' },
-    ucsf:         { name: 'Dra. Marina Faria',    photo: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&q=80', specialty: 'Oncologia',      whatsapp: '5511991006006' },
-    mdanderson:   { name: 'Dr. João Mendes',      photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&q=80', specialty: 'Oncologia',      whatsapp: '5511991007007' },
-    stanford:     { name: 'Dra. Camila Torres',   photo: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=200&q=80', specialty: 'Cardiologia',    whatsapp: '5511991008008' },
-    northwestern: { name: 'Dr. Bruno Costa',      photo: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=200&q=80', specialty: 'Transplante',    whatsapp: '5511991009009' },
-    default:      { name: 'Dr. Lucas Ferreira',   photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&q=80', specialty: 'Medicina',       whatsapp: '5511991000000' },
+    cleveland:       { name: 'Dr. Rafael Moura',    photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&q=80', specialty: 'Cardiologia',     whatsapp: '5511991001001' },
+    mayo:            { name: 'Dra. Beatriz Santos',  photo: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&q=80', specialty: 'Med. Interna',    whatsapp: '5511991002002' },
+    jhopkins:        { name: 'Dr. Pedro Alves',      photo: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=200&q=80', specialty: 'Neurologia',     whatsapp: '5511991003003' },
+    mgh:             { name: 'Dra. Ana Lima',         photo: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=200&q=80', specialty: 'Psiquiatria',    whatsapp: '5511991004004' },
+    nyp:             { name: 'Dr. Carlos Souza',     photo: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=200&q=80', specialty: 'Cirurgia',       whatsapp: '5511991005005' },
+    ucsf:            { name: 'Dra. Marina Faria',    photo: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&q=80', specialty: 'Neurociências',   whatsapp: '5511991006006' },
+    mdanderson:      { name: 'Dr. João Mendes',      photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&q=80', specialty: 'Oncologia',      whatsapp: '5511991007007' },
+    msk:             { name: 'Dra. Fernanda Ramos',  photo: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=200&q=80', specialty: 'Oncologia',      whatsapp: '5511991010010' },
+    cedars:          { name: 'Dr. Thiago Oliveira',  photo: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=200&q=80', specialty: 'Cardiologia',    whatsapp: '5511991011011' },
+    nyulangone:      { name: 'Dra. Juliana Pereira', photo: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&q=80', specialty: 'Neurologia',     whatsapp: '5511991012012' },
+    stanford:        { name: 'Dra. Camila Torres',   photo: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=200&q=80', specialty: 'Cardiologia',    whatsapp: '5511991008008' },
+    northwestern:    { name: 'Dr. Bruno Costa',      photo: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=200&q=80', specialty: 'Transplante',    whatsapp: '5511991009009' },
+    barnesjewish:    { name: 'Dr. Marcos Andrade',   photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&q=80', specialty: 'Medicina Interna', whatsapp: '5511991013013' },
+    umichigan:       { name: 'Dra. Renata Campos',   photo: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=200&q=80', specialty: 'Oncologia',      whatsapp: '5511991014014' },
+    duke:            { name: 'Dr. Vitor Nascimento',  photo: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=200&q=80', specialty: 'Neurologia',     whatsapp: '5511991015015' },
+    bostonchildrens: { name: 'Dra. Lara Monteiro',   photo: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&q=80', specialty: 'Pediatria',      whatsapp: '5511991016016' },
+    chop:            { name: 'Dr. Felipe Barbosa',   photo: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=200&q=80', specialty: 'Pediatria',      whatsapp: '5511991017017' },
+    texaschildrens:  { name: 'Dra. Gabriela Dias',   photo: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=200&q=80', specialty: 'Pediatria',      whatsapp: '5511991018018' },
+    danafar:         { name: 'Dr. André Fonseca',    photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&q=80', specialty: 'Oncologia',      whatsapp: '5511991019019' },
+    ucla:            { name: 'Dra. Patrícia Vieira',  photo: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&q=80', specialty: 'Transplante',    whatsapp: '5511991020020' },
+    default:         { name: 'Dr. Lucas Ferreira',   photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&q=80', specialty: 'Medicina',       whatsapp: '5511991000000' },
 }
 
 const ONBOARDING_CATEGORIES = [
@@ -2376,10 +2387,10 @@ function PipelineView({ specialtyOrder, hospitalOrderBySpecialty, onReorderSpec,
             {state.intercambios.length > 1 && (
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '4px' }}>
                     {state.intercambios.map(i => (
-                        <button key={i.id} onClick={() => dispatch({ type: 'SET_ACTIVE_INTERCAMBIO', id: i.id })}
-                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', border: `1.5px solid ${i.id === intercambio.id ? '#BFDBFE' : '#E2E8F0'}`, background: i.id === intercambio.id ? '#EFF6FF' : '#fff', color: i.id === intercambio.id ? '#2563EB' : '#64748B', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', transition: 'all 0.2s' }}>
+                        <div key={i.id}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', border: `1.5px solid ${i.id === intercambio.id ? '#BFDBFE' : '#E2E8F0'}`, background: i.id === intercambio.id ? '#EFF6FF' : '#F8FAFC', color: i.id === intercambio.id ? '#2563EB' : '#94A3B8', fontSize: '13px', fontWeight: 700, whiteSpace: 'nowrap', userSelect: 'none' }}>
                             <MapPin size={11} />{i.hospital.shortName}
-                        </button>
+                        </div>
                     ))}
                 </div>
             )}
@@ -2405,26 +2416,29 @@ export default function MeuIntercambio() {
     const [specialtyOrder, setSpecialtyOrder] = useState<string[]>([])
     const [hospitalOrderBySpecialty, setHospitalOrderBySpecialty] = useState<Record<string, string[]>>({})
 
-    // Init specialty order from intercambios
+    // Init specialty order from persisted selected specialties
     useEffect(() => {
-        if (state.intercambios.length > 0 && specialtyOrder.length === 0) {
-            setSpecialtyOrder([...new Set(state.intercambios.flatMap(i => i.hospital.specialty))])
+        if (state.selectedSpecialties.length > 0 && specialtyOrder.length === 0) {
+            setSpecialtyOrder(state.selectedSpecialties)
         }
-    }, [state.intercambios])
+    }, [state.selectedSpecialties])
 
     useEffect(() => {
         if (hasIntercambios && step === 'specialty' && selectedSpecialties.length === 0) setStep('pipeline')
     }, [hasIntercambios])
 
     function handleConfirmSpecialties() {
+        dispatch({ type: 'SET_SELECTED_SPECIALTIES', specialties: selectedSpecialties })
         setStep('hospitals')
     }
 
     function handleConfirmHospitals() {
         const toAdd = state.hospitals.filter(h => selectedHospitalIds.includes(h.id))
         toAdd.forEach(h => dispatch({ type: 'ADD_INTERCAMBIO', hospital: h }))
-        const allSpecs = [...new Set([...specialtyOrder, ...selectedSpecialties, ...toAdd.flatMap(h => h.specialty)])]
-        setSpecialtyOrder(allSpecs)
+        // Merge new specialties into persisted list, keeping only user-selected ones
+        const merged = [...new Set([...state.selectedSpecialties, ...selectedSpecialties])]
+        dispatch({ type: 'SET_SELECTED_SPECIALTIES', specialties: merged })
+        setSpecialtyOrder(merged)
         setSelectedHospitalIds([])
         setSelectedSpecialties([])
         setStep('pipeline')
@@ -2490,7 +2504,7 @@ export default function MeuIntercambio() {
                     {step === 'hospitals' && (
                         <motion.div key="hospitals">
                             <HospitalGallery
-                                selectedSpecialties={selectedSpecialties.length > 0 ? selectedSpecialties : [...new Set(state.intercambios.flatMap(i => i.hospital.specialty))]}
+                                selectedSpecialties={selectedSpecialties.length > 0 ? selectedSpecialties : state.selectedSpecialties}
                                 selectedIds={selectedHospitalIds}
                                 onToggle={id => setSelectedHospitalIds(prev => prev.includes(id) ? prev.filter(h => h !== id) : [...prev, id])}
                                 onConfirm={handleConfirmHospitals}
