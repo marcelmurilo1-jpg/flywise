@@ -301,7 +301,7 @@ app.get('/api/amadeus/airports', async (req, res) => {
 
 // ─── Google Flights Scraper ───────────────────────────────────────────────────
 // Navegador compartilhado: criado uma vez, reutilizado em todas as requisições.
-const scrapeLimit = pLimit(4); // máx. 4 abas simultâneas
+const scrapeLimit = pLimit(1); // Railway: 1 aba por vez (limite de processos do container)
 let _browser = null;
 
 // ── Fase 2: Pool de User-Agents reais do Chrome 120-124 ──────────────────────
@@ -352,6 +352,11 @@ async function getBrowser() {
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--no-zygote',
+            '--single-process',
+            '--disable-extensions',
             '--disable-blink-features=AutomationControlled',
             '--disable-features=IsolateOrigins,site-per-process',
         ],
