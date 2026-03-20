@@ -438,11 +438,12 @@ async function scrapeOneway(origin, destination, date) {
                 .first().click({ timeout: 4000 }).catch(() => {});
 
             // Aguarda os cards de voo aparecerem (div[data-id] com aria-label de voo)
+            // Detecta tanto PT ("Reais brasileiros", "Voo da") quanto EN ("From R$", "flight")
             await page.waitForFunction(
                 () => [...document.querySelectorAll('div[data-id]')].some(el => {
                     const link = el.querySelector('[aria-label]');
                     const a = link?.getAttribute('aria-label') ?? '';
-                    return /Reais brasileiros/i.test(a) || /Voo da /i.test(a);
+                    return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(a);
                 }),
                 { timeout: 20000 }
             ).catch(() => console.log(`[GFlights] ${origin}→${destination}: timeout aguardando cards de voo`));
@@ -450,53 +451,113 @@ async function scrapeOneway(origin, destination, date) {
             await page.waitForTimeout(1500);
 
             const flights = await page.evaluate(() => {
-                // Parser baseado em aria-label — formato estável e estruturado do Google Flights
-                // Exemplo: "A partir de 2276 Reais brasileiros. Voo da COPA com 1 parada.
-                //   Sai do aeroporto ... às 05:25 do dia ... e chega ... às 16:40 do dia ...
-                //   Duração total: 12h 15 min. Parada (1 de 1) de 2h 12 min ... em Cidade do Panamá."
+                // Parser bilíngue PT + EN baseado em aria-label do Google Flights
+                function to24h(time, ampm) {
+                    let [h, m] = time.split(':').map(Number);
+                    if (ampm.toUpperCase() === 'PM' && h !== 12) h += 12;
+                    if (ampm.toUpperCase() === 'AM' && h === 12) h = 0;
+                    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+                }
+
                 function parseAriaLabel(aria) {
                     if (!aria) return null;
 
-                    // Preço: "A partir de 2276 Reais brasileiros"
-                    const priceM = aria.match(/A partir de (\d[\d\s]*) Reais/i);
-                    const preco_brl = priceM ? parseInt(priceM[1].replace(/\s/g, ''), 10) : 0;
+                    // ── Preço ────────────────────────────────────────────────────────────────
+                    // PT: "A partir de 2276 Reais brasileiros"
+                    // EN: "From R$1,234" or "From BRL 1,234"
+                    let preco_brl = 0;
+                    const pricePT = aria.match(/A partir de (\d[\d\s]*) Reais/i);
+                    if (pricePT) preco_brl = parseInt(pricePT[1].replace(/\s/g, ''), 10);
+                    if (!preco_brl) {
+                        const priceEN = aria.match(/(?:From\s+)?(?:R\$|BRL\s*)(\d[\d,]*)/i);
+                        if (priceEN) preco_brl = parseInt(priceEN[1].replace(/,/g, ''), 10);
+                    }
                     if (!preco_brl) return null;
 
-                    // Companhia: "Voo da COPA" ou "Voo da LATAM" (até ponto/vírgula/espaço+com)
-                    const airlineM = aria.match(/Voo da ([^,.]+?)(?:\s+com\s+|\.|,|Operado)/i);
-                    const companhia = airlineM ? airlineM[1].trim() : '';
-
-                    // Paradas: "com 1 parada" ou "Sem escalas"
-                    const paradas = /Sem escalas/i.test(aria) ? 0
-                        : (aria.match(/com (\d+) parada/i)?.[1] ? parseInt(aria.match(/com (\d+) parada/i)[1]) : 1);
-
-                    // Horários: "às 05:25 do dia" — primeira = partida, segunda = chegada
-                    const times = [...aria.matchAll(/às (\d{1,2}:\d{2}) do dia/gi)];
-                    const partida = times[0]?.[1] ?? '';
-                    const chegada = times[1]?.[1] ?? '';
-
-                    // Offset de chegada: detecta se data de chegada > data de partida pelo texto do dia
-                    // "quinta-feira, abril 16" vs "quarta-feira, abril 15" → offset = 1
-                    const dayNumbers = [...aria.matchAll(/dia \w+-feira, \w+ (\d+)|dia \w+, \w+ (\d+)|dia (\d{1,2}) de \w+/gi)];
-                    let chegadaOffset = 0;
-                    if (dayNumbers.length >= 2) {
-                        const d1 = parseInt(dayNumbers[0][1] ?? dayNumbers[0][2] ?? dayNumbers[0][3] ?? '0');
-                        const d2 = parseInt(dayNumbers[1][1] ?? dayNumbers[1][2] ?? dayNumbers[1][3] ?? '0');
-                        if (d2 > d1) chegadaOffset = d2 - d1;
+                    // ── Companhia ────────────────────────────────────────────────────────────
+                    // PT: "Voo da COPA com 1 parada"
+                    // EN: "American Airlines flight with 1 stop"
+                    let companhia = '';
+                    const airlinePT = aria.match(/Voo da ([^,.]+?)(?:\s+com\s+|\.|,|Operado)/i);
+                    if (airlinePT) companhia = airlinePT[1].trim();
+                    if (!companhia) {
+                        const airlineEN = aria.match(/^([^.]+?)\s+flight\b/i);
+                        if (airlineEN) companhia = airlineEN[1].trim();
                     }
 
-                    // Duração total: "Duração total: 12h 15 min"
-                    const durM = aria.match(/Dura[çc][aã]o total: (\d+)h(?:\s*(\d+)\s*min)?/i);
-                    const duracao_min = durM ? parseInt(durM[1]) * 60 + (durM[2] ? parseInt(durM[2]) : 0) : 0;
+                    // ── Paradas ──────────────────────────────────────────────────────────────
+                    // PT: "Sem escalas" / "com 1 parada"
+                    // EN: "Nonstop" / "1 stop"
+                    let paradas = 1;
+                    if (/Sem escalas/i.test(aria) || /Nonstop/i.test(aria)) {
+                        paradas = 0;
+                    } else {
+                        const stopsPT = aria.match(/com (\d+) parada/i);
+                        const stopsEN = aria.match(/(\d+)\s+stop/i);
+                        if (stopsPT) paradas = parseInt(stopsPT[1]);
+                        else if (stopsEN) paradas = parseInt(stopsEN[1]);
+                    }
 
-                    // Cidade de conexão: "Parada (N de N) de Xh Ymin ... em CIDADE."
-                    // Google às vezes escreve "emCidade" sem espaço, outras "em Cidade"
-                    const layoverM = aria.match(/Parada \(\d+ de \d+\) de [^.]+?em\s*([A-ZÀ-Ú][^.]+?)\./i);
-                    const layoverCity = layoverM ? layoverM[1].replace(/\s*\([A-Z]{3}\)/, '').trim() : '';
+                    // ── Horários ─────────────────────────────────────────────────────────────
+                    // PT: "às 05:25 do dia"
+                    // EN: "8:00 AM" / "3:30 PM"
+                    let partida = '';
+                    let chegada = '';
+                    const timesPT = [...aria.matchAll(/às (\d{1,2}:\d{2}) do dia/gi)];
+                    if (timesPT.length >= 1) partida = timesPT[0][1];
+                    if (timesPT.length >= 2) chegada = timesPT[1][1];
+                    if (!partida) {
+                        const timesEN = [...aria.matchAll(/(\d{1,2}:\d{2})\s*(AM|PM)/gi)];
+                        if (timesEN.length >= 1) partida = to24h(timesEN[0][1], timesEN[0][2]);
+                        if (timesEN.length >= 2) chegada = to24h(timesEN[1][1], timesEN[1][2]);
+                    }
 
-                    // Duração da conexão: "de 2h 12 min no aeroporto"
-                    const layoverDurMs = [...aria.matchAll(/Parada \(\d+ de \d+\) de (\d+)h(?:\s*(\d+)\s*min)?/gi)];
-                    const layoverDurations = layoverDurMs.map(m => parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0));
+                    // ── Offset de chegada ────────────────────────────────────────────────────
+                    // PT: "dia quinta-feira, abril 16" / EN: "Mon, Mar 20"
+                    let chegadaOffset = 0;
+                    const daysPT = [...aria.matchAll(/dia \w+-feira, \w+ (\d+)|dia \w+, \w+ (\d+)|dia (\d{1,2}) de \w+/gi)];
+                    if (daysPT.length >= 2) {
+                        const d1 = parseInt(daysPT[0][1] ?? daysPT[0][2] ?? daysPT[0][3] ?? '0');
+                        const d2 = parseInt(daysPT[1][1] ?? daysPT[1][2] ?? daysPT[1][3] ?? '0');
+                        if (d2 > d1) chegadaOffset = d2 - d1;
+                    }
+                    if (!chegadaOffset) {
+                        const daysEN = [...aria.matchAll(/\w{3},\s*\w{3}\s+(\d{1,2})/g)];
+                        if (daysEN.length >= 2) {
+                            const d1 = parseInt(daysEN[0][1]);
+                            const d2 = parseInt(daysEN[1][1]);
+                            if (d2 > d1) chegadaOffset = d2 - d1;
+                        }
+                    }
+
+                    // ── Duração total ────────────────────────────────────────────────────────
+                    // PT: "Duração total: 12h 15 min" / EN: "Total duration 12 hr 15 min"
+                    let duracao_min = 0;
+                    const durPT = aria.match(/Dura[çc][aã]o total: (\d+)h(?:\s*(\d+)\s*min)?/i);
+                    if (durPT) duracao_min = parseInt(durPT[1]) * 60 + (durPT[2] ? parseInt(durPT[2]) : 0);
+                    if (!duracao_min) {
+                        const durEN = aria.match(/Total duration (\d+) hr(?:\s*(\d+) min)?/i);
+                        if (durEN) duracao_min = parseInt(durEN[1]) * 60 + (durEN[2] ? parseInt(durEN[2]) : 0);
+                    }
+
+                    // ── Cidade de conexão ────────────────────────────────────────────────────
+                    // PT: "Parada (N de N) de Xh em Cidade"
+                    // EN: "Layover (N of N) Xhr in City"
+                    let layoverCity = '';
+                    const layoverPT = aria.match(/Parada \(\d+ de \d+\) de [^.]+?em\s*([A-ZÀ-Ú][^.(]+?)(?:\s*\([A-Z]{3}\))?\./i);
+                    if (layoverPT) layoverCity = layoverPT[1].trim();
+                    if (!layoverCity) {
+                        const layoverEN = aria.match(/Layover \(\d+ of \d+\) [^.]+?in ([^.(]+?)(?:\s*\([A-Z]{3}\))?\./i);
+                        if (layoverEN) layoverCity = layoverEN[1].trim();
+                    }
+
+                    // ── Durações de conexão ──────────────────────────────────────────────────
+                    const ldPT = [...aria.matchAll(/Parada \(\d+ de \d+\) de (\d+)h(?:\s*(\d+)\s*min)?/gi)];
+                    const ldEN = [...aria.matchAll(/Layover \(\d+ of \d+\) (\d+) hr(?:\s*(\d+) min)?/gi)];
+                    const layoverDurations = [
+                        ...ldPT.map(m => parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0)),
+                        ...ldEN.map(m => parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0)),
+                    ];
 
                     return {
                         companhia,
@@ -517,11 +578,12 @@ async function scrapeOneway(origin, destination, date) {
                 const results = [];
                 const divs = [...document.querySelectorAll('div[data-id]')];
                 for (const el of divs) {
-                    // Encontra o elemento filho com aria-label de voo
+                    // Encontra o elemento filho com aria-label de voo (PT ou EN)
                     const links = [...el.querySelectorAll('[aria-label]')];
                     const flightLink = links.find(l => {
                         const a = l.getAttribute('aria-label') ?? '';
-                        return /Reais brasileiros/i.test(a) || /Voo da /i.test(a);
+                        return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d/i.test(a)
+                            || (/\bflight\b/i.test(a) && /R\$|\d+:\d+/i.test(a));
                     });
                     if (!flightLink) continue;
 
