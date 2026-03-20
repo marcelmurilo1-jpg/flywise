@@ -16,13 +16,15 @@ import { userContextToString } from './buildUserContext'
 export interface StrategyResult {
     programa_recomendado: string       // "Smiles"
     motivo: string                     // max 2 sentences
-    steps: string[]                    // 3 actionable steps
+    steps: string[]                    // 3-4 actionable steps (title only)
+    step_details: string[]             // one paragraph per step explaining in detail for beginners
     milhas_necessarias: number         // ex: 120000
     taxas_estimadas_brl: number        // ex: 280
     economia_pct: number               // ex: 68
     promocao_ativa?: string            // "Bônus 40% Smiles via Nubank (expira 15/03)"
     alternativa?: string               // fallback program if main is not available
     aviso?: string                     // any important disclaimer
+    regras_promocoes?: string[]        // list of rules/warnings about promos used in the strategy
 }
 
 export const SYSTEM_PROMPT = `Você é FlyWise, um especialista em programas de fidelidade e milhas aéreas do Brasil.

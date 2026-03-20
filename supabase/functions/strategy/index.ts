@@ -169,17 +169,27 @@ const JSON_SCHEMA = `{
   "programa_recomendado": "<ex: Smiles | LATAM Pass | TudoAzul | Livelo>",
   "motivo": "<máx 2 frases explicando por que este programa é o melhor para esta rota>",
   "steps": [
-    "<Passo 1 — Acumular: qual cartão de crédito solicitar ou qual parceiro transferir para chegar às milhas necessárias. Inclua o nome do cartão e banco.>",
-    "<Passo 2 — Transferir: quando e como transferir pontos para o programa, aproveitando bônus de transferência se houver promoção ativa.>",
-    "<Passo 3 — Emitir: como emitir o bilhete pelo site/app do programa — rota exata, cabine, dica de disponibilidade.>",
-    "<Passo 4 — Timing: melhor época para reservar, lista de espera se lotado, ou alternativa de programa caso não haja disponibilidade.>"
+    "<Passo 1 — título curto (máx 8 palavras): ex: 'Transferir pontos Livelo → Smiles'>",
+    "<Passo 2 — título curto: ex: 'Aproveitar bônus de transferência ativo'>",
+    "<Passo 3 — título curto: ex: 'Emitir bilhete no site Smiles'>",
+    "<Passo 4 — título curto: ex: 'Timing: quando reservar para garantir disponibilidade'>"
   ],
-  "milhas_necessarias": <número inteiro — milhas para emitir este voo no programa recomendado>,
-  "taxas_estimadas_brl": <número inteiro — taxas e sobretaxas em R$ além das milhas>,
-  "economia_pct": <número 0-100 — percentual de economia vs preço cash>,
-  "promocao_ativa": "<se houver promoção de transferência ou bônus relevante, descreva: 'Ex: 80% bônus Nubank→Smiles até 30/04' ou null>",
-  "alternativa": "<segundo programa recomendado caso o principal não tenha disponibilidade, ou null>",
-  "aviso": "<aviso importante: ex: 'Este voo tem cobranças de combustível elevadas no programa X' ou null>"
+  "step_details": [
+    "<Passo 1 detalhado — explicação completa em 2-4 frases para leigos: o que fazer, onde acessar, o que clicar, quanto tempo leva. Foque em transferência de pontos já existentes, compra de milhas bonificada, ou uso de clube.>",
+    "<Passo 2 detalhado — mesma estrutura>",
+    "<Passo 3 detalhado — mesma estrutura>",
+    "<Passo 4 detalhado — mesma estrutura>"
+  ],
+  "milhas_necessarias": <número inteiro>,
+  "taxas_estimadas_brl": <número inteiro>,
+  "economia_pct": <número 0-100>,
+  "promocao_ativa": "<descrição breve da promoção usada na estratégia ou null>",
+  "alternativa": "<segundo programa ou null>",
+  "aviso": "<aviso principal ou null>",
+  "regras_promocoes": [
+    "<Regra ou condição importante sobre alguma promoção ou programa citado. Ex: 'Bônus de transferência Nubank→Smiles não acumula com outros bônus do mês'>",
+    "<outra regra se houver>"
+  ]
 }`
 
 serve(async (req) => {
@@ -347,22 +357,26 @@ serve(async (req) => {
                 messages: [
                     {
                         role: 'system',
-                        content: `Você é FlyWise, especialista em programas de fidelidade e milhas aéreas do Brasil (Smiles, LATAM Pass, TudoAzul, Livelo, Esfera, Membership Rewards, Elo Mais).
-Sua função: analisar o voo selecionado e gerar a estratégia MAIS ECONÔMICA considerando o perfil real do usuário.
-Regras:
-- SE o usuário já tem saldo suficiente (marcado com ✓), priorize esse programa no passo 1
-- SE o usuário tem cartões ativos, cite-os no passo 1 como forma de acúmulo/transferência
-- SE o usuário tem clube (ex: Smiles Diamante), mencione benefícios de tier no passo 3
-- Priorize promoções de transferência ativas para reduzir milhas necessárias
-- Os steps devem ser ACIONÁVEIS e ESPECÍFICOS: mencione nome de cartão, banco, app, prazo
-- Calcule milhas_necessarias com base no programa recomendado (Smiles BR→USA economy: ~35.000-45.000; business: ~55.000-70.000; BR→EUR economy: ~45.000-60.000)
-- taxas_estimadas_brl: Smiles cobra pouco (~R$50-150); LATAM Pass cobra combustível (~R$300-600+)
+                        content: `Você é FlyWise, especialista em milhas e programas de fidelidade aéreos do Brasil.
+Sua função: gerar a estratégia MAIS ECONÔMICA para emitir o voo usando milhas que o usuário JÁ POSSUI ou pode obter SEM solicitar cartão de crédito novo.
+
+REGRAS OBRIGATÓRIAS:
+- NUNCA sugira solicitar, contratar ou pedir um novo cartão de crédito. Isso é proibido.
+- Foque apenas em: (1) transferência de pontos já existentes entre programas, (2) compra de milhas bonificada quando disponível, (3) uso de clubes de assinatura com bônus (ex: Smiles Clube Diamante, LATAM Pass Clube)
+- SE o usuário tem saldo suficiente (marcado com ✓), o passo 1 DEVE usar esse saldo
+- SE há promoção de bônus de transferência ativa, PRIORIZE e explique como aproveitar
+- SE o usuário tem clube, cite o bônus de tier no passo relevante
+- steps: apenas o TÍTULO curto de cada passo (máx 8 palavras)
+- step_details: explicação detalhada e didática para quem nunca usou milhas — diga onde clicar, qual site/app, quanto tempo leva, o que esperar
+- regras_promocoes: liste regras/condições importantes sobre promoções ou programas usados (validade, limite, cumulatividade, etc.)
+- Calcule milhas_necessarias realistas: Smiles BR→USA economy ~35k-45k; business ~55k-70k; BR→EUR economy ~45k-60k
+- taxas_estimadas_brl: Smiles ~R$50-150; LATAM Pass ~R$300-600+
 - Responda APENAS em JSON válido sem texto adicional.`,
                     },
                     { role: 'user', content: userPrompt },
                 ],
                 response_format: { type: 'json_object' },
-                max_tokens: 600,
+                max_tokens: 900,
                 temperature: 0.2,
             }),
         })

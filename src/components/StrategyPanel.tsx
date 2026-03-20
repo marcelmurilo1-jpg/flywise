@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Zap, TrendingDown, ArrowRight, Save, CheckCircle, Loader2, AlertTriangle, Tag, Sparkles, Lock } from 'lucide-react'
+import { X, Zap, TrendingDown, ArrowRight, Save, CheckCircle, Loader2, AlertTriangle, Tag, Sparkles, Lock, ChevronDown, ChevronUp } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import type { ResultadoVoo } from '@/lib/supabase'
@@ -40,6 +40,9 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
     const [strategy, setStrategy] = useState<StrategyResult | null>(null)
     const [llmError, setLlmError] = useState<string | null>(null)
     const [tokensUsed, setTokensUsed] = useState<number | null>(null)
+    const [openSteps, setOpenSteps] = useState<Set<number>>(new Set())
+    const [rulesOpen, setRulesOpen] = useState(false)
+    function toggleStep(i: number) { setOpenSteps(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n }) }
 
     // Must have either a DB flight or seatsContext to render
     if (!flight && !seatsContext) return null
@@ -337,18 +340,42 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                                     {/* Steps */}
                                     <div>
                                         <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '12px' }}>Plano passo a passo</div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                            {(strategy.steps ?? []).map((step, i) => (
-                                                <motion.div
-                                                    key={i}
-                                                    initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }}
-                                                    transition={{ delay: i * 0.1 }}
-                                                    style={{ display: 'flex', gap: '12px', background: 'var(--bg-subtle)', border: '1px solid var(--border-faint)', borderRadius: '12px', padding: '14px' }}
-                                                >
-                                                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--accent-soft)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-start)', fontWeight: 800, fontSize: '12px', flexShrink: 0 }}>{i + 1}</div>
-                                                    <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{step}</p>
-                                                </motion.div>
-                                            ))}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            {(strategy.steps ?? []).map((step, i) => {
+                                                const detail = strategy.step_details?.[i]
+                                                const isOpen = openSteps.has(i)
+                                                return (
+                                                    <motion.div
+                                                        key={i}
+                                                        initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }}
+                                                        transition={{ delay: i * 0.08 }}
+                                                        style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-faint)', borderRadius: '12px', overflow: 'hidden' }}
+                                                    >
+                                                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px 14px' }}>
+                                                            <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--accent-soft)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-start)', fontWeight: 800, fontSize: '12px', flexShrink: 0 }}>{i + 1}</div>
+                                                            <p style={{ flex: 1, fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.4, margin: 0 }}>{step}</p>
+                                                            {detail && (
+                                                                <button onClick={() => toggleStep(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 0, display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 600, flexShrink: 0, fontFamily: 'inherit' }}>
+                                                                    {isOpen ? <><ChevronUp size={13} /> Ocultar</> : <><ChevronDown size={13} /> Saiba mais</>}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        <AnimatePresence>
+                                                            {isOpen && detail && (
+                                                                <motion.div
+                                                                    initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                                                                    transition={{ duration: 0.2 }}
+                                                                    style={{ overflow: 'hidden' }}
+                                                                >
+                                                                    <div style={{ padding: '0 14px 14px 50px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, borderTop: '1px dashed var(--border-faint)' }}>
+                                                                        <div style={{ paddingTop: 10 }}>{detail}</div>
+                                                                    </div>
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
+                                                    </motion.div>
+                                                )
+                                            })}
                                         </div>
                                     </div>
 
@@ -357,6 +384,33 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                                         <div style={{ display: 'flex', gap: 8, padding: '10px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10 }}>
                                             <AlertTriangle size={14} color="#D97706" style={{ flexShrink: 0, marginTop: 1 }} />
                                             <span style={{ fontSize: 12, color: '#92400E' }}>{strategy.aviso}</span>
+                                        </div>
+                                    )}
+
+                                    {/* Regras e condições das promoções */}
+                                    {(strategy.regras_promocoes ?? []).length > 0 && (
+                                        <div style={{ border: '1px solid #FDE68A', borderRadius: 12, overflow: 'hidden' }}>
+                                            <button onClick={() => setRulesOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', background: '#FFFBEB', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                                    <AlertTriangle size={14} color="#D97706" />
+                                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>Regras e condições das promoções</span>
+                                                </div>
+                                                {rulesOpen ? <ChevronUp size={13} color="#D97706" /> : <ChevronDown size={13} color="#D97706" />}
+                                            </button>
+                                            <AnimatePresence>
+                                                {rulesOpen && (
+                                                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} style={{ overflow: 'hidden' }}>
+                                                        <div style={{ padding: '10px 14px 14px', background: '#FFFDF0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                            {(strategy.regras_promocoes ?? []).map((rule, i) => (
+                                                                <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, color: '#78350F', lineHeight: 1.6 }}>
+                                                                    <span style={{ flexShrink: 0, marginTop: 2 }}>•</span>
+                                                                    <span>{rule}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
                                         </div>
                                     )}
 

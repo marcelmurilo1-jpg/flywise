@@ -572,7 +572,18 @@ export default function Resultados() {
                                                                 {((seatsIdaSel?.precoMilhas ?? 0) + (seatsVoltaSel?.precoMilhas ?? 0)).toLocaleString('pt-BR')} pts
                                                             </div>
                                                             {(() => {
-                                                                const bestCash = Math.min(...flights.filter(f => (f.preco_brl ?? 0) > 0).map(f => f.preco_brl!))
+                                                                // Para ida+volta: prioriza ofertas combinadas Amadeus (preco_brl já inclui as 2 pernas)
+                                                                const combined = flights.filter(f => (f.preco_brl ?? 0) > 0 && !!(f.detalhes as any)?.returnPartida)
+                                                                const outOnly = flights.filter(f => (f.preco_brl ?? 0) > 0)
+                                                                const inOnly = inboundFlights.filter(f => (f.preco_brl ?? 0) > 0)
+                                                                let bestCash: number
+                                                                if (seatsVoltaSel && combined.length > 0) {
+                                                                    bestCash = Math.min(...combined.map(f => f.preco_brl!))
+                                                                } else if (seatsVoltaSel && outOnly.length > 0 && inOnly.length > 0) {
+                                                                    bestCash = Math.min(...outOnly.map(f => f.preco_brl!)) + Math.min(...inOnly.map(f => f.preco_brl!))
+                                                                } else {
+                                                                    bestCash = Math.min(...outOnly.map(f => f.preco_brl!))
+                                                                }
                                                                 return isFinite(bestCash) ? (
                                                                     <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
                                                                         Melhor preço em dinheiro: R$ {bestCash.toLocaleString('pt-BR')}
@@ -583,7 +594,14 @@ export default function Resultados() {
                                                         <button
                                                             onClick={() => {
                                                                 const sf = seatsIdaSel
-                                                                const bestCash = Math.min(...flights.filter(f => (f.preco_brl ?? 0) > 0).map(f => f.preco_brl!))
+                                                                const combined = flights.filter(f => (f.preco_brl ?? 0) > 0 && !!(f.detalhes as any)?.returnPartida)
+                                                                const outOnly = flights.filter(f => (f.preco_brl ?? 0) > 0)
+                                                                const inOnly = inboundFlights.filter(f => (f.preco_brl ?? 0) > 0)
+                                                                const bestCash = seatsVoltaSel && combined.length > 0
+                                                                    ? Math.min(...combined.map(f => f.preco_brl!))
+                                                                    : seatsVoltaSel && outOnly.length > 0 && inOnly.length > 0
+                                                                        ? Math.min(...outOnly.map(f => f.preco_brl!)) + Math.min(...inOnly.map(f => f.preco_brl!))
+                                                                        : Math.min(...outOnly.map(f => f.preco_brl!))
                                                                 const ctx: SeatsContext = {
                                                                     airlineCode: sf.companhiaAerea ?? '',
                                                                     airlineName: AIRLINE_FULL[sf.companhiaAerea ?? ''] ?? sf.companhiaAerea ?? '',

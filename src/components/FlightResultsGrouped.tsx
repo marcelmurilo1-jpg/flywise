@@ -301,13 +301,6 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], searchInfo,
                                             <div style={{ fontSize: 9, color: '#94A3B8' }}>{(flight.preco_brl ?? 0) > 0 ? 'preço final' : 'incl. na ida'}</div>
                                         </div>
                                     </div>
-                                    <div className="fly-card-actions" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                        <button onClick={() => toggleExpand(cardId)}
-                                            style={{ background: 'none', color: '#64748B', border: '1px solid #E2EAF5', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                            {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                                            Detalhes
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
 
