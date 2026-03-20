@@ -8,12 +8,28 @@ import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
 import type { StrategyResult } from '@/lib/llm/buildPrompt'
 
-interface StrategyPanelProps {
-    open: boolean; onClose: () => void
-    flight: ResultadoVoo | null; buscaId: number; cashPrice?: number
+export interface SeatsContext {
+    airlineCode: string
+    airlineName: string
+    origem: string
+    destino: string
+    cabin: string
+    program: string
+    idaMilhas: number
+    voltaMilhas?: number
+    totalMilhas: number
+    isRoundTrip: boolean
+    dataVoo: string
+    taxas?: string
 }
 
-export function StrategyPanel({ open, onClose, flight, buscaId, cashPrice = 0 }: StrategyPanelProps) {
+interface StrategyPanelProps {
+    open: boolean; onClose: () => void
+    flight?: ResultadoVoo | null; buscaId: number; cashPrice?: number
+    seatsContext?: SeatsContext
+}
+
+export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice = 0, seatsContext }: StrategyPanelProps) {
     const { user } = useAuth()
     const navigate = useNavigate()
     const { canGenerateStrategy, strategiesUsed, strategyLimit, plan, refresh: refreshPlan } = usePlan()
@@ -25,18 +41,29 @@ export function StrategyPanel({ open, onClose, flight, buscaId, cashPrice = 0 }:
     const [llmError, setLlmError] = useState<string | null>(null)
     const [tokensUsed, setTokensUsed] = useState<number | null>(null)
 
-    if (!flight) return null
-    const price = cashPrice || flight.preco_brl || 0
+    // Must have either a DB flight or seatsContext to render
+    if (!flight && !seatsContext) return null
+    const price = cashPrice || flight?.preco_brl || 0
+
+    // Header display info — prefer seatsContext when no DB flight
+    const displayAirline = seatsContext ? `${seatsContext.airlineName} (${seatsContext.program})` : (flight?.companhia ?? '')
+    const displayRoute = seatsContext ? `${seatsContext.origem} → ${seatsContext.destino}` : `${flight?.origem ?? ''} → ${flight?.destino ?? ''}`
 
     async function generateStrategy() {
-        if (!flight?.id) return
+        // Either need a DB flight id OR seatsContext
+        if (!flight?.id && !seatsContext) return
         setLoading(true); setLlmError(null); setStrategy(null)
         try {
             const { data: { session } } = await supabase.auth.getSession()
             const token = session?.access_token
 
             const res = await supabase.functions.invoke('strategy', {
-                body: { flightId: flight.id, userId: user?.id, cashPrice: cashPrice || undefined },
+                body: {
+                    flightId: flight?.id || undefined,
+                    userId: user?.id,
+                    cashPrice: cashPrice || undefined,
+                    seatsContext: seatsContext || undefined,
+                },
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             })
 
@@ -112,7 +139,8 @@ export function StrategyPanel({ open, onClose, flight, buscaId, cashPrice = 0 }:
                                         {loading ? 'Analisando estratégia...' : strategy ? 'Estratégia gerada por IA' : 'Estratégia com Milhas'}
                                     </div>
                                     <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                        {flight.companhia} · {flight.origem} → {flight.destino}
+                                        {displayAirline} · {displayRoute}
+                                        {seatsContext && <span style={{ marginLeft: 6, color: '#16A34A', fontWeight: 700 }}>· {seatsContext.totalMilhas.toLocaleString('pt-BR')} pts</span>}
                                         {tokensUsed && <span style={{ marginLeft: 8, color: '#94A3B8' }}>· {tokensUsed} tokens</span>}
                                     </div>
                                 </div>
@@ -164,20 +192,25 @@ export function StrategyPanel({ open, onClose, flight, buscaId, cashPrice = 0 }:
                                                         : 'A IA vai analisar o voo, verificar promoções ativas e calcular o melhor programa de milhas para esta rota.'}
                                                 </p>
                                             </div>
-                                            <button
-                                                onClick={generateStrategy}
-                                                disabled={!flight.id}
-                                                style={{
-                                                    background: flight.id ? 'linear-gradient(135deg, #2A60C2, #4A90E2)' : '#CBD5E1',
-                                                    color: '#fff', border: 'none', borderRadius: 12,
-                                                    padding: '12px 28px', fontFamily: 'inherit',
-                                                    fontSize: 14, fontWeight: 700, cursor: flight.id ? 'pointer' : 'not-allowed',
-                                                    display: 'flex', alignItems: 'center', gap: 8,
-                                                    boxShadow: flight.id ? '0 4px 16px rgba(42,96,194,0.35)' : 'none',
-                                                }}
-                                            >
-                                                {flight.id ? <><Zap size={15} /> Gerar estratégia</> : <><Loader2 size={15} className="spin" /> Preparando...</>}
-                                            </button>
+                                            {(() => {
+                                                const ready = !!seatsContext || !!flight?.id
+                                                return (
+                                                    <button
+                                                        onClick={generateStrategy}
+                                                        disabled={!ready}
+                                                        style={{
+                                                            background: ready ? 'linear-gradient(135deg, #2A60C2, #4A90E2)' : '#CBD5E1',
+                                                            color: '#fff', border: 'none', borderRadius: 12,
+                                                            padding: '12px 28px', fontFamily: 'inherit',
+                                                            fontSize: 14, fontWeight: 700, cursor: ready ? 'pointer' : 'not-allowed',
+                                                            display: 'flex', alignItems: 'center', gap: 8,
+                                                            boxShadow: ready ? '0 4px 16px rgba(42,96,194,0.35)' : 'none',
+                                                        }}
+                                                    >
+                                                        {ready ? <><Zap size={15} /> Gerar estratégia</> : <><Loader2 size={15} className="spin" /> Preparando...</>}
+                                                    </button>
+                                                )
+                                            })()}
                                             <p style={{ fontSize: 11, color: '#94A3B8' }}>
                                                 {strategiesUsed}/{strategyLimit} {plan === 'free' ? 'estratégia usada' : 'estratégias usadas este mês'}
                                             </p>

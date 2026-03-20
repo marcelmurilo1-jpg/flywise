@@ -186,8 +186,8 @@ serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
     try {
-        const { flightId, userId, cashPrice } = await req.json()
-        if (!flightId) return new Response(JSON.stringify({ error: 'flightId required' }), { status: 400, headers: corsHeaders })
+        const { flightId, userId, cashPrice, seatsContext } = await req.json()
+        if (!flightId && !seatsContext) return new Response(JSON.stringify({ error: 'flightId or seatsContext required' }), { status: 400, headers: corsHeaders })
 
         // Init Supabase with service role (can bypass RLS to read flight owned by user)
         const sb = createClient(
@@ -195,9 +195,29 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
         )
 
-        // 1. Load flight
-        const { data: flight, error: fErr } = await sb.from('resultados_voos').select('*').eq('id', flightId).single()
-        if (fErr || !flight) return new Response(JSON.stringify({ error: 'Flight not found' }), { status: 404, headers: corsHeaders })
+        // 1. Load flight (from DB if flightId given, or build synthetic row from seatsContext)
+        let flight: FlightRow | null = null
+        if (flightId) {
+            const { data, error: fErr } = await sb.from('resultados_voos').select('*').eq('id', flightId).single()
+            if (fErr || !data) return new Response(JSON.stringify({ error: 'Flight not found' }), { status: 404, headers: corsHeaders })
+            flight = data as FlightRow
+        } else if (seatsContext) {
+            // Build synthetic FlightRow from Seats.aero data
+            flight = {
+                id: 0,
+                companhia: `${seatsContext.airlineName} (${seatsContext.airlineCode})`,
+                preco_brl: cashPrice || null,
+                preco_milhas: seatsContext.totalMilhas,
+                taxas_brl: null, cpm: null,
+                partida: null, chegada: null,
+                origem: seatsContext.origem,
+                destino: seatsContext.destino,
+                duracao_min: null,
+                cabin_class: seatsContext.cabin?.toLowerCase() ?? 'economy',
+                segmentos: null, detalhes: null,
+            }
+        }
+        if (!flight) return new Response(JSON.stringify({ error: 'No flight data' }), { status: 400, headers: corsHeaders })
 
         // 2. Enforce plan limits (server-side)
         if (userId) {
@@ -282,14 +302,29 @@ serve(async (req) => {
         const sections = [
             '=== VOO SELECIONADO ===', flightStr,
         ]
-        // Se o usuário informou o preço cash real da combinação ida+volta selecionada, inclui
+        // Contexto de milhas do Seats.aero (disponibilidade real encontrada)
+        if (seatsContext) {
+            const roundTrip = seatsContext.isRoundTrip
+            const lines = [
+                `Disponibilidade REAL encontrada no Seats.aero:`,
+                `  Programa: ${seatsContext.program}`,
+                `  Ida: ${seatsContext.idaMilhas.toLocaleString('pt-BR')} pts (${seatsContext.origem} → ${seatsContext.destino})`,
+            ]
+            if (roundTrip && seatsContext.voltaMilhas) {
+                lines.push(`  Volta: ${seatsContext.voltaMilhas.toLocaleString('pt-BR')} pts (${seatsContext.destino} → ${seatsContext.origem})`)
+            }
+            lines.push(`  Total: ${seatsContext.totalMilhas.toLocaleString('pt-BR')} pts`)
+            if (seatsContext.taxas) lines.push(`  Taxas: ${seatsContext.taxas}`)
+            lines.push(`  Cabine: ${seatsContext.cabin}`)
+            sections.push(`\n=== DISPONIBILIDADE EM MILHAS (Seats.aero) ===`, lines.join('\n'))
+        }
+        // Preço cash de referência para comparação
         if (cashPrice && cashPrice > 0) {
             const totalBrl = Number(cashPrice)
-            const milhasEst = Math.round((totalBrl * 55) / 1000) * 1000
             sections.push(
-                `\n=== PREÇO CASH DA COMBINAÇÃO SELECIONADA ===`,
-                `Preço total ida+volta em dinheiro: R$ ${totalBrl.toLocaleString('pt-BR')} | Milhas estimadas para cobrir: ~${milhasEst.toLocaleString('pt-BR')} pts`,
-                `Use este valor como base de comparação para calcular economia_pct.`,
+                `\n=== PREÇO EM DINHEIRO (referência de comparação) ===`,
+                `Melhor preço encontrado em dinheiro: R$ ${totalBrl.toLocaleString('pt-BR')}`,
+                `Use este valor para calcular economia_pct: quanto o usuário economiza pagando com milhas vs dinheiro.`,
             )
         }
         sections.push('\n=== PROMOÇÕES ATIVAS ===', promoStr)

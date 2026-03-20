@@ -1,8 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plane, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plane, ChevronDown, ChevronUp } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ResultadoVoo } from '@/lib/supabase'
-import { StrategyPanel } from '@/components/StrategyPanel'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { airlineMatchesPrograms } from '@/lib/airlineMilesMapping'
@@ -93,131 +92,7 @@ function FlightLeg({
     )
 }
 
-// ─── Compact card shown after selecting a flight (mirrors miles section) ─────
-function SelectedFlightCard({
-    flight, label, onChangeSelection,
-}: {
-    flight: ResultadoVoo; label: string; onChangeSelection?: () => void
-}) {
-    const [expanded, setExpanded] = useState(false)
-    const det = (flight.detalhes as any) ?? {}
-    const segsOut = (flight.segmentos as any[]) ?? []
-    const layoverCity = det.layoverCity || ''
-    const connectionStr = layoverCity
-        ? `${det.paradas ?? 1} conexão · ${layoverCity}`
-        : stopCodes(segsOut)
-
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-            style={{ background: '#fff', border: '2px solid #16A34A', borderRadius: 16, overflow: 'hidden', marginBottom: 12 }}
-        >
-            <div style={{ background: '#16A34A', padding: '6px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <CheckCircle2 size={13} color="#fff" />
-                    <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: '0.05em' }}>{label}</span>
-                </div>
-                {onChangeSelection && (
-                    <button onClick={onChangeSelection}
-                        style={{ background: 'none', border: 'none', fontSize: 11, color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontFamily: 'inherit', padding: 0, fontWeight: 600 }}>
-                        ← Mudar ida
-                    </button>
-                )}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', flexWrap: 'wrap', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 4, height: 32, borderRadius: 4, background: '#0E2A55' }} />
-                    <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: '#0E2A55' }}>{flight.companhia}</div>
-                        <div style={{ fontSize: 11, color: '#94A3B8' }}>{formatDate(flight.partida)}</div>
-                    </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ textAlign: 'center', minWidth: 44 }}>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: '#0E2A55', lineHeight: 1 }}>{formatTime(flight.partida)}</div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B', marginTop: 2 }}>{flight.origem}</div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 80 }}>
-                        {!!flight.duracao_min && <span style={{ fontSize: 11, fontWeight: 600, color: '#64748B' }}>{formatDur(flight.duracao_min)}</span>}
-                        <div style={{ position: 'relative', height: 1, background: '#BBF7D0', width: '100%' }}>
-                            <Plane size={11} style={{ position: 'absolute', right: -1, top: -5, color: '#16A34A' }} />
-                        </div>
-                        <span style={{ fontSize: 10, color: (det.paradas ?? 0) === 0 ? '#16A34A' : '#94A3B8', fontWeight: (det.paradas ?? 0) === 0 ? 700 : 400 }}>
-                            {stopLabel(det.paradas ?? 0, connectionStr)}
-                        </span>
-                    </div>
-                    <div style={{ textAlign: 'center', minWidth: 44 }}>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: '#0E2A55', lineHeight: 1 }}>{formatTime(flight.chegada)}</div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B', marginTop: 2 }}>{flight.destino}</div>
-                    </div>
-                </div>
-                {(flight.preco_brl ?? 0) > 0 && (
-                    <div style={{ fontSize: 20, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em' }}>
-                        R$ {flight.preco_brl?.toLocaleString('pt-BR')}
-                    </div>
-                )}
-            </div>
-            {/* Segment details (expandable) */}
-            {expanded && segsOut.length > 0 && (
-                <div style={{ padding: '12px 16px', background: '#F8FAFC', borderTop: '1px dashed #E2EAF5' }}>
-                    {segsOut.map((seg: any, si: number) => {
-                        const segDep = seg.partida?.includes('T') ? seg.partida.slice(11, 16) : (seg.partida?.slice(0, 5) || '')
-                        const segArr = seg.chegada?.includes('T') ? seg.chegada.slice(11, 16) : (seg.chegada?.slice(0, 5) || '')
-                        const connDur = det.layoverDurations?.[si]
-                        return (
-                            <div key={si}>
-                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0' }}>
-                                    <div style={{ minWidth: 40, textAlign: 'right' }}>
-                                        {segDep && <div style={{ fontSize: 13, fontWeight: 800, color: '#0E2A55' }}>{segDep}</div>}
-                                        {seg.duracao_min > 0 && <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 14 }}>{formatDur(seg.duracao_min)}</div>}
-                                        {segArr && <div style={{ fontSize: 13, fontWeight: 800, color: '#0E2A55', marginTop: seg.duracao_min > 0 ? 0 : 28 }}>{segArr}</div>}
-                                    </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 4 }}>
-                                        <div style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #16A34A', background: '#fff' }} />
-                                        <div style={{ width: 2, flex: 1, background: '#BBF7D0', margin: '3px 0' }} />
-                                        <div style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #16A34A', background: '#fff' }} />
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: 12, fontWeight: 700, color: '#0E2A55' }}>{seg.origem}</div>
-                                        <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 6 }}>
-                                            {[seg.companhia_seg || flight.companhia, seg.numero, seg.aeronave].filter(Boolean).join(' · ')}
-                                        </div>
-                                        <div style={{ fontSize: 12, fontWeight: 700, color: '#0E2A55' }}>{seg.destino}</div>
-                                    </div>
-                                </div>
-                                {si < segsOut.length - 1 && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 58px', borderTop: '1px dashed #E2EAF5', borderBottom: '1px dashed #E2EAF5', margin: '2px 0' }}>
-                                        <span style={{ fontSize: 11, fontWeight: 700, color: '#F97316', background: '#FFF7ED', padding: '2px 8px', borderRadius: 6 }}>
-                                            Conexão{layoverCity ? ` em ${layoverCity}` : ''}{connDur ? ` · ${formatDur(connDur)}` : ''}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                        )
-                    })}
-                </div>
-            )}
-            <button
-                onClick={() => setExpanded(e => !e)}
-                style={{
-                    width: '100%', background: 'none', border: 'none', borderTop: '1px solid #F0FDF4',
-                    padding: '6px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                    cursor: 'pointer', color: '#16A34A', fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
-                }}
-            >
-                {expanded ? <><ChevronUp size={12} /> Ocultar detalhes</> : <><ChevronDown size={12} /> Ver detalhes do voo</>}
-            </button>
-        </motion.div>
-    )
-}
-
 export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, searchInfo, onNewSearch, sidebarFilters, returnDate }: FlightResultsGroupedProps) {
-    const [selFlight, setSelFlight] = useState<ResultadoVoo | null>(null)
-    const [selCashPrice, setSelCashPrice] = useState(0)
-    const [panelOpen, setPanelOpen] = useState(false)
-    const [amadPhase, setAmadPhase] = useState<'browsing' | 'ida-sel' | 'confirmed'>('browsing')
-    const [amadSel, setAmadSel] = useState<ResultadoVoo | null>(null)
-    const [amadReturnSel, setAmadReturnSel] = useState<ResultadoVoo | null>(null)
     const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
     function toggleExpand(id: string) {
         setExpandedCards(prev => {
@@ -226,25 +101,6 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
             return next
         })
     }
-
-    // Reset selection when flights list changes (new search)
-    useEffect(() => {
-        setAmadPhase('browsing')
-        setAmadSel(null)
-    }, [flights])
-
-    // Keep selFlight in sync when flights list is updated with DB-assigned IDs
-    useEffect(() => {
-        if (!selFlight) return
-        const updated = [...flights, ...inboundFlights].find(f =>
-            f.origem === selFlight.origem &&
-            f.destino === selFlight.destino &&
-            f.partida === selFlight.partida &&
-            f.companhia === selFlight.companhia &&
-            f.id !== selFlight.id
-        )
-        if (updated) setSelFlight(updated)
-    }, [flights, inboundFlights, selFlight])
 
     // (filtros gerenciados pela Sidebar — sem estado interno duplicado)
 
@@ -447,28 +303,11 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
                                         </div>
                                     </div>
                                     <div className="fly-card-actions" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                        {isReturn ? (
-                                            <button onClick={() => { setAmadReturnSel(flight); setAmadPhase('confirmed') }}
-                                                style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
-                                                Confirmar Volta ✓
-                                            </button>
-                                        ) : (
-                                            <>
-                                                {amadPhase === 'browsing' && isRoundTrip && (
-                                                    <button onClick={() => { setAmadSel(flight); setAmadPhase('ida-sel') }}
-                                                        style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
-                                                        Selecionar →
-                                                    </button>
-                                                )}
-                                                {/* Estratégia só aparece aqui para buscas somente ida */}
-                                                {!isRoundTrip && (
-                                                    <button onClick={() => { setSelFlight(flight); setSelCashPrice(flight.preco_brl ?? 0); setPanelOpen(true) }}
-                                                        style={{ background: 'none', color: '#0E2A55', border: '1px solid #CBD5E1', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
-                                                        Ver Detalhes
-                                                    </button>
-                                                )}
-                                            </>
-                                        )}
+                                        <button onClick={() => toggleExpand(cardKey)}
+                                            style={{ background: 'none', color: '#64748B', border: '1px solid #E2EAF5', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                            Detalhes
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -576,35 +415,22 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
 
                 return (
                     <>
-                        {/* ── Browsing: lista todos os voos de ida ─── */}
-                        {amadPhase === 'browsing' && (
-                            <AnimatePresence>
-                                {sorted.map((flight, idx) => (
-                                    <FlightCard key={flight.flight_key ?? idx} flight={flight} idx={idx} />
-                                ))}
-                            </AnimatePresence>
-                        )}
+                        {/* Voos de ida */}
+                        <AnimatePresence>
+                            {sorted.map((flight, idx) => (
+                                <FlightCard key={flight.flight_key ?? idx} flight={flight} idx={idx} />
+                            ))}
+                        </AnimatePresence>
 
-                        {/* ── IDA selecionada — card compacto (estilo milhas) ─── */}
-                        {(amadPhase === 'ida-sel' || amadPhase === 'confirmed') && amadSel && (
-                            <SelectedFlightCard
-                                flight={amadSel}
-                                label="IDA SELECIONADA"
-                                onChangeSelection={amadPhase === 'ida-sel'
-                                    ? () => { setAmadPhase('browsing'); setAmadSel(null); setAmadReturnSel(null) }
-                                    : undefined}
-                            />
-                        )}
-
-                        {/* ── Fase ida-sel: voos de volta ─── */}
-                        {amadPhase === 'ida-sel' && hasInbound && (
+                        {/* Voos de volta (referência de preço) */}
+                        {hasInbound && (
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0 12px' }}>
-                                    <div style={{ flex: 1, height: 1, background: '#BBF7D0' }} />
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#16A34A', whiteSpace: 'nowrap' }}>
-                                        ✈ Selecione o voo de volta
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 12px' }}>
+                                    <div style={{ flex: 1, height: 1, background: '#E2EAF5' }} />
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', whiteSpace: 'nowrap' }}>
+                                        VOOS DE VOLTA — REFERÊNCIA DE PREÇO
                                     </span>
-                                    <div style={{ flex: 1, height: 1, background: '#BBF7D0' }} />
+                                    <div style={{ flex: 1, height: 1, background: '#E2EAF5' }} />
                                 </div>
                                 <AnimatePresence>
                                     {inboundFlights.map((flight, idx) => (
@@ -613,83 +439,9 @@ export function FlightResultsGrouped({ flights, inboundFlights = [], buscaId, se
                                 </AnimatePresence>
                             </motion.div>
                         )}
-
-                        {/* Amadeus combinado: botão confirmar volta */}
-                        {amadPhase === 'ida-sel' && amadSel && !!(amadSel.detalhes as any)?.returnPartida && !hasInbound && (
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-                                <button onClick={() => setAmadPhase('confirmed')}
-                                    style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                                    Confirmar Volta →
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Nenhum voo de volta encontrado */}
-                        {amadPhase === 'ida-sel' && isRoundTrip && !hasInbound && !(amadSel && !!(amadSel.detalhes as any)?.returnPartida) && (
-                            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                                style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 12, padding: '14px 20px', marginBottom: 12, fontSize: 13, color: '#92400E' }}>
-                                Nenhum voo de volta encontrado para a data selecionada. Tente buscar novamente com outra data de volta.
-                            </motion.div>
-                        )}
-
-                        {/* ── Confirmado: VOLTA + total ─── */}
-                        {amadPhase === 'confirmed' && (
-                            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column' }}>
-                                {amadReturnSel && (
-                                    <SelectedFlightCard flight={amadReturnSel} label="VOLTA CONFIRMADA" />
-                                )}
-                                {(() => {
-                                    const totalCash = (amadSel?.preco_brl ?? 0) + (amadReturnSel?.preco_brl ?? 0)
-                                    return (
-                                        <div style={{ background: '#0E2A55', borderRadius: 12, padding: '14px 20px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                                            <div>
-                                                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total (ida + volta)</div>
-                                                <div style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>
-                                                    R$ {totalCash.toLocaleString('pt-BR')}
-                                                </div>
-                                            </div>
-                                            {amadSel && (
-                                                <button
-                                                    onClick={() => {
-                                                        setSelFlight(amadSel)
-                                                        setSelCashPrice(totalCash)
-                                                        setPanelOpen(true)
-                                                    }}
-                                                    style={{
-                                                        background: 'linear-gradient(135deg, #16A34A, #22C55E)',
-                                                        color: '#fff', border: 'none', borderRadius: 10,
-                                                        padding: '10px 20px', fontSize: 13, fontWeight: 700,
-                                                        cursor: 'pointer', fontFamily: 'inherit',
-                                                        display: 'flex', alignItems: 'center', gap: 6,
-                                                        boxShadow: '0 4px 12px rgba(22,163,74,0.4)',
-                                                        whiteSpace: 'nowrap' as const,
-                                                    }}
-                                                >
-                                                    ⚡ Gerar Estratégia com Milhas
-                                                </button>
-                                            )}
-                                        </div>
-                                    )
-                                })()}
-                                <button onClick={() => { setAmadPhase('browsing'); setAmadSel(null); setAmadReturnSel(null) }}
-                                    style={{ alignSelf: 'flex-start', background: 'none', border: '1px solid #CBD5E1', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#64748B', cursor: 'pointer', fontFamily: 'inherit', marginBottom: 12 }}>
-                                    ← Escolher novamente
-                                </button>
-                            </motion.div>
-                        )}
                     </>
                 )
             })()}
-
-            {panelOpen && selFlight && (
-                <StrategyPanel
-                    open={panelOpen}
-                    flight={selFlight}
-                    buscaId={buscaId}
-                    cashPrice={selCashPrice}
-                    onClose={() => setPanelOpen(false)}
-                />
-            )}
         </div>
     )
 }

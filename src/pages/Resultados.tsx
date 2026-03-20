@@ -6,6 +6,7 @@ import { searchFlights } from '@/lib/amadeus'
 import { useAuth } from '@/contexts/AuthContext'
 import { Header } from '@/components/Header'
 import { FlightResultsGrouped } from '@/components/FlightResultsGrouped'
+import { StrategyPanel, type SeatsContext } from '@/components/StrategyPanel'
 import { PlaneWindowLoader } from '@/components/PlaneWindowLoader'
 import { Sidebar, type FilterState } from '@/components/Sidebar'
 import { SearchBarTop } from '@/components/SearchBarTop'
@@ -47,6 +48,11 @@ export default function Resultados() {
     const [seatsIdaSel, setSeatsIdaSel] = useState<any | null>(null)
     const [seatsVoltaSel, setSeatsVoltaSel] = useState<any | null>(null)
     const [seatsDetailOpen, setSeatsDetailOpen] = useState<Set<string>>(new Set())
+
+    // Strategy panel state (opened from milhas summary)
+    const [stratOpen, setStratOpen] = useState(false)
+    const [stratContext, setStratContext] = useState<SeatsContext | null>(null)
+    const [stratCashPrice, setStratCashPrice] = useState(0)
 
     // Sidebar state
     const [filters, setFilters] = useState<FilterState>({ sortBy: 'best', stops: [], airlines: [], maxPrice: null })
@@ -412,6 +418,7 @@ export default function Resultados() {
     if (loading) return <PlaneWindowLoader />
 
     return (
+        <>
         <div style={{ minHeight: '100vh', background: 'var(--snow)', fontFamily: 'Manrope, system-ui, sans-serif' }}>
         <style>{`
             @media (max-width: 768px) {
@@ -555,12 +562,59 @@ export default function Resultados() {
                                                             </div>
                                                         )
                                                     })}
-                                                    {seatsVoltaSel && (
-                                                        <div style={{ background: '#0E2A55', borderRadius: 12, padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total (ida + volta)</span>
-                                                            <span style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>{((seatsIdaSel?.precoMilhas ?? 0) + (seatsVoltaSel?.precoMilhas ?? 0)).toLocaleString('pt-BR')} pts</span>
+                                                    {/* Total em milhas */}
+                                                    <div style={{ background: '#0E2A55', borderRadius: 12, padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                                                        <div>
+                                                            <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                                                                {seatsVoltaSel ? 'Total ida + volta' : 'Total ida'}
+                                                            </div>
+                                                            <div style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>
+                                                                {((seatsIdaSel?.precoMilhas ?? 0) + (seatsVoltaSel?.precoMilhas ?? 0)).toLocaleString('pt-BR')} pts
+                                                            </div>
+                                                            {(() => {
+                                                                const bestCash = Math.min(...flights.filter(f => (f.preco_brl ?? 0) > 0).map(f => f.preco_brl!))
+                                                                return isFinite(bestCash) ? (
+                                                                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
+                                                                        Melhor preço em dinheiro: R$ {bestCash.toLocaleString('pt-BR')}
+                                                                    </div>
+                                                                ) : null
+                                                            })()}
                                                         </div>
-                                                    )}
+                                                        <button
+                                                            onClick={() => {
+                                                                const sf = seatsIdaSel
+                                                                const bestCash = Math.min(...flights.filter(f => (f.preco_brl ?? 0) > 0).map(f => f.preco_brl!))
+                                                                const ctx: SeatsContext = {
+                                                                    airlineCode: sf.companhiaAerea ?? '',
+                                                                    airlineName: AIRLINE_FULL[sf.companhiaAerea ?? ''] ?? sf.companhiaAerea ?? '',
+                                                                    origem: sf.origem ?? '',
+                                                                    destino: sf.destino ?? '',
+                                                                    cabin: sf.cabineEncontrada ?? 'Economy',
+                                                                    program: SOURCE_PROGRAM[sf.source?.toLowerCase() ?? '']?.name ?? sf.source ?? '',
+                                                                    idaMilhas: sf.precoMilhas ?? 0,
+                                                                    voltaMilhas: seatsVoltaSel?.precoMilhas,
+                                                                    totalMilhas: (sf.precoMilhas ?? 0) + (seatsVoltaSel?.precoMilhas ?? 0),
+                                                                    isRoundTrip: !!seatsVoltaSel,
+                                                                    dataVoo: sf.dataVoo ?? '',
+                                                                    taxas: sf.taxas,
+                                                                }
+                                                                setStratContext(ctx)
+                                                                setStratCashPrice(isFinite(bestCash) ? bestCash : 0)
+                                                                setStratOpen(true)
+                                                            }}
+                                                            style={{
+                                                                background: 'linear-gradient(135deg, #16A34A, #22C55E)',
+                                                                color: '#fff', border: 'none', borderRadius: 10,
+                                                                padding: '10px 20px', fontSize: 13, fontWeight: 700,
+                                                                cursor: 'pointer', fontFamily: 'inherit',
+                                                                display: 'flex', alignItems: 'center', gap: 6,
+                                                                boxShadow: '0 4px 12px rgba(22,163,74,0.4)',
+                                                                whiteSpace: 'nowrap' as const,
+                                                            }}
+                                                        >
+                                                            ⚡ Gerar Estratégia
+                                                        </button>
+                                                    </div>
                                                     <button onClick={() => { setSeatsPhase('ida'); setSeatsIdaSel(null); setSeatsVoltaSel(null) }} style={{ alignSelf: 'flex-start', background: 'none', border: '1px solid #CBD5E1', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#64748B', cursor: 'pointer', fontFamily: 'inherit' }}>← Escolher novamente</button>
                                                 </div>
                                             ) : (
@@ -761,5 +815,17 @@ export default function Resultados() {
                 </div>
             </div>
         </div>
+
+        {/* Strategy Panel — opened from milhas summary */}
+        {stratOpen && stratContext && (
+            <StrategyPanel
+                open={stratOpen}
+                seatsContext={stratContext}
+                cashPrice={stratCashPrice}
+                buscaId={buscaId}
+                onClose={() => setStratOpen(false)}
+            />
+        )}
+        </>
     )
 }
