@@ -642,6 +642,76 @@ async function scrapeOneway(origin, destination, date) {
     });
 }
 
+// ── Airline name normalization ─────────────────────────────────────────────────
+const AIRLINE_NAME_MAP = {
+    'latam': 'LATAM Airlines', 'latam airlines': 'LATAM Airlines',
+    'gol': 'GOL Linhas Aéreas', 'gol linhas aereas': 'GOL Linhas Aéreas', 'gol linhas aéreas': 'GOL Linhas Aéreas',
+    'azul': 'Azul Linhas Aéreas', 'azul linhas aereas': 'Azul Linhas Aéreas', 'azul linhas aéreas': 'Azul Linhas Aéreas', 'azul linhas aéreas brasileiras': 'Azul Linhas Aéreas',
+    'copa': 'Copa Airlines', 'copa airlines': 'Copa Airlines',
+    'avianca': 'Avianca',
+    'american': 'American Airlines', 'american airlines': 'American Airlines',
+    'united': 'United Airlines', 'united airlines': 'United Airlines',
+    'delta': 'Delta Air Lines', 'delta air lines': 'Delta Air Lines',
+    'air france': 'Air France',
+    'klm': 'KLM', 'klm royal dutch airlines': 'KLM',
+    'lufthansa': 'Lufthansa',
+    'tap': 'TAP Air Portugal', 'tap air portugal': 'TAP Air Portugal', 'tap portugal': 'TAP Air Portugal',
+    'iberia': 'Iberia',
+    'british airways': 'British Airways',
+    'emirates': 'Emirates',
+    'qatar airways': 'Qatar Airways', 'qatar': 'Qatar Airways',
+    'turkish airlines': 'Turkish Airlines', 'turkish': 'Turkish Airlines',
+    'swiss': 'Swiss', 'swiss international air lines': 'Swiss',
+    'austrian': 'Austrian Airlines', 'austrian airlines': 'Austrian Airlines',
+    'ethiopian': 'Ethiopian Airlines', 'ethiopian airlines': 'Ethiopian Airlines',
+    'aeromexico': 'Aeromexico', 'aeroméxico': 'Aeromexico',
+    'air europa': 'Air Europa',
+    'singapore airlines': 'Singapore Airlines', 'singapore': 'Singapore Airlines',
+    'cathay pacific': 'Cathay Pacific',
+    'japan airlines': 'Japan Airlines', 'jal': 'Japan Airlines',
+    'ana': 'ANA', 'all nippon airways': 'ANA',
+    'alaska airlines': 'Alaska Airlines', 'alaska': 'Alaska Airlines',
+    'jetblue': 'JetBlue', 'jetblue airways': 'JetBlue',
+    'virgin atlantic': 'Virgin Atlantic',
+    'ita airways': 'ITA Airways', 'ita': 'ITA Airways',
+    'aerolineas argentinas': 'Aerolíneas Argentinas', 'aerolíneas argentinas': 'Aerolíneas Argentinas',
+    'wizzair': 'Wizz Air', 'wizz air': 'Wizz Air',
+    'ryanair': 'Ryanair',
+    'easyjet': 'easyJet',
+    'sas': 'SAS', 'scandinavian airlines': 'SAS',
+    'finnair': 'Finnair',
+    'westjet': 'WestJet',
+    'air canada': 'Air Canada',
+    'southwest': 'Southwest Airlines', 'southwest airlines': 'Southwest Airlines',
+    'spirit': 'Spirit Airlines', 'spirit airlines': 'Spirit Airlines',
+    'frontier': 'Frontier Airlines', 'frontier airlines': 'Frontier Airlines',
+};
+
+const AIRLINE_CODE_MAP = {
+    'LATAM Airlines': 'LA', 'GOL Linhas Aéreas': 'G3', 'Azul Linhas Aéreas': 'AD',
+    'Copa Airlines': 'CM', 'Avianca': 'AV',
+    'American Airlines': 'AA', 'United Airlines': 'UA', 'Delta Air Lines': 'DL',
+    'Air France': 'AF', 'KLM': 'KL', 'Lufthansa': 'LH',
+    'TAP Air Portugal': 'TP', 'Iberia': 'IB', 'British Airways': 'BA',
+    'Emirates': 'EK', 'Qatar Airways': 'QR', 'Turkish Airlines': 'TK',
+    'Swiss': 'LX', 'Austrian Airlines': 'OS', 'Ethiopian Airlines': 'ET',
+    'Aeromexico': 'AM', 'Air Europa': 'UX',
+    'Singapore Airlines': 'SQ', 'Cathay Pacific': 'CX',
+    'Japan Airlines': 'JL', 'ANA': 'NH',
+    'Alaska Airlines': 'AS', 'JetBlue': 'B6', 'Virgin Atlantic': 'VS',
+    'ITA Airways': 'AZ', 'Aerolíneas Argentinas': 'AR',
+    'Wizz Air': 'W6', 'Ryanair': 'FR', 'easyJet': 'U2',
+    'SAS': 'SK', 'Finnair': 'AY', 'WestJet': 'WS',
+    'Air Canada': 'AC', 'Southwest Airlines': 'WN',
+    'Spirit Airlines': 'NK', 'Frontier Airlines': 'F9',
+};
+
+function normalizeAirline(raw) {
+    if (!raw) return '';
+    const key = raw.toLowerCase().trim().replace(/\s+/g, ' ');
+    return AIRLINE_NAME_MAP[key] || raw.trim();
+}
+
 // Converte resultado do scraper para o formato FlightOffer usado no frontend
 function normalizeTime(t) {
     if (!t) return '12:00';
@@ -652,10 +722,12 @@ function normalizeTime(t) {
 
 function mapToFlightOffer(item, origin, destination, date, idx) {
     const arrivalDate = addDaysToDate(date, item.chegadaOffset || 0);
+    const companhia = normalizeAirline(item.companhia) || 'Companhia não identificada';
+    const carrierCode = AIRLINE_CODE_MAP[companhia] || (item.companhia ? item.companhia.slice(0, 2).toUpperCase() : 'XX');
     return {
         id: `gf-${idx}-${Date.now()}`,
-        companhia: item.companhia || 'Companhia não identificada',
-        carrierCode: (item.companhia ?? '').slice(0, 2).toUpperCase() || 'XX',
+        companhia,
+        carrierCode,
         preco_brl: item.preco_brl,
         taxas_brl: 0,
         partida: date + 'T' + normalizeTime(item.partida) + ':00',
