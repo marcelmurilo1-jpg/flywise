@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --legacy-peer-deps
 
 # Instala Chromium no build (fica disponível em runtime no mesmo container)
 ENV PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers
