@@ -71,9 +71,9 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
             })
 
             const json = res.data as { ok: boolean; strategy: StrategyResult; tokens_used: number; error?: string } | null
-            // Check plan limit first — Edge Function returns 403 which sets res.error,
-            // but res.data still contains the body in Supabase SDK v2
+            // Todos os erros agora chegam como HTTP 200 com ok:false — res.data sempre disponível
             if (json?.error === 'plan_limit_reached') throw new Error('Limite do plano atingido.')
+            if (json?.error) throw new Error(json.error)
             if (res.error) throw new Error(res.error.message)
             if (!json?.ok || !json.strategy) throw new Error('Resposta inválida da LLM.')
             setStrategy(json.strategy)

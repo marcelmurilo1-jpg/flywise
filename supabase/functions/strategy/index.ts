@@ -197,7 +197,7 @@ serve(async (req) => {
 
     try {
         const { flightId, userId, cashPrice, seatsContext } = await req.json()
-        if (!flightId && !seatsContext) return new Response(JSON.stringify({ error: 'flightId or seatsContext required' }), { status: 400, headers: corsHeaders })
+        if (!flightId && !seatsContext) return new Response(JSON.stringify({ ok: false, error: 'flightId or seatsContext required' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
         // Init Supabase with service role (can bypass RLS to read flight owned by user)
         const sb = createClient(
@@ -209,7 +209,7 @@ serve(async (req) => {
         let flight: FlightRow | null = null
         if (flightId) {
             const { data, error: fErr } = await sb.from('resultados_voos').select('*').eq('id', flightId).single()
-            if (fErr || !data) return new Response(JSON.stringify({ error: 'Flight not found' }), { status: 404, headers: corsHeaders })
+            if (fErr || !data) return new Response(JSON.stringify({ ok: false, error: 'Flight not found' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
             flight = data as FlightRow
         } else if (seatsContext) {
             // Build synthetic FlightRow from Seats.aero data
@@ -227,7 +227,7 @@ serve(async (req) => {
                 segmentos: null, detalhes: null,
             }
         }
-        if (!flight) return new Response(JSON.stringify({ error: 'No flight data' }), { status: 400, headers: corsHeaders })
+        if (!flight) return new Response(JSON.stringify({ ok: false, error: 'No flight data' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
         // 2. Enforce plan limits (server-side)
         if (userId) {
@@ -430,8 +430,8 @@ REGRAS OBRIGATÓRIAS:
 
     } catch (err) {
         console.error('[strategy] Error:', err)
-        return new Response(JSON.stringify({ error: String(err) }), {
-            status: 500,
+        return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+            status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
     }
