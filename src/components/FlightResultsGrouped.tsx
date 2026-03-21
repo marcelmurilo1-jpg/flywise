@@ -224,7 +224,6 @@ function FlightCard({
     const hasReturn = !!det.returnPartida
     const iata = extractIata(flight.companhia)
     const showReturn = hasReturn && !hasInboundFlights
-    const cardId = flight.flight_key ?? `${idx}`
     const layoverCity = det.layoverCity || ''
     const connectionStr = layoverCity
         ? `${det.paradas ?? 1} conexão · ${layoverCity}`
