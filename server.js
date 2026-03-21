@@ -62,9 +62,20 @@ async function ensureChromium() {
     }
 }
 
+// ─── Handlers globais para evitar crash por exceção não capturada ─────────────
+process.on('uncaughtException', (err) => {
+    console.error('[FATAL] uncaughtException — servidor continua:', err);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('[FATAL] unhandledRejection — servidor continua:', reason);
+});
+
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// ─── Health check (Railway monitora este endpoint) ────────────────────────────
+app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
 // Inicializa o cliente Supabase do backend
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -1765,6 +1776,20 @@ if (process.env.VERCEL !== '1') {
         console.log('[Cron] Iniciando sync automático de dados de transferência...');
         syncTransferData().catch(err => console.error('[Cron:TransferSync] Erro:', err.message));
     });
+
+    // A cada 30 minutos: fecha browser Playwright ocioso para liberar memória
+    setInterval(async () => {
+        if (_browser && _browser.isConnected()) {
+            try {
+                await _browser.close();
+                _browser = null;
+                console.log('[GFlights] Browser fechado pelo cleanup periódico (memória liberada).');
+            } catch (e) {
+                console.warn('[GFlights] Erro no cleanup periódico:', e.message);
+                _browser = null;
+            }
+        }
+    }, 30 * 60 * 1000);
 
     const PORT = process.env.PORT || 3001;
     app.listen(PORT, () => {
