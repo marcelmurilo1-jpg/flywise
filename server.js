@@ -536,14 +536,21 @@ async function scrapeOneway(origin, destination, date) {
                     if (!preco_brl) return null;
 
                     // ── Companhia ────────────────────────────────────────────────────────────
-                    // PT: "Voo da COPA com 1 parada"
+                    // PT: "Voo da LATAM" / "Voo do United" / "Voo das..." / "Voo dos..."
                     // EN: "American Airlines flight with 1 stop"
                     let companhia = '';
-                    const airlinePT = aria.match(/Voo da ([^,.]+?)(?:\s+com\s+|\.|,|[Oo]perado)/i);
+                    // PT: cobre da/do/das/dos/de (artigo varia conforme gênero da companhia)
+                    const airlinePT = aria.match(/Voo d(?:a|o|as|os|e) ([^,.]+?)(?:\s+com\s+|\.|,|[Oo]perado|\s*$)/i);
                     if (airlinePT) companhia = airlinePT[1].trim();
                     if (!companhia) {
-                        const airlineEN = aria.match(/^([A-Z][^.]+?)\s+(?:flight|airlines?)\b/i);
+                        // EN: "American Airlines flight" / "Delta Air Lines flight"
+                        const airlineEN = aria.match(/^([A-Za-z][^.]+?)\s+(?:flight|airlines?|air lines?)\b/i);
                         if (airlineEN) companhia = airlineEN[1].trim();
+                    }
+                    if (!companhia) {
+                        // EN alternativo: "flight on American Airlines"
+                        const flightOn = aria.match(/flight\s+(?:on|with|by)\s+([^,.]+?)(?:\.|,|with|$)/i);
+                        if (flightOn) companhia = flightOn[1].trim();
                     }
                     if (!companhia) {
                         const operated = aria.match(/(?:[Oo]perado\s+por|[Oo]perated\s+by)\s+([^,.]+?)(?:\.|,|$)/);
@@ -552,9 +559,20 @@ async function scrapeOneway(origin, destination, date) {
                     if (!companhia) {
                         if (/múltiplas companhias|multiple airlines/i.test(aria)) companhia = 'Múltiplas companhias';
                     }
-                    // Fallback: search for known airline names anywhere in the aria-label
+                    // Fallback: procura nomes conhecidos em qualquer parte do aria-label
                     if (!companhia) {
-                        const knownNames = ['LATAM Airlines','GOL','Azul','Avianca','Copa Airlines','American Airlines','United Airlines','Delta Air Lines','Air France','KLM','Lufthansa','TAP Air Portugal','Iberia','British Airways','Emirates','Qatar Airways','Turkish Airlines','Swiss','Austrian Airlines','Ethiopian Airlines','Aeromexico','Air Europa','Singapore Airlines','Cathay Pacific','Japan Airlines','Alaska Airlines','JetBlue','Virgin Atlantic','ITA Airways'];
+                        const knownNames = [
+                            'LATAM Airlines','Latam Airlines Brasil','GOL Linhas Aéreas','GOL','Azul Linhas Aéreas','Azul',
+                            'Avianca','Copa Airlines','American Airlines','United Airlines','Delta Air Lines',
+                            'Air France','KLM','Lufthansa','TAP Air Portugal','Iberia','British Airways',
+                            'Emirates','Qatar Airways','Turkish Airlines','Swiss','Austrian Airlines',
+                            'Ethiopian Airlines','Aeromexico','Aeroméxico','Air Europa',
+                            'Singapore Airlines','Cathay Pacific','Japan Airlines','ANA','All Nippon Airways',
+                            'Alaska Airlines','JetBlue','Virgin Atlantic','ITA Airways',
+                            'Aerolíneas Argentinas','Aerolineas Argentinas',
+                            'Air Canada','WestJet','Finnair','SAS','Ryanair','easyJet','Wizz Air',
+                            'Spirit Airlines','Frontier Airlines','Southwest Airlines',
+                        ];
                         for (const n of knownNames) {
                             if (aria.toLowerCase().includes(n.toLowerCase())) { companhia = n; break; }
                         }
@@ -720,47 +738,69 @@ async function scrapeOneway(origin, destination, date) {
 
 // ── Airline name normalization ─────────────────────────────────────────────────
 const AIRLINE_NAME_MAP = {
+    // LATAM
     'latam': 'LATAM Airlines', 'latam airlines': 'LATAM Airlines',
+    'latam airlines brasil': 'LATAM Airlines', 'tam': 'LATAM Airlines', 'tam linhas aéreas': 'LATAM Airlines',
+    // GOL
     'gol': 'GOL Linhas Aéreas', 'gol linhas aereas': 'GOL Linhas Aéreas', 'gol linhas aéreas': 'GOL Linhas Aéreas',
-    'azul': 'Azul Linhas Aéreas', 'azul linhas aereas': 'Azul Linhas Aéreas', 'azul linhas aéreas': 'Azul Linhas Aéreas', 'azul linhas aéreas brasileiras': 'Azul Linhas Aéreas',
+    'gol transportes aéreos': 'GOL Linhas Aéreas',
+    // Azul
+    'azul': 'Azul Linhas Aéreas', 'azul linhas aereas': 'Azul Linhas Aéreas', 'azul linhas aéreas': 'Azul Linhas Aéreas',
+    'azul linhas aéreas brasileiras': 'Azul Linhas Aéreas', 'azul brazilian airlines': 'Azul Linhas Aéreas',
+    // Copa
     'copa': 'Copa Airlines', 'copa airlines': 'Copa Airlines',
-    'avianca': 'Avianca',
+    // Avianca
+    'avianca': 'Avianca', 'avianca brasil': 'Avianca',
+    // US carriers
     'american': 'American Airlines', 'american airlines': 'American Airlines',
     'united': 'United Airlines', 'united airlines': 'United Airlines',
-    'delta': 'Delta Air Lines', 'delta air lines': 'Delta Air Lines',
+    'delta': 'Delta Air Lines', 'delta air lines': 'Delta Air Lines', 'delta airlines': 'Delta Air Lines',
+    'alaska': 'Alaska Airlines', 'alaska airlines': 'Alaska Airlines',
+    'jetblue': 'JetBlue', 'jetblue airways': 'JetBlue',
+    'southwest': 'Southwest Airlines', 'southwest airlines': 'Southwest Airlines',
+    'spirit': 'Spirit Airlines', 'spirit airlines': 'Spirit Airlines',
+    'frontier': 'Frontier Airlines', 'frontier airlines': 'Frontier Airlines',
+    // European
     'air france': 'Air France',
     'klm': 'KLM', 'klm royal dutch airlines': 'KLM',
     'lufthansa': 'Lufthansa',
     'tap': 'TAP Air Portugal', 'tap air portugal': 'TAP Air Portugal', 'tap portugal': 'TAP Air Portugal',
-    'iberia': 'Iberia',
-    'british airways': 'British Airways',
-    'emirates': 'Emirates',
-    'qatar airways': 'Qatar Airways', 'qatar': 'Qatar Airways',
-    'turkish airlines': 'Turkish Airlines', 'turkish': 'Turkish Airlines',
-    'swiss': 'Swiss', 'swiss international air lines': 'Swiss',
+    'iberia': 'Iberia', 'iberia express': 'Iberia',
+    'british airways': 'British Airways', 'ba': 'British Airways',
+    'swiss': 'Swiss', 'swiss international air lines': 'Swiss', 'swiss air lines': 'Swiss',
     'austrian': 'Austrian Airlines', 'austrian airlines': 'Austrian Airlines',
-    'ethiopian': 'Ethiopian Airlines', 'ethiopian airlines': 'Ethiopian Airlines',
-    'aeromexico': 'Aeromexico', 'aeroméxico': 'Aeromexico',
-    'air europa': 'Air Europa',
-    'singapore airlines': 'Singapore Airlines', 'singapore': 'Singapore Airlines',
-    'cathay pacific': 'Cathay Pacific',
-    'japan airlines': 'Japan Airlines', 'jal': 'Japan Airlines',
-    'ana': 'ANA', 'all nippon airways': 'ANA',
-    'alaska airlines': 'Alaska Airlines', 'alaska': 'Alaska Airlines',
-    'jetblue': 'JetBlue', 'jetblue airways': 'JetBlue',
-    'virgin atlantic': 'Virgin Atlantic',
-    'ita airways': 'ITA Airways', 'ita': 'ITA Airways',
-    'aerolineas argentinas': 'Aerolíneas Argentinas', 'aerolíneas argentinas': 'Aerolíneas Argentinas',
-    'wizzair': 'Wizz Air', 'wizz air': 'Wizz Air',
-    'ryanair': 'Ryanair',
-    'easyjet': 'easyJet',
     'sas': 'SAS', 'scandinavian airlines': 'SAS',
     'finnair': 'Finnair',
-    'westjet': 'WestJet',
+    'ryanair': 'Ryanair',
+    'easyjet': 'easyJet', 'easy jet': 'easyJet',
+    'wizzair': 'Wizz Air', 'wizz air': 'Wizz Air',
+    'virgin atlantic': 'Virgin Atlantic',
+    'ita airways': 'ITA Airways', 'ita': 'ITA Airways', 'alitalia': 'ITA Airways',
+    'air europa': 'Air Europa',
+    // Middle East
+    'emirates': 'Emirates',
+    'qatar airways': 'Qatar Airways', 'qatar': 'Qatar Airways',
+    'turkish airlines': 'Turkish Airlines', 'turkish': 'Turkish Airlines', 'thy': 'Turkish Airlines',
+    // Africa
+    'ethiopian': 'Ethiopian Airlines', 'ethiopian airlines': 'Ethiopian Airlines',
+    'south african airways': 'South African Airways', 'saa': 'South African Airways',
+    'kenya airways': 'Kenya Airways',
+    // Americas
+    'aeromexico': 'Aeromexico', 'aeroméxico': 'Aeromexico',
+    'aerolineas argentinas': 'Aerolíneas Argentinas', 'aerolíneas argentinas': 'Aerolíneas Argentinas',
     'air canada': 'Air Canada',
-    'southwest': 'Southwest Airlines', 'southwest airlines': 'Southwest Airlines',
-    'spirit': 'Spirit Airlines', 'spirit airlines': 'Spirit Airlines',
-    'frontier': 'Frontier Airlines', 'frontier airlines': 'Frontier Airlines',
+    'westjet': 'WestJet',
+    // Asia-Pacific
+    'singapore airlines': 'Singapore Airlines', 'singapore': 'Singapore Airlines',
+    'cathay pacific': 'Cathay Pacific', 'cathay': 'Cathay Pacific',
+    'japan airlines': 'Japan Airlines', 'jal': 'Japan Airlines',
+    'ana': 'ANA', 'all nippon airways': 'ANA',
+    'korean air': 'Korean Air',
+    'air china': 'Air China',
+    'china southern': 'China Southern',
+    'china eastern': 'China Eastern',
+    'thai airways': 'Thai Airways',
+    'malaysia airlines': 'Malaysia Airlines',
 };
 
 const AIRLINE_CODE_MAP = {
@@ -780,6 +820,11 @@ const AIRLINE_CODE_MAP = {
     'SAS': 'SK', 'Finnair': 'AY', 'WestJet': 'WS',
     'Air Canada': 'AC', 'Southwest Airlines': 'WN',
     'Spirit Airlines': 'NK', 'Frontier Airlines': 'F9',
+    'South African Airways': 'SA', 'Kenya Airways': 'KQ',
+    'Korean Air': 'KE', 'Air China': 'CA',
+    'China Southern': 'CZ', 'China Eastern': 'MU',
+    'Thai Airways': 'TG', 'Malaysia Airlines': 'MH',
+    'Múltiplas companhias': 'XX',
 };
 
 function normalizeAirline(raw) {
