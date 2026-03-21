@@ -582,12 +582,15 @@ export default function Resultados() {
                                                             {(() => {
                                                                 // Use selected cash cards if available, otherwise best available
                                                                 let bestCash: number
+                                                                let label: string
                                                                 if (cashIdaSel) {
                                                                     const cashDet = (cashIdaSel.detalhes as any) ?? {}
                                                                     if (cashDet.returnPartida) {
                                                                         bestCash = cashIdaSel.preco_brl ?? 0
+                                                                        label = 'Total selecionado (ida+volta)'
                                                                     } else {
                                                                         bestCash = (cashIdaSel.preco_brl ?? 0) + (cashVoltaSel ? (cashVoltaSel.preco_brl ?? 0) : 0)
+                                                                        label = cashVoltaSel ? 'Total selecionado (ida+volta)' : 'Ida selecionada em dinheiro'
                                                                     }
                                                                 } else {
                                                                     const combined = flights.filter(f => (f.preco_brl ?? 0) > 0 && !!(f.detalhes as any)?.returnPartida)
@@ -595,18 +598,18 @@ export default function Resultados() {
                                                                     const inOnly = inboundFlights.filter(f => (f.preco_brl ?? 0) > 0)
                                                                     if (seatsVoltaSel && combined.length > 0) {
                                                                         bestCash = Math.min(...combined.map(f => f.preco_brl!))
+                                                                        label = 'Melhor preço em dinheiro (ida+volta)'
                                                                     } else if (seatsVoltaSel && outOnly.length > 0 && inOnly.length > 0) {
                                                                         bestCash = Math.min(...outOnly.map(f => f.preco_brl!)) + Math.min(...inOnly.map(f => f.preco_brl!))
+                                                                        label = 'Melhor preço em dinheiro (ida+volta)'
                                                                     } else {
                                                                         bestCash = outOnly.length > 0 ? Math.min(...outOnly.map(f => f.preco_brl!)) : 0
+                                                                        label = 'Melhor preço de ida em dinheiro'
                                                                     }
                                                                 }
                                                                 return isFinite(bestCash) && bestCash > 0 ? (
                                                                     <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
-                                                                        {cashIdaSel
-                                                                            ? (!!(cashIdaSel.detalhes as any)?.returnPartida || cashVoltaSel ? 'Total selecionado (ida+volta)' : 'Ida selecionada em dinheiro')
-                                                                            : (seatsVoltaSel && (combined.length > 0 || inOnly.length > 0) ? 'Melhor preço em dinheiro (ida+volta)' : 'Melhor preço de ida em dinheiro')
-                                                                        }: R$ {bestCash.toLocaleString('pt-BR')}
+                                                                        {label}: R$ {bestCash.toLocaleString('pt-BR')}
                                                                     </div>
                                                                 ) : null
                                                             })()}
