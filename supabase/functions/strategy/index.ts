@@ -255,8 +255,8 @@ serve(async (req) => {
                     .select('id', { count: 'exact', head: true })
                     .eq('user_id', userId)
                 if ((count ?? 0) >= limit.lifetime) {
-                    return new Response(JSON.stringify({ error: 'plan_limit_reached', plan }), {
-                        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                    return new Response(JSON.stringify({ ok: false, error: 'plan_limit_reached', plan }), {
+                        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                     })
                 }
             } else if (limit.perMonth !== null) {
@@ -268,8 +268,8 @@ serve(async (req) => {
                     .eq('user_id', userId)
                     .gte('created_at', monthStart.toISOString())
                 if ((count ?? 0) >= limit.perMonth) {
-                    return new Response(JSON.stringify({ error: 'plan_limit_reached', plan }), {
-                        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                    return new Response(JSON.stringify({ ok: false, error: 'plan_limit_reached', plan }), {
+                        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                     })
                 }
             }

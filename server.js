@@ -503,11 +503,25 @@ async function scrapeOneway(origin, destination, date) {
                     // PT: "Voo da COPA com 1 parada"
                     // EN: "American Airlines flight with 1 stop"
                     let companhia = '';
-                    const airlinePT = aria.match(/Voo da ([^,.]+?)(?:\s+com\s+|\.|,|Operado)/i);
+                    const airlinePT = aria.match(/Voo da ([^,.]+?)(?:\s+com\s+|\.|,|[Oo]perado)/i);
                     if (airlinePT) companhia = airlinePT[1].trim();
                     if (!companhia) {
-                        const airlineEN = aria.match(/^([^.]+?)\s+flight\b/i);
+                        const airlineEN = aria.match(/^([A-Z][^.]+?)\s+(?:flight|airlines?)\b/i);
                         if (airlineEN) companhia = airlineEN[1].trim();
+                    }
+                    if (!companhia) {
+                        const operated = aria.match(/(?:[Oo]perado\s+por|[Oo]perated\s+by)\s+([^,.]+?)(?:\.|,|$)/);
+                        if (operated) companhia = operated[1].trim();
+                    }
+                    if (!companhia) {
+                        if (/múltiplas companhias|multiple airlines/i.test(aria)) companhia = 'Múltiplas companhias';
+                    }
+                    // Fallback: search for known airline names anywhere in the aria-label
+                    if (!companhia) {
+                        const knownNames = ['LATAM Airlines','GOL','Azul','Avianca','Copa Airlines','American Airlines','United Airlines','Delta Air Lines','Air France','KLM','Lufthansa','TAP Air Portugal','Iberia','British Airways','Emirates','Qatar Airways','Turkish Airlines','Swiss','Austrian Airlines','Ethiopian Airlines','Aeromexico','Air Europa','Singapore Airlines','Cathay Pacific','Japan Airlines','Alaska Airlines','JetBlue','Virgin Atlantic','ITA Airways'];
+                        for (const n of knownNames) {
+                            if (aria.toLowerCase().includes(n.toLowerCase())) { companhia = n; break; }
+                        }
                     }
 
                     // ── Paradas ──────────────────────────────────────────────────────────────
@@ -584,6 +598,23 @@ async function scrapeOneway(origin, destination, date) {
                         ...ldEN.map(m => parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0)),
                     ];
 
+                    // ── Aeronave ─────────────────────────────────────────────────────────────
+                    let aeronave = '';
+                    const aircraftMatch = aria.match(/(?:Airbus|Boeing|Embraer|ATR|Bombardier)\s+[A-Z]?\d+[-A-Z0-9]*/i);
+                    if (aircraftMatch) aeronave = aircraftMatch[0].trim();
+
+                    // ── Cabine ───────────────────────────────────────────────────────────────
+                    let cabin = 'economy';
+                    if (/[Ee]xecutiv[ao]|[Bb]usiness/i.test(aria)) cabin = 'business';
+                    else if (/[Pp]rimeira\s+classe|[Ff]irst\s+class/i.test(aria)) cabin = 'first';
+                    else if (/[Pp]remium\s+[Ee]conom|[Pp]remière/i.test(aria)) cabin = 'premium_economy';
+
+                    // ── Números de voo ───────────────────────────────────────────────────────
+                    const flightNums = [...aria.matchAll(/\b([A-Z]{1,2})\s*(\d{3,5})\b/g)]
+                        .map(m => `${m[1]}${m[2]}`)
+                        .filter(n => !/^\d/.test(n))
+                        .slice(0, 4);
+
                     return {
                         companhia,
                         partida,
@@ -594,9 +625,11 @@ async function scrapeOneway(origin, destination, date) {
                         layoverCity,
                         layoverDurations,
                         preco_brl,
+                        aeronave,
+                        cabin,
                         segmentos: [],
-                        numeroVoos: [],
-                        aeronaves: [],
+                        numeroVoos: flightNums,
+                        aeronaves: aeronave ? [aeronave] : [],
                     };
                 }
 
@@ -623,6 +656,13 @@ async function scrapeOneway(origin, destination, date) {
 
                 return results;
             });
+
+            // Expande voos com conexão para extrair segmentos detalhados
+            if (flights.length > 0 && flights.some(f => (f.paradas ?? 0) > 0)) {
+                await expandFlightDetails(page, flights).catch(e =>
+                    console.log('[GFlights] expandFlightDetails error:', e.message?.slice(0, 80))
+                );
+            }
 
             await context.close();
             return flights;
@@ -736,7 +776,7 @@ function mapToFlightOffer(item, origin, destination, date, idx) {
         destino: destination.toUpperCase(),
         duracao_min: item.duracao_min || 0,
         paradas: item.paradas ?? 0,
-        cabin_class: 'economy',
+        cabin_class: item.cabin ?? 'economy',
         voo_numero: '',
         segmentos: item.segmentos || [],
         layoverCity: item.layoverCity || '',
@@ -763,6 +803,124 @@ async function doScrape(origin, destination, date, returnDate) {
     const outbound = rawOut.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
     const inbound  = rawIn.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
     return { outbound, inbound };
+}
+
+// Expande cada voo com conexão para extrair dados por segmento via clique
+async function expandFlightDetails(page, flights) {
+    for (let i = 0; i < flights.length; i++) {
+        if ((flights[i].paradas ?? 0) === 0) continue; // Voos diretos já têm tudo
+        try {
+            const cards = await page.$$('div[data-id]');
+            if (i >= cards.length) continue;
+            const card = cards[i];
+
+            // Tenta encontrar um botão de detalhes dentro do card (não o link principal)
+            const detailBtn = await card.$([
+                '[aria-label*="mais detalhes"]',
+                '[aria-label*="more details"]',
+                '[aria-label*="detalhes do voo"]',
+                '[aria-label*="flight details"]',
+                '[aria-label*="Ver detalhes"]',
+                '[aria-label*="Expand"]',
+                '[data-expandable]',
+                'button:not([aria-label])',
+            ].join(', ')).catch(() => null);
+
+            // Se não encontrou botão específico, clica no card inteiro
+            const clickTarget = detailBtn || card;
+            await clickTarget.click({ timeout: 3000 }).catch(() => null);
+            await page.waitForTimeout(700);
+
+            // Procura o painel de detalhes expandido
+            const dialogText = await page.evaluate(() => {
+                const containers = [
+                    document.querySelector('[role="dialog"]'),
+                    document.querySelector('[data-fid]'),
+                    ...document.querySelectorAll('[aria-expanded="true"]'),
+                ].filter(Boolean);
+
+                for (const container of containers) {
+                    const text = (container.innerText || container.textContent || '').trim();
+                    if (text.length > 50) return text;
+                }
+                return '';
+            }).catch(() => '');
+
+            if (dialogText && dialogText.length > 30) {
+                const segments = parseSegmentsFromText(dialogText);
+                if (segments.length > 0) {
+                    flights[i].segmentos = segments;
+                }
+            }
+
+            // Fecha o painel com Escape
+            await page.keyboard.press('Escape').catch(() => null);
+            await page.waitForTimeout(400);
+
+        } catch (e) {
+            // Ignora erros individuais — dado de segmento é opcional
+            console.log(`[GFlights] expand flight ${i} error:`, e.message?.slice(0, 60));
+        }
+    }
+    return flights;
+}
+
+// Parser de texto do painel expandido → array de segmentos
+function parseSegmentsFromText(text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const segments = [];
+    let cur = null;
+    let waitingArrival = false;
+
+    for (const line of lines) {
+        // Tempo (HH:MM) — começa ou termina um segmento
+        const timeMatch = line.match(/^(\d{1,2}):(\d{2})$/);
+        if (timeMatch) {
+            if (cur && waitingArrival) {
+                cur.chegada = line;
+                waitingArrival = false;
+            } else {
+                if (cur) segments.push(cur);
+                cur = { partida: line, chegada: '', origem: '', destino: '', duracao_min: 0, aeronave: '', numero: '', companhia_seg: '' };
+                waitingArrival = false;
+            }
+            continue;
+        }
+
+        if (!cur) continue;
+
+        // Código IATA 3 letras (linha só com o código)
+        const iataMatch = line.match(/^([A-Z]{3})$/);
+        if (iataMatch) {
+            if (!cur.origem) cur.origem = iataMatch[1];
+            else if (!cur.destino) { cur.destino = iataMatch[1]; waitingArrival = true; }
+            continue;
+        }
+
+        // "Tempo de viagem: Xh Ymin" ou "Travel time: Xhr Ymin"
+        const durMatch = line.match(/(?:[Tt]empo\s+de\s+viagem|[Tt]ravel\s+time)[:\s]+(\d+)h(?:\s*(\d+)\s*min)?/);
+        if (durMatch) {
+            cur.duracao_min = parseInt(durMatch[1]) * 60 + (durMatch[2] ? parseInt(durMatch[2]) : 0);
+            waitingArrival = true;
+            continue;
+        }
+
+        // Aeronave
+        const aircraftMatch = line.match(/(?:Airbus|Boeing|Embraer|ATR)\s+[A-Z]?\d+[-A-Z0-9]*/i);
+        if (aircraftMatch) { cur.aeronave = aircraftMatch[0]; continue; }
+
+        // Número de voo (ex: "LA 4607" ou "LA4607")
+        const flightNumMatch = line.match(/^([A-Z]{1,2})\s*(\d{3,5})$/);
+        if (flightNumMatch) { cur.numero = `${flightNumMatch[1]}${flightNumMatch[2]}`; continue; }
+
+        // Parada (layover) — fecha o segmento atual
+        if (/[Pp]arada\s+de|[Ll]ayover/i.test(line)) {
+            if (cur && cur.partida) { segments.push(cur); cur = null; waitingArrival = false; }
+        }
+    }
+
+    if (cur && cur.partida) segments.push(cur);
+    return segments.filter(s => s.partida && (s.origem || s.duracao_min > 0));
 }
 
 // GET /api/amadeus/flights — scraper do Google Flights (ida e volta em paralelo)

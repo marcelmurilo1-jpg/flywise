@@ -603,7 +603,10 @@ export default function Resultados() {
                                                                 }
                                                                 return isFinite(bestCash) && bestCash > 0 ? (
                                                                     <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
-                                                                        {cashIdaSel ? 'Preço selecionado em dinheiro' : 'Melhor preço em dinheiro'}: R$ {bestCash.toLocaleString('pt-BR')}
+                                                                        {cashIdaSel
+                                                                            ? (!!(cashIdaSel.detalhes as any)?.returnPartida || cashVoltaSel ? 'Total selecionado (ida+volta)' : 'Ida selecionada em dinheiro')
+                                                                            : (seatsVoltaSel && (combined.length > 0 || inOnly.length > 0) ? 'Melhor preço em dinheiro (ida+volta)' : 'Melhor preço de ida em dinheiro')
+                                                                        }: R$ {bestCash.toLocaleString('pt-BR')}
                                                                     </div>
                                                                 ) : null
                                                             })()}
