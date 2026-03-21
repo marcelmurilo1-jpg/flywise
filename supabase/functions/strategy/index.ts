@@ -246,31 +246,34 @@ serve(async (req) => {
                 essencial: { lifetime: null, perMonth: 3   },
                 pro:       { lifetime: null, perMonth: 5   },
                 elite:     { lifetime: null, perMonth: 10  },
+                admin:     { lifetime: null, perMonth: null }, // sem limite
             }
             const limit = LIMITS[plan] ?? LIMITS['free']
-
-            if (limit.lifetime !== null) {
-                const { count } = await sb
-                    .from('strategies')
-                    .select('id', { count: 'exact', head: true })
-                    .eq('user_id', userId)
-                if ((count ?? 0) >= limit.lifetime) {
-                    return new Response(JSON.stringify({ ok: false, error: 'plan_limit_reached', plan }), {
-                        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                    })
-                }
-            } else if (limit.perMonth !== null) {
-                const monthStart = new Date()
-                monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
-                const { count } = await sb
-                    .from('strategies')
-                    .select('id', { count: 'exact', head: true })
-                    .eq('user_id', userId)
-                    .gte('created_at', monthStart.toISOString())
-                if ((count ?? 0) >= limit.perMonth) {
-                    return new Response(JSON.stringify({ ok: false, error: 'plan_limit_reached', plan }), {
-                        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                    })
+            // admin (ambos null) → sem verificação de limite
+            if (limit.lifetime !== null || limit.perMonth !== null) {
+                if (limit.lifetime !== null) {
+                    const { count } = await sb
+                        .from('strategies')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('user_id', userId)
+                    if ((count ?? 0) >= limit.lifetime) {
+                        return new Response(JSON.stringify({ ok: false, error: 'plan_limit_reached', plan }), {
+                            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                        })
+                    }
+                } else if (limit.perMonth !== null) {
+                    const monthStart = new Date()
+                    monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
+                    const { count } = await sb
+                        .from('strategies')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('user_id', userId)
+                        .gte('created_at', monthStart.toISOString())
+                    if ((count ?? 0) >= limit.perMonth) {
+                        return new Response(JSON.stringify({ ok: false, error: 'plan_limit_reached', plan }), {
+                            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                        })
+                    }
                 }
             }
         }
