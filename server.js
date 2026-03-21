@@ -12,10 +12,9 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── PLAYWRIGHT_BROWSERS_PATH DEVE ser definido ANTES do import do playwright ────────────
-// Playwright cacheia PLAYWRIGHT_BROWSERS_PATH no momento do import (testado e confirmado).
-// Usamos dynamic import (await import) APÓS definir a variável.
-// /tmp é gravável em Railway (/var/task runtime), Lambda, e qualquer ambiente
-process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || '/tmp/.playwright-browsers';
+// Em Railway: /app/.playwright-browsers é instalado no BUILD (baked na imagem Docker).
+// Nunca usar /tmp — ele é limpo a cada restart, forçando reinstalação de 60-90s.
+process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || '/app/.playwright-browsers';
 console.log('[Playwright] PLAYWRIGHT_BROWSERS_PATH:', process.env.PLAYWRIGHT_BROWSERS_PATH);
 
 // Carrega variáveis do ambiente (tenta .env.local e .env globalmente)
@@ -31,19 +30,32 @@ chromiumExtra.use(StealthPlugin());
 // A instalação roda em background após o app.listen(). Requisições ao scraper
 // aguardam via chromiumReady antes de tentar lançar o browser.
 let _chromiumInstalling = false;
-let _chromiumReady = fs.existsSync(chromiumExtra.executablePath());
-console.log('[Playwright] Chromium binário encontrado:', _chromiumReady, '→', chromiumExtra.executablePath());
+
+// Verifica se o binário realmente existe em disco (não apenas se o path foi calculado)
+function chromiumBinaryExists() {
+    try {
+        const p = chromiumExtra.executablePath();
+        return p && fs.existsSync(p);
+    } catch {
+        return false;
+    }
+}
+
+let _chromiumReady = chromiumBinaryExists();
+console.log('[Playwright] Chromium binário encontrado:', _chromiumReady, '→', (() => { try { return chromiumExtra.executablePath(); } catch { return 'n/a'; } })());
 
 async function ensureChromium() {
-    if (_chromiumReady) return;
+    // Re-checa o disco a cada chamada — o binário pode ter sumido após restart
+    if (chromiumBinaryExists()) { _chromiumReady = true; return; }
+    _chromiumReady = false;
+
     if (_chromiumInstalling) {
-        // Aguarda instalação já em curso (polling simples)
         while (_chromiumInstalling) await new Promise(r => setTimeout(r, 500));
         return;
     }
     _chromiumInstalling = true;
     try {
-        console.log('[Playwright] Instalando Chromium em background (pode levar ~60s)...');
+        console.log('[Playwright] Instalando Chromium (pode levar ~90s)...');
         const playwrightBin = path.join(__dirname, 'node_modules', '.bin', 'playwright');
         await new Promise((resolve, reject) => {
             const child = spawn(playwrightBin, ['install', 'chromium'], {
@@ -349,6 +361,19 @@ const TIMEZONE_POOL = [
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 
+// Resolve o executável do Chromium: tenta playwright-extra primeiro, cai no sistema (apt)
+function resolveChromiumPath() {
+    try {
+        const p = chromiumExtra.executablePath();
+        if (p && fs.existsSync(p)) return p;
+    } catch (_) {}
+    // Fallback: chromium instalado via apt no nixpacks
+    for (const p of ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome']) {
+        if (fs.existsSync(p)) { console.log('[GFlights] Usando chromium do sistema:', p); return p; }
+    }
+    throw new Error('Chromium não encontrado. Verifique o build do Railway.');
+}
+
 async function getBrowser() {
     if (_browser && _browser.isConnected()) return _browser;
     // Reset zombie browser before relaunching
@@ -356,10 +381,10 @@ async function getBrowser() {
         try { await _browser.close(); } catch (_) {}
         _browser = null;
     }
-    await ensureChromium(); // aguarda instalação se ainda em curso
+    await ensureChromium(); // tenta instalar se binário sumiu
     const opts = {
         headless: true,
-        executablePath: chromiumExtra.executablePath(),
+        executablePath: resolveChromiumPath(),
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',

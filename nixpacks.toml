@@ -6,8 +6,12 @@ aptPkgs = [
   "libcups2", "libdrm2", "libxkbcommon0", "libxcomposite1",
   "libxdamage1", "libxfixes3", "libxrandr2", "libgbm1",
   "libasound2", "libpango-1.0-0", "libcairo2", "libatspi2.0-0",
-  "libx11-6", "libxcb1", "libxext6", "fonts-liberation"
+  "libx11-6", "libxcb1", "libxext6", "fonts-liberation",
+  "chromium", "chromium-driver"
 ]
+
+[phases.build]
+cmds = ["PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers npx playwright install chromium"]
 
 [start]
 cmd = "node server.js"
