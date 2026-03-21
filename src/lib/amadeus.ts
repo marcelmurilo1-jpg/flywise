@@ -118,14 +118,15 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
     console.log('[Amadeus] searchFlights:', qp)
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 60000)
+    const timeoutId = setTimeout(() => controller.abort(), 120000)
 
     let data: any
     try {
         const res = await fetch(
             `${API_BASE}/api/amadeus/flights?${new URLSearchParams(qp)}`,
             { signal: controller.signal }
-        ).catch(() => {
+        ).catch((err: any) => {
+            if (err?.name === 'AbortError') throw new Error('A busca demorou muito (timeout). Tente novamente.')
             throw new Error(`Servidor backend não está respondendo em ${API_BASE}. Certifique-se de que o servidor está rodando com: node server.js`)
         })
         data = await res.json()

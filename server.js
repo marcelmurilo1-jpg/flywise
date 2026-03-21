@@ -472,7 +472,7 @@ async function scrapeOneway(origin, destination, date) {
             const query = encodeURIComponent(`Flights from ${origin} to ${destination} on ${date} one way`);
             const url = `https://www.google.com/travel/flights?q=${query}&curr=BRL&hl=pt-BR`;
 
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 22000 });
 
             // Log diagnóstico: título e URL após navegação
             const pageTitle = await page.title();
@@ -484,7 +484,7 @@ async function scrapeOneway(origin, destination, date) {
                 .first().click({ timeout: 5000 }).then(() => true).catch(() => false);
             if (cookieClicked) {
                 console.log(`[GFlights] ${origin}→${destination}: cookie consent clicado, aguardando...`);
-                await page.waitForTimeout(2000);
+                await page.waitForTimeout(1000);
             }
 
             // Aguarda os cards de voo aparecerem (div[data-id] com aria-label de voo)
@@ -495,7 +495,7 @@ async function scrapeOneway(origin, destination, date) {
                     const a = link?.getAttribute('aria-label') ?? '';
                     return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(a);
                 }),
-                { timeout: 25000 }
+                { timeout: 12000 }
             ).catch(() => console.log(`[GFlights] ${origin}→${destination}: timeout aguardando cards de voo`));
 
             await page.waitForTimeout(1500);
@@ -841,16 +841,18 @@ async function doScrape(origin, destination, date, returnDate) {
     return { outbound, inbound };
 }
 
-// Expande cada voo com conexão para extrair dados por segmento via clique
+// Expande até MAX_EXPAND voos com conexão para extrair segmentos (limitado para não atrasar a resposta)
+const MAX_EXPAND = 5;
 async function expandFlightDetails(page, flights) {
-    for (let i = 0; i < flights.length; i++) {
-        if ((flights[i].paradas ?? 0) === 0) continue; // Voos diretos já têm tudo
+    let expanded = 0;
+    for (let i = 0; i < flights.length && expanded < MAX_EXPAND; i++) {
+        if ((flights[i].paradas ?? 0) === 0) continue;
+        expanded++;
         try {
             const cards = await page.$$('div[data-id]');
             if (i >= cards.length) continue;
             const card = cards[i];
 
-            // Tenta encontrar um botão de detalhes dentro do card (não o link principal)
             const detailBtn = await card.$([
                 '[aria-label*="mais detalhes"]',
                 '[aria-label*="more details"]',
@@ -862,19 +864,16 @@ async function expandFlightDetails(page, flights) {
                 'button:not([aria-label])',
             ].join(', ')).catch(() => null);
 
-            // Se não encontrou botão específico, clica no card inteiro
             const clickTarget = detailBtn || card;
-            await clickTarget.click({ timeout: 3000 }).catch(() => null);
-            await page.waitForTimeout(700);
+            await clickTarget.click({ timeout: 2000 }).catch(() => null);
+            await page.waitForTimeout(400);
 
-            // Procura o painel de detalhes expandido
             const dialogText = await page.evaluate(() => {
                 const containers = [
                     document.querySelector('[role="dialog"]'),
                     document.querySelector('[data-fid]'),
                     ...document.querySelectorAll('[aria-expanded="true"]'),
                 ].filter(Boolean);
-
                 for (const container of containers) {
                     const text = (container.innerText || container.textContent || '').trim();
                     if (text.length > 50) return text;
@@ -884,17 +883,12 @@ async function expandFlightDetails(page, flights) {
 
             if (dialogText && dialogText.length > 30) {
                 const segments = parseSegmentsFromText(dialogText);
-                if (segments.length > 0) {
-                    flights[i].segmentos = segments;
-                }
+                if (segments.length > 0) flights[i].segmentos = segments;
             }
 
-            // Fecha o painel com Escape
             await page.keyboard.press('Escape').catch(() => null);
-            await page.waitForTimeout(400);
-
+            await page.waitForTimeout(200);
         } catch (e) {
-            // Ignora erros individuais — dado de segmento é opcional
             console.log(`[GFlights] expand flight ${i} error:`, e.message?.slice(0, 60));
         }
     }
