@@ -131,7 +131,26 @@ export default function Resultados() {
                     if (retDate) setTripType('round-trip')
                 }
 
-                // 2. Check for already-saved results
+                // 2. Fetch Seats.aero sempre (independente de cache do Amadeus)
+                if (orig && destP && date) {
+                    setSeatsLoading(true)
+                    fetch(`${import.meta.env.VITE_API_BASE_URL ?? ''}/api/search-flights`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            origem: orig,
+                            destino: destP,
+                            data_ida: date,
+                            data_volta: ret || undefined
+                        })
+                    })
+                        .then(r => r.json())
+                        .then(data => { if (data.voos) setSeatsFlights(data.voos) })
+                        .catch(err => console.error('[Resultados] Erro Seats.aero:', err))
+                        .finally(() => setSeatsLoading(false))
+                }
+
+                // 3. Check for already-saved Amadeus results
                 const { data: cached, error: cacheErr } = await supabase
                     .from('resultados_voos').select('*')
                     .eq('busca_id', buscaId).eq('user_id', user.id)
@@ -139,7 +158,6 @@ export default function Resultados() {
                 if (cacheErr) throw cacheErr
 
                 if (cached && cached.length > 0) {
-                    // Already have results — split outbound/inbound by isReturn flag
                     const outbound = cached.filter(f => !(f.detalhes as any)?.isReturn)
                     const inbound = cached.filter(f => !!(f.detalhes as any)?.isReturn)
                     await new Promise<void>(r => setTimeout(r, MIN_ANIM_MS))
@@ -148,7 +166,7 @@ export default function Resultados() {
                     return
                 }
 
-                // 3. No cached results — call Amadeus IN PARALLEL with animation timer
+                // 4. No cached results — call Amadeus
                 if (!orig || !destP || !date) {
                     console.warn('[Resultados] No search params in URL, cannot call Amadeus')
                     await new Promise<void>(r => setTimeout(r, MIN_ANIM_MS))
@@ -157,33 +175,6 @@ export default function Resultados() {
                 }
 
                 console.log('[Resultados] Calling Amadeus:', orig, '→', destP, date, ret ? `return:${ret}` : 'one-way')
-
-                // 3.1 Fetch Seats.aero in parallel (non-blocking)
-                setSeatsLoading(true)
-                console.log('[Resultados] Iniciando fetch Seats.aero para:', orig, destP)
-                fetch(`${import.meta.env.VITE_API_BASE_URL ?? ''}/api/search-flights`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        origem: orig,
-                        destino: destP,
-                        data_ida: date,
-                        data_volta: ret || undefined
-                    })
-                })
-                    .then(res => {
-                        console.log('[Resultados] Resposta Seats.aero recebida:', res.status)
-                        return res.json()
-                    })
-                    .then(data => {
-                        console.log('[Resultados] Dados Seats.aero:', data)
-                        if (data.voos) setSeatsFlights(data.voos)
-                    })
-                    .catch(err => console.error('[Resultados] Erro ao buscar seatsaero:', err))
-                    .finally(() => {
-                        console.log('[Resultados] Finalizado seatsLoading')
-                        setSeatsLoading(false)
-                    })
 
                 const [searchResult] = await Promise.all([
                     searchFlights({
