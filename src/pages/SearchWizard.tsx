@@ -739,22 +739,47 @@ export default function SearchWizard() {
                                     <p className="text-slate-400 text-base">Escolha o perfil e diga tudo o que a IA precisa saber.</p>
                                 </div>
 
-                                <div className="flex flex-col gap-3">
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                     {HACKER_MODES.map(m => {
                                         const sel = data.hackerMode === m.id
                                         return (
                                             <button key={m.id}
                                                 onClick={() => setData({ ...data, hackerMode: m.id as any })}
-                                                className={`flex items-center gap-4 p-5 rounded-2xl border-2 text-left transition-all duration-200 ${sel ? 'border-[#4a90e2] bg-[#4a90e2]/5 shadow-[0_8px_24px_rgba(74,144,226,0.12)]' : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'}`}>
-                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-all ${sel ? 'bg-[#4a90e2] text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', gap: 16,
+                                                    padding: '16px 20px', borderRadius: '14px',
+                                                    border: `1.5px solid ${sel ? 'rgba(74,144,226,0.6)' : '#e2e8f0'}`,
+                                                    background: sel ? 'rgba(74,144,226,0.05)' : '#fff',
+                                                    cursor: 'pointer', textAlign: 'left',
+                                                    transition: 'all 0.2s', fontFamily: 'inherit',
+                                                    boxShadow: sel ? '0 4px 16px rgba(74,144,226,0.10)' : 'none',
+                                                }}
+                                                onMouseEnter={e => { if (!sel) { e.currentTarget.style.border = '1.5px solid rgba(74,144,226,0.3)'; e.currentTarget.style.background = 'rgba(74,144,226,0.02)' } }}
+                                                onMouseLeave={e => { if (!sel) { e.currentTarget.style.border = '1.5px solid #e2e8f0'; e.currentTarget.style.background = '#fff' } }}
+                                            >
+                                                {/* Radio circle — same as Step 4 */}
+                                                <div style={{
+                                                    width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                                                    border: `2px solid ${sel ? '#4a90e2' : '#cbd5e1'}`,
+                                                    background: sel ? '#4a90e2' : 'transparent',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    transition: 'all 0.2s',
+                                                }}>
+                                                    {sel && <Check style={{ width: 11, height: 11, color: '#fff' }} />}
+                                                </div>
+                                                {/* Icon */}
+                                                <div style={{
+                                                    width: 40, height: 40, borderRadius: '10px', flexShrink: 0,
+                                                    background: sel ? 'rgba(74,144,226,0.12)' : '#f8fafc',
+                                                    color: sel ? '#4a90e2' : '#94a3b8',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    transition: 'all 0.2s',
+                                                }}>
                                                     {m.icon}
                                                 </div>
-                                                <div className="flex-1">
-                                                    <p className={`font-semibold text-base ${sel ? 'text-[#4a90e2]' : 'text-slate-800'}`}>{m.label}</p>
-                                                    <p className="text-sm text-slate-500 mt-0.5 leading-relaxed">{m.desc}</p>
-                                                </div>
-                                                <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${sel ? 'border-[#4a90e2] bg-[#4a90e2]' : 'border-slate-300'}`}>
-                                                    {sel && <Check className="w-3 h-3 text-white" />}
+                                                <div style={{ flex: 1 }}>
+                                                    <p style={{ fontWeight: 700, fontSize: '15px', color: sel ? '#4a90e2' : '#1e293b', margin: 0 }}>{m.label}</p>
+                                                    <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: 2 }}>{m.desc}</p>
                                                 </div>
                                             </button>
                                         )

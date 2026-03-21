@@ -13,6 +13,7 @@ import {
 } from '@/lib/country-utils'
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
+const GEO_CACHE_KEY = 'flywise_geo_topojson_v1'
 const DEFAULT_CENTER: [number, number] = [15, 10]
 
 type CountryStatus = 'visited' | 'wishlist'
@@ -95,8 +96,36 @@ export default function Mapa() {
   const [selectedCard, setSelectedCard] = useState<SelectedCard | null>(null)
   const [recommendations, setRecommendations] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [geoData, setGeoData] = useState<string | null>(() => {
+    try { return sessionStorage.getItem(GEO_CACHE_KEY) } catch { return null }
+  })
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const isDraggingRef = useRef(false)
+
+  // Pre-fetch and cache geography JSON in sessionStorage
+  useEffect(() => {
+    if (geoData) return // already cached in this session
+    fetch(GEO_URL)
+      .then(r => r.text())
+      .then(text => {
+        try { sessionStorage.setItem(GEO_CACHE_KEY, text) } catch { /* quota */ }
+        setGeoData(text)
+      })
+      .catch(() => setGeoData(GEO_URL)) // fallback to URL if fetch fails
+  }, [geoData])
+
+  // Two-finger trackpad / mouse wheel zoom
+  useEffect(() => {
+    const el = mapContainerRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const delta = e.deltaY < 0 ? 0.3 : -0.3
+      setZoom(z => Math.max(1, Math.min(8, parseFloat((z + delta).toFixed(1)))))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
 
   // Pointer-based drag detection with distance threshold (works on touch too)
   useEffect(() => {
@@ -256,7 +285,7 @@ export default function Mapa() {
                     setCenter(coordinates as [number, number])
                   }}
                 >
-                  <Geographies geography={GEO_URL}>
+                  <Geographies geography={geoData || GEO_URL}>
                     {({ geographies }: { geographies: any[] }) =>
                       geographies.map((geo: any) => {
                         // França (250) é MultiPolygon incluindo Guiana Francesa — renderiza com split dedicado

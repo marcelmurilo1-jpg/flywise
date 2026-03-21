@@ -186,7 +186,7 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
     const [tempEnd, setTempEnd] = useState<Date | null>(parseLocal(dateBack))
     const [hoverDate, setHoverDate] = useState<Date | null>(null)
     const [viewLeft, setViewLeft] = useState(startOfMonth(parseLocal(dateGo) || new Date()))
-    const [dropRect, setDropRect] = useState<{ top: number; left: number } | null>(null)
+    const [dropRect, setDropRect] = useState<{ top: number; left: number; clampedLeft: number } | null>(null)
 
     const triggerRef = useRef<HTMLDivElement>(null)
 
@@ -207,7 +207,11 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
         const el = triggerRef.current
         if (!el) return
         const r = el.getBoundingClientRect()
-        setDropRect({ top: r.bottom + window.scrollY + 8, left: r.left + window.scrollX })
+        const left = r.left + window.scrollX
+        const panelWidth = 620 // approximate max width of the calendar panel
+        const maxLeft = window.innerWidth - panelWidth - 16 // 16px safety margin from right edge
+        const clampedLeft = Math.max(8, Math.min(left, maxLeft))
+        setDropRect({ top: r.bottom + window.scrollY + 8, left, clampedLeft })
     }
 
     function handleDayClick(d: Date) {
@@ -359,9 +363,10 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
         <div style={{
             position: 'fixed',
             top: dropRect.top - window.scrollY,
-            left: dropRect.left - window.scrollX,
+            left: dropRect.clampedLeft - window.scrollX,
             zIndex: 999998,
             minWidth: 600,
+            maxWidth: 'calc(100vw - 24px)',
         }}>
             {calendarPanel}
         </div>

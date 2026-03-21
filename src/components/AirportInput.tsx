@@ -99,6 +99,7 @@ export function AirportInput({ value, iataCode, onChange, placeholder = 'Cidade 
         setQuery(value)
         setOpen(false)
         setList([])
+        setApiLoading(false)
     }, [value])
 
     // Update dropdown position whenever it opens
@@ -142,9 +143,21 @@ export function AirportInput({ value, iataCode, onChange, placeholder = 'Cidade 
 
     // Search effect — dropdown ONLY opens when hasFocused is true
     useEffect(() => {
-        if (justSelected.current) { justSelected.current = false; return }
-        if (debQ.length < 2) { setList([]); setOpen(false); return }
-        if (!hasFocused.current) return  // ← THE KEY GATE: do nothing without user focus
+        if (justSelected.current) { 
+            justSelected.current = false
+            setApiLoading(false)
+            return 
+        }
+        if (debQ.length < 2) { 
+            setList([])
+            setOpen(false)
+            setApiLoading(false)
+            return 
+        }
+        if (!hasFocused.current) {
+            setApiLoading(false)
+            return  
+        }
 
         const local = filterLocal(debQ)
         setList(local)
@@ -174,6 +187,7 @@ export function AirportInput({ value, iataCode, onChange, placeholder = 'Cidade 
         setQuery(label)
         setOpen(false)
         setList([])
+        setApiLoading(false)
         onChange(label, airport.iataCode)
     }, [onChange])
 
