@@ -229,7 +229,7 @@ ${allFolders}
 </kml>`
 }
 
-function downloadKMLAndOpenMyMaps(itinerary: ItineraryResult, destination: string) {
+function downloadKML(itinerary: ItineraryResult, destination: string) {
     const kml = generateKML(itinerary, destination)
     const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' })
     const url = URL.createObjectURL(blob)
@@ -240,8 +240,157 @@ function downloadKMLAndOpenMyMaps(itinerary: ItineraryResult, destination: strin
     link.click()
     document.body.removeChild(link)
     setTimeout(() => URL.revokeObjectURL(url), 300)
-    // Open My Maps so user can immediately import the downloaded KML
-    window.open('https://mymaps.google.com', '_blank', 'noopener,noreferrer')
+}
+
+// ─── My Maps Modal ────────────────────────────────────────────────────────────
+
+function MyMapsModal({ fileName, onClose }: { fileName: string; onClose: () => void }) {
+    const steps = [
+        {
+            num: 1,
+            title: 'Abra o Google My Maps',
+            desc: 'Clique no botão abaixo para abrir o My Maps em uma nova aba.',
+            action: { label: 'Abrir Google My Maps', href: 'https://mymaps.google.com' },
+        },
+        {
+            num: 2,
+            title: 'Crie um novo mapa',
+            desc: 'Na tela inicial do My Maps, clique em "+ Criar novo mapa".',
+        },
+        {
+            num: 3,
+            title: 'Importe o arquivo KML',
+            desc: `Clique em "Importar" na camada e selecione o arquivo "${fileName}" que acabou de ser baixado.`,
+        },
+        {
+            num: 4,
+            title: 'Pronto! Explore seu roteiro',
+            desc: 'Todos os locais aparecerão no mapa organizados por dia, com pinos numerados. Você pode editar, compartilhar e navegar offline.',
+        },
+    ]
+
+    return (
+        <AnimatePresence>
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+                style={{
+                    position: 'fixed', inset: 0, zIndex: 9999,
+                    background: 'rgba(14,42,85,0.55)', backdropFilter: 'blur(6px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '20px',
+                }}
+            >
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.93, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.93, y: 20 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                        background: '#fff', borderRadius: '24px',
+                        padding: '32px', width: '100%', maxWidth: '480px',
+                        boxShadow: '0 24px 64px rgba(14,42,85,0.18)',
+                    }}
+                >
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{
+                                width: '44px', height: '44px', borderRadius: '12px',
+                                background: 'rgba(52,168,83,0.1)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                <Globe size={22} color="#34A853" />
+                            </div>
+                            <div>
+                                <p style={{ fontSize: '11px', fontWeight: 700, color: '#34A853', letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>
+                                    Google Maps
+                                </p>
+                                <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0E2A55', margin: 0, lineHeight: 1.2 }}>
+                                    Como importar seu roteiro
+                                </h3>
+                            </div>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: '#A0AECB', padding: '4px', borderRadius: '8px',
+                                display: 'flex', alignItems: 'center',
+                            }}
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    {/* KML downloaded badge */}
+                    <div style={{
+                        background: 'rgba(52,168,83,0.08)', border: '1px solid rgba(52,168,83,0.25)',
+                        borderRadius: '12px', padding: '10px 14px',
+                        display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px',
+                    }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34A853', flexShrink: 0 }} />
+                        <p style={{ fontSize: '13px', color: '#1a7336', fontWeight: 600, margin: 0 }}>
+                            Arquivo <strong>{fileName}</strong> baixado com sucesso!
+                        </p>
+                    </div>
+
+                    {/* Steps */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '28px' }}>
+                        {steps.map((step, i) => (
+                            <div key={i} style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                                <div style={{
+                                    width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+                                    background: '#0E2A55', color: '#fff',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '13px', fontWeight: 800,
+                                }}>
+                                    {step.num}
+                                </div>
+                                <div style={{ flex: 1, paddingTop: '4px' }}>
+                                    <p style={{ fontSize: '14px', fontWeight: 700, color: '#0E2A55', margin: '0 0 3px' }}>
+                                        {step.title}
+                                    </p>
+                                    <p style={{ fontSize: '13px', color: '#6B7A99', margin: 0, lineHeight: 1.5 }}>
+                                        {step.desc}
+                                    </p>
+                                    {step.action && (
+                                        <a
+                                            href={step.action.href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                                marginTop: '8px', padding: '8px 14px', borderRadius: '10px',
+                                                background: '#34A853', color: '#fff',
+                                                fontSize: '13px', fontWeight: 700, textDecoration: 'none',
+                                            }}
+                                        >
+                                            <Globe size={13} /> {step.action.label}
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <button
+                        onClick={onClose}
+                        style={{
+                            width: '100%', padding: '13px', borderRadius: '14px',
+                            background: '#0E2A55', color: '#fff', border: 'none',
+                            fontSize: '15px', fontWeight: 700, cursor: 'pointer',
+                        }}
+                    >
+                        Entendido
+                    </button>
+                </motion.div>
+            </motion.div>
+        </AnimatePresence>
+    )
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -266,7 +415,8 @@ export default function Roteiro() {
     const [isSaved, setIsSaved] = useState(false)
     const [savingTrip, setSavingTrip] = useState(false)
     const [exportingPDF, setExportingPDF] = useState(false)
-    const [myMapsSuccess, setMyMapsSuccess] = useState(false)
+    const [showMyMapsModal, setShowMyMapsModal] = useState(false)
+    const [kmlFileName, setKmlFileName] = useState('')
 
     // Edit state — result step
     const [isEditing, setIsEditing] = useState(false)
@@ -454,16 +604,18 @@ export default function Roteiro() {
     const handleExportMyMapsResult = () => {
         const data = editableItinerary ?? itinerary
         if (!data) return
-        downloadKMLAndOpenMyMaps(data, destination)
-        setMyMapsSuccess(true)
-        setTimeout(() => setMyMapsSuccess(false), 4000)
+        const fileName = `roteiro-${destination.toLowerCase().replace(/[^a-z0-9]/g, '-')}.kml`
+        downloadKML(data, destination)
+        setKmlFileName(fileName)
+        setShowMyMapsModal(true)
     }
 
     const handleExportMyMapsView = () => {
         if (!viewingTrip) return
-        downloadKMLAndOpenMyMaps(viewingTrip.result, viewingTrip.destination)
-        setMyMapsSuccess(true)
-        setTimeout(() => setMyMapsSuccess(false), 4000)
+        const fileName = `roteiro-${viewingTrip.destination.toLowerCase().replace(/[^a-z0-9]/g, '-')}.kml`
+        downloadKML(viewingTrip.result, viewingTrip.destination)
+        setKmlFileName(fileName)
+        setShowMyMapsModal(true)
     }
 
     const handleViewTrip = (trip: SavedItinerary) => {
@@ -1069,16 +1221,15 @@ export default function Roteiro() {
                                                 style={{
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                                                     padding: '14px 20px', borderRadius: '14px',
-                                                    background: myMapsSuccess ? 'rgba(52,168,83,0.12)' : 'transparent',
-                                                    color: myMapsSuccess ? '#1a7336' : '#34A853',
-                                                    border: `2px solid ${myMapsSuccess ? '#34A853' : 'rgba(52,168,83,0.4)'}`,
+                                                    background: 'transparent', color: '#34A853',
+                                                    border: '2px solid rgba(52,168,83,0.4)',
                                                     fontSize: '15px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
                                                 }}
                                                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(52,168,83,0.1)'; e.currentTarget.style.borderColor = '#34A853' }}
-                                                onMouseLeave={e => { if (!myMapsSuccess) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(52,168,83,0.4)' } }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(52,168,83,0.4)' }}
                                             >
                                                 <Globe size={16} />
-                                                {myMapsSuccess ? 'KML baixado!' : 'My Maps'}
+                                                Google Maps
                                             </button>
                                             <button
                                                 onClick={handleReset}
@@ -1286,16 +1437,15 @@ export default function Roteiro() {
                                             style={{
                                                 display: 'flex', alignItems: 'center', gap: '7px',
                                                 padding: '10px 18px', borderRadius: '12px',
-                                                background: myMapsSuccess ? 'rgba(52,168,83,0.12)' : 'transparent',
-                                                color: myMapsSuccess ? '#1a7336' : '#34A853',
-                                                border: `2px solid ${myMapsSuccess ? '#34A853' : 'rgba(52,168,83,0.4)'}`,
+                                                background: 'transparent', color: '#34A853',
+                                                border: '2px solid rgba(52,168,83,0.4)',
                                                 fontSize: '14px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
                                             }}
                                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(52,168,83,0.1)'; e.currentTarget.style.borderColor = '#34A853' }}
-                                            onMouseLeave={e => { if (!myMapsSuccess) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(52,168,83,0.4)' } }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(52,168,83,0.4)' }}
                                         >
                                             <Globe size={15} />
-                                            {myMapsSuccess ? 'KML baixado!' : 'My Maps'}
+                                            Google Maps
                                         </button>
                                         </>
                                     )}
@@ -1368,6 +1518,13 @@ export default function Roteiro() {
 
                 </AnimatePresence>
             </main>
+
+            {showMyMapsModal && (
+                <MyMapsModal
+                    fileName={kmlFileName}
+                    onClose={() => setShowMyMapsModal(false)}
+                />
+            )}
         </div>
     )
 }
