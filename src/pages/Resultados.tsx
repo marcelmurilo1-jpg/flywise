@@ -125,23 +125,26 @@ export default function Resultados() {
                     setOrigin(buscaData.origem); setOriginIata(buscaData.origem)
                     setDest(buscaData.destino); setDestIata(buscaData.destino)
                     setDateGo(buscaData.data_ida); setPax(buscaData.passageiros)
-                    // Set return date from DB or URL param
                     const retDate = buscaData.data_volta ?? ret ?? ''
                     setDateBack(retDate)
                     if (retDate) setTripType('round-trip')
                 }
 
-                // 2. Fetch Seats.aero sempre (independente de cache do Amadeus)
-                if (orig && destP && date) {
+                // 2. Fetch Seats.aero — usa URL params ou fallback para dados do banco
+                const seatsOrig = orig ?? buscaData?.origem
+                const seatsDest = destP ?? buscaData?.destino
+                const seatsDate = date ?? buscaData?.data_ida
+                const seatsRet  = ret  ?? buscaData?.data_volta ?? undefined
+                if (seatsOrig && seatsDest && seatsDate) {
                     setSeatsLoading(true)
                     fetch(`${import.meta.env.VITE_API_BASE_URL ?? ''}/api/search-flights`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            origem: orig,
-                            destino: destP,
-                            data_ida: date,
-                            data_volta: ret || undefined
+                            origem: seatsOrig,
+                            destino: seatsDest,
+                            data_ida: seatsDate,
+                            data_volta: seatsRet || undefined
                         })
                     })
                         .then(r => r.json())
