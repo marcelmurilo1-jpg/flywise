@@ -63,31 +63,7 @@ export function PlaneWindowLoader({ message = 'Buscando os melhores voos...', su
                     background: 'linear-gradient(to top, rgba(209,250,229,0.5), transparent)',
                 }} />
 
-                {/* Airplane silhouette */}
-                <motion.div
-                    animate={{ y: [0, -8, 0], rotate: [-6, -4, -6] }}
-                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                    style={{
-                        position: 'absolute',
-                        bottom: '55px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                    }}
-                >
-                    <svg width="56" height="28" viewBox="0 0 56 28" fill="none">
-                        <path d="M2 18L14 4l6 6-8 8 4 2 20-8 4 2-20 8 2 5-6-1-2-4-6 2-2-4z" fill="white" fillOpacity="0.9" />
-                        <path d="M14 18l10-5" stroke="rgba(147,197,253,0.6)" strokeWidth="1.5" />
-                        <path d="M2 18L54 10" stroke="white" strokeOpacity="0.5" strokeWidth="1" />
-                    </svg>
-                </motion.div>
 
-                {/* Wing reflection */}
-                <div style={{
-                    position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)',
-                    width: '120px', height: '12px',
-                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
-                    borderRadius: '50%',
-                }} />
 
                 {/* Pulsing glow ring */}
                 <motion.div
