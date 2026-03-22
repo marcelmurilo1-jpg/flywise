@@ -96,8 +96,11 @@ export default function Mapa() {
   const [selectedCard, setSelectedCard] = useState<SelectedCard | null>(null)
   const [recommendations, setRecommendations] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
-  const [geoData, setGeoData] = useState<string | null>(() => {
-    try { return sessionStorage.getItem(GEO_CACHE_KEY) } catch { return null }
+  const [geoData, setGeoData] = useState<object | null>(() => {
+    try {
+      const s = sessionStorage.getItem(GEO_CACHE_KEY)
+      return s ? JSON.parse(s) : null
+    } catch { return null }
   })
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const isDraggingRef = useRef(false)
@@ -106,13 +109,13 @@ export default function Mapa() {
   useEffect(() => {
     if (geoData) return // already cached in this session
     fetch(GEO_URL)
-      .then(r => r.text())
-      .then(text => {
-        try { sessionStorage.setItem(GEO_CACHE_KEY, text) } catch { /* quota */ }
-        setGeoData(text)
+      .then(r => r.json())
+      .then(data => {
+        try { sessionStorage.setItem(GEO_CACHE_KEY, JSON.stringify(data)) } catch { /* quota */ }
+        setGeoData(data)
       })
-      .catch(() => setGeoData(GEO_URL)) // fallback to URL if fetch fails
-  }, [geoData])
+      .catch(() => {}) // on failure, Geographies falls back to fetching GEO_URL itself
+  }, [])
 
   // Two-finger trackpad / mouse wheel zoom
   useEffect(() => {
@@ -267,16 +270,16 @@ export default function Mapa() {
           <div
             ref={mapContainerRef}
             className="mapa-map-container"
-            style={{ background: '#dbeafe', borderRadius: '18px', border: '1px solid #bfdbfe', overflow: 'hidden', position: 'relative', minHeight: '480px' }}
+            style={{ background: '#dbeafe', borderRadius: '18px', border: '1px solid #bfdbfe', overflow: 'hidden', position: 'relative', height: '480px' }}
             onClick={() => setSelectedCard(null)}
           >
             {loading ? (
-              <div className="mapa-loading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '480px', flexDirection: 'column', gap: '10px' }}>
+              <div className="mapa-loading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: '10px' }}>
                 <Globe2 size={32} color="#93c5fd" />
                 <span style={{ color: '#94a3b8', fontSize: '14px' }}>Carregando mapa…</span>
               </div>
             ) : (
-              <ComposableMap style={{ width: '100%', height: 'auto' }}>
+              <ComposableMap style={{ width: '100%', height: '100%' }}>
                 <ZoomableGroup
                   zoom={zoom}
                   center={center}
@@ -578,13 +581,11 @@ export default function Mapa() {
           .mapa-inner { padding: 14px 12px 80px !important; }
           .mapa-title { font-size: 17px !important; }
           .mapa-desc { display: none; }
-          .mapa-map-container { min-height: 320px !important; border-radius: 14px !important; }
-          .mapa-loading { height: 320px !important; }
+          .mapa-map-container { height: 320px !important; border-radius: 14px !important; }
           .mapa-zoom-btn { width: 40px !important; height: 40px !important; }
         }
         @media (max-width: 400px) {
-          .mapa-map-container { min-height: 280px !important; }
-          .mapa-loading { height: 280px !important; }
+          .mapa-map-container { height: 260px !important; }
         }
       `}</style>
     </div>

@@ -818,6 +818,17 @@ export default function Roteiro() {
     return (
         <div style={{ minHeight: '100vh', background: 'var(--snow)', display: 'flex', flexDirection: 'column', fontFamily: 'Inter, system-ui, sans-serif' }}>
             <style>{`
+                /* Leaflet + Tailwind v4 fix: preflight overrides break tile rendering */
+                .leaflet-container img {
+                    max-width: none !important;
+                    display: inline !important;
+                }
+                .leaflet-tile-container img {
+                    display: block !important;
+                    max-width: none !important;
+                    width: 256px !important;
+                    height: 256px !important;
+                }
                 @media (max-width: 768px) {
                     .roteiro-main { padding: 20px 16px 100px !important; }
                     .roteiro-result-grid { grid-template-columns: 1fr !important; }
@@ -1718,6 +1729,15 @@ function FitBounds({ positions }: { positions: [number, number][] }) {
     return null
 }
 
+function InvalidateSize() {
+    const map = useMap()
+    useEffect(() => {
+        const t = setTimeout(() => map.invalidateSize(), 80)
+        return () => clearTimeout(t)
+    }, [map])
+    return null
+}
+
 function buildPin(color: string, n: number, size = 26) {
     return L.divIcon({
         html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-size:${size < 28 ? 11 : 13}px;font-weight:800;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.28);font-family:Inter,system-ui,sans-serif">${n}</div>`,
@@ -1816,6 +1836,7 @@ function DaysMapSection({ dias, collapsedDays }: { dias: ItineraryDay[]; collaps
                         attributionControl={false}
                     >
                         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                        <InvalidateSize />
                         {haspins && <FitBounds positions={positions} />}
                         {pins.map((pin, i) => (
                             <Marker key={i} position={[pin.lat, pin.lng]} icon={buildPin(pin.color, i + 1)} />
@@ -1892,6 +1913,7 @@ function DaysMapSection({ dias, collapsedDays }: { dias: ItineraryDay[]; collaps
                                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                                     />
+                                    <InvalidateSize />
                                     {haspins && <FitBounds positions={positions} />}
                                     {pins.map((pin, i) => (
                                         <Marker key={i} position={[pin.lat, pin.lng]} icon={buildPin(pin.color, i + 1, 32)}>
