@@ -3,7 +3,7 @@ import {
     Loader2, MapPin, RefreshCw, Lightbulb, Sunrise, Sun, Moon, Sparkles,
     BookmarkPlus, Bookmark, ChevronLeft, ChevronDown, CalendarDays, Users,
     Search, Pencil, Trash2, Plus, Check, UtensilsCrossed, Landmark, TreePine, ShoppingBag, Clock,
-    Maximize2, X, FileDown,
+    Maximize2, X, FileDown, Globe,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -131,6 +131,119 @@ const BLANK_DAY = (dia: number): ItineraryDay => ({
     noite: { atividades: [{ ...BLANK_ACTIVITY }] },
 })
 
+// ─── KML Generation (Google My Maps) ─────────────────────────────────────────
+
+function escapeXml(str: string): string {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;')
+}
+
+// Google Maps numbered paddle icons (day 1 → "1.png", ..., day 10 → "10.png")
+const KML_DAY_ICONS = Array.from({ length: 10 }, (_, i) =>
+    `http://maps.google.com/mapfiles/kml/paddle/${i + 1}.png`
+)
+const KML_EXTRAS_ICON = 'http://maps.google.com/mapfiles/kml/paddle/wht-stars.png'
+
+const KML_PERIOD_PREFIX: Record<string, string> = {
+    manha: '☀️ Manhã',
+    tarde: '🌤 Tarde',
+    noite: '🌙 Noite',
+}
+
+function generateKML(itinerary: ItineraryResult, destination: string): string {
+    // One style per day
+    const styles = itinerary.dias.map((_, i) => {
+        const icon = KML_DAY_ICONS[i] ?? 'http://maps.google.com/mapfiles/kml/paddle/wht-blank.png'
+        return `  <Style id="day${i + 1}">
+    <IconStyle><scale>1.1</scale><Icon><href>${icon}</href></Icon></IconStyle>
+  </Style>`
+    }).join('\n')
+
+    // Day folders
+    const dayFolders = itinerary.dias.map((day, dayIdx) => {
+        const placemarks: string[] = []
+        for (const { key } of PERIOD_CONFIG) {
+            const activities = normalizePeriod(day[key])
+            for (const act of activities) {
+                if (!act.local) continue
+                const descLines = [
+                    `${KML_PERIOD_PREFIX[key] ?? key}${act.horario ? ` — ${act.horario}` : ''}`,
+                    act.atividade || '',
+                    act.dica ? `💡 Dica: ${act.dica}` : '',
+                ].filter(Boolean).join('\n')
+                const pointTag = act.lat != null && act.lng != null
+                    ? `\n    <Point><coordinates>${act.lng},${act.lat},0</coordinates></Point>`
+                    : ''
+                placemarks.push(
+                    `  <Placemark>\n    <name>${escapeXml(act.local)}</name>\n    <description>${escapeXml(descLines)}</description>\n    <styleUrl>#day${dayIdx + 1}</styleUrl>${pointTag}\n  </Placemark>`
+                )
+            }
+        }
+        if (placemarks.length === 0) return null
+        return `<Folder>\n  <name>Dia ${day.dia} — ${escapeXml(day.tema)}</name>\n${placemarks.join('\n')}\n</Folder>`
+    }).filter(Boolean)
+
+    // Extras folders
+    const extraFolders: string[] = []
+    if (itinerary.extras) {
+        const EXTRA_LABELS: Record<ExtraCategory, string> = {
+            gastronomia: '🍽 Gastronomia',
+            cultura: '🏛 Cultura',
+            natureza: '🌿 Natureza',
+            compras: '🛍 Compras',
+        }
+        for (const cat of ['gastronomia', 'cultura', 'natureza', 'compras'] as ExtraCategory[]) {
+            const items = itinerary.extras[cat] ?? []
+            if (items.length === 0) continue
+            const placemarks = items.map(item => {
+                const desc = [item.descricao, item.dica ? `💡 ${item.dica}` : ''].filter(Boolean).join('\n')
+                const pointTag = item.lat != null && item.lng != null
+                    ? `\n    <Point><coordinates>${item.lng},${item.lat},0</coordinates></Point>`
+                    : ''
+                return `  <Placemark>\n    <name>${escapeXml(item.nome)}</name>\n    <description>${escapeXml(desc)}</description>\n    <styleUrl>#extras</styleUrl>${pointTag}\n  </Placemark>`
+            })
+            extraFolders.push(
+                `<Folder>\n  <name>${EXTRA_LABELS[cat]}</name>\n${placemarks.join('\n')}\n</Folder>`
+            )
+        }
+    }
+
+    const allFolders = [...dayFolders, ...extraFolders].join('\n')
+    const title = `Roteiro ${destination} — ${itinerary.dias.length} dia${itinerary.dias.length > 1 ? 's' : ''}`
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>${escapeXml(itinerary.titulo || title)}</name>
+  <description>${escapeXml(itinerary.resumo || '')} — Gerado por FlyWise</description>
+${styles}
+  <Style id="extras">
+    <IconStyle><Icon><href>${KML_EXTRAS_ICON}</href></Icon></IconStyle>
+  </Style>
+${allFolders}
+</Document>
+</kml>`
+}
+
+function downloadKMLAndOpenMyMaps(itinerary: ItineraryResult, destination: string) {
+    const kml = generateKML(itinerary, destination)
+    const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `roteiro-${destination.toLowerCase().replace(/[^a-z0-9]/g, '-')}.kml`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setTimeout(() => URL.revokeObjectURL(url), 300)
+    // Open My Maps so user can immediately import the downloaded KML
+    window.open('https://mymaps.google.com', '_blank', 'noopener,noreferrer')
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Roteiro() {
@@ -153,6 +266,7 @@ export default function Roteiro() {
     const [isSaved, setIsSaved] = useState(false)
     const [savingTrip, setSavingTrip] = useState(false)
     const [exportingPDF, setExportingPDF] = useState(false)
+    const [myMapsSuccess, setMyMapsSuccess] = useState(false)
 
     // Edit state — result step
     const [isEditing, setIsEditing] = useState(false)
@@ -335,6 +449,21 @@ export default function Roteiro() {
             viewingTrip.traveler_type,
             viewingTrip.travel_style,
         )
+    }
+
+    const handleExportMyMapsResult = () => {
+        const data = editableItinerary ?? itinerary
+        if (!data) return
+        downloadKMLAndOpenMyMaps(data, destination)
+        setMyMapsSuccess(true)
+        setTimeout(() => setMyMapsSuccess(false), 4000)
+    }
+
+    const handleExportMyMapsView = () => {
+        if (!viewingTrip) return
+        downloadKMLAndOpenMyMaps(viewingTrip.result, viewingTrip.destination)
+        setMyMapsSuccess(true)
+        setTimeout(() => setMyMapsSuccess(false), 4000)
     }
 
     const handleViewTrip = (trip: SavedItinerary) => {
@@ -934,6 +1063,24 @@ export default function Roteiro() {
                                                 {exportingPDF ? 'Gerando...' : 'Exportar PDF'}
                                             </button>
                                             <button
+                                                onClick={handleExportMyMapsResult}
+                                                className="btn"
+                                                title="Baixa um arquivo KML e abre o Google My Maps para você importar"
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                                                    padding: '14px 20px', borderRadius: '14px',
+                                                    background: myMapsSuccess ? 'rgba(52,168,83,0.12)' : 'transparent',
+                                                    color: myMapsSuccess ? '#1a7336' : '#34A853',
+                                                    border: `2px solid ${myMapsSuccess ? '#34A853' : 'rgba(52,168,83,0.4)'}`,
+                                                    fontSize: '15px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
+                                                }}
+                                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(52,168,83,0.1)'; e.currentTarget.style.borderColor = '#34A853' }}
+                                                onMouseLeave={e => { if (!myMapsSuccess) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(52,168,83,0.4)' } }}
+                                            >
+                                                <Globe size={16} />
+                                                {myMapsSuccess ? 'KML baixado!' : 'My Maps'}
+                                            </button>
+                                            <button
                                                 onClick={handleReset}
                                                 className="btn"
                                                 style={{
@@ -1130,6 +1277,24 @@ export default function Roteiro() {
                                         >
                                             {exportingPDF ? <Loader2 size={15} className="spin" /> : <FileDown size={15} />}
                                             {exportingPDF ? 'Gerando...' : 'Exportar PDF'}
+                                        </button>
+                                        <button
+                                            onClick={handleExportMyMapsView}
+                                            className="btn"
+                                            title="Baixa um arquivo KML e abre o Google My Maps para importar"
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '7px',
+                                                padding: '10px 18px', borderRadius: '12px',
+                                                background: myMapsSuccess ? 'rgba(52,168,83,0.12)' : 'transparent',
+                                                color: myMapsSuccess ? '#1a7336' : '#34A853',
+                                                border: `2px solid ${myMapsSuccess ? '#34A853' : 'rgba(52,168,83,0.4)'}`,
+                                                fontSize: '14px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(52,168,83,0.1)'; e.currentTarget.style.borderColor = '#34A853' }}
+                                            onMouseLeave={e => { if (!myMapsSuccess) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(52,168,83,0.4)' } }}
+                                        >
+                                            <Globe size={15} />
+                                            {myMapsSuccess ? 'KML baixado!' : 'My Maps'}
                                         </button>
                                     )}
                                 </div>
