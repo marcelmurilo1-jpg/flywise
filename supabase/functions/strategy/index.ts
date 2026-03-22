@@ -196,7 +196,7 @@ async function fetchPromos(
     targetProgram: string,
     relatedPrograms: string[],
     sb: ReturnType<typeof createClient>
-): Promise<{ promoStr: string; transferPromos: PromoRow[] }> {
+): Promise<{ promoStr: string; transferPromos: PromoRow[]; purchasePromos: PromoRow[] }> {
     try {
         const now = new Date().toISOString()
         const searchPrograms = Array.from(new Set([targetProgram, ...relatedPrograms])).filter(Boolean).slice(0, 7)
@@ -442,6 +442,50 @@ const BASE_COST_PER_K: Record<string, number> = {
     'MileagePlus': 55,
 }
 
+// Purchase URLs per program (where users can buy miles directly)
+const PROGRAM_PURCHASE_INFO: Record<string, { url: string; notes: string }> = {
+    'Smiles':      { url: 'smiles.com.br/compre-milhas', notes: 'Promoções frequentes às quartas-feiras com até 40% de bônus' },
+    'LATAM Pass':  { url: 'latampass.latam.com/pt_br/junte-milhas/compre-milhas', notes: 'Pacotes com bônus sazonais; verifique "Turbine"' },
+    'TudoAzul':    { url: 'tudoazul.voeazul.com.br/compre-pontos', notes: 'Bônus em datas especiais e campanhas do Clube Azul' },
+    'Lifemiles':   { url: 'lifemiles.com/shop/buy-miles', notes: 'Promoções frequentes de 30-125% de bônus' },
+    'AAdvantage':  { url: 'aa.com/aadvantage/accrual/purchase-miles.do', notes: '' },
+    'MileagePlus': { url: 'united.com/ual/pt/br/flight/mileageplus/buy-miles.html', notes: '' },
+    'Flying Blue': { url: 'flyingblue.com/pt/miles/buy', notes: '' },
+    'Miles&More':  { url: 'miles-and-more.com/miles/buy', notes: '' },
+    'Aeroplan':    { url: 'aeroplan.com/en/earn-miles/buy', notes: '' },
+}
+
+// Transfer page URLs per program
+const PROGRAM_TRANSFER_URLS: Record<string, string> = {
+    'Smiles':      'smiles.com.br/acumule-milhas/transferencia-de-pontos',
+    'LATAM Pass':  'latampass.latam.com/pt_br/junte-milhas/transfira-pontos',
+    'TudoAzul':    'tudoazul.voeazul.com.br/acumule/transferencia-de-pontos',
+    'Livelo':      'livelo.com.br/transferencia-de-pontos',
+    'Flying Blue': 'flyingblue.com/en/earn-miles/partners/bank-partners',
+}
+
+// Maps card IDs (from userData.cards) to the bank transfer program they belong to
+const CARD_TO_BANK_PROGRAM: Record<string, { bank: string; label: string }> = {
+    'nubank_ultravioleta': { bank: 'Membership Rewards', label: 'Nubank Ultravioleta (via Amex)' },
+    'amex_platinum':       { bank: 'Membership Rewards', label: 'Amex Platinum' },
+    'amex_gold':           { bank: 'Membership Rewards', label: 'Amex Gold' },
+    'amex_green':          { bank: 'Membership Rewards', label: 'Amex Green' },
+    'iupp_itau':           { bank: 'Pontos Itaú', label: 'iupp Itaú' },
+    'itau_personnalite':   { bank: 'Pontos Itaú', label: 'Itaú Personnalité' },
+    'itau_uniclass':       { bank: 'Pontos Itaú', label: 'Itaú Uniclass' },
+    'itau_grafite':        { bank: 'Pontos Itaú', label: 'Itaú Grafite' },
+    'esfera_santander':    { bank: 'Esfera', label: 'Santander Esfera' },
+    'santander_elite':     { bank: 'Esfera', label: 'Santander Elite' },
+    'santander_black':     { bank: 'Esfera', label: 'Santander Black' },
+    'c6_atomos':           { bank: 'C6 Bank', label: 'C6 Átomos' },
+    'inter_black':         { bank: 'Inter Milhas', label: 'Banco Inter Black' },
+    'inter_win':           { bank: 'Inter Milhas', label: 'Banco Inter Win' },
+    'diners_global':       { bank: 'Diners Club', label: 'Diners Club Global' },
+    'livelo_bradesco':     { bank: 'Livelo', label: 'Bradesco Livelo' },
+    'livelo_bb':           { bank: 'Livelo', label: 'BB Livelo' },
+    'caixa_mastercard':    { bank: 'Livelo', label: 'Caixa Mastercard' },
+}
+
 function buildPurchaseSection(
     targetProgram: string,
     deficitMiles: number,
@@ -491,6 +535,13 @@ function buildPurchaseSection(
         } else {
             lines.push(`→ ATENÇÃO: custo total comprando milhas (~R$ ${totalWithPurchase.toLocaleString('pt-BR')}) próximo ao preço em dinheiro (R$ ${cashPrice.toLocaleString('pt-BR')}). Dinheiro pode ser mais prático.`)
         }
+    }
+
+    const purchaseInfo = PROGRAM_PURCHASE_INFO[targetProgram]
+    if (purchaseInfo) {
+        lines.push('')
+        lines.push(`ONDE COMPRAR: https://${purchaseInfo.url}`)
+        if (purchaseInfo.notes) lines.push(`  Dica: ${purchaseInfo.notes}`)
     }
 
     return lines.join('\n')
@@ -709,7 +760,10 @@ serve(async (req) => {
             )
             : null
         const coverageSection = coverageResult?.section ?? ''
-        const deficitMiles = coverageResult?.deficit ?? 0
+        // When user has no wallet, assume all miles must be acquired from scratch
+        const deficitMiles = userData
+            ? (coverageResult?.deficit ?? 0)
+            : neededMiles
         const purchaseSection = buildPurchaseSection(
             targetProgram, deficitMiles, promoResult.purchasePromos, cashPrice || flight.preco_brl
         )
@@ -746,6 +800,39 @@ serve(async (req) => {
 
         if (coverageSection) {
             sections.push('\n=== COBERTURA COM MILHAS DO USUÁRIO ===', coverageSection)
+        } else if (!userData || Object.keys(userData.miles).length === 0) {
+            // No wallet configured — explicit guidance for the LLM
+            const transferUrl = PROGRAM_TRANSFER_URLS[targetProgram] ?? `${targetProgram.toLowerCase().replace(/\s+/g, '')}.com`
+            sections.push('\n=== CARTEIRA DE MILHAS ===', [
+                'Usuário SEM milhas cadastradas na carteira FlyWise.',
+                `Precisa obter TODAS as ${neededMiles.toLocaleString('pt-BR')} pts de ${targetProgram} do zero.`,
+                'Opções para obter as milhas:',
+                `  1. COMPRAR DIRETAMENTE: veja seção "ANÁLISE DE COMPRA DE MILHAS" abaixo`,
+                `  2. TRANSFERIR de pontos de cartão de crédito bancário para ${targetProgram} — URL: https://${transferUrl}`,
+                `  3. ACUMULAR voando: comprar o voo em dinheiro e acumular milhas para futuros resgates`,
+            ].join('\n'))
+        }
+
+        // Show which of the user's cards can transfer to the target program
+        if (userData?.cards && userData.cards.length > 0) {
+            const bases = TRANSFER_BASES[targetProgram] ?? []
+            const bankPrograms = new Set(bases.map(b => b.source))
+            const compatibleCards = userData.cards
+                .map(id => CARD_TO_BANK_PROGRAM[id])
+                .filter((c): c is { bank: string; label: string } => !!c && bankPrograms.has(c.bank))
+            if (compatibleCards.length > 0) {
+                const transferUrl = PROGRAM_TRANSFER_URLS[targetProgram]
+                const cardLines = compatibleCards.map(c => {
+                    const base = bases.find(b => b.source === c.bank)
+                    return `  ${c.label} → ${c.bank} → ${targetProgram} (razão base ${base?.ratio ?? 1}:1)`
+                })
+                sections.push('\n=== CARTÕES DO USUÁRIO COMPATÍVEIS COM TRANSFERÊNCIA ===', [
+                    `Os seguintes cartões do usuário podem transferir pontos para ${targetProgram}:`,
+                    ...cardLines,
+                    transferUrl ? `  URL para transferir: https://${transferUrl}` : '',
+                    'IMPORTANTE: o usuário NÃO tem saldo registrado nesses cartões. Sugira verificar o saldo e transferir se disponível.',
+                ].filter(Boolean).join('\n'))
+            }
         }
 
         if (purchaseSection) {
@@ -779,18 +866,19 @@ REGRAS OBRIGATÓRIAS:
 2. Se vale_a_pena: true, a estratégia DEVE ser executável com o que o usuário TEM (saldo direto + transferências possíveis conforme "COBERTURA COM MILHAS").
 3. NUNCA sugira solicitar ou contratar novo cartão de crédito — PROIBIDO.
 4. Se a cobertura mostra "✓ COBRE TUDO" ou saldo direto suficiente, o passo 1 DEVE usar esse saldo diretamente.
-5. Se há "★ PROMO ATIVA" na cobertura, PRIORIZE essa transferência e explique o bônus no step_details.
+5. Se há "★ PROMO ATIVA" na cobertura ou em "CARTÕES DO USUÁRIO COMPATÍVEIS", PRIORIZE essa transferência e explique o bônus no step_details.
 6. Se o usuário tem clube (ex: Smiles Diamante), mencione o benefício EXPLICITAMENTE no passo relevante (ex: "10% desconto nas taxas").
-7. Se milhas_faltantes > 0: use a seção "ANÁLISE DE COMPRA DE MILHAS" para preencher como_completar_faltantes com custo real. Se há promo de compra ativa, mencione o preço efetivo por mil pts e o custo total estimado.
-8. steps: TÍTULO curto (máx 8 palavras). step_details: explicação didática completa — onde clicar, qual site/app, o que esperar, quanto tempo leva.
-9. Se vale_a_pena: false: steps devem guiar o usuário para o que fazer neste caso (reservar em dinheiro, aguardar promo, acumular mais).
-10. milhas_necessarias: usar o valor REAL do Seats.aero quando fornecido, não estimar.
-11. Responda APENAS em JSON válido, sem texto adicional.`,
+7. Se milhas_faltantes > 0 OU usuário não tem carteira: OBRIGATÓRIO criar um passo "Comprar milhas no site oficial" em steps/step_details. Use a seção "ANÁLISE DE COMPRA DE MILHAS" para informar o custo real e inclua a URL exata (https://...) no step_details. Como_completar_faltantes DEVE conter: custo estimado em R$, URL e dica de promo se houver.
+8. Se a seção "CARTEIRA DE MILHAS" mostrar que o usuário não tem milhas, o passo 1 DEVE ser como obter as milhas (comprar ou transferir de cartão), não como emitir.
+9. steps: TÍTULO curto (máx 8 palavras). step_details: explicação didática completa — onde clicar, qual site/app, o que esperar, quanto tempo leva. Inclua URLs onde relevante.
+10. Se vale_a_pena: false: steps devem guiar o usuário para o que fazer neste caso (reservar em dinheiro, aguardar promo, acumular mais).
+11. milhas_necessarias: usar o valor REAL do Seats.aero quando fornecido, não estimar.
+12. Responda APENAS em JSON válido, sem texto adicional.`,
                     },
                     { role: 'user', content: userPrompt },
                 ],
                 response_format: { type: 'json_object' },
-                max_tokens: 1600,
+                max_tokens: 2000,
                 temperature: 0.2,
             }),
         })
