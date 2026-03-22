@@ -86,6 +86,16 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ─── Middleware de autenticação para endpoints admin ──────────────────────────
+function requireSyncSecret(req, res, next) {
+    if (process.env.NODE_ENV !== 'production') return next();
+    const secret = req.headers['x-sync-secret'] ?? '';
+    if (!process.env.SYNC_SECRET || secret !== process.env.SYNC_SECRET) {
+        return res.status(401).json({ error: 'Não autorizado' });
+    }
+    next();
+}
+
 // ─── Health check (Railway monitora este endpoint) ────────────────────────────
 app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
@@ -327,16 +337,22 @@ app.get('/api/amadeus/airports', async (req, res) => {
 const scrapeLimit = pLimit(1); // Railway: 1 aba por vez (limite de processos do container)
 let _browser = null;
 
-// ── Fase 2: Pool de User-Agents reais do Chrome 120-124 ──────────────────────
+// ── Pool de User-Agents reais do Chrome 129-132 (atualizados para 2026) ───────
 const UA_POOL = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    // Chrome 132 (Jan 2026)
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_2_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+    // Chrome 131 (Nov 2025)
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    // Chrome 130 (Out 2025)
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    // Chrome 129 (Set 2025)
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
 ];
 
 // Extrai versão major do Chrome a partir do UA (ex: "124")
@@ -351,11 +367,12 @@ function getPlatform(ua) {
     return 'Windows';
 }
 
-// ── Fase 2: Pool de timezones ────────────────────────────────────────────────
+// ── Pool de timezones ─────────────────────────────────────────────────────────
 const TIMEZONE_POOL = [
     'America/Sao_Paulo', 'America/Sao_Paulo', 'America/Sao_Paulo', // peso maior BR
+    'America/Recife', 'America/Manaus', 'America/Belem',
     'America/New_York', 'America/Chicago', 'America/Los_Angeles',
-    'Europe/Lisbon', 'Europe/Madrid',
+    'Europe/Lisbon', 'Europe/Madrid', 'Europe/London',
 ];
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -484,7 +501,7 @@ async function scrapeOneway(origin, destination, date) {
                 .first().click({ timeout: 5000 }).then(() => true).catch(() => false);
             if (cookieClicked) {
                 console.log(`[GFlights] ${origin}→${destination}: cookie consent clicado, aguardando...`);
-                await page.waitForTimeout(1000);
+                await new Promise(r => setTimeout(r, randInt(800, 1400)));
             }
 
             // Aguarda os cards de voo aparecerem (div[data-id] com aria-label de voo)
@@ -498,7 +515,13 @@ async function scrapeOneway(origin, destination, date) {
                 { timeout: 12000 }
             ).catch(() => console.log(`[GFlights] ${origin}→${destination}: timeout aguardando cards de voo`));
 
-            await page.waitForTimeout(1500);
+            // ── Comportamento humano: movimento de mouse + scroll aleatório ────
+            await page.mouse.move(randInt(200, vw - 200), randInt(100, vh / 2));
+            await new Promise(r => setTimeout(r, randInt(150, 350)));
+            await page.mouse.move(randInt(100, vw - 300), randInt(vh / 3, vh - 200));
+            await new Promise(r => setTimeout(r, randInt(100, 250)));
+            await page.evaluate((scrollY) => window.scrollBy(0, scrollY), randInt(80, 220));
+            await new Promise(r => setTimeout(r, randInt(900, 1800)));
 
             // Log diagnóstico: quantos div[data-id] e primeiros aria-labels
             const diagInfo = await page.evaluate(() => {
@@ -869,10 +892,19 @@ function mapToFlightOffer(item, origin, destination, date, idx) {
     };
 }
 
-// ── Fase 5: Cache em memória para Google Flights (TTL 4h) ─────────────────────
+// ── Cache em memória para Google Flights (TTL 4h, LRU max 300 entradas) ───────
 const _gfCache = new Map();    // key → { data, inbound, expiresAt }
 const _gfInflight = new Map(); // key → Promise (deduplicação de requests simultâneos)
 const GF_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 horas
+const GF_CACHE_MAX = 300;
+
+function gfCacheSet(key, value) {
+    // Evicta entrada mais antiga (LRU simples via inserção Map) se limite atingido
+    if (_gfCache.size >= GF_CACHE_MAX) {
+        _gfCache.delete(_gfCache.keys().next().value);
+    }
+    _gfCache.set(key, value);
+}
 
 function gfCacheKey(origin, dest, date, returnDate) {
     return `${origin}|${dest}|${date}|${returnDate ?? ''}`;
@@ -911,7 +943,7 @@ async function expandFlightDetails(page, flights) {
 
             const clickTarget = detailBtn || card;
             await clickTarget.click({ timeout: 2000 }).catch(() => null);
-            await page.waitForTimeout(400);
+            await new Promise(r => setTimeout(r, randInt(350, 550)));
 
             const dialogText = await page.evaluate(() => {
                 const containers = [
@@ -932,7 +964,7 @@ async function expandFlightDetails(page, flights) {
             }
 
             await page.keyboard.press('Escape').catch(() => null);
-            await page.waitForTimeout(200);
+            await new Promise(r => setTimeout(r, randInt(150, 300)));
         } catch (e) {
             console.log(`[GFlights] expand flight ${i} error:`, e.message?.slice(0, 60));
         }
@@ -1033,7 +1065,7 @@ app.get('/api/amadeus/flights', async (req, res) => {
         .then(result => {
             const { outbound } = result;
             if (outbound.length > 0) {
-                _gfCache.set(cacheKey, { data: outbound, inbound: result.inbound, expiresAt: Date.now() + GF_CACHE_TTL_MS });
+                gfCacheSet(cacheKey, { data: outbound, inbound: result.inbound, expiresAt: Date.now() + GF_CACHE_TTL_MS });
             }
             console.log(`[GFlights] Ida: ${outbound.length} | Volta: ${result.inbound.length}`);
             return result;
@@ -1218,11 +1250,12 @@ async function syncAwardPrices() {
                     if (trip.YAvailable && trip.YMileageCost > 0) results[route.category].economy.push(trip.YMileageCost);
                     if (trip.JAvailable && trip.JMileageCost > 0) results[route.category].business.push(trip.JMileageCost);
                 }
-                await new Promise(r => setTimeout(r, 300)); // rate limit gentile
+                await new Promise(r => setTimeout(r, 300)); // rate limit entre datas
             } catch (e) {
                 console.warn(`[AwardSync] Erro ${route.origin}-${route.destination} ${date}: ${e.message}`);
             }
         }
+        await new Promise(r => setTimeout(r, 600)); // pausa extra entre rotas
     }
 
     // Calcular médias e salvar no Supabase
@@ -1260,11 +1293,7 @@ app.get('/api/award-prices', async (req, res) => {
 });
 
 // POST /api/award-prices/sync — dispara sync manual (protegido por header)
-app.post('/api/award-prices/sync', async (req, res) => {
-    const secret = req.headers['x-sync-secret'] ?? '';
-    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
-        return res.status(401).json({ error: 'Não autorizado' });
-    }
+app.post('/api/award-prices/sync', requireSyncSecret, async (req, res) => {
     syncAwardPrices().catch(console.error);
     res.json({ message: 'Sincronização iniciada em background' });
 });
@@ -1307,7 +1336,7 @@ async function seedPromotionsIfEmpty() {
         console.log('[Promotions] Supabase vazio — inserindo dados default...');
         const { error } = await supabase
             .from('transfer_promotions')
-            .insert(DEFAULT_PROMOTIONS_SEED);
+            .upsert(DEFAULT_PROMOTIONS_SEED, { onConflict: 'card_id,program' });
         if (error) throw error;
         console.log(`[Promotions] Seed concluído: ${DEFAULT_PROMOTIONS_SEED.length} promoções inseridas`);
     } catch (err) {
@@ -1386,21 +1415,13 @@ app.get('/api/transfer-promotions', async (req, res) => {
 });
 
 // POST /api/transfer-promotions/update — força re-fetch do Supabase (protegido por header)
-app.post('/api/transfer-promotions/update', async (req, res) => {
-    const secret = (req.headers['x-sync-secret'] ?? '');
-    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
-        return res.status(401).json({ error: 'Não autorizado' });
-    }
+app.post('/api/transfer-promotions/update', requireSyncSecret, async (req, res) => {
     await refreshPromotionsCache();
     res.json({ message: 'Cache de promoções atualizado', count: promotionsCache?.length ?? 0 });
 });
 
 // POST /api/admin/sync-promotions — força seed + re-fetch (protegido por x-sync-secret)
-app.post('/api/admin/sync-promotions', async (req, res) => {
-    const secret = (req.headers['x-sync-secret'] ?? '');
-    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
-        return res.status(401).json({ error: 'Não autorizado' });
-    }
+app.post('/api/admin/sync-promotions', requireSyncSecret, async (req, res) => {
     const force = req.query.force === 'true' || req.body?.force === true;
     if (force && supabase) {
         // Limpa tabela e re-seed com dados atuais
@@ -1507,34 +1528,50 @@ async function scrapeTransferSource(source) {
             });
             if (!res.ok) return null;
             const text = await res.text();
-            // Extrai só entradas recentes (últimos 30 dias) sobre transferência/bônus
-            const keywords = ['bônus', 'bonus', 'transferência', 'transfer', 'smiles', 'tudoazul', 'latam', 'livelo', 'inter', 'clube'];
-            const lines = text.split('\n');
-            const relevant = lines.filter(l => keywords.some(k => l.toLowerCase().includes(k)));
-            return { id: source.id, label: source.label, content: relevant.slice(0, 100).join('\n') };
+
+            // Desencapsula CDATA, decodifica entidades e remove tags XML
+            const stripped = text
+                .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+                .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"').replace(/&#\d+;/g, '')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/\s+/g, ' ');
+
+            // Filtra sentenças com palavras-chave relevantes
+            const keywords = ['bônus', 'bonus', 'transferência', 'transfer', 'smiles', 'tudoazul', 'latam', 'livelo', 'inter', 'clube', 'promo'];
+            const sentences = stripped.split(/(?<=[.!?])\s+/);
+            const relevant = sentences.filter(s => keywords.some(k => s.toLowerCase().includes(k)));
+            return { id: source.id, label: source.label, content: relevant.slice(0, 60).join(' ') };
         }
 
-        // Páginas com JS (programas/bancos): usa Playwright
+        // Páginas com JS (programas/bancos): reutiliza browser compartilhado via contexto isolado
         await ensureChromium();
-        const browser = await chromiumExtra.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-        const page = await browser.newPage();
-        await page.setExtraHTTPHeaders({ 'Accept-Language': 'pt-BR,pt;q=0.9' });
-        await page.goto(source.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await page.waitForTimeout(3000);
-
-        // Tenta aceitar cookies se aparecer
-        try {
-            await page.click('button:has-text("Aceitar"), button:has-text("Accept"), button:has-text("Concordo")', { timeout: 3000 });
-        } catch (_) {}
-
-        // Extrai texto relevante (sem scripts/estilos)
-        const content = await page.evaluate(() => {
-            const remove = document.querySelectorAll('script, style, nav, footer, header');
-            remove.forEach(el => el.remove());
-            return document.body?.innerText?.slice(0, 3000) ?? '';
+        const browser = await getBrowser();
+        const context = await browser.newContext({
+            locale: 'pt-BR',
+            extraHTTPHeaders: { 'Accept-Language': 'pt-BR,pt;q=0.9' },
         });
-        await browser.close();
-        return { id: source.id, label: source.label, content };
+        const page = await context.newPage();
+        try {
+            await page.goto(source.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await new Promise(r => setTimeout(r, randInt(2500, 3500)));
+
+            // Tenta aceitar cookies se aparecer
+            try {
+                await page.click('button:has-text("Aceitar"), button:has-text("Accept"), button:has-text("Concordo")', { timeout: 3000 });
+                await new Promise(r => setTimeout(r, 800));
+            } catch (_) {}
+
+            // Extrai texto relevante (sem scripts/estilos)
+            const content = await page.evaluate(() => {
+                const remove = document.querySelectorAll('script, style, nav, footer, header');
+                remove.forEach(el => el.remove());
+                return document.body?.innerText?.slice(0, 3000) ?? '';
+            });
+            return { id: source.id, label: source.label, content };
+        } finally {
+            await context.close().catch(() => {});
+        }
     } catch (err) {
         console.warn(`[TransferSync] Falha ao scraper ${source.id}:`, err.message);
         return null;
@@ -1610,6 +1647,7 @@ Retorne SOMENTE um JSON válido no formato:
         body: JSON.stringify({
             model: 'claude-haiku-4-5-20251001',
             max_tokens: 4096,
+            system: 'Responda SOMENTE com JSON válido. Sem markdown, sem blocos de código, sem texto antes ou depois do JSON.',
             messages: [{ role: 'user', content: prompt }],
         }),
         signal: AbortSignal.timeout(60000),
@@ -1667,11 +1705,39 @@ async function syncTransferData() {
         console.log(`[TransferSync] Claude: changes_detected=${analysis.changes_detected}`);
         console.log(`[TransferSync] Resumo: ${analysis.summary}`);
 
-        // 4. Se há mudanças, atualiza Supabase
+        // 4. Se há mudanças, atualiza Supabase; insere novas promoções detectadas
         if (analysis.changes_detected && Array.isArray(analysis.promotions)) {
             for (const promo of analysis.promotions) {
-                const existing = current?.find(r => r.card_id === promo.card_id && r.program === promo.program);
-                if (!existing) continue;
+                const cardId = promo.card_id ?? promo.cardId;
+                const existing = current?.find(r => r.card_id === cardId && r.program === promo.program);
+
+                if (!existing) {
+                    // Nova promoção detectada pelo Claude — insere no banco
+                    if (!cardId || !promo.program) continue; // skip malformed
+                    const newRow = {
+                        card_id: cardId,
+                        program: promo.program,
+                        bonus_percent: promo.bonus_percent ?? promo.bonusPercent ?? 0,
+                        club_bonus_percent: promo.club_bonus_percent ?? promo.clubBonusPercent ?? 0,
+                        club_tier_bonuses: promo.club_tier_bonuses ?? promo.clubTierBonuses ?? {},
+                        valid_until: promo.valid_until ?? promo.validUntil ?? '',
+                        description: promo.description ?? '',
+                        is_periodic: promo.is_periodic ?? promo.isPeriodic ?? true,
+                        last_confirmed: promo.last_confirmed ?? promo.lastConfirmed ?? new Date().toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
+                        rules: promo.rules ?? [],
+                        club_required: promo.club_required ?? promo.clubRequired ?? null,
+                        active: true,
+                    };
+                    const { error: insertErr } = await supabase.from('transfer_promotions').insert(newRow);
+                    if (insertErr) {
+                        console.error(`[TransferSync] Erro ao inserir ${cardId}→${promo.program}:`, insertErr.message);
+                    } else {
+                        updatedCount++;
+                        console.log(`[TransferSync] Nova promoção inserida: ${cardId}→${promo.program}`);
+                    }
+                    continue;
+                }
+
                 const updates = {
                     bonus_percent: promo.bonus_percent ?? promo.bonusPercent ?? existing.bonus_percent,
                     club_bonus_percent: promo.club_bonus_percent ?? promo.clubBonusPercent ?? existing.club_bonus_percent,
@@ -1686,7 +1752,7 @@ async function syncTransferData() {
                 const { error: updateErr } = await supabase
                     .from('transfer_promotions').update(updates).eq('id', existing.id);
                 if (updateErr) {
-                    console.error(`[TransferSync] Erro ao atualizar ${promo.card_id}→${promo.program}:`, updateErr.message);
+                    console.error(`[TransferSync] Erro ao atualizar ${cardId}→${promo.program}:`, updateErr.message);
                 } else {
                     updatedCount++;
                 }
@@ -1732,22 +1798,14 @@ async function syncTransferData() {
 }
 
 // POST /api/admin/sync-transfer-data — dispara sync completo (chamado pelo GitHub Actions)
-app.post('/api/admin/sync-transfer-data', async (req, res) => {
-    const secret = (req.headers['x-sync-secret'] ?? '');
-    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
-        return res.status(401).json({ error: 'Não autorizado' });
-    }
+app.post('/api/admin/sync-transfer-data', requireSyncSecret, async (req, res) => {
     // Roda em background para não segurar a resposta HTTP
     res.json({ message: 'Sync iniciado em background' });
     syncTransferData().catch(err => console.error('[TransferSync] Erro:', err.message));
 });
 
 // POST /api/admin/sync-transfer-data-sync — versão síncrona para debug (aguarda resultado)
-app.post('/api/admin/sync-transfer-data-sync', async (req, res) => {
-    const secret = (req.headers['x-sync-secret'] ?? '');
-    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
-        return res.status(401).json({ error: 'Não autorizado' });
-    }
+app.post('/api/admin/sync-transfer-data-sync', requireSyncSecret, async (req, res) => {
     try {
         const result = await syncTransferData();
         res.json({ ok: true, result });
@@ -1806,11 +1864,7 @@ app.get('/api/admin/transfer-sync-diag', async (_req, res) => {
 });
 
 // GET /api/admin/transfer-sync-log — últimas execuções do sync
-app.get('/api/admin/transfer-sync-log', async (req, res) => {
-    const secret = (req.headers['x-sync-secret'] ?? '');
-    if (secret !== process.env.SYNC_SECRET && process.env.NODE_ENV === 'production') {
-        return res.status(401).json({ error: 'Não autorizado' });
-    }
+app.get('/api/admin/transfer-sync-log', requireSyncSecret, async (req, res) => {
     if (!supabase) return res.json({ logs: [] });
     const { data } = await supabase
         .from('transfer_sync_log')
@@ -1829,13 +1883,8 @@ if (process.env.VERCEL !== '1') {
         syncAwardPrices().catch(console.error);
     });
 
-    // Todo dia ao meio-dia BRT (15:00 UTC) — refresh de promoções de transferência
-    cron.schedule('0 15 * * *', () => {
-        console.log('[Cron] Refreshing cache de promoções de transferência...');
-        refreshPromotionsCache().catch(console.error);
-    });
-
     // Todo dia às 11h BRT (14:00 UTC) — sync completo de dados de transferência via Claude
+    // (o próprio syncTransferData chama refreshPromotionsCache ao final — cron de refresh separado removido)
     cron.schedule('0 14 * * *', () => {
         console.log('[Cron] Iniciando sync automático de dados de transferência...');
         syncTransferData().catch(err => console.error('[Cron:TransferSync] Erro:', err.message));

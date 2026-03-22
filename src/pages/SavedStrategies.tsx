@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plane, Search, Zap, TrendingDown, Trash2, Tag, Loader2, MessageSquare, Plus, ChevronRight } from 'lucide-react'
+import { Plane, Search, Zap, TrendingDown, TrendingUp, Trash2, Tag, Loader2, MessageSquare, Plus, ChevronRight, AlertTriangle, CheckCircle } from 'lucide-react'
 import { Header } from '@/components/Header'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -99,7 +99,7 @@ export default function SavedStrategies() {
                                     </div>
                                     <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-dark)' }}>Nenhuma estratégia salva</h3>
                                     <p style={{ color: 'var(--text-muted)', maxWidth: '300px', margin: '0 auto', fontSize: '14px', lineHeight: 1.6 }}>
-                                        Você ainda não salvou nenhuma rota. Realize uma busca e clique em "Ver Detalhes" para gerar e salvar uma estratégia.
+                                        Nenhuma estratégia gerada ainda. Busque um voo, selecione um resultado Seats.aero e clique em "Gerar Estratégia" — ela é salva automaticamente.
                                     </p>
                                     <button
                                         onClick={() => navigate('/home')}
@@ -115,12 +115,35 @@ export default function SavedStrategies() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '40px' }}>
                                 <AnimatePresence>
                                     {strategies.map((s, i) => {
-                                        const tags: string[] = s.tags ?? []
+                                        const allTags: string[] = s.tags ?? []
                                         const result = (s as any).structured_result
-                                        const programa = result?.programa_recomendado ?? tags[0] ?? '—'
+
+                                        // Separate the seatsKey tag for route display; filter internal tags from chips
+                                        const seatsTag = allTags.find(t => t?.startsWith('seats:'))
+                                        const visibleTags = allTags.filter(t => t && !t.startsWith('seats:') && t !== 'llm')
+
+                                        // Parse seatsKey → route info: seats:GRU:MIA:Smiles:Economy:70000:2026-04-15
+                                        const seatsInfo = seatsTag ? (() => {
+                                            const parts = seatsTag.replace('seats:', '').split(':')
+                                            if (parts.length < 5) return null
+                                            return {
+                                                from: parts[0], to: parts[1],
+                                                program: parts[2].replace(/_/g, ' '),
+                                                cabin: parts[3],
+                                                miles: parseInt(parts[4]) || 0,
+                                                date: parts[5] ?? null,
+                                            }
+                                        })() : null
+
+                                        const programa = result?.programa_recomendado ?? visibleTags[0] ?? '—'
                                         const economia = s.economia_pct ?? result?.economia_pct ?? null
+                                        const economiaBrl = result?.economia_brl ?? null
                                         const precoCash = s.preco_cash ?? null
                                         const precoEstrategia = s.preco_estrategia ?? result?.taxas_estimadas_brl ?? null
+                                        const valeAPena: boolean | undefined = result?.vale_a_pena
+                                        const cpm: number | undefined = result?.cpm_resgate
+                                        const cpmAvaliacao: string | undefined = result?.cpm_avaliacao
+                                        const milesNeeded: number | undefined = result?.milhas_necessarias
 
                                         return (
                                             <motion.div
@@ -129,41 +152,81 @@ export default function SavedStrategies() {
                                                 animate={{ opacity: 1, y: 0 }}
                                                 exit={{ opacity: 0, y: -8 }}
                                                 transition={{ delay: i * 0.05 }}
-                                                style={{ background: 'var(--bg-white)', border: '1px solid var(--border-light)', borderRadius: '16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(14,42,85,0.04)' }}
+                                                style={{ background: 'var(--bg-white)', border: `1px solid ${valeAPena === false ? '#FED7AA' : 'var(--border-light)'}`, borderRadius: '16px', padding: '20px 24px', boxShadow: '0 4px 16px rgba(14,42,85,0.04)' }}
                                             >
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
                                                     <div style={{ flex: 1, minWidth: 0 }}>
+                                                        {/* Header row: program badge + vale_a_pena + CPM */}
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #EEF4FF, #E8F0FF)', border: '1px solid #C7D9F8', borderRadius: '8px', padding: '4px 10px' }}>
-                                                                <Zap size={12} color="#2A60C2" />
-                                                                <span style={{ fontSize: '12px', fontWeight: 700, color: '#2A60C2' }}>{programa}</span>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: valeAPena === false ? '#FEF3C7' : 'linear-gradient(135deg, #EEF4FF, #E8F0FF)', border: `1px solid ${valeAPena === false ? '#FDE68A' : '#C7D9F8'}`, borderRadius: '8px', padding: '4px 10px' }}>
+                                                                <Zap size={12} color={valeAPena === false ? '#D97706' : '#2A60C2'} />
+                                                                <span style={{ fontSize: '12px', fontWeight: 700, color: valeAPena === false ? '#92400E' : '#2A60C2' }}>{programa}</span>
                                                             </div>
-                                                            {tags.slice(1).map(tag => (
+                                                            {valeAPena === false ? (
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 6, padding: '3px 8px' }}>
+                                                                    <AlertTriangle size={11} color="#EA580C" />
+                                                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#C2410C' }}>Dinheiro mais vantajoso</span>
+                                                                </div>
+                                                            ) : valeAPena === true ? (
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 6, padding: '3px 8px' }}>
+                                                                    <CheckCircle size={11} color="#16A34A" />
+                                                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#15803D' }}>Vale a pena</span>
+                                                                </div>
+                                                            ) : null}
+                                                            {cpm !== undefined && cpm > 0 && (
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: cpm >= 2.5 ? '#DCFCE7' : cpm >= 1.8 ? '#DBEAFE' : '#FEF9C3', border: `1px solid ${cpm >= 2.5 ? '#86EFAC' : cpm >= 1.8 ? '#93C5FD' : '#FDE047'}`, borderRadius: 6, padding: '3px 8px' }}>
+                                                                    <TrendingUp size={11} color={cpm >= 2.5 ? '#16A34A' : cpm >= 1.8 ? '#2563EB' : '#CA8A04'} />
+                                                                    <span style={{ fontSize: '11px', fontWeight: 700, color: cpm >= 2.5 ? '#15803D' : cpm >= 1.8 ? '#1D4ED8' : '#A16207' }}>
+                                                                        {cpm.toFixed(2)} c/pt{cpmAvaliacao ? ` — ${cpmAvaliacao}` : ''}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                            {/* Other visible tags (iata code etc) — max 2 */}
+                                                            {visibleTags.slice(1, 3).map(tag => (
                                                                 <span key={tag} style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', background: '#F1F5F9', padding: '3px 8px', borderRadius: '6px' }}>
                                                                     {tag}
                                                                 </span>
                                                             ))}
                                                         </div>
+
+                                                        {/* Route from seatsKey */}
+                                                        {seatsInfo && (
+                                                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-dark)', marginBottom: 8 }}>
+                                                                {seatsInfo.from} → {seatsInfo.to}
+                                                                <span style={{ fontWeight: 500, color: '#64748B', marginLeft: 8 }}>{seatsInfo.program} · {seatsInfo.cabin}</span>
+                                                                {seatsInfo.date && <span style={{ fontWeight: 500, color: '#94A3B8', marginLeft: 8 }}>{seatsInfo.date}</span>}
+                                                                {seatsInfo.miles > 0 && <span style={{ fontWeight: 700, color: '#16A34A', marginLeft: 8 }}>{seatsInfo.miles.toLocaleString('pt-BR')} pts</span>}
+                                                            </div>
+                                                        )}
+
                                                         {s.strategy_text && (
                                                             <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '14px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                                                                 {s.strategy_text.split('\n\n')[0]}
                                                             </p>
                                                         )}
+
                                                         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                                                            {economia !== null && (
+                                                            {economia !== null && economia > 0 && (
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                                     <TrendingDown size={13} color="#16A34A" />
-                                                                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#16A34A' }}>{economia}% de economia</span>
+                                                                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#16A34A' }}>
+                                                                        {economia}% economia{economiaBrl ? ` (~R$ ${economiaBrl.toLocaleString('pt-BR')})` : ''}
+                                                                    </span>
                                                                 </div>
                                                             )}
                                                             {precoCash !== null && (
                                                                 <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                                                                    Preço cash: <strong style={{ color: 'var(--text-dark)' }}>R$ {precoCash.toLocaleString('pt-BR')}</strong>
+                                                                    Cash: <strong style={{ color: 'var(--text-dark)' }}>R$ {precoCash.toLocaleString('pt-BR')}</strong>
                                                                 </span>
                                                             )}
-                                                            {precoEstrategia !== null && (
+                                                            {precoEstrategia !== null && valeAPena !== false && (
                                                                 <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                                                                    Com milhas: <strong style={{ color: '#16A34A' }}>R$ {precoEstrategia.toLocaleString('pt-BR')}</strong>
+                                                                    Taxas: <strong style={{ color: '#16A34A' }}>R$ {precoEstrategia.toLocaleString('pt-BR')}</strong>
+                                                                </span>
+                                                            )}
+                                                            {milesNeeded !== undefined && milesNeeded > 0 && (
+                                                                <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                                                                    Milhas: <strong style={{ color: '#0E2A55' }}>{milesNeeded.toLocaleString('pt-BR')} pts</strong>
                                                                 </span>
                                                             )}
                                                         </div>

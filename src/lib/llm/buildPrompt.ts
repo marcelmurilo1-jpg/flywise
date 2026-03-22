@@ -14,13 +14,20 @@ import { promoContextToString } from './buildPromoContext'
 import { userContextToString } from './buildUserContext'
 
 export interface StrategyResult {
+    vale_a_pena: boolean               // false = dinheiro é mais vantajoso
+    cpm_resgate: number                // centavos por milha, ex: 2.50
+    cpm_avaliacao: string              // "EXCELENTE" | "MUITO BOM" | "BOM" | "RAZOÁVEL" | "RUIM"
     programa_recomendado: string       // "Smiles"
     motivo: string                     // max 2 sentences
     steps: string[]                    // 3-4 actionable steps (title only)
     step_details: string[]             // one paragraph per step explaining in detail for beginners
-    milhas_necessarias: number         // ex: 120000
+    milhas_necessarias: number         // ex: 70000
+    milhas_em_carteira?: number        // saldo direto do usuário no programa alvo
+    milhas_faltantes?: number          // deficit after direct balance + transfers
+    como_completar_faltantes?: string  // how to get the missing miles
     taxas_estimadas_brl: number        // ex: 280
     economia_pct: number               // ex: 68
+    economia_brl?: number              // cashPrice - taxas_estimadas_brl
     promocao_ativa?: string            // "Bônus 40% Smiles via Nubank (expira 15/03)"
     alternativa?: string               // fallback program if main is not available
     aviso?: string                     // any important disclaimer

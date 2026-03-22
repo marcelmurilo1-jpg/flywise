@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Zap, TrendingDown, ArrowRight, Save, CheckCircle, Loader2, AlertTriangle, Tag, Sparkles, Lock, ChevronDown, ChevronUp } from 'lucide-react'
+import { X, Zap, TrendingDown, ArrowRight, Loader2, AlertTriangle, Tag, Sparkles, Lock, ChevronDown, ChevronUp, TrendingUp, Coins } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import type { ResultadoVoo } from '@/lib/supabase'
@@ -33,9 +33,6 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
     const { user } = useAuth()
     const navigate = useNavigate()
     const { canGenerateStrategy, strategiesUsed, strategyLimit, plan, refresh: refreshPlan } = usePlan()
-    const [saved, setSaved] = useState(false)
-    const [saving, setSaving] = useState(false)
-    const [msg, setMsg] = useState('')
     const [loading, setLoading] = useState(false)
     const [strategy, setStrategy] = useState<StrategyResult | null>(null)
     const [llmError, setLlmError] = useState<string | null>(null)
@@ -66,6 +63,7 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                     userId: user?.id,
                     cashPrice: cashPrice || undefined,
                     seatsContext: seatsContext || undefined,
+                    buscaId: buscaId || undefined,
                 },
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             })
@@ -89,28 +87,6 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
     const economyPct = strategy?.economia_pct ?? 0
     const milesNeeded = strategy?.milhas_necessarias ?? 0
     const taxesBrl = strategy?.taxas_estimadas_brl ?? 0
-    const strategyPrice = taxesBrl
-    void strategyPrice // referenced in save flow
-
-    const handleSave = async () => {
-        if (!user || saved || !strategy) return
-        setSaving(true)
-        try {
-            const { error } = await supabase.from('strategies').insert({
-                busca_id: buscaId, user_id: user.id,
-                strategy_text: strategy.steps.join('\n\n'),
-                tags: [strategy.programa_recomendado, strategy.alternativa].filter(Boolean),
-                economia_pct: economyPct,
-                preco_cash: price,
-                preco_estrategia: strategyPrice,
-                structured_result: strategy,
-            })
-            if (error) throw error
-            setSaved(true); setMsg('✓ Estratégia salva!')
-            setTimeout(() => setMsg(''), 3000)
-        } catch { setMsg('Erro ao salvar.') }
-        finally { setSaving(false) }
-    }
 
     return (
         <AnimatePresence>
@@ -282,29 +258,70 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                             {/* ── Strategy result ───────────────────────────────────── */}
                             {strategy && (
                                 <>
+                                    {/* vale_a_pena: false — dinheiro é melhor */}
+                                    {strategy.vale_a_pena === false && (
+                                        <div style={{ padding: '14px 16px', background: 'linear-gradient(135deg, #FFF7ED, #FFEDD5)', border: '2px solid #FED7AA', borderRadius: 14 }}>
+                                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                                                <AlertTriangle size={17} color="#EA580C" />
+                                                <span style={{ fontSize: 14, fontWeight: 800, color: '#C2410C' }}>Dinheiro é mais vantajoso</span>
+                                            </div>
+                                            <p style={{ fontSize: 13, color: '#7C2D12', lineHeight: 1.6, margin: 0 }}>{strategy.motivo}</p>
+                                            {strategy.cpm_resgate > 0 && (
+                                                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, background: '#FEF3C7', borderRadius: 8, padding: '6px 10px', width: 'fit-content' }}>
+                                                    <TrendingDown size={13} color="#D97706" />
+                                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>CPM: {strategy.cpm_resgate.toFixed(2)} c/pt — {strategy.cpm_avaliacao}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* CPM badge (only when vale_a_pena: true) */}
+                                    {strategy.vale_a_pena !== false && strategy.cpm_resgate > 0 && (
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <div style={{
+                                                display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
+                                                background: strategy.cpm_resgate >= 2.5 ? '#DCFCE7' : strategy.cpm_resgate >= 1.8 ? '#DBEAFE' : '#FEF9C3',
+                                                border: `1px solid ${strategy.cpm_resgate >= 2.5 ? '#86EFAC' : strategy.cpm_resgate >= 1.8 ? '#93C5FD' : '#FDE047'}`,
+                                                borderRadius: 20,
+                                            }}>
+                                                <TrendingUp size={13} color={strategy.cpm_resgate >= 2.5 ? '#16A34A' : strategy.cpm_resgate >= 1.8 ? '#2563EB' : '#CA8A04'} />
+                                                <span style={{ fontSize: 12, fontWeight: 700, color: strategy.cpm_resgate >= 2.5 ? '#15803D' : strategy.cpm_resgate >= 1.8 ? '#1D4ED8' : '#A16207' }}>
+                                                    CPM {strategy.cpm_resgate.toFixed(2)} c/pt — {strategy.cpm_avaliacao}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Recommendation badge */}
-                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '12px 16px', background: 'linear-gradient(135deg, #EEF4FF, #E8F0FF)', border: '1px solid #C7D9F8', borderRadius: 12 }}>
-                                        <Zap size={16} color="#2A60C2" />
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '12px 16px', background: strategy.vale_a_pena === false ? 'var(--bg-subtle)' : 'linear-gradient(135deg, #EEF4FF, #E8F0FF)', border: `1px solid ${strategy.vale_a_pena === false ? 'var(--border-light)' : '#C7D9F8'}`, borderRadius: 12 }}>
+                                        <Zap size={16} color={strategy.vale_a_pena === false ? 'var(--text-muted)' : '#2A60C2'} />
                                         <div>
-                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#2A60C2', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Programa recomendado</div>
-                                            <div style={{ fontSize: 17, fontWeight: 900, color: '#0E2A55' }}>{strategy.programa_recomendado}</div>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: strategy.vale_a_pena === false ? 'var(--text-muted)' : '#2A60C2', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                                                {strategy.vale_a_pena === false ? 'Se ainda quiser usar milhas' : 'Programa recomendado'}
+                                            </div>
+                                            <div style={{ fontSize: 17, fontWeight: 900, color: 'var(--text-primary)' }}>{strategy.programa_recomendado}</div>
                                             {strategy.alternativa && (
                                                 <div style={{ fontSize: 11, color: '#64748B' }}>Alternativa: {strategy.alternativa}</div>
                                             )}
                                         </div>
                                     </div>
 
-                                    {/* Motivo */}
-                                    <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>
-                                        {strategy.motivo}
-                                    </p>
+                                    {/* Motivo (only when vale_a_pena: true — false case already shown above) */}
+                                    {strategy.vale_a_pena !== false && (
+                                        <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>
+                                            {strategy.motivo}
+                                        </p>
+                                    )}
 
                                     {/* Savings comparison */}
-                                    {price > 0 && (
+                                    {price > 0 && strategy.vale_a_pena !== false && (
                                         <div style={{ background: 'linear-gradient(135deg, #eff6ff, #f0fdf4)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: '14px', padding: '18px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px' }}>
                                                 <TrendingDown size={15} color="var(--green)" />
-                                                <span style={{ color: 'var(--green)', fontWeight: 700, fontSize: '13px' }}>Economia estimada: {economyPct}%</span>
+                                                <span style={{ color: 'var(--green)', fontWeight: 700, fontSize: '13px' }}>
+                                                    Economia estimada: {economyPct}%
+                                                    {strategy.economia_brl ? ` (~R$ ${strategy.economia_brl.toLocaleString('pt-BR')})` : ''}
+                                                </span>
                                             </div>
                                             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '10px' }}>
                                                 <div>
@@ -332,6 +349,31 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                                             </div>
                                         ))}
                                     </div>
+
+                                    {/* Coverage: milhas em carteira + faltantes + como completar */}
+                                    {(strategy.milhas_em_carteira !== undefined || strategy.milhas_faltantes !== undefined) && (
+                                        <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-faint)', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Sua cobertura</div>
+                                            <div style={{ display: 'flex', gap: 8 }}>
+                                                <div style={{ flex: 1, background: '#fff', borderRadius: 8, padding: '10px', textAlign: 'center', border: '1px solid var(--border-faint)' }}>
+                                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Em carteira</div>
+                                                    <div style={{ fontSize: 15, fontWeight: 800, color: '#16A34A' }}>{(strategy.milhas_em_carteira ?? 0).toLocaleString('pt-BR')} pts</div>
+                                                </div>
+                                                <div style={{ flex: 1, background: '#fff', borderRadius: 8, padding: '10px', textAlign: 'center', border: '1px solid var(--border-faint)' }}>
+                                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Faltam</div>
+                                                    <div style={{ fontSize: 15, fontWeight: 800, color: (strategy.milhas_faltantes ?? 0) > 0 ? '#DC2626' : '#16A34A' }}>
+                                                        {(strategy.milhas_faltantes ?? 0) > 0 ? `${strategy.milhas_faltantes!.toLocaleString('pt-BR')} pts` : '✓ Coberto'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {strategy.como_completar_faltantes && (
+                                                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                                    <Coins size={14} color="#2A60C2" style={{ flexShrink: 0, marginTop: 2 }} />
+                                                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{strategy.como_completar_faltantes}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {/* Promo badge */}
                                     {strategy.promocao_ativa && (
@@ -420,26 +462,16 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                                         </div>
                                     )}
 
-                                    {/* Regenerate + Save */}
-                                    <div style={{ display: 'flex', gap: 8 }}>
+                                    {/* Regenerate */}
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                         <button
                                             onClick={generateStrategy}
                                             style={{ flex: 1, background: 'none', border: '1px solid var(--border-light)', borderRadius: 10, padding: '10px', fontFamily: 'inherit', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                                         >
-                                            <Zap size={12} /> Regerar
-                                        </button>
-                                        <button
-                                            onClick={handleSave}
-                                            disabled={saved || saving}
-                                            className="btn btn-primary"
-                                            style={{ flex: 2, justifyContent: 'center', padding: '10px', opacity: saved || saving ? 0.7 : 1 }}
-                                        >
-                                            {saving ? <><Loader2 size={15} className="spin" /> Salvando...</> : saved ? <><CheckCircle size={15} /> Salva!</> : <><Save size={15} /> Salvar estratégia</>}
+                                            <Zap size={12} /> Regerar estratégia
                                         </button>
                                     </div>
-                                    {msg && (
-                                        <div style={{ padding: '9px 13px', borderRadius: '8px', background: saved ? 'var(--green-bg)' : 'var(--red-bg)', color: saved ? 'var(--green)' : 'var(--red)', fontSize: '13px', fontWeight: 600 }}>{msg}</div>
-                                    )}
+                                    <p style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', margin: 0 }}>✓ Salva automaticamente no seu histórico</p>
                                 </>
                             )}
                         </div>
