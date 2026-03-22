@@ -540,9 +540,22 @@ export default function Roteiro() {
                 @media (max-width: 768px) {
                     .roteiro-main { padding: 20px 16px 100px !important; }
                     .roteiro-result-grid { grid-template-columns: 1fr !important; }
-                    .roteiro-form-row { grid-template-columns: 1fr !important; }
+                    .roteiro-view-grid  { grid-template-columns: 1fr !important; }
+                    .roteiro-form-row   { grid-template-columns: 1fr !important; }
                     .roteiro-budget-grid { grid-template-columns: 1fr 1fr !important; }
-                    .roteiro-actions { flex-direction: column !important; }
+                    .roteiro-actions { flex-wrap: wrap !important; }
+                    .roteiro-actions .btn { flex: 1 1 calc(50% - 6px) !important; min-width: 130px !important; font-size: 14px !important; padding: 12px 10px !important; }
+                    .roteiro-header-card { padding: 20px 18px !important; }
+                    .roteiro-day-header  { padding: 14px 16px !important; }
+                    .roteiro-period-row  { padding: 14px 16px !important; }
+                }
+                @media (max-width: 480px) {
+                    .roteiro-main { padding: 16px 12px 90px !important; }
+                    .roteiro-actions .btn { flex: 1 1 100% !important; }
+                    .roteiro-header-card { padding: 16px 14px !important; border-radius: 18px !important; }
+                    .roteiro-day-header  { padding: 12px 14px !important; }
+                    .roteiro-period-row  { padding: 12px 14px !important; }
+                    .roteiro-budget-grid { grid-template-columns: 1fr !important; }
                 }
             `}</style>
             <Header variant="app" />
@@ -825,7 +838,7 @@ export default function Roteiro() {
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
                                     {/* Header card */}
-                                    <div style={{ background: 'linear-gradient(135deg, #0E2A55 0%, #2A60C2 100%)', borderRadius: '24px', padding: '28px 32px', color: '#fff' }}>
+                                    <div className="roteiro-header-card" style={{ background: 'linear-gradient(135deg, #0E2A55 0%, #2A60C2 100%)', borderRadius: '24px', padding: '28px 32px', color: '#fff' }}>
                                         <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)', marginBottom: '8px' }}>
                                             Roteiro Personalizado
                                         </p>
@@ -1122,9 +1135,9 @@ export default function Roteiro() {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '28px', alignItems: 'flex-start' }}>
+                            <div className="roteiro-view-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '28px', alignItems: 'flex-start' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                    <div style={{ background: 'linear-gradient(135deg, #0E2A55 0%, #2A60C2 100%)', borderRadius: '24px', padding: '28px 32px', color: '#fff' }}>
+                                    <div className="roteiro-header-card" style={{ background: 'linear-gradient(135deg, #0E2A55 0%, #2A60C2 100%)', borderRadius: '24px', padding: '28px 32px', color: '#fff' }}>
                                         <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)', marginBottom: '8px' }}>Viagem Salva</p>
                                         <h2 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 12px', lineHeight: 1.3 }}>{displayViewItinerary.titulo}</h2>
                                         <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', margin: '0 0 20px', lineHeight: 1.6 }}>{displayViewItinerary.resumo}</p>
@@ -1228,6 +1241,7 @@ function EditableDayCard({ day, index, isEditing, collapsed, onToggle, onExpand,
             {/* Day header */}
             <div
                 onClick={toggleCollapse}
+                className="roteiro-day-header"
                 style={{
                     display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 24px',
                     borderBottom: collapsed ? 'none' : '1px solid var(--border-light)',
@@ -1287,7 +1301,7 @@ function EditableDayCard({ day, index, isEditing, collapsed, onToggle, onExpand,
                     const period = day[key]
                     const atividades = normalizePeriod(period)
                     return (
-                        <div key={key} style={{ padding: '16px 24px', borderBottom: key !== 'noite' ? '1px solid var(--border-light)' : 'none' }}>
+                        <div key={key} className="roteiro-period-row" style={{ padding: '16px 24px', borderBottom: key !== 'noite' ? '1px solid var(--border-light)' : 'none' }}>
                             {/* Period label */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                                 <div style={{ width: '26px', height: '26px', borderRadius: '8px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
