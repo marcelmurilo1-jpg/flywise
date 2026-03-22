@@ -136,6 +136,18 @@ export default function Resultados() {
                 const seatsDate = date ?? buscaData?.data_ida
                 const seatsRet  = ret  ?? buscaData?.data_volta ?? undefined
                 if (seatsOrig && seatsDest && seatsDate) {
+                    // Restore from sessionStorage immediately so reload shows results right away
+                    const sessionKey = `seats_${buscaId}`
+                    try {
+                        const cached_seats = sessionStorage.getItem(sessionKey)
+                        if (cached_seats) {
+                            const parsed = JSON.parse(cached_seats)
+                            if (Array.isArray(parsed) && parsed.length > 0) {
+                                setSeatsFlights(parsed)
+                            }
+                        }
+                    } catch { /* ignore parse errors */ }
+
                     setSeatsLoading(true)
                     fetch(`${import.meta.env.VITE_API_BASE_URL ?? ''}/api/search-flights`, {
                         method: 'POST',
@@ -148,7 +160,12 @@ export default function Resultados() {
                         })
                     })
                         .then(r => r.json())
-                        .then(data => { if (data.voos) setSeatsFlights(data.voos) })
+                        .then(data => {
+                            if (data.voos && Array.isArray(data.voos) && data.voos.length > 0) {
+                                setSeatsFlights(data.voos)
+                                try { sessionStorage.setItem(sessionKey, JSON.stringify(data.voos)) } catch { /* quota exceeded */ }
+                            }
+                        })
                         .catch(err => console.error('[Resultados] Erro Seats.aero:', err))
                         .finally(() => setSeatsLoading(false))
                 }
