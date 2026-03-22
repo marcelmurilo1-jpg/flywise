@@ -3,7 +3,7 @@ import {
     Loader2, MapPin, RefreshCw, Lightbulb, Sunrise, Sun, Moon, Sparkles,
     BookmarkPlus, Bookmark, ChevronLeft, ChevronDown, CalendarDays, Users,
     Search, Pencil, Trash2, Plus, Check, UtensilsCrossed, Landmark, TreePine, ShoppingBag, Clock,
-    Maximize2, X,
+    Maximize2, X, FileDown,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -104,6 +104,25 @@ const EXTRA_TABS: { key: ExtraCategory; label: string; Icon: React.ElementType }
 
 
 const BLANK_ACTIVITY: Activity = { horario: '', atividade: '', local: '', dica: '' }
+
+// Normaliza um período para sempre retornar um array de atividades.
+// Suporta tanto o formato novo ({ atividades: [...] }) quanto o formato antigo (estrutura plana).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizePeriod(period: any): Activity[] {
+    if (!period) return []
+    if (Array.isArray(period.atividades)) return period.atividades
+    // Formato antigo: campos diretos no período
+    const acts: Activity[] = []
+    if (period.atividade || period.local) {
+        acts.push({ horario: period.horario ?? '', atividade: period.atividade ?? '', local: period.local ?? '', dica: period.dica ?? '', lat: period.lat, lng: period.lng })
+    }
+    if (Array.isArray(period.extras_atividades)) {
+        for (const e of period.extras_atividades) {
+            acts.push({ horario: e.horario ?? '', atividade: e.atividade ?? '', local: e.local ?? '', dica: e.dica ?? '' })
+        }
+    }
+    return acts
+}
 const BLANK_DAY = (dia: number): ItineraryDay => ({
     dia,
     tema: '',
@@ -133,11 +152,17 @@ export default function Roteiro() {
     const [currentRowId, setCurrentRowId] = useState<number | null>(null)
     const [isSaved, setIsSaved] = useState(false)
     const [savingTrip, setSavingTrip] = useState(false)
+    const [exportingPDF, setExportingPDF] = useState(false)
 
-    // Edit state
+    // Edit state — result step
     const [isEditing, setIsEditing] = useState(false)
     const [editableItinerary, setEditableItinerary] = useState<ItineraryResult | null>(null)
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+
+    // Edit state — view step (saved trips)
+    const [isViewEditing, setIsViewEditing] = useState(false)
+    const [editableViewItinerary, setEditableViewItinerary] = useState<ItineraryResult | null>(null)
+    const [viewSaveStatus, setViewSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
 
     // Extras sidebar
     const [activeTab, setActiveTab] = useState<ExtraCategory>('gastronomia')
@@ -264,17 +289,76 @@ export default function Roteiro() {
         setStep('form')
     }
 
+    const triggerPDFDownload = async (itineraryData: ItineraryResult, dest: string, dur: number, traveler: string, styles: string[]) => {
+        setExportingPDF(true)
+        setError('')
+        try {
+            const { generateRoteiroPDF } = await import('@/components/RoteiroPDF')
+            const fileName = `roteiro-${dest.toLowerCase().replace(/\s+/g, '-')}.pdf`
+            const blob = await generateRoteiroPDF({
+                itinerary: itineraryData,
+                destination: dest,
+                duration: dur,
+                travelerType: traveler,
+                travelStyle: styles,
+            })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = fileName
+            document.body.appendChild(a)
+            a.click()
+            setTimeout(() => {
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+            }, 200)
+        } catch (err) {
+            console.error('Erro ao exportar PDF:', err)
+            setError(`Erro ao gerar PDF: ${err instanceof Error ? err.message : String(err)}`)
+        } finally {
+            setExportingPDF(false)
+        }
+    }
+
+    const handleExportPDF = () => {
+        const data = editableItinerary ?? itinerary
+        if (!data) return
+        triggerPDFDownload(data, destination, duration, travelerType, travelStyle)
+    }
+
+    const handleExportViewPDF = () => {
+        if (!viewingTrip) return
+        triggerPDFDownload(
+            viewingTrip.result,
+            viewingTrip.destination,
+            viewingTrip.duration,
+            viewingTrip.traveler_type,
+            viewingTrip.travel_style,
+        )
+    }
+
     const handleViewTrip = (trip: SavedItinerary) => {
         setViewingTrip(trip)
         setActiveTab('gastronomia')
         setViewCollapsedDays((trip.result.dias ?? []).map((_, i) => i !== 0))
+        setIsViewEditing(false)
+        setEditableViewItinerary(null)
+        setViewSaveStatus('idle')
         setStep('view')
     }
 
     // ── Edit helpers ────────────────────────────────────────────────────────
 
     const startEditing = () => {
-        setEditableItinerary(structuredClone(itinerary))
+        if (!itinerary) return
+        const cloned = structuredClone(itinerary)
+        // Normaliza para o formato novo (atividades[]) antes de editar
+        for (const day of cloned.dias) {
+            for (const key of ['manha', 'tarde', 'noite'] as const) {
+                day[key] = { atividades: normalizePeriod(day[key]) }
+            }
+        }
+        setEditableItinerary(cloned)
         setIsEditing(true)
         setSaveStatus('idle')
     }
@@ -298,8 +382,7 @@ export default function Roteiro() {
         setEditableItinerary(prev => {
             if (!prev) return prev
             const dias = [...prev.dias]
-            const p = dias[dayIdx][period]
-            const atividades = [...p.atividades]
+            const atividades = [...normalizePeriod(dias[dayIdx][period])]
             atividades[actIdx] = { ...atividades[actIdx], [field]: value }
             dias[dayIdx] = { ...dias[dayIdx], [period]: { atividades } }
             return { ...prev, dias }
@@ -310,8 +393,8 @@ export default function Roteiro() {
         setEditableItinerary(prev => {
             if (!prev) return prev
             const dias = [...prev.dias]
-            const p = dias[dayIdx][period]
-            dias[dayIdx] = { ...dias[dayIdx], [period]: { atividades: [...p.atividades, { ...BLANK_ACTIVITY }] } }
+            const atividades = normalizePeriod(dias[dayIdx][period])
+            dias[dayIdx] = { ...dias[dayIdx], [period]: { atividades: [...atividades, { ...BLANK_ACTIVITY }] } }
             return { ...prev, dias }
         })
     }
@@ -320,8 +403,8 @@ export default function Roteiro() {
         setEditableItinerary(prev => {
             if (!prev) return prev
             const dias = [...prev.dias]
-            const p = dias[dayIdx][period]
-            dias[dayIdx] = { ...dias[dayIdx], [period]: { atividades: p.atividades.filter((_, i) => i !== actIdx) } }
+            const atividades = normalizePeriod(dias[dayIdx][period])
+            dias[dayIdx] = { ...dias[dayIdx], [period]: { atividades: atividades.filter((_, i) => i !== actIdx) } }
             return { ...prev, dias }
         })
     }
@@ -355,6 +438,97 @@ export default function Roteiro() {
     }
 
     const displayItinerary = isEditing ? editableItinerary : itinerary
+
+    // ── View step edit helpers ───────────────────────────────────────────────
+
+    const startViewEditing = () => {
+        if (!viewingTrip) return
+        const cloned = structuredClone(viewingTrip.result)
+        for (const day of cloned.dias) {
+            for (const key of ['manha', 'tarde', 'noite'] as const) {
+                day[key] = { atividades: normalizePeriod(day[key]) }
+            }
+        }
+        setEditableViewItinerary(cloned)
+        setIsViewEditing(true)
+        setViewSaveStatus('idle')
+    }
+
+    const cancelViewEditing = () => {
+        setEditableViewItinerary(null)
+        setIsViewEditing(false)
+        setViewSaveStatus('idle')
+    }
+
+    const saveViewEdits = async () => {
+        if (!editableViewItinerary || !viewingTrip) return
+        setViewSaveStatus('saving')
+        await supabase.from('itineraries').update({ result: editableViewItinerary }).eq('id', viewingTrip.id)
+        setViewingTrip(prev => prev ? { ...prev, result: editableViewItinerary } : prev)
+        setIsViewEditing(false)
+        setEditableViewItinerary(null)
+        setViewSaveStatus('saved')
+        setTimeout(() => setViewSaveStatus('idle'), 2500)
+    }
+
+    const updateViewDayTema = (dayIdx: number, value: string) => {
+        setEditableViewItinerary(prev => {
+            if (!prev) return prev
+            const dias = [...prev.dias]
+            dias[dayIdx] = { ...dias[dayIdx], tema: value }
+            return { ...prev, dias }
+        })
+    }
+
+    const setViewActivity = (dayIdx: number, period: 'manha' | 'tarde' | 'noite', actIdx: number, field: keyof Activity, value: string) => {
+        setEditableViewItinerary(prev => {
+            if (!prev) return prev
+            const dias = [...prev.dias]
+            const atividades = [...normalizePeriod(dias[dayIdx][period])]
+            atividades[actIdx] = { ...atividades[actIdx], [field]: value }
+            dias[dayIdx] = { ...dias[dayIdx], [period]: { atividades } }
+            return { ...prev, dias }
+        })
+    }
+
+    const addViewActivity = (dayIdx: number, period: 'manha' | 'tarde' | 'noite') => {
+        setEditableViewItinerary(prev => {
+            if (!prev) return prev
+            const dias = [...prev.dias]
+            const atividades = normalizePeriod(dias[dayIdx][period])
+            dias[dayIdx] = { ...dias[dayIdx], [period]: { atividades: [...atividades, { ...BLANK_ACTIVITY }] } }
+            return { ...prev, dias }
+        })
+    }
+
+    const removeViewActivity = (dayIdx: number, period: 'manha' | 'tarde' | 'noite', actIdx: number) => {
+        setEditableViewItinerary(prev => {
+            if (!prev) return prev
+            const dias = [...prev.dias]
+            const atividades = normalizePeriod(dias[dayIdx][period])
+            dias[dayIdx] = { ...dias[dayIdx], [period]: { atividades: atividades.filter((_, i) => i !== actIdx) } }
+            return { ...prev, dias }
+        })
+    }
+
+    const removeViewDay = (dayIdx: number) => {
+        setEditableViewItinerary(prev => {
+            if (!prev) return prev
+            const dias = prev.dias.filter((_, i) => i !== dayIdx).map((d, i) => ({ ...d, dia: i + 1 }))
+            return { ...prev, dias }
+        })
+        setViewCollapsedDays(prev => prev.filter((_, i) => i !== dayIdx))
+    }
+
+    const addViewDay = () => {
+        setEditableViewItinerary(prev => {
+            if (!prev) return prev
+            return { ...prev, dias: [...prev.dias, BLANK_DAY(prev.dias.length + 1)] }
+        })
+        setViewCollapsedDays(prev => [...prev, false])
+    }
+
+    const displayViewItinerary = isViewEditing ? editableViewItinerary : viewingTrip?.result ?? null
 
     // ── Main layout width ────────────────────────────────────────────────────
 
@@ -730,6 +904,23 @@ export default function Roteiro() {
                                                 {savingTrip ? <Loader2 size={16} className="spin" /> : isSaved ? <><Bookmark size={16} /> Viagem salva</> : <><BookmarkPlus size={16} /> Adicionar viagem</>}
                                             </button>
                                             <button
+                                                onClick={handleExportPDF}
+                                                disabled={exportingPDF}
+                                                className="btn"
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                                                    padding: '14px 20px', borderRadius: '14px',
+                                                    background: 'transparent', color: 'var(--blue-vibrant)',
+                                                    border: '2px solid var(--blue-medium)', fontSize: '15px', fontWeight: 700, cursor: exportingPDF ? 'default' : 'pointer',
+                                                    opacity: exportingPDF ? 0.7 : 1,
+                                                }}
+                                                onMouseEnter={e => { if (!exportingPDF) e.currentTarget.style.background = 'var(--blue-pale)' }}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                {exportingPDF ? <Loader2 size={16} className="spin" /> : <FileDown size={16} />}
+                                                {exportingPDF ? 'Gerando...' : 'Exportar PDF'}
+                                            </button>
+                                            <button
                                                 onClick={handleReset}
                                                 className="btn"
                                                 style={{
@@ -854,36 +1045,128 @@ export default function Roteiro() {
                     )}
 
                     {/* ── View saved trip ───────────────────────────────── */}
-                    {step === 'view' && viewingTrip?.result && (
+                    {step === 'view' && viewingTrip?.result && displayViewItinerary && (
                         <motion.div
                             key="view"
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.4 }}
                         >
-                            <button
-                                onClick={() => setStep('list')}
-                                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 700, color: 'var(--text-muted)', padding: 0, fontFamily: 'inherit', marginBottom: '20px' }}
-                            >
-                                <ChevronLeft size={16} /> Voltar para Minhas Viagens
-                            </button>
+                            {error && (
+                                <p style={{ fontSize: '13px', color: '#f87171', textAlign: 'center', margin: '0 0 12px' }}>{error}</p>
+                            )}
+                            {/* Top bar */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
+                                <button
+                                    onClick={isViewEditing ? cancelViewEditing : () => setStep('list')}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 700, color: 'var(--text-muted)', padding: 0, fontFamily: 'inherit' }}
+                                >
+                                    <ChevronLeft size={16} /> {isViewEditing ? 'Cancelar edição' : 'Voltar para Minhas Viagens'}
+                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    {viewSaveStatus === 'saved' && (
+                                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#22c55e', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <Check size={14} /> Salvo!
+                                        </span>
+                                    )}
+                                    {isViewEditing ? (
+                                        <button
+                                            onClick={saveViewEdits}
+                                            disabled={viewSaveStatus === 'saving'}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '6px',
+                                                padding: '10px 18px', borderRadius: '12px',
+                                                background: 'var(--blue-medium)', color: '#fff',
+                                                border: 'none', fontSize: '14px', fontWeight: 700,
+                                                cursor: 'pointer', fontFamily: 'inherit', opacity: viewSaveStatus === 'saving' ? 0.7 : 1,
+                                            }}
+                                        >
+                                            {viewSaveStatus === 'saving' ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
+                                            Salvar alterações
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={startViewEditing}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '6px',
+                                                padding: '10px 16px', borderRadius: '12px',
+                                                border: '1.5px solid var(--border-light)', background: '#fff',
+                                                color: 'var(--text-dark)', fontSize: '13px', fontWeight: 700,
+                                                cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue-medium)'; e.currentTarget.style.color = 'var(--blue-medium)' }}
+                                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-dark)' }}
+                                        >
+                                            <Pencil size={14} /> Editar roteiro
+                                        </button>
+                                    )}
+                                    {!isViewEditing && (
+                                        <button
+                                            onClick={handleExportViewPDF}
+                                            disabled={exportingPDF}
+                                            className="btn"
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '7px',
+                                                padding: '10px 18px', borderRadius: '12px',
+                                                background: 'transparent', color: 'var(--blue-vibrant)',
+                                                border: '2px solid var(--blue-medium)', fontSize: '14px', fontWeight: 700, cursor: exportingPDF ? 'default' : 'pointer',
+                                                opacity: exportingPDF ? 0.7 : 1,
+                                            }}
+                                            onMouseEnter={e => { if (!exportingPDF) e.currentTarget.style.background = 'var(--blue-pale)' }}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                        >
+                                            {exportingPDF ? <Loader2 size={15} className="spin" /> : <FileDown size={15} />}
+                                            {exportingPDF ? 'Gerando...' : 'Exportar PDF'}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 320px', gap: '28px', alignItems: 'flex-start' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                     <div style={{ background: 'linear-gradient(135deg, #0E2A55 0%, #2A60C2 100%)', borderRadius: '24px', padding: '28px 32px', color: '#fff' }}>
                                         <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)', marginBottom: '8px' }}>Viagem Salva</p>
-                                        <h2 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 12px', lineHeight: 1.3 }}>{viewingTrip.result.titulo}</h2>
-                                        <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', margin: '0 0 20px', lineHeight: 1.6 }}>{viewingTrip.result.resumo}</p>
+                                        <h2 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 12px', lineHeight: 1.3 }}>{displayViewItinerary.titulo}</h2>
+                                        <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', margin: '0 0 20px', lineHeight: 1.6 }}>{displayViewItinerary.resumo}</p>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                             <MetaBadge label={`${viewingTrip.duration} dia${viewingTrip.duration > 1 ? 's' : ''}`} />
                                             <MetaBadge label={TRAVELER_OPTIONS.find(o => o.value === viewingTrip.traveler_type)?.label ?? viewingTrip.traveler_type} />
                                             {viewingTrip.travel_style?.map(s => <MetaBadge key={s} label={s} />)}
                                         </div>
                                     </div>
-                                    {viewingTrip.result.dias.map((day, i) => (
-                                        <EditableDayCard key={i} day={day} index={i} isEditing={false} collapsed={viewCollapsedDays[i] ?? false} onToggle={() => toggleViewDay(i)} onExpand={() => expandViewDay(i)} onUpdateTema={() => {}} onSetActivity={() => {}} onAddActivity={() => {}} onRemoveActivity={() => {}} onRemove={() => {}} />
+                                    {displayViewItinerary.dias.map((day, i) => (
+                                        <EditableDayCard
+                                            key={i}
+                                            day={day}
+                                            index={i}
+                                            isEditing={isViewEditing}
+                                            collapsed={viewCollapsedDays[i] ?? false}
+                                            onToggle={() => toggleViewDay(i)}
+                                            onExpand={() => expandViewDay(i)}
+                                            onUpdateTema={v => updateViewDayTema(i, v)}
+                                            onSetActivity={(p, ai, f, v) => setViewActivity(i, p, ai, f, v)}
+                                            onAddActivity={p => addViewActivity(i, p)}
+                                            onRemoveActivity={(p, ai) => removeViewActivity(i, p, ai)}
+                                            onRemove={() => removeViewDay(i)}
+                                        />
                                     ))}
-                                    <TipsBudgetCard itinerary={viewingTrip.result} delayBase={viewingTrip.result.dias.length} />
+                                    {isViewEditing && (
+                                        <button
+                                            onClick={addViewDay}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                                                width: '100%', padding: '14px', borderRadius: '16px',
+                                                border: '2px dashed var(--border-light)', background: 'transparent',
+                                                color: 'var(--text-muted)', fontSize: '14px', fontWeight: 700,
+                                                cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue-medium)'; e.currentTarget.style.color = 'var(--blue-medium)' }}
+                                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-muted)' }}
+                                        >
+                                            <Plus size={16} /> Adicionar dia
+                                        </button>
+                                    )}
+                                    <TipsBudgetCard itinerary={displayViewItinerary} delayBase={displayViewItinerary.dias.length} />
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                     {viewingTrip.result.extras && (
@@ -897,7 +1180,7 @@ export default function Roteiro() {
                                             }}
                                         />
                                     )}
-                                    <DaysMapSection dias={viewingTrip.result.dias} collapsedDays={viewCollapsedDays} />
+                                    <DaysMapSection dias={displayViewItinerary.dias} collapsedDays={viewCollapsedDays} />
                                 </div>
                             </div>
                         </motion.div>
@@ -1002,7 +1285,7 @@ function EditableDayCard({ day, index, isEditing, collapsed, onToggle, onExpand,
                     <div style={{ padding: '4px 0' }}>
                 {PERIOD_CONFIG.map(({ key, label, Icon, color, bg }) => {
                     const period = day[key]
-                    const atividades = period.atividades ?? []
+                    const atividades = normalizePeriod(period)
                     return (
                         <div key={key} style={{ padding: '16px 24px', borderBottom: key !== 'noite' ? '1px solid var(--border-light)' : 'none' }}>
                             {/* Period label */}
@@ -1124,7 +1407,7 @@ function DaysMapSection({ dias, collapsedDays }: { dias: ItineraryDay[]; collaps
     PERIOD_CONFIG.forEach(({ key, color }) => {
         dias.forEach((day, i) => {
             if (collapsedDays[i]) return
-            const atividades = day[key]?.atividades ?? []
+            const atividades = normalizePeriod(day[key])
             atividades.forEach(act => {
                 if (act.lat != null && act.lng != null) {
                     pins.push({ lat: act.lat, lng: act.lng, color, dayNum: day.dia, period: key, atividade: act.atividade, local: act.local })
@@ -1141,7 +1424,7 @@ function DaysMapSection({ dias, collapsedDays }: { dias: ItineraryDay[]; collaps
     const fallbackCenter = useMemo<[number, number]>(() => {
         for (const day of dias) {
             for (const { key } of PERIOD_CONFIG) {
-                const atividades = day[key]?.atividades ?? []
+                const atividades = normalizePeriod(day[key])
                 for (const a of atividades) {
                     if (a.lat != null && a.lng != null) return [a.lat, a.lng]
                 }
