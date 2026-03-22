@@ -703,7 +703,7 @@ serve(async (req) => {
 
         if (flightId) {
             // Filter by user_id: strategy includes personalized data (balance, clubs)
-            const query = sb
+            let query = sb
                 .from('strategies')
                 .select('structured_result, tokens_used')
                 .eq('flight_id', flightId)
@@ -711,7 +711,7 @@ serve(async (req) => {
                 .not('structured_result', 'is', null)
                 .order('created_at', { ascending: false })
                 .limit(1)
-            if (userId) query.eq('user_id', userId)
+            if (userId) query = query.eq('user_id', userId)
             const { data } = await query.maybeSingle()
             cached = data
         } else if (seatsKey && userId) {

@@ -1,4 +1,4 @@
-export type Plan = 'free' | 'essencial' | 'pro' | 'elite'
+export type Plan = 'free' | 'essencial' | 'pro' | 'elite' | 'admin'
 
 export interface PlanConfig {
     label: string
@@ -13,6 +13,15 @@ export interface PlanConfig {
 }
 
 export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
+    admin: {
+        label: 'Admin',
+        strategiesLifetime: null,
+        strategiesPerMonth: null,
+        roteiroPerMonth: 999,
+        notifications: true,
+        unlimitedSearch: true,
+        transferSimulator: true,
+    },
     free: {
         label: 'Free',
         strategiesLifetime: 1,
@@ -53,6 +62,8 @@ export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
 
 export function getStrategyLimit(plan: Plan): number {
     const cfg = PLAN_LIMITS[plan]
+    // null on both = unlimited (admin)
+    if (cfg.strategiesLifetime === null && cfg.strategiesPerMonth === null) return 9999
     return cfg.strategiesLifetime ?? cfg.strategiesPerMonth ?? 0
 }
 
@@ -61,7 +72,7 @@ export function getRoteiroLimit(plan: Plan): number {
 }
 
 export function normalizePlan(raw: string | null | undefined): Plan {
-    const valid: Plan[] = ['free', 'essencial', 'pro', 'elite']
+    const valid: Plan[] = ['free', 'essencial', 'pro', 'elite', 'admin']
     const lower = (raw ?? '').toLowerCase() as Plan
     return valid.includes(lower) ? lower : 'free'
 }
