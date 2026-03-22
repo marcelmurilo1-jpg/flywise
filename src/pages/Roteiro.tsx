@@ -1261,6 +1261,7 @@ export default function Roteiro() {
                                         </button>
                                     )}
                                     {!isViewEditing && (
+                                        <>
                                         <button
                                             onClick={handleExportViewPDF}
                                             disabled={exportingPDF}
@@ -1296,6 +1297,7 @@ export default function Roteiro() {
                                             <Globe size={15} />
                                             {myMapsSuccess ? 'KML baixado!' : 'My Maps'}
                                         </button>
+                                        </>
                                     )}
                                 </div>
                             </div>
