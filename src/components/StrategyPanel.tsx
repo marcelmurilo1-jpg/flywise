@@ -54,31 +54,48 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
         if (!flight?.id && !seatsContext) return
         setLoading(true); setLlmError(null); setStrategy(null)
         try {
-            // Força refresh do token para garantir JWT válido (evita 401 por token expirado)
-            const { data: refreshData } = await supabase.auth.refreshSession()
-            const token = refreshData.session?.access_token
-                ?? (await supabase.auth.getSession()).data.session?.access_token
+            // 1. Tenta obter token fresco via refreshSession
+            let token: string | undefined
+            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+            if (!refreshError && refreshData.session?.access_token) {
+                token = refreshData.session.access_token
+            } else {
+                // Fallback: usa sessão atual do localStorage
+                const { data: sessionData } = await supabase.auth.getSession()
+                token = sessionData.session?.access_token
+            }
 
-            const res = await supabase.functions.invoke('strategy', {
-                body: {
+            if (!token) {
+                throw new Error('Sessão não encontrada. Faça logout e login novamente.')
+            }
+
+            // 2. Chama a Edge Function via fetch direto — evita bugs de ordenação de
+            //    headers do supabase.functions.invoke onde o anon key pode sobrescrever o JWT
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+            const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+
+            const response = await fetch(`${supabaseUrl}/functions/v1/strategy`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    'apikey': supabaseKey,
+                },
+                body: JSON.stringify({
                     flightId: flight?.id || undefined,
                     userId: user?.id,
                     cashPrice: cashPrice || undefined,
                     seatsContext: seatsContext || undefined,
                     buscaId: buscaId || undefined,
-                },
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                }),
             })
 
-            const json = res.data as { ok: boolean; strategy: StrategyResult; tokens_used: number; error?: string } | null
-
-            // Trata erros HTTP da Edge Function (non-2xx)
-            if (res.error) {
-                const ctx = (res.error as any)?.context
-                const httpStatus = ctx instanceof Response ? ctx.status : 0
-                if (httpStatus === 401) throw new Error('Sessão expirada. Faça login novamente e tente de novo.')
+            if (!response.ok) {
+                if (response.status === 401) throw new Error('Sessão expirada. Faça logout e login novamente.')
                 throw new Error('Erro ao contactar o servidor. Tente novamente em instantes.')
             }
+
+            const json = await response.json() as { ok: boolean; strategy: StrategyResult; tokens_used: number; error?: string } | null
 
             // Todos os erros de lógica chegam como HTTP 200 com ok:false
             if (json?.error === 'plan_limit_reached') throw new Error('Limite do plano atingido.')
