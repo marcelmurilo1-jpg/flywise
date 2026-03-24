@@ -482,7 +482,7 @@ function Usuarios({ token }: { token: string }) {
                                         <td style={{ padding: '11px 14px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 <PlanBadge plan={u.plan} />
-                                                {u.is_admin && <Shield size={11} style={{ color: '#dc2626' }} title="Admin" />}
+                                                {u.is_admin && <span title="Admin" style={{ display: 'flex' }}><Shield size={11} style={{ color: '#dc2626' }} /></span>}
                                             </div>
                                         </td>
                                         <td style={{ padding: '11px 14px', color: '#94a3b8', fontSize: 12 }}>{fmtDate(u.plan_expires_at)}</td>
