@@ -38,8 +38,10 @@ import ChatBuscaAvancada from '@/pages/ChatBuscaAvancada'
 import Mapa from '@/pages/Mapa'
 import ExploreDestinos from '@/pages/c1/ExploreDestinos'
 import MeuIntercambio from '@/pages/c1/MeuIntercambio'
+import Admin from '@/pages/Admin'
 import { C1Provider } from '@/contexts/C1Context'
 import { BottomNav } from '@/components/BottomNav'
+import { useAdmin } from '@/hooks/useAdmin'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -57,6 +59,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     )
   }
   if (!user) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading: authLoading } = useAuth()
+  const { isAdmin, loading: adminLoading } = useAdmin()
+  if (authLoading || adminLoading) return null
+  if (!user || !isAdmin) return <Navigate to="/home" replace />
   return <>{children}</>
 }
 
@@ -110,6 +120,7 @@ function AppRoutes() {
         <Route path="/mapa" element={<ProtectedRoute><Mapa /></ProtectedRoute>} />
         <Route path="/c1" element={<ProtectedRoute><ExploreDestinos /></ProtectedRoute>} />
         <Route path="/c1/intercambio" element={<ProtectedRoute><MeuIntercambio /></ProtectedRoute>} />
+        <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <AppRoutesInner />

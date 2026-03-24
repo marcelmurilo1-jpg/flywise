@@ -1874,6 +1874,148 @@ app.get('/api/admin/transfer-sync-log', requireSyncSecret, async (req, res) => {
     res.json({ logs: data ?? [] });
 });
 
+// ─── Admin API (autenticada por JWT + is_admin) ───────────────────────────────
+
+async function requireAdminJWT(req, res, next) {
+    const authHeader = req.headers['authorization'] ?? '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ error: 'Token não fornecido' });
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return res.status(401).json({ error: 'Token inválido' });
+
+    const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single();
+
+    if (!profile?.is_admin) return res.status(403).json({ error: 'Acesso negado' });
+
+    req.adminUserId = user.id;
+    next();
+}
+
+// GET /api/admin/stats — métricas gerais do produto
+app.get('/api/admin/stats', requireAdminJWT, async (_req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+        const [usersRes, planCountsRes, strategiesMonthRes, roteiroMonthRes, buscasMonthRes] = await Promise.all([
+            supabase.from('user_profiles').select('id', { count: 'exact', head: true }),
+            supabase.from('user_profiles').select('plan'),
+            supabase.from('strategies').select('id', { count: 'exact', head: true }).gte('created_at', monthStart),
+            supabase.from('itineraries').select('id', { count: 'exact', head: true }).gte('created_at', monthStart),
+            supabase.from('buscas').select('id', { count: 'exact', head: true }).gte('created_at', monthStart),
+        ]);
+
+        const planCounts = { free: 0, essencial: 0, pro: 0, elite: 0, admin: 0 };
+        for (const row of planCountsRes.data ?? []) {
+            const p = row.plan ?? 'free';
+            planCounts[p] = (planCounts[p] ?? 0) + 1;
+        }
+
+        res.json({
+            totalUsers: usersRes.count ?? 0,
+            planCounts,
+            strategiesThisMonth: strategiesMonthRes.count ?? 0,
+            roteiroThisMonth: roteiroMonthRes.count ?? 0,
+            buscasThisMonth: buscasMonthRes.count ?? 0,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/admin/users — lista usuários com info de plano e uso
+app.get('/api/admin/users', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const plan = req.query.plan ?? null;
+        const search = req.query.search ?? null;
+        const page = parseInt(req.query.page ?? '1', 10);
+        const pageSize = 20;
+        const offset = (page - 1) * pageSize;
+
+        let query = supabase
+            .from('user_profiles')
+            .select('id, full_name, plan, plan_expires_at, plan_billing, is_admin, updated_at', { count: 'exact' })
+            .order('updated_at', { ascending: false })
+            .range(offset, offset + pageSize - 1);
+
+        if (plan) query = query.eq('plan', plan);
+
+        const { data, count, error } = await query;
+        if (error) throw error;
+
+        // Busca emails via auth.users (service_role apenas)
+        const ids = (data ?? []).map(u => u.id);
+        let emailMap = {};
+        if (ids.length > 0) {
+            const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+            for (const au of authUsers?.users ?? []) {
+                emailMap[au.id] = au.email;
+            }
+        }
+
+        // Filtra por search (email ou nome) após buscar — simples, funciona para volumes pequenos
+        let users = (data ?? []).map(u => ({ ...u, email: emailMap[u.id] ?? null }));
+        if (search) {
+            const s = search.toLowerCase();
+            users = users.filter(u =>
+                u.full_name?.toLowerCase().includes(s) ||
+                u.email?.toLowerCase().includes(s)
+            );
+        }
+
+        res.json({ users, total: count ?? 0, page, pageSize });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PATCH /api/admin/users/:id/plan — alterar plano e/ou expiração
+app.patch('/api/admin/users/:id/plan', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    const { id } = req.params;
+    const { plan, plan_expires_at, plan_billing } = req.body;
+
+    const allowed = ['free', 'essencial', 'pro', 'elite', 'admin'];
+    if (plan && !allowed.includes(plan)) return res.status(400).json({ error: 'Plano inválido' });
+
+    try {
+        const update = {};
+        if (plan !== undefined) update.plan = plan;
+        if (plan_expires_at !== undefined) update.plan_expires_at = plan_expires_at;
+        if (plan_billing !== undefined) update.plan_billing = plan_billing;
+
+        const { error } = await supabase.from('user_profiles').update(update).eq('id', id);
+        if (error) throw error;
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/admin/users/:id/toggle-admin — conceder/revogar admin
+app.post('/api/admin/users/:id/toggle-admin', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    const { id } = req.params;
+    const { is_admin } = req.body;
+    if (typeof is_admin !== 'boolean') return res.status(400).json({ error: 'is_admin deve ser boolean' });
+
+    try {
+        const { error } = await supabase.from('user_profiles').update({ is_admin }).eq('id', id);
+        if (error) throw error;
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Localmente: inicia o servidor Express normalmente.
 // Na Vercel: o arquivo é importado como módulo serverless — app.listen não é chamado.
 if (process.env.VERCEL !== '1') {
