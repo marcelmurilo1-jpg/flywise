@@ -214,8 +214,7 @@ export default function Resultados() {
                 console.log('[Resultados] Got', offers.length, 'offers from Amadeus', inboundOffers.length, 'inbound')
 
                 if (offers.length === 0) {
-                    setFlights([])
-                    return
+                    throw new Error('Nenhum voo encontrado para esta rota. O servidor de busca pode estar sobrecarregado — tente novamente em alguns instantes.')
                 }
 
                 // Display results immediately - don't wait for Supabase save

@@ -13,9 +13,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── PLAYWRIGHT_BROWSERS_PATH DEVE ser definido ANTES do import do playwright ────────────
 // Em Railway: /app/.playwright-browsers é instalado no BUILD (baked na imagem Docker).
+// Em dev local: deixa o Playwright usar o path padrão (~/.cache/ms-playwright).
 // Nunca usar /tmp — ele é limpo a cada restart, forçando reinstalação de 60-90s.
-process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || '/app/.playwright-browsers';
-console.log('[Playwright] PLAYWRIGHT_BROWSERS_PATH:', process.env.PLAYWRIGHT_BROWSERS_PATH);
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH && process.env.RAILWAY_ENVIRONMENT) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = '/app/.playwright-browsers';
+}
+console.log('[Playwright] PLAYWRIGHT_BROWSERS_PATH:', process.env.PLAYWRIGHT_BROWSERS_PATH ?? '(default)');
 
 // Carrega variáveis do ambiente (tenta .env.local e .env globalmente)
 dotenv.config({ path: '.env.local' });
