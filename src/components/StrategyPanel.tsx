@@ -54,8 +54,10 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
         if (!flight?.id && !seatsContext) return
         setLoading(true); setLlmError(null); setStrategy(null)
         try {
-            const { data: { session } } = await supabase.auth.getSession()
-            const token = session?.access_token
+            // Força refresh do token para garantir JWT válido (evita 401 por token expirado)
+            const { data: refreshData } = await supabase.auth.refreshSession()
+            const token = refreshData.session?.access_token
+                ?? (await supabase.auth.getSession()).data.session?.access_token
 
             const res = await supabase.functions.invoke('strategy', {
                 body: {
