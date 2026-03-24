@@ -295,9 +295,9 @@ export default function Resultados() {
 
                 // Save outbound + inbound to Supabase in background (non-blocking)
                 // Use .select() to get back DB-assigned IDs and update local state
-                const insertRows = rows.map(r => { const { id, ...rest } = r; return rest })
+                const insertRows = rows.map(r => { const { id, created_at, ...rest } = r; return rest })
                 const insertInbound = inboundRows.map(r => {
-                    const { id, ...rest } = r
+                    const { id, created_at, ...rest } = r
                     return { ...rest, detalhes: { ...(rest.detalhes as object ?? {}), isReturn: true } }
                 })
                 supabase
