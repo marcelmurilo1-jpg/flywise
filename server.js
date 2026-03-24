@@ -15,8 +15,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Em Railway: /app/.playwright-browsers é instalado no BUILD (baked na imagem Docker).
 // Em dev local: deixa o Playwright usar o path padrão (~/.cache/ms-playwright).
 // Nunca usar /tmp — ele é limpo a cada restart, forçando reinstalação de 60-90s.
-if (!process.env.PLAYWRIGHT_BROWSERS_PATH && process.env.RAILWAY_ENVIRONMENT) {
-    process.env.PLAYWRIGHT_BROWSERS_PATH = '/app/.playwright-browsers';
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
+    // Detecta Railway pela existência do path de build — mais confiável que variáveis de env
+    const railwayPath = '/app/.playwright-browsers';
+    if (fs.existsSync(railwayPath)) {
+        process.env.PLAYWRIGHT_BROWSERS_PATH = railwayPath;
+    }
+    // else: dev local — usa path padrão do Playwright (~/.cache/ms-playwright)
 }
 console.log('[Playwright] PLAYWRIGHT_BROWSERS_PATH:', process.env.PLAYWRIGHT_BROWSERS_PATH ?? '(default)');
 
