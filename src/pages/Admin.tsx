@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
     Users, BarChart2, Tag, FileText, ChevronLeft,
     RefreshCw, Shield, Loader2, CheckCircle, XCircle,
-    AlertTriangle, Search, TrendingUp, Activity, Zap,
+    AlertTriangle, Search, Activity, Zap,
     DollarSign, MapPin, Clock, UserX,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
