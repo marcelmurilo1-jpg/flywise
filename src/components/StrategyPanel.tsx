@@ -70,14 +70,12 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
 
             const json = res.data as { ok: boolean; strategy: StrategyResult; tokens_used: number; error?: string } | null
 
-            // Trata erros HTTP da Edge Function (non-2xx, ex: 500 por falha de compilação Deno)
+            // Trata erros HTTP da Edge Function (non-2xx)
             if (res.error) {
-                const errMsg = (res.error as any)?.message ?? String(res.error)
-                // Mapeia a mensagem genérica do Supabase client para uma mensagem mais útil
-                if (errMsg.includes('non-2xx')) {
-                    throw new Error('Erro interno na Edge Function. Tente novamente em instantes.')
-                }
-                throw new Error(errMsg)
+                const ctx = (res.error as any)?.context
+                const httpStatus = ctx instanceof Response ? ctx.status : 0
+                if (httpStatus === 401) throw new Error('Sessão expirada. Faça login novamente e tente de novo.')
+                throw new Error('Erro ao contactar o servidor. Tente novamente em instantes.')
             }
 
             // Todos os erros de lógica chegam como HTTP 200 com ok:false
