@@ -2024,6 +2024,214 @@ app.post('/api/admin/users/:id/toggle-admin', requireAdminJWT, async (req, res) 
     }
 });
 
+// ─── Preços por plano (espelha Planos.tsx) ────────────────────────────────────
+const PLAN_PRICES = {
+    essencial: { mensal: 19, anual: 12 },
+    pro:       { mensal: 39, anual: 25 },
+    elite:     { mensal: 69, anual: 45 },
+};
+
+// GET /api/admin/revenue — MRR, churn, conversão, alertas de expiração
+app.get('/api/admin/revenue', requireAdminJWT, async (_req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const in7days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+        const { data: profiles } = await supabase
+            .from('user_profiles')
+            .select('id, plan, plan_expires_at, plan_billing');
+
+        let mrr = 0;
+        let churnCount = 0;
+        const expiringUsers = [];
+
+        for (const p of profiles ?? []) {
+            const isExpired = p.plan_expires_at && new Date(p.plan_expires_at) < now;
+            const isPaid = ['essencial', 'pro', 'elite'].includes(p.plan);
+            const prices = PLAN_PRICES[p.plan];
+
+            // MRR: planos ativos e não expirados
+            if (isPaid && !isExpired && prices) {
+                const monthly = p.plan_billing === 'anual' ? prices.anual : prices.mensal;
+                mrr += monthly;
+            }
+
+            // Churn: planos que expiraram (eram pagantes, agora inativos)
+            if (isPaid && isExpired) churnCount++;
+
+            // Expirando nos próximos 7 dias
+            if (p.plan_expires_at && !isExpired && new Date(p.plan_expires_at) <= new Date(in7days) && isPaid) {
+                expiringUsers.push({ id: p.id, plan: p.plan, plan_expires_at: p.plan_expires_at });
+            }
+        }
+
+        // Novos pagantes este mês (assinaram após monthStart)
+        const { count: newPaidThisMonth } = await supabase
+            .from('user_profiles')
+            .select('id', { count: 'exact', head: true })
+            .in('plan', ['essencial', 'pro', 'elite'])
+            .gte('updated_at', monthStart);
+
+        const total = profiles?.length ?? 0;
+        const paid = (profiles ?? []).filter(p => {
+            const isExpired = p.plan_expires_at && new Date(p.plan_expires_at) < now;
+            return ['essencial', 'pro', 'elite'].includes(p.plan) && !isExpired;
+        }).length;
+
+        res.json({
+            mrr,
+            conversionRate: total > 0 ? ((paid / total) * 100).toFixed(1) : '0',
+            paidUsers: paid,
+            churnCount,
+            newPaidThisMonth: newPaidThisMonth ?? 0,
+            expiringIn7Days: expiringUsers,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/admin/engagement — usuários ativos, novos usuários, top destinos, estratégias por dia
+app.get('/api/admin/engagement', requireAdminJWT, async (_req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const now = new Date();
+        const days30ago = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const days7ago  = new Date(now.getTime() -  7 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Usuários que fizeram pelo menos 1 busca nos últimos 30 dias
+        const { data: activeBuscas } = await supabase
+            .from('buscas')
+            .select('user_id')
+            .gte('created_at', days30ago);
+        const activeUsers30d = new Set((activeBuscas ?? []).map(b => b.user_id)).size;
+
+        // Usuários que fizeram busca nos últimos 7 dias
+        const { data: activeBuscas7d } = await supabase
+            .from('buscas')
+            .select('user_id')
+            .gte('created_at', days7ago);
+        const activeUsers7d = new Set((activeBuscas7d ?? []).map(b => b.user_id)).size;
+
+        // Top 10 destinos (últimos 30 dias)
+        const { data: buscas30d } = await supabase
+            .from('buscas')
+            .select('origem, destino')
+            .gte('created_at', days30ago);
+        const routeCount = {};
+        for (const b of buscas30d ?? []) {
+            const key = `${b.origem} → ${b.destino}`;
+            routeCount[key] = (routeCount[key] ?? 0) + 1;
+        }
+        const topRoutes = Object.entries(routeCount)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([route, count]) => ({ route, count }));
+
+        // Estratégias geradas por dia nos últimos 14 dias
+        const days14ago = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: strategies14d } = await supabase
+            .from('strategies')
+            .select('created_at')
+            .gte('created_at', days14ago);
+        const stratByDay = {};
+        for (const s of strategies14d ?? []) {
+            const day = s.created_at.slice(0, 10);
+            stratByDay[day] = (stratByDay[day] ?? 0) + 1;
+        }
+        const strategiesPerDay = Object.entries(stratByDay)
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([date, count]) => ({ date, count }));
+
+        // Pagantes sem uso nos últimos 30 dias
+        const { data: paidProfiles } = await supabase
+            .from('user_profiles')
+            .select('id, plan, plan_expires_at')
+            .in('plan', ['essencial', 'pro', 'elite']);
+        const activeIds = new Set((activeBuscas ?? []).map(b => b.user_id));
+        const paidNow = new Date();
+        const inactivePaid = (paidProfiles ?? []).filter(p => {
+            const expired = p.plan_expires_at && new Date(p.plan_expires_at) < paidNow;
+            return !expired && !activeIds.has(p.id);
+        }).length;
+
+        res.json({
+            activeUsers30d,
+            activeUsers7d,
+            inactivePaidUsers: inactivePaid,
+            topRoutes,
+            strategiesPerDay,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/admin/api-status — verifica saúde das APIs externas
+app.get('/api/admin/api-status', requireAdminJWT, async (_req, res) => {
+    async function check(name, fn) {
+        const start = Date.now();
+        try {
+            await fn();
+            return { name, ok: true, latency: Date.now() - start };
+        } catch (e) {
+            return { name, ok: false, latency: Date.now() - start, error: e.message };
+        }
+    }
+
+    const results = await Promise.all([
+        check('Supabase', async () => {
+            if (!supabase) throw new Error('Client não inicializado');
+            const { error } = await supabase.from('user_profiles').select('id').limit(1);
+            if (error) throw error;
+        }),
+        check('Seats.aero', async () => {
+            if (!SEATS_AERO_API_KEY) throw new Error('API key não configurada');
+            const r = await fetch(`${SEATS_AERO_BASE}/availability?origin_airport=GRU&destination_airport=JFK&cabin=economy&start_date=2025-06-01&end_date=2025-06-30`, {
+                headers: { 'Partner-Authorization': SEATS_AERO_API_KEY },
+                signal: AbortSignal.timeout(8000),
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        }),
+        check('Amadeus', async () => {
+            const key = process.env.AMADEUS_CLIENT_ID;
+            const secret = process.env.AMADEUS_CLIENT_SECRET;
+            if (!key || !secret) throw new Error('Credenciais não configuradas');
+            const r = await fetch('https://api.amadeus.com/v1/security/oauth2/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `grant_type=client_credentials&client_id=${key}&client_secret=${secret}`,
+                signal: AbortSignal.timeout(8000),
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        }),
+        check('Anthropic (Claude)', async () => {
+            const key = process.env.ANTHROPIC_API_KEY;
+            if (!key) throw new Error('API key não configurada');
+            const r = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+                body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 8, messages: [{ role: 'user', content: 'OK' }] }),
+                signal: AbortSignal.timeout(15000),
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        }),
+        check('AbacatePay', async () => {
+            const key = process.env.ABACATEPAY_API_KEY;
+            if (!key) throw new Error('API key não configurada');
+            const r = await fetch('https://api.abacatepay.com/v1/billing/list', {
+                headers: { Authorization: `Bearer ${key}` },
+                signal: AbortSignal.timeout(8000),
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        }),
+    ]);
+
+    res.json({ checks: results, checkedAt: new Date().toISOString() });
+});
+
 // Localmente: inicia o servidor Express normalmente.
 // Na Vercel: o arquivo é importado como módulo serverless — app.listen não é chamado.
 if (process.env.VERCEL !== '1') {

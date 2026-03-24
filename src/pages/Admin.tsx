@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
     Users, BarChart2, Tag, FileText, ChevronLeft,
-    RefreshCw, Shield, Loader2,
-    CheckCircle, XCircle, AlertTriangle, Search,
+    RefreshCw, Shield, Loader2, CheckCircle, XCircle,
+    AlertTriangle, Search, TrendingUp, Activity, Zap,
+    DollarSign, MapPin, Clock, UserX,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
@@ -12,7 +13,6 @@ import { Header } from '@/components/Header'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TabId = 'dashboard' | 'usuarios' | 'promocoes' | 'logs'
-
 type Plan = 'free' | 'essencial' | 'pro' | 'elite' | 'admin'
 
 interface Stats {
@@ -21,6 +21,35 @@ interface Stats {
     strategiesThisMonth: number
     roteiroThisMonth: number
     buscasThisMonth: number
+}
+
+interface Revenue {
+    mrr: number
+    conversionRate: string
+    paidUsers: number
+    churnCount: number
+    newPaidThisMonth: number
+    expiringIn7Days: { id: string; plan: Plan; plan_expires_at: string }[]
+}
+
+interface Engagement {
+    activeUsers30d: number
+    activeUsers7d: number
+    inactivePaidUsers: number
+    topRoutes: { route: string; count: number }[]
+    strategiesPerDay: { date: string; count: number }[]
+}
+
+interface ApiCheck {
+    name: string
+    ok: boolean
+    latency: number
+    error?: string
+}
+
+interface ApiStatus {
+    checks: ApiCheck[]
+    checkedAt: string
 }
 
 interface AdminUser {
@@ -68,11 +97,7 @@ const PLAN_LABELS: Record<Plan, string> = {
 }
 
 const PLAN_COLORS: Record<Plan, string> = {
-    free: '#64748b',
-    essencial: '#2A60C2',
-    pro: '#7c3aed',
-    elite: '#d97706',
-    admin: '#dc2626',
+    free: '#64748b', essencial: '#2A60C2', pro: '#7c3aed', elite: '#d97706', admin: '#dc2626',
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -105,17 +130,55 @@ function fmtDateTime(iso: string | null) {
     return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+function fmtBRL(value: number) {
+    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+}
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+// ─── Shared UI ────────────────────────────────────────────────────────────────
+
+function LoadingSpinner() {
     return (
-        <div style={{
-            background: '#111827', border: '1px solid #1e293b', borderRadius: 12,
-            padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 4,
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+            <Loader2 size={24} style={{ color: '#2A60C2', animation: 'spin 1s linear infinite' }} />
+        </div>
+    )
+}
+
+function ErrorMsg({ msg, onRetry }: { msg: string; onRetry: () => void }) {
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#1a0a0a', border: '1px solid #7f1d1d', borderRadius: 10, padding: '14px 18px' }}>
+            <AlertTriangle size={16} style={{ color: '#ef4444', flexShrink: 0 }} />
+            <span style={{ color: '#fca5a5', fontSize: 13, flex: 1 }}>{msg}</span>
+            <button onClick={onRetry} style={btnSecondary}>Tentar novamente</button>
+        </div>
+    )
+}
+
+function SectionTitle({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) {
+    return (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
+            <div style={{ background: '#1e293b', borderRadius: 8, padding: 8, marginTop: 2 }}>
+                <Icon size={16} style={{ color: '#2A60C2' }} />
+            </div>
+            <div>
+                <p style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 800, margin: 0 }}>{title}</p>
+                <p style={{ color: '#475569', fontSize: 12, margin: '2px 0 0' }}>{description}</p>
+            </div>
+        </div>
+    )
+}
+
+function StatCard({ label, value, sub, highlight, tooltip }: {
+    label: string; value: string | number; sub?: string; highlight?: string; tooltip?: string
+}) {
+    return (
+        <div title={tooltip} style={{
+            background: '#111827', border: `1px solid ${highlight ? highlight + '33' : '#1e293b'}`,
+            borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 4,
         }}>
-            <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-            <span style={{ fontSize: 28, fontWeight: 800, color: '#f1f5f9' }}>{value}</span>
-            {sub && <span style={{ fontSize: 12, color: '#475569' }}>{sub}</span>}
+            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: highlight ?? '#f1f5f9' }}>{value}</span>
+            {sub && <span style={{ fontSize: 11, color: '#475569' }}>{sub}</span>}
         </div>
     )
 }
@@ -123,32 +186,49 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 function PlanBadge({ plan }: { plan: Plan }) {
     return (
         <span style={{
-            background: PLAN_COLORS[plan] + '22',
-            color: PLAN_COLORS[plan],
-            border: `1px solid ${PLAN_COLORS[plan]}44`,
-            borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700,
+            background: PLAN_COLORS[plan] + '22', color: PLAN_COLORS[plan],
+            border: `1px solid ${PLAN_COLORS[plan]}44`, borderRadius: 6,
+            padding: '2px 8px', fontSize: 11, fontWeight: 700,
         }}>
             {PLAN_LABELS[plan]}
         </span>
     )
 }
 
-// ─── Dashboard Tab ────────────────────────────────────────────────────────────
+// ─── Dashboard Tab ─────────────────────────────────────────────────────────────
 
 function DashboardTab({ token }: { token: string }) {
     const [stats, setStats] = useState<Stats | null>(null)
+    const [revenue, setRevenue] = useState<Revenue | null>(null)
+    const [engagement, setEngagement] = useState<Engagement | null>(null)
+    const [apiStatus, setApiStatus] = useState<ApiStatus | null>(null)
     const [loading, setLoading] = useState(true)
+    const [loadingApi, setLoadingApi] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
     const load = useCallback(async () => {
         setLoading(true); setError(null)
         try {
-            const data = await adminFetch('/api/admin/stats', token)
-            setStats(data)
-        } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : 'Erro ao carregar')
+            const [s, r, e] = await Promise.all([
+                adminFetch('/api/admin/stats', token),
+                adminFetch('/api/admin/revenue', token),
+                adminFetch('/api/admin/engagement', token),
+            ])
+            setStats(s); setRevenue(r); setEngagement(e)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Erro ao carregar')
         } finally {
             setLoading(false)
+        }
+    }, [token])
+
+    const checkApis = useCallback(async () => {
+        setLoadingApi(true)
+        try {
+            const data = await adminFetch('/api/admin/api-status', token)
+            setApiStatus(data)
+        } finally {
+            setLoadingApi(false)
         }
     }, [token])
 
@@ -156,39 +236,255 @@ function DashboardTab({ token }: { token: string }) {
 
     if (loading) return <LoadingSpinner />
     if (error) return <ErrorMsg msg={error} onRetry={load} />
-    if (!stats) return null
+    if (!stats || !revenue || !engagement) return null
 
-    const paid = (stats.planCounts.essencial ?? 0) + (stats.planCounts.pro ?? 0) +
-        (stats.planCounts.elite ?? 0) + (stats.planCounts.admin ?? 0)
+    const paid = revenue.paidUsers
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-                <StatCard label="Total de usuários" value={stats.totalUsers} />
-                <StatCard label="Pagantes" value={paid} sub={`${((paid / Math.max(stats.totalUsers, 1)) * 100).toFixed(1)}% conversão`} />
-                <StatCard label="Estratégias (mês)" value={stats.strategiesThisMonth} />
-                <StatCard label="Roteiros (mês)" value={stats.roteiroThisMonth} />
-                <StatCard label="Buscas (mês)" value={stats.buscasThisMonth} />
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
-            <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: 24 }}>
-                <p style={{ color: '#94a3b8', fontSize: 13, fontWeight: 700, marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Distribuição por plano</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {(['free', 'essencial', 'pro', 'elite', 'admin'] as Plan[]).map(p => {
-                        const count = stats.planCounts[p] ?? 0
-                        const pct = stats.totalUsers > 0 ? (count / stats.totalUsers) * 100 : 0
-                        return (
-                            <div key={p} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <span style={{ width: 72, fontSize: 12, fontWeight: 700, color: PLAN_COLORS[p] }}>{PLAN_LABELS[p]}</span>
-                                <div style={{ flex: 1, background: '#1e293b', borderRadius: 4, height: 8, overflow: 'hidden' }}>
-                                    <div style={{ width: `${pct}%`, height: '100%', background: PLAN_COLORS[p], borderRadius: 4, transition: 'width 0.6s' }} />
+            {/* ── Receita ─────────────────────────────────────────────────── */}
+            <section>
+                <SectionTitle
+                    icon={DollarSign}
+                    title="Receita"
+                    description="Visão financeira do produto — MRR, conversão e alertas de churn"
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+                    <StatCard
+                        label="MRR"
+                        value={fmtBRL(revenue.mrr)}
+                        sub="Receita mensal recorrente"
+                        tooltip="Soma dos planos pagantes ativos × preço mensal"
+                        highlight="#22c55e"
+                    />
+                    <StatCard
+                        label="Usuários pagantes"
+                        value={paid}
+                        sub={`de ${stats.totalUsers} totais`}
+                        tooltip="Planos essencial, pro ou elite não expirados"
+                    />
+                    <StatCard
+                        label="Conversão"
+                        value={`${revenue.conversionRate}%`}
+                        sub="Free → pago"
+                        tooltip="% de usuários com plano pago ativo"
+                    />
+                    <StatCard
+                        label="Novos pagantes"
+                        value={revenue.newPaidThisMonth}
+                        sub="Este mês"
+                        tooltip="Usuários que atualizaram para plano pago neste mês"
+                    />
+                    <StatCard
+                        label="Churn (expirados)"
+                        value={revenue.churnCount}
+                        sub="Não renovaram"
+                        highlight={revenue.churnCount > 0 ? '#ef4444' : undefined}
+                        tooltip="Planos pagos que expiraram e não foram renovados"
+                    />
+                </div>
+
+                {/* Alerta: expirando em 7 dias */}
+                {revenue.expiringIn7Days.length > 0 && (
+                    <div style={{ marginTop: 12, background: '#1a1200', border: '1px solid #854d0e', borderRadius: 10, padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <Clock size={14} style={{ color: '#f59e0b' }} />
+                            <span style={{ color: '#fcd34d', fontSize: 13, fontWeight: 700 }}>
+                                {revenue.expiringIn7Days.length} plano(s) expirando nos próximos 7 dias
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {revenue.expiringIn7Days.map(u => (
+                                <span key={u.id} style={{ fontSize: 11, color: '#92400e', background: '#451a03', borderRadius: 6, padding: '3px 8px' }}>
+                                    {PLAN_LABELS[u.plan]} · expira {fmtDate(u.plan_expires_at)}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </section>
+
+            {/* ── Distribuição por plano ────────────────────────────────── */}
+            <section>
+                <SectionTitle
+                    icon={Users}
+                    title="Usuários"
+                    description="Total de cadastros e distribuição por plano"
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, marginBottom: 12 }}>
+                    <StatCard label="Total de usuários" value={stats.totalUsers} sub="Todos os cadastros" />
+                    <StatCard
+                        label="Ativos (30d)"
+                        value={engagement.activeUsers30d}
+                        sub="Fizeram ≥1 busca"
+                        tooltip="Usuários que realizaram pelo menos 1 busca de voo nos últimos 30 dias"
+                    />
+                    <StatCard
+                        label="Ativos (7d)"
+                        value={engagement.activeUsers7d}
+                        sub="Semana atual"
+                        tooltip="Usuários com busca nos últimos 7 dias"
+                    />
+                    <StatCard
+                        label="Pagantes inativos"
+                        value={engagement.inactivePaidUsers}
+                        sub="Sem uso em 30d"
+                        highlight={engagement.inactivePaidUsers > 0 ? '#f59e0b' : undefined}
+                        tooltip="Usuários com plano pago ativo mas sem busca nos últimos 30 dias — risco de churn"
+                    />
+                </div>
+
+                {/* Barra de distribuição por plano */}
+                <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: '18px 20px' }}>
+                    <p style={{ color: '#475569', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+                        Distribuição por plano
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {(['free', 'essencial', 'pro', 'elite', 'admin'] as Plan[]).map(p => {
+                            const count = stats.planCounts[p] ?? 0
+                            const pct = stats.totalUsers > 0 ? (count / stats.totalUsers) * 100 : 0
+                            return (
+                                <div key={p} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <span style={{ width: 72, fontSize: 12, fontWeight: 700, color: PLAN_COLORS[p] }}>{PLAN_LABELS[p]}</span>
+                                    <div style={{ flex: 1, background: '#1e293b', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                                        <div style={{ width: `${pct}%`, height: '100%', background: PLAN_COLORS[p], borderRadius: 4, transition: 'width 0.6s' }} />
+                                    </div>
+                                    <span style={{ width: 36, textAlign: 'right', fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{count}</span>
                                 </div>
-                                <span style={{ width: 36, textAlign: 'right', fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{count}</span>
+                            )
+                        })}
+                    </div>
+                </div>
+            </section>
+
+            {/* ── Uso do produto ───────────────────────────────────────── */}
+            <section>
+                <SectionTitle
+                    icon={Activity}
+                    title="Uso do produto"
+                    description="Volume de uso das funcionalidades de IA este mês"
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, marginBottom: 16 }}>
+                    <StatCard
+                        label="Buscas (mês)"
+                        value={stats.buscasThisMonth}
+                        sub="Voos consultados"
+                        tooltip="Total de buscas de voos realizadas este mês"
+                    />
+                    <StatCard
+                        label="Estratégias (mês)"
+                        value={stats.strategiesThisMonth}
+                        sub="Geradas por IA"
+                        tooltip="Estratégias de milhas geradas pelo Claude este mês"
+                    />
+                    <StatCard
+                        label="Roteiros (mês)"
+                        value={stats.roteiroThisMonth}
+                        sub="Gerados por IA"
+                        tooltip="Roteiros de viagem gerados pelo Claude este mês"
+                    />
+                </div>
+
+                {/* Estratégias por dia — mini gráfico de barras */}
+                {engagement.strategiesPerDay.length > 0 && (
+                    <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: '18px 20px' }}>
+                        <p style={{ color: '#475569', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+                            Estratégias geradas — últimos 14 dias
+                        </p>
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 60 }}>
+                            {(() => {
+                                const max = Math.max(...engagement.strategiesPerDay.map(d => d.count as number), 1)
+                                return engagement.strategiesPerDay.map(d => (
+                                    <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                        <div
+                                            title={`${d.date}: ${d.count}`}
+                                            style={{
+                                                width: '100%', background: '#2A60C2',
+                                                borderRadius: '3px 3px 0 0',
+                                                height: `${((d.count as number) / max) * 52}px`,
+                                                minHeight: 2, transition: 'height 0.3s',
+                                            }}
+                                        />
+                                        <span style={{ fontSize: 9, color: '#334155', transform: 'rotate(-45deg)', transformOrigin: 'center', whiteSpace: 'nowrap' }}>
+                                            {d.date.slice(5)}
+                                        </span>
+                                    </div>
+                                ))
+                            })()}
+                        </div>
+                    </div>
+                )}
+            </section>
+
+            {/* ── Top destinos ────────────────────────────────────────── */}
+            <section>
+                <SectionTitle
+                    icon={MapPin}
+                    title="Top destinos"
+                    description="Rotas mais buscadas nos últimos 30 dias — indica demanda dos usuários"
+                />
+                <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, overflow: 'hidden' }}>
+                    {engagement.topRoutes.length === 0 && (
+                        <p style={{ color: '#475569', padding: 20, textAlign: 'center', fontSize: 13 }}>Sem dados de buscas recentes.</p>
+                    )}
+                    {engagement.topRoutes.map((r, i) => {
+                        const max = engagement.topRoutes[0]?.count ?? 1
+                        const pct = ((r.count as number) / (max as number)) * 100
+                        return (
+                            <div key={r.route} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: i < engagement.topRoutes.length - 1 ? '1px solid #0f172a' : 'none' }}>
+                                <span style={{ width: 20, fontSize: 11, color: '#475569', fontWeight: 700 }}>#{i + 1}</span>
+                                <span style={{ flex: 1, fontSize: 13, color: '#f1f5f9', fontWeight: 600 }}>{r.route}</span>
+                                <div style={{ width: 80, background: '#1e293b', borderRadius: 4, height: 6 }}>
+                                    <div style={{ width: `${pct}%`, height: '100%', background: '#2A60C2', borderRadius: 4 }} />
+                                </div>
+                                <span style={{ width: 28, textAlign: 'right', fontSize: 12, color: '#94a3b8', fontWeight: 700 }}>{r.count}</span>
                             </div>
                         )
                     })}
                 </div>
-            </div>
+            </section>
+
+            {/* ── Status das APIs ─────────────────────────────────────── */}
+            <section>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+                    <SectionTitle
+                        icon={Zap}
+                        title="Status das APIs"
+                        description="Verifica se os serviços externos estão respondendo corretamente"
+                    />
+                    <button onClick={checkApis} disabled={loadingApi} style={{ ...btnSecondary, marginTop: 2 }}>
+                        {loadingApi ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={13} />}
+                        &nbsp;Verificar
+                    </button>
+                </div>
+
+                {!apiStatus && !loadingApi && (
+                    <p style={{ color: '#475569', fontSize: 13 }}>Clique em "Verificar" para checar o status das integrações.</p>
+                )}
+                {loadingApi && <LoadingSpinner />}
+                {apiStatus && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {apiStatus.checks.map(c => (
+                            <div key={c.name} style={{
+                                display: 'flex', alignItems: 'center', gap: 12,
+                                background: '#111827', border: `1px solid ${c.ok ? '#14532d' : '#7f1d1d'}`,
+                                borderRadius: 10, padding: '12px 16px',
+                            }}>
+                                {c.ok
+                                    ? <CheckCircle size={16} style={{ color: '#22c55e', flexShrink: 0 }} />
+                                    : <XCircle size={16} style={{ color: '#ef4444', flexShrink: 0 }} />}
+                                <span style={{ flex: 1, color: '#f1f5f9', fontSize: 13, fontWeight: 600 }}>{c.name}</span>
+                                <span style={{ fontSize: 11, color: '#475569' }}>{c.latency}ms</span>
+                                {!c.ok && c.error && (
+                                    <span style={{ fontSize: 11, color: '#fca5a5', maxWidth: 200, textAlign: 'right' }}>{c.error}</span>
+                                )}
+                            </div>
+                        ))}
+                        <p style={{ fontSize: 11, color: '#334155', textAlign: 'right' }}>Verificado em {fmtDateTime(apiStatus.checkedAt)}</p>
+                    </div>
+                )}
+            </section>
         </div>
     )
 }
@@ -227,6 +523,12 @@ function UsuariosTab({ token }: { token: string }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <SectionTitle
+                icon={Users}
+                title="Gerenciar usuários"
+                description="Visualize, filtre e edite plano, expiração e permissões de cada usuário"
+            />
+
             {/* Filtros */}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                 <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
@@ -241,7 +543,7 @@ function UsuariosTab({ token }: { token: string }) {
                 <select
                     value={planFilter}
                     onChange={e => { setPlanFilter(e.target.value as Plan | ''); setPage(1) }}
-                    style={inputStyle({ width: 140 })}
+                    style={inputStyle({ width: 150 })}
                 >
                     <option value="">Todos os planos</option>
                     {(['free', 'essencial', 'pro', 'elite', 'admin'] as Plan[]).map(p => (
@@ -260,7 +562,7 @@ function UsuariosTab({ token }: { token: string }) {
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                             <thead>
                                 <tr style={{ borderBottom: '1px solid #1e293b' }}>
-                                    {['Nome / Email', 'Plano', 'Expira', 'Cobrança', 'Atualizado', 'Ações'].map(h => (
+                                    {['Nome / Email', 'Plano', 'Expira em', 'Cobrança', 'Atualizado', ''].map(h => (
                                         <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                                     ))}
                                 </tr>
@@ -275,7 +577,11 @@ function UsuariosTab({ token }: { token: string }) {
                                         <td style={{ padding: '10px 12px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 <PlanBadge plan={u.plan} />
-                                                {u.is_admin && <span title="Admin" style={{ color: '#dc2626' }}><Shield size={12} /></span>}
+                                                {u.is_admin && (
+                                                    <span title="Admin" style={{ color: '#dc2626', display: 'flex' }}>
+                                                        <Shield size={12} />
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                         <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{fmtDate(u.plan_expires_at)}</td>
@@ -292,6 +598,7 @@ function UsuariosTab({ token }: { token: string }) {
                             <p style={{ textAlign: 'center', color: '#475569', padding: 32 }}>Nenhum usuário encontrado.</p>
                         )}
                     </div>
+
                     {totalPages > 1 && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
                             <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} style={btnSecondary}>←</button>
@@ -317,10 +624,7 @@ function UsuariosTab({ token }: { token: string }) {
 // ─── Edit User Modal ──────────────────────────────────────────────────────────
 
 function EditUserModal({ user, token, onClose, onSaved }: {
-    user: AdminUser
-    token: string
-    onClose: () => void
-    onSaved: () => void
+    user: AdminUser; token: string; onClose: () => void; onSaved: () => void
 }) {
     const [plan, setPlan] = useState<Plan>(user.plan)
     const [expiresAt, setExpiresAt] = useState(user.plan_expires_at ? user.plan_expires_at.slice(0, 10) : '')
@@ -356,7 +660,7 @@ function EditUserModal({ user, token, onClose, onSaved }: {
 
     return (
         <div style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 50,
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 50,
             display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
         }} onClick={e => e.target === e.currentTarget && onClose()}>
             <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 16, padding: 28, width: '100%', maxWidth: 420 }}>
@@ -372,12 +676,10 @@ function EditUserModal({ user, token, onClose, onSaved }: {
                             ))}
                         </select>
                     </label>
-
                     <label style={labelStyle}>
-                        Expiração do plano
+                        Data de expiração
                         <input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} style={inputStyle()} />
                     </label>
-
                     <label style={labelStyle}>
                         Cobrança
                         <select value={billing} onChange={e => setBilling(e.target.value)} style={inputStyle()}>
@@ -386,10 +688,12 @@ function EditUserModal({ user, token, onClose, onSaved }: {
                             <option value="anual">Anual</option>
                         </select>
                     </label>
-
                     <label style={{ ...labelStyle, flexDirection: 'row', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                         <input type="checkbox" checked={isAdmin} onChange={e => setIsAdmin(e.target.checked)} />
-                        <span>Admin (acesso ao painel)</span>
+                        <div>
+                            <span style={{ color: '#f1f5f9' }}>Acesso de admin</span>
+                            <p style={{ fontSize: 11, color: '#475569', margin: '2px 0 0' }}>Permite acessar este painel</p>
+                        </div>
                     </label>
                 </div>
 
@@ -437,7 +741,7 @@ function PromocoesTab({ token }: { token: string }) {
         setSyncing(true); setSyncMsg(null)
         try {
             await adminFetch('/api/transfer-promotions/update', token, { method: 'POST' })
-            setSyncMsg('Sync disparado com sucesso.')
+            setSyncMsg('Sync disparado. Aguarde alguns segundos e recarregue.')
             await load()
         } catch (e: unknown) {
             setSyncMsg(e instanceof Error ? e.message : 'Erro no sync')
@@ -454,15 +758,27 @@ function PromocoesTab({ token }: { token: string }) {
     if (loading) return <LoadingSpinner />
     if (error) return <ErrorMsg msg={error} onRetry={load} />
 
+    const active = promos.filter(p => p.active).length
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <p style={{ color: '#94a3b8', fontSize: 13 }}>{promos.length} promoções cadastradas</p>
+            <SectionTitle
+                icon={Tag}
+                title="Promoções de transferência"
+                description="Bônus de transferência de pontos exibidos no simulador. Ative/desative sem precisar do Supabase."
+            />
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 10 }}>
+                    <span style={{ fontSize: 12, color: '#22c55e' }}>{active} ativas</span>
+                    <span style={{ fontSize: 12, color: '#475569' }}>·</span>
+                    <span style={{ fontSize: 12, color: '#475569' }}>{promos.length - active} inativas</span>
+                </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     {syncMsg && <span style={{ fontSize: 12, color: '#94a3b8' }}>{syncMsg}</span>}
                     <button onClick={syncPromos} disabled={syncing} style={btnSecondary}>
                         {syncing ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={14} />}
-                        &nbsp;Sync
+                        &nbsp;Sincronizar dados
                     </button>
                 </div>
             </div>
@@ -471,27 +787,29 @@ function PromocoesTab({ token }: { token: string }) {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                         <tr style={{ borderBottom: '1px solid #1e293b' }}>
-                            {['Cartão', 'Programa', 'Bônus', 'Validade', 'Confirmado', 'Periódico', 'Ativo'].map(h => (
+                            {['Cartão', 'Programa', 'Bônus', 'Última confirmação', 'Validade', 'Periódico', 'Ativo'].map(h => (
                                 <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody>
                         {promos.map(p => (
-                            <tr key={p.id} style={{ borderBottom: '1px solid #0f172a', opacity: p.active ? 1 : 0.45 }}>
+                            <tr key={p.id} style={{ borderBottom: '1px solid #0f172a', opacity: p.active ? 1 : 0.4 }}>
                                 <td style={{ padding: '10px 12px', color: '#f1f5f9', fontWeight: 600 }}>{p.card_id}</td>
                                 <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{p.program}</td>
                                 <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 700 }}>+{p.bonus_percent}%</td>
-                                <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 11, maxWidth: 160 }}>{p.valid_until}</td>
                                 <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 11 }}>{p.last_confirmed ?? '—'}</td>
+                                <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 11, maxWidth: 180 }}>{p.valid_until}</td>
                                 <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                                    {p.is_periodic ? <CheckCircle size={14} style={{ color: '#22c55e' }} /> : <XCircle size={14} style={{ color: '#475569' }} />}
+                                    {p.is_periodic
+                                        ? <CheckCircle size={14} style={{ color: '#22c55e' }} />
+                                        : <XCircle size={14} style={{ color: '#475569' }} />}
                                 </td>
                                 <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                                     <button
                                         onClick={() => toggleActive(p.id, p.active)}
-                                        title={p.active ? 'Desativar' : 'Ativar'}
-                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                                        title={p.active ? 'Desativar promoção' : 'Ativar promoção'}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
                                     >
                                         {p.active
                                             ? <CheckCircle size={16} style={{ color: '#22c55e' }} />
@@ -532,59 +850,47 @@ function LogsTab({ token }: { token: string }) {
     if (error) return <ErrorMsg msg={error} onRetry={load} />
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <p style={{ color: '#64748b', fontSize: 13 }}>{logs.length} registros</p>
-                <button onClick={load} style={btnSecondary}><RefreshCw size={14} /></button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                <SectionTitle
+                    icon={FileText}
+                    title="Logs de sincronização"
+                    description="Histórico de execuções do sync automático de promoções de transferência. Útil para detectar falhas ou confirmar que os dados estão atualizados."
+                />
+                <button onClick={load} style={{ ...btnSecondary, marginTop: 2 }}><RefreshCw size={14} /></button>
             </div>
+
             {logs.length === 0 && (
                 <p style={{ color: '#475569', textAlign: 'center', padding: 32 }}>Nenhum log encontrado.</p>
             )}
+
             {logs.map(log => (
                 <div key={log.id} style={{
-                    background: '#111827', border: `1px solid ${log.changes_detected ? '#1e3a5f' : '#1e293b'}`,
+                    background: '#111827',
+                    border: `1px solid ${log.changes_detected ? '#1e3a5f' : '#1e293b'}`,
                     borderRadius: 10, padding: '14px 18px',
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             {log.changes_detected
                                 ? <CheckCircle size={14} style={{ color: '#22c55e', flexShrink: 0 }} />
-                                : <XCircle size={14} style={{ color: '#475569', flexShrink: 0 }} />}
+                                : <UserX size={14} style={{ color: '#475569', flexShrink: 0 }} />}
                             <span style={{ color: '#f1f5f9', fontSize: 13, fontWeight: 600 }}>
-                                {log.changes_detected ? `${log.rows_updated} linha(s) atualizada(s)` : 'Sem alterações'}
+                                {log.changes_detected
+                                    ? `${log.rows_updated} linha(s) atualizada(s)`
+                                    : 'Sem alterações detectadas'}
                             </span>
                         </div>
                         <span style={{ color: '#475569', fontSize: 11, whiteSpace: 'nowrap' }}>{fmtDateTime(log.synced_at)}</span>
                     </div>
                     {log.summary && (
-                        <p style={{ color: '#64748b', fontSize: 12, marginTop: 6, lineHeight: 1.4 }}>{log.summary}</p>
+                        <p style={{ color: '#64748b', fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{log.summary}</p>
                     )}
                     <p style={{ color: '#334155', fontSize: 11, marginTop: 4 }}>
                         {log.sources_scraped} fonte(s) verificada(s)
                     </p>
                 </div>
             ))}
-        </div>
-    )
-}
-
-// ─── Shared UI ────────────────────────────────────────────────────────────────
-
-function LoadingSpinner() {
-    return (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
-            <Loader2 size={24} style={{ color: '#2A60C2', animation: 'spin 1s linear infinite' }} />
-            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-        </div>
-    )
-}
-
-function ErrorMsg({ msg, onRetry }: { msg: string; onRetry: () => void }) {
-    return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#1a0a0a', border: '1px solid #7f1d1d', borderRadius: 10, padding: '14px 18px' }}>
-            <AlertTriangle size={16} style={{ color: '#ef4444', flexShrink: 0 }} />
-            <span style={{ color: '#fca5a5', fontSize: 13, flex: 1 }}>{msg}</span>
-            <button onClick={onRetry} style={btnSecondary}>Tentar novamente</button>
         </div>
     )
 }
@@ -635,19 +941,22 @@ export default function Admin() {
             <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
 
             <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px 80px' }}>
-                {/* Header */}
+                {/* Cabeçalho */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
                     <button onClick={() => navigate('/home')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 4 }}>
                         <ChevronLeft size={20} />
                     </button>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <Shield size={20} style={{ color: '#dc2626' }} />
-                        <h1 style={{ color: '#f1f5f9', fontSize: 20, fontWeight: 800, margin: 0 }}>Painel Admin</h1>
+                        <div>
+                            <h1 style={{ color: '#f1f5f9', fontSize: 20, fontWeight: 800, margin: 0 }}>Painel Admin</h1>
+                            <p style={{ color: '#475569', fontSize: 12, margin: 0 }}>FlyWise · Acesso restrito</p>
+                        </div>
                     </div>
                 </div>
 
                 {/* Tabs */}
-                <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #1e293b', marginBottom: 24 }}>
+                <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid #1e293b', marginBottom: 28, overflowX: 'auto' }}>
                     {TABS.map(({ id, label, Icon }) => (
                         <button
                             key={id}
@@ -659,7 +968,7 @@ export default function Admin() {
                                 borderBottom: tab === id ? '2px solid #2A60C2' : '2px solid transparent',
                                 fontSize: 13, fontWeight: tab === id ? 700 : 500,
                                 display: 'flex', alignItems: 'center', gap: 6,
-                                transition: 'color 0.15s',
+                                transition: 'color 0.15s', whiteSpace: 'nowrap',
                             }}
                         >
                             <Icon size={14} />
@@ -668,7 +977,7 @@ export default function Admin() {
                     ))}
                 </div>
 
-                {/* Content */}
+                {/* Conteúdo */}
                 {tab === 'dashboard' && <DashboardTab token={token} />}
                 {tab === 'usuarios' && <UsuariosTab token={token} />}
                 {tab === 'promocoes' && <PromocoesTab token={token} />}
