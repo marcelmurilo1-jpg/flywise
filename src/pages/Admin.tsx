@@ -1,18 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-    Users, BarChart2, Tag, FileText, ChevronLeft,
-    RefreshCw, Shield, Loader2, CheckCircle, XCircle,
+    Users, BarChart2, Tag, FileText, Shield,
+    RefreshCw, Loader2, CheckCircle, XCircle,
     AlertTriangle, Search, Activity, Zap,
-    DollarSign, MapPin, Clock, UserX,
+    DollarSign, MapPin, Clock, UserX, Receipt,
+    Plus, Trash2, ChevronLeft, ChevronRight,
+    TrendingDown, Home,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
-import { Header } from '@/components/Header'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type TabId = 'dashboard' | 'usuarios' | 'promocoes' | 'logs'
+type SectionId = 'dashboard' | 'usuarios' | 'custos' | 'promocoes' | 'logs'
 type Plan = 'free' | 'essencial' | 'pro' | 'elite' | 'admin'
 
 interface Stats {
@@ -40,56 +41,40 @@ interface Engagement {
     strategiesPerDay: { date: string; count: number }[]
 }
 
-interface ApiCheck {
-    name: string
-    ok: boolean
-    latency: number
-    error?: string
-}
-
-interface ApiStatus {
-    checks: ApiCheck[]
-    checkedAt: string
-}
+interface ApiCheck { name: string; ok: boolean; latency: number; error?: string }
+interface ApiStatus { checks: ApiCheck[]; checkedAt: string }
 
 interface AdminUser {
-    id: string
-    full_name: string | null
-    email: string | null
-    plan: Plan
-    plan_expires_at: string | null
-    plan_billing: string | null
-    is_admin: boolean
-    updated_at: string
+    id: string; full_name: string | null; email: string | null
+    plan: Plan; plan_expires_at: string | null; plan_billing: string | null
+    is_admin: boolean; updated_at: string
 }
 
 interface TransferPromo {
-    id: number
-    card_id: string
-    program: string
-    bonus_percent: number
-    valid_until: string
-    active: boolean
-    last_confirmed: string | null
-    is_periodic: boolean
+    id: number; card_id: string; program: string; bonus_percent: number
+    valid_until: string; active: boolean; last_confirmed: string | null; is_periodic: boolean
 }
 
 interface SyncLog {
-    id: number
-    synced_at: string
-    sources_scraped: number
-    changes_detected: boolean
-    rows_updated: number
-    summary: string | null
+    id: number; synced_at: string; sources_scraped: number
+    changes_detected: boolean; rows_updated: number; summary: string | null
 }
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+interface Cost {
+    id: number; month: string; service: string; category: string
+    amount_brl: number; notes: string | null; created_at: string
+}
 
-const TABS: { id: TabId; label: string; Icon: React.ElementType }[] = [
-    { id: 'dashboard', label: 'Dashboard', Icon: BarChart2 },
-    { id: 'usuarios', label: 'Usuários', Icon: Users },
-    { id: 'promocoes', label: 'Promoções', Icon: Tag },
-    { id: 'logs', label: 'Logs', Icon: FileText },
+interface CostHistory { month: string; total: number }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const SECTIONS: { id: SectionId; label: string; icon: React.ElementType; description: string }[] = [
+    { id: 'dashboard',  label: 'Dashboard',   icon: BarChart2,  description: 'Visão geral do negócio' },
+    { id: 'usuarios',   label: 'Usuários',     icon: Users,      description: 'Gerenciar contas e planos' },
+    { id: 'custos',     label: 'Custos',       icon: Receipt,    description: 'Controle de gastos' },
+    { id: 'promocoes',  label: 'Promoções',    icon: Tag,        description: 'Bônus de transferência' },
+    { id: 'logs',       label: 'Logs',         icon: FileText,   description: 'Histórico de sincronização' },
 ]
 
 const PLAN_LABELS: Record<Plan, string> = {
@@ -98,6 +83,25 @@ const PLAN_LABELS: Record<Plan, string> = {
 
 const PLAN_COLORS: Record<Plan, string> = {
     free: '#64748b', essencial: '#2A60C2', pro: '#7c3aed', elite: '#d97706', admin: '#dc2626',
+}
+
+const COST_CATEGORIES = ['Infraestrutura', 'APIs', 'Pagamentos', 'Marketing', 'Outros'] as const
+type CostCategory = typeof COST_CATEGORIES[number]
+
+const CATEGORY_COLORS: Record<CostCategory, string> = {
+    Infraestrutura: '#2A60C2',
+    APIs:           '#7c3aed',
+    Pagamentos:     '#059669',
+    Marketing:      '#d97706',
+    Outros:         '#64748b',
+}
+
+const SUGGESTED_SERVICES: Record<CostCategory, string[]> = {
+    Infraestrutura: ['Vercel', 'Railway', 'Supabase', 'Cloudflare', 'Domínio'],
+    APIs:           ['Anthropic (Claude)', 'Seats.aero', 'Amadeus', 'Google APIs'],
+    Pagamentos:     ['AbacatePay', 'Stripe', 'Taxas de processamento'],
+    Marketing:      ['Google Ads', 'Meta Ads', 'Ferramentas de e-mail'],
+    Outros:         ['Ferramentas SaaS', 'Design', 'Jurídico'],
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -131,73 +135,80 @@ function fmtDateTime(iso: string | null) {
 }
 
 function fmtBRL(value: number) {
-    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 })
+}
+
+function monthLabel(ym: string) {
+    const [y, m] = ym.split('-')
+    const names = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+    return `${names[parseInt(m) - 1]}/${y.slice(2)}`
+}
+
+function currentMonth() {
+    return new Date().toISOString().slice(0, 7)
 }
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 
-function LoadingSpinner() {
+function Spinner() {
     return (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-            <Loader2 size={24} style={{ color: '#2A60C2', animation: 'spin 1s linear infinite' }} />
+            <Loader2 size={22} style={{ color: '#2A60C2', animation: 'spin 1s linear infinite' }} />
         </div>
     )
 }
 
-function ErrorMsg({ msg, onRetry }: { msg: string; onRetry: () => void }) {
+function ErrBox({ msg, onRetry }: { msg: string; onRetry: () => void }) {
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#1a0a0a', border: '1px solid #7f1d1d', borderRadius: 10, padding: '14px 18px' }}>
-            <AlertTriangle size={16} style={{ color: '#ef4444', flexShrink: 0 }} />
+            <AlertTriangle size={15} style={{ color: '#ef4444', flexShrink: 0 }} />
             <span style={{ color: '#fca5a5', fontSize: 13, flex: 1 }}>{msg}</span>
-            <button onClick={onRetry} style={btnSecondary}>Tentar novamente</button>
+            <button onClick={onRetry} style={S.btnSm}>Tentar novamente</button>
         </div>
     )
 }
 
-function SectionTitle({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) {
+function BlockTitle({ icon: Icon, title, subtitle }: { icon: React.ElementType; title: string; subtitle: string }) {
     return (
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
-            <div style={{ background: '#1e293b', borderRadius: 8, padding: 8, marginTop: 2 }}>
-                <Icon size={16} style={{ color: '#2A60C2' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{ background: '#1e293b', borderRadius: 8, padding: 7 }}>
+                <Icon size={15} style={{ color: '#2A60C2', display: 'block' }} />
             </div>
             <div>
                 <p style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 800, margin: 0 }}>{title}</p>
-                <p style={{ color: '#475569', fontSize: 12, margin: '2px 0 0' }}>{description}</p>
+                <p style={{ color: '#475569', fontSize: 11, margin: 0 }}>{subtitle}</p>
             </div>
         </div>
     )
 }
 
-function StatCard({ label, value, sub, highlight, tooltip }: {
-    label: string; value: string | number; sub?: string; highlight?: string; tooltip?: string
+function KPI({ label, value, sub, color, tooltip }: {
+    label: string; value: string | number; sub?: string; color?: string; tooltip?: string
 }) {
     return (
-        <div title={tooltip} style={{
-            background: '#111827', border: `1px solid ${highlight ? highlight + '33' : '#1e293b'}`,
-            borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 4,
-        }}>
-            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-            <span style={{ fontSize: 26, fontWeight: 800, color: highlight ?? '#f1f5f9' }}>{value}</span>
-            {sub && <span style={{ fontSize: 11, color: '#475569' }}>{sub}</span>}
+        <div title={tooltip} style={{ background: '#111827', border: `1px solid ${color ? color + '30' : '#1e293b'}`, borderRadius: 12, padding: '16px 18px' }}>
+            <p style={{ fontSize: 11, color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>{label}</p>
+            <p style={{ fontSize: 24, fontWeight: 800, color: color ?? '#f1f5f9', margin: '0 0 4px' }}>{value}</p>
+            {sub && <p style={{ fontSize: 11, color: '#475569', margin: 0 }}>{sub}</p>}
         </div>
     )
 }
 
 function PlanBadge({ plan }: { plan: Plan }) {
     return (
-        <span style={{
-            background: PLAN_COLORS[plan] + '22', color: PLAN_COLORS[plan],
-            border: `1px solid ${PLAN_COLORS[plan]}44`, borderRadius: 6,
-            padding: '2px 8px', fontSize: 11, fontWeight: 700,
-        }}>
+        <span style={{ background: PLAN_COLORS[plan] + '22', color: PLAN_COLORS[plan], border: `1px solid ${PLAN_COLORS[plan]}44`, borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
             {PLAN_LABELS[plan]}
         </span>
     )
 }
 
-// ─── Dashboard Tab ─────────────────────────────────────────────────────────────
+function Divider() {
+    return <div style={{ height: 1, background: '#1e293b', margin: '28px 0' }} />
+}
 
-function DashboardTab({ token }: { token: string }) {
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+function Dashboard({ token }: { token: string }) {
     const [stats, setStats] = useState<Stats | null>(null)
     const [revenue, setRevenue] = useState<Revenue | null>(null)
     const [engagement, setEngagement] = useState<Engagement | null>(null)
@@ -217,86 +228,51 @@ function DashboardTab({ token }: { token: string }) {
             setStats(s); setRevenue(r); setEngagement(e)
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Erro ao carregar')
-        } finally {
-            setLoading(false)
-        }
+        } finally { setLoading(false) }
     }, [token])
 
     const checkApis = useCallback(async () => {
         setLoadingApi(true)
-        try {
-            const data = await adminFetch('/api/admin/api-status', token)
-            setApiStatus(data)
-        } finally {
-            setLoadingApi(false)
-        }
+        try { setApiStatus(await adminFetch('/api/admin/api-status', token)) }
+        finally { setLoadingApi(false) }
     }, [token])
 
     useEffect(() => { load() }, [load])
 
-    if (loading) return <LoadingSpinner />
-    if (error) return <ErrorMsg msg={error} onRetry={load} />
+    if (loading) return <Spinner />
+    if (error) return <ErrBox msg={error} onRetry={load} />
     if (!stats || !revenue || !engagement) return null
-
-    const paid = revenue.paidUsers
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
-            {/* ── Receita ─────────────────────────────────────────────────── */}
+            {/* ── Receita ────────────────────────────────────────────── */}
             <section>
-                <SectionTitle
-                    icon={DollarSign}
-                    title="Receita"
-                    description="Visão financeira do produto — MRR, conversão e alertas de churn"
-                />
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
-                    <StatCard
-                        label="MRR"
-                        value={fmtBRL(revenue.mrr)}
-                        sub="Receita mensal recorrente"
-                        tooltip="Soma dos planos pagantes ativos × preço mensal"
-                        highlight="#22c55e"
-                    />
-                    <StatCard
-                        label="Usuários pagantes"
-                        value={paid}
-                        sub={`de ${stats.totalUsers} totais`}
-                        tooltip="Planos essencial, pro ou elite não expirados"
-                    />
-                    <StatCard
-                        label="Conversão"
-                        value={`${revenue.conversionRate}%`}
-                        sub="Free → pago"
-                        tooltip="% de usuários com plano pago ativo"
-                    />
-                    <StatCard
-                        label="Novos pagantes"
-                        value={revenue.newPaidThisMonth}
-                        sub="Este mês"
-                        tooltip="Usuários que atualizaram para plano pago neste mês"
-                    />
-                    <StatCard
-                        label="Churn (expirados)"
-                        value={revenue.churnCount}
-                        sub="Não renovaram"
-                        highlight={revenue.churnCount > 0 ? '#ef4444' : undefined}
-                        tooltip="Planos pagos que expiraram e não foram renovados"
-                    />
+                <BlockTitle icon={DollarSign} title="Receita" subtitle="MRR, conversão e alertas de renovação" />
+                <div style={S.grid5}>
+                    <KPI label="MRR" value={fmtBRL(revenue.mrr)} sub="Receita mensal recorrente" color="#22c55e"
+                        tooltip="Soma dos planos pagantes ativos × preço mensal" />
+                    <KPI label="Pagantes" value={revenue.paidUsers} sub={`de ${stats.totalUsers} usuários`}
+                        tooltip="Planos essencial, pro ou elite não expirados" />
+                    <KPI label="Conversão" value={`${revenue.conversionRate}%`} sub="Free → pago"
+                        tooltip="% de usuários com plano pago ativo" />
+                    <KPI label="Novos pagantes" value={revenue.newPaidThisMonth} sub="Este mês" />
+                    <KPI label="Churn (expirados)" value={revenue.churnCount} sub="Não renovaram"
+                        color={revenue.churnCount > 0 ? '#ef4444' : undefined}
+                        tooltip="Planos pagos expirados e não renovados" />
                 </div>
 
-                {/* Alerta: expirando em 7 dias */}
                 {revenue.expiringIn7Days.length > 0 && (
-                    <div style={{ marginTop: 12, background: '#1a1200', border: '1px solid #854d0e', borderRadius: 10, padding: '12px 16px' }}>
+                    <div style={{ marginTop: 10, background: '#1a1200', border: '1px solid #854d0e', borderRadius: 10, padding: '12px 16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                            <Clock size={14} style={{ color: '#f59e0b' }} />
+                            <Clock size={13} style={{ color: '#f59e0b' }} />
                             <span style={{ color: '#fcd34d', fontSize: 13, fontWeight: 700 }}>
-                                {revenue.expiringIn7Days.length} plano(s) expirando nos próximos 7 dias
+                                {revenue.expiringIn7Days.length} plano(s) expirando nos próximos 7 dias — considere entrar em contato
                             </span>
                         </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                             {revenue.expiringIn7Days.map(u => (
-                                <span key={u.id} style={{ fontSize: 11, color: '#92400e', background: '#451a03', borderRadius: 6, padding: '3px 8px' }}>
+                                <span key={u.id} style={{ fontSize: 11, color: '#b45309', background: '#451a03', borderRadius: 6, padding: '3px 8px' }}>
                                     {PLAN_LABELS[u.plan]} · expira {fmtDate(u.plan_expires_at)}
                                 </span>
                             ))}
@@ -305,52 +281,34 @@ function DashboardTab({ token }: { token: string }) {
                 )}
             </section>
 
-            {/* ── Distribuição por plano ────────────────────────────────── */}
+            <Divider />
+
+            {/* ── Usuários ───────────────────────────────────────────── */}
             <section>
-                <SectionTitle
-                    icon={Users}
-                    title="Usuários"
-                    description="Total de cadastros e distribuição por plano"
-                />
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, marginBottom: 12 }}>
-                    <StatCard label="Total de usuários" value={stats.totalUsers} sub="Todos os cadastros" />
-                    <StatCard
-                        label="Ativos (30d)"
-                        value={engagement.activeUsers30d}
-                        sub="Fizeram ≥1 busca"
-                        tooltip="Usuários que realizaram pelo menos 1 busca de voo nos últimos 30 dias"
-                    />
-                    <StatCard
-                        label="Ativos (7d)"
-                        value={engagement.activeUsers7d}
-                        sub="Semana atual"
-                        tooltip="Usuários com busca nos últimos 7 dias"
-                    />
-                    <StatCard
-                        label="Pagantes inativos"
-                        value={engagement.inactivePaidUsers}
-                        sub="Sem uso em 30d"
-                        highlight={engagement.inactivePaidUsers > 0 ? '#f59e0b' : undefined}
-                        tooltip="Usuários com plano pago ativo mas sem busca nos últimos 30 dias — risco de churn"
-                    />
+                <BlockTitle icon={Users} title="Usuários" subtitle="Cadastros, engajamento e distribuição por plano" />
+                <div style={S.grid4}>
+                    <KPI label="Total de usuários" value={stats.totalUsers} sub="Todos os cadastros" />
+                    <KPI label="Ativos (30d)" value={engagement.activeUsers30d} sub="≥1 busca nos últimos 30d"
+                        tooltip="Usuários que fizeram pelo menos 1 busca de voo nos últimos 30 dias" />
+                    <KPI label="Ativos (7d)" value={engagement.activeUsers7d} sub="Semana atual" />
+                    <KPI label="Pagantes sem uso" value={engagement.inactivePaidUsers} sub="Risco de churn"
+                        color={engagement.inactivePaidUsers > 0 ? '#f59e0b' : undefined}
+                        tooltip="Plano pago ativo mas sem busca nos últimos 30 dias" />
                 </div>
 
-                {/* Barra de distribuição por plano */}
-                <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: '18px 20px' }}>
-                    <p style={{ color: '#475569', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                        Distribuição por plano
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ ...S.card, marginTop: 12 }}>
+                    <p style={S.cardLabel}>Distribuição por plano</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
                         {(['free', 'essencial', 'pro', 'elite', 'admin'] as Plan[]).map(p => {
                             const count = stats.planCounts[p] ?? 0
                             const pct = stats.totalUsers > 0 ? (count / stats.totalUsers) * 100 : 0
                             return (
                                 <div key={p} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                     <span style={{ width: 72, fontSize: 12, fontWeight: 700, color: PLAN_COLORS[p] }}>{PLAN_LABELS[p]}</span>
-                                    <div style={{ flex: 1, background: '#1e293b', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                                    <div style={{ flex: 1, background: '#1e293b', borderRadius: 4, height: 7 }}>
                                         <div style={{ width: `${pct}%`, height: '100%', background: PLAN_COLORS[p], borderRadius: 4, transition: 'width 0.6s' }} />
                                     </div>
-                                    <span style={{ width: 36, textAlign: 'right', fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{count}</span>
+                                    <span style={{ width: 32, textAlign: 'right', fontSize: 12, color: '#94a3b8', fontWeight: 700 }}>{count}</span>
                                 </div>
                             )
                         })}
@@ -358,55 +316,32 @@ function DashboardTab({ token }: { token: string }) {
                 </div>
             </section>
 
-            {/* ── Uso do produto ───────────────────────────────────────── */}
+            <Divider />
+
+            {/* ── Uso do produto ─────────────────────────────────────── */}
             <section>
-                <SectionTitle
-                    icon={Activity}
-                    title="Uso do produto"
-                    description="Volume de uso das funcionalidades de IA este mês"
-                />
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, marginBottom: 16 }}>
-                    <StatCard
-                        label="Buscas (mês)"
-                        value={stats.buscasThisMonth}
-                        sub="Voos consultados"
-                        tooltip="Total de buscas de voos realizadas este mês"
-                    />
-                    <StatCard
-                        label="Estratégias (mês)"
-                        value={stats.strategiesThisMonth}
-                        sub="Geradas por IA"
-                        tooltip="Estratégias de milhas geradas pelo Claude este mês"
-                    />
-                    <StatCard
-                        label="Roteiros (mês)"
-                        value={stats.roteiroThisMonth}
-                        sub="Gerados por IA"
-                        tooltip="Roteiros de viagem gerados pelo Claude este mês"
-                    />
+                <BlockTitle icon={Activity} title="Uso do produto" subtitle="Volume de uso das funcionalidades de IA este mês" />
+                <div style={S.grid3}>
+                    <KPI label="Buscas (mês)" value={stats.buscasThisMonth} sub="Voos consultados"
+                        tooltip="Total de buscas de voos realizadas este mês" />
+                    <KPI label="Estratégias (mês)" value={stats.strategiesThisMonth} sub="Geradas pelo Claude"
+                        tooltip="Estratégias de milhas geradas por IA este mês" />
+                    <KPI label="Roteiros (mês)" value={stats.roteiroThisMonth} sub="Gerados pelo Claude" />
                 </div>
 
-                {/* Estratégias por dia — mini gráfico de barras */}
                 {engagement.strategiesPerDay.length > 0 && (
-                    <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: '18px 20px' }}>
-                        <p style={{ color: '#475569', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                            Estratégias geradas — últimos 14 dias
-                        </p>
-                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 60 }}>
+                    <div style={{ ...S.card, marginTop: 12 }}>
+                        <p style={S.cardLabel}>Estratégias geradas por dia — últimos 14 dias</p>
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 56, marginTop: 16 }}>
                             {(() => {
                                 const max = Math.max(...engagement.strategiesPerDay.map(d => d.count as number), 1)
                                 return engagement.strategiesPerDay.map(d => (
                                     <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                                        <div
-                                            title={`${d.date}: ${d.count}`}
-                                            style={{
-                                                width: '100%', background: '#2A60C2',
-                                                borderRadius: '3px 3px 0 0',
-                                                height: `${((d.count as number) / max) * 52}px`,
-                                                minHeight: 2, transition: 'height 0.3s',
-                                            }}
-                                        />
-                                        <span style={{ fontSize: 9, color: '#334155', transform: 'rotate(-45deg)', transformOrigin: 'center', whiteSpace: 'nowrap' }}>
+                                        <div title={`${d.date}: ${d.count}`} style={{
+                                            width: '100%', background: '#2A60C2', borderRadius: '3px 3px 0 0',
+                                            height: `${Math.max(((d.count as number) / max) * 48, 2)}px`, transition: 'height 0.3s',
+                                        }} />
+                                        <span style={{ fontSize: 9, color: '#334155', writingMode: 'vertical-rl', transform: 'rotate(180deg)', height: 24 }}>
                                             {d.date.slice(5)}
                                         </span>
                                     </div>
@@ -417,71 +352,59 @@ function DashboardTab({ token }: { token: string }) {
                 )}
             </section>
 
-            {/* ── Top destinos ────────────────────────────────────────── */}
+            <Divider />
+
+            {/* ── Top destinos ───────────────────────────────────────── */}
             <section>
-                <SectionTitle
-                    icon={MapPin}
-                    title="Top destinos"
-                    description="Rotas mais buscadas nos últimos 30 dias — indica demanda dos usuários"
-                />
-                <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 12, overflow: 'hidden' }}>
+                <BlockTitle icon={MapPin} title="Top destinos" subtitle="Rotas mais buscadas nos últimos 30 dias" />
+                <div style={S.card}>
                     {engagement.topRoutes.length === 0 && (
-                        <p style={{ color: '#475569', padding: 20, textAlign: 'center', fontSize: 13 }}>Sem dados de buscas recentes.</p>
+                        <p style={{ color: '#475569', textAlign: 'center', padding: 16, fontSize: 13 }}>Sem dados de buscas recentes.</p>
                     )}
                     {engagement.topRoutes.map((r, i) => {
                         const max = engagement.topRoutes[0]?.count ?? 1
                         const pct = ((r.count as number) / (max as number)) * 100
                         return (
-                            <div key={r.route} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: i < engagement.topRoutes.length - 1 ? '1px solid #0f172a' : 'none' }}>
-                                <span style={{ width: 20, fontSize: 11, color: '#475569', fontWeight: 700 }}>#{i + 1}</span>
+                            <div key={r.route} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderBottom: i < engagement.topRoutes.length - 1 ? '1px solid #0f172a' : 'none' }}>
+                                <span style={{ width: 18, fontSize: 11, color: '#475569', fontWeight: 700 }}>#{i + 1}</span>
                                 <span style={{ flex: 1, fontSize: 13, color: '#f1f5f9', fontWeight: 600 }}>{r.route}</span>
-                                <div style={{ width: 80, background: '#1e293b', borderRadius: 4, height: 6 }}>
+                                <div style={{ width: 72, background: '#1e293b', borderRadius: 4, height: 5 }}>
                                     <div style={{ width: `${pct}%`, height: '100%', background: '#2A60C2', borderRadius: 4 }} />
                                 </div>
-                                <span style={{ width: 28, textAlign: 'right', fontSize: 12, color: '#94a3b8', fontWeight: 700 }}>{r.count}</span>
+                                <span style={{ width: 24, textAlign: 'right', fontSize: 12, color: '#94a3b8', fontWeight: 700 }}>{r.count}</span>
                             </div>
                         )
                     })}
                 </div>
             </section>
 
-            {/* ── Status das APIs ─────────────────────────────────────── */}
+            <Divider />
+
+            {/* ── Status das APIs ────────────────────────────────────── */}
             <section>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
-                    <SectionTitle
-                        icon={Zap}
-                        title="Status das APIs"
-                        description="Verifica se os serviços externos estão respondendo corretamente"
-                    />
-                    <button onClick={checkApis} disabled={loadingApi} style={{ ...btnSecondary, marginTop: 2 }}>
-                        {loadingApi ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={13} />}
-                        &nbsp;Verificar
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <BlockTitle icon={Zap} title="Status das APIs" subtitle="Verifica se os serviços externos estão respondendo" />
+                    <button onClick={checkApis} disabled={loadingApi} style={{ ...S.btnSm, marginTop: 2 }}>
+                        {loadingApi ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={12} />}
+                        Verificar agora
                     </button>
                 </div>
 
                 {!apiStatus && !loadingApi && (
-                    <p style={{ color: '#475569', fontSize: 13 }}>Clique em "Verificar" para checar o status das integrações.</p>
+                    <p style={{ color: '#475569', fontSize: 13 }}>Clique em "Verificar agora" para checar as integrações.</p>
                 )}
-                {loadingApi && <LoadingSpinner />}
+                {loadingApi && <Spinner />}
                 {apiStatus && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {apiStatus.checks.map(c => (
-                            <div key={c.name} style={{
-                                display: 'flex', alignItems: 'center', gap: 12,
-                                background: '#111827', border: `1px solid ${c.ok ? '#14532d' : '#7f1d1d'}`,
-                                borderRadius: 10, padding: '12px 16px',
-                            }}>
-                                {c.ok
-                                    ? <CheckCircle size={16} style={{ color: '#22c55e', flexShrink: 0 }} />
-                                    : <XCircle size={16} style={{ color: '#ef4444', flexShrink: 0 }} />}
+                            <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#111827', border: `1px solid ${c.ok ? '#14532d' : '#7f1d1d'}`, borderRadius: 10, padding: '11px 16px' }}>
+                                {c.ok ? <CheckCircle size={15} style={{ color: '#22c55e', flexShrink: 0 }} /> : <XCircle size={15} style={{ color: '#ef4444', flexShrink: 0 }} />}
                                 <span style={{ flex: 1, color: '#f1f5f9', fontSize: 13, fontWeight: 600 }}>{c.name}</span>
                                 <span style={{ fontSize: 11, color: '#475569' }}>{c.latency}ms</span>
-                                {!c.ok && c.error && (
-                                    <span style={{ fontSize: 11, color: '#fca5a5', maxWidth: 200, textAlign: 'right' }}>{c.error}</span>
-                                )}
+                                {!c.ok && c.error && <span style={{ fontSize: 11, color: '#fca5a5', maxWidth: 180, textAlign: 'right' }}>{c.error}</span>}
                             </div>
                         ))}
-                        <p style={{ fontSize: 11, color: '#334155', textAlign: 'right' }}>Verificado em {fmtDateTime(apiStatus.checkedAt)}</p>
+                        <p style={{ fontSize: 11, color: '#334155', textAlign: 'right', marginTop: 4 }}>Verificado em {fmtDateTime(apiStatus.checkedAt)}</p>
                     </div>
                 )}
             </section>
@@ -489,9 +412,9 @@ function DashboardTab({ token }: { token: string }) {
     )
 }
 
-// ─── Usuários Tab ─────────────────────────────────────────────────────────────
+// ─── Usuários ─────────────────────────────────────────────────────────────────
 
-function UsuariosTab({ token }: { token: string }) {
+function Usuarios({ token }: { token: string }) {
     const [users, setUsers] = useState<AdminUser[]>([])
     const [total, setTotal] = useState(0)
     const [page, setPage] = useState(1)
@@ -499,129 +422,94 @@ function UsuariosTab({ token }: { token: string }) {
     const [search, setSearch] = useState('')
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
-    const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
+    const [editing, setEditing] = useState<AdminUser | null>(null)
 
     const load = useCallback(async () => {
         setLoading(true); setError(null)
         try {
-            const params = new URLSearchParams({ page: String(page) })
-            if (planFilter) params.set('plan', planFilter)
-            if (search) params.set('search', search)
-            const data = await adminFetch(`/api/admin/users?${params}`, token)
-            setUsers(data.users)
-            setTotal(data.total)
-        } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : 'Erro ao carregar')
-        } finally {
-            setLoading(false)
-        }
+            const p = new URLSearchParams({ page: String(page) })
+            if (planFilter) p.set('plan', planFilter)
+            if (search) p.set('search', search)
+            const data = await adminFetch(`/api/admin/users?${p}`, token)
+            setUsers(data.users); setTotal(data.total)
+        } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Erro') }
+        finally { setLoading(false) }
     }, [token, page, planFilter, search])
 
     useEffect(() => { load() }, [load])
 
-    const totalPages = Math.ceil(total / 20)
+    const pages = Math.ceil(total / 20)
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <SectionTitle
-                icon={Users}
-                title="Gerenciar usuários"
-                description="Visualize, filtre e edite plano, expiração e permissões de cada usuário"
-            />
+            <BlockTitle icon={Users} title="Gerenciar usuários" subtitle="Edite plano, expiração e permissões de cada conta" />
 
-            {/* Filtros */}
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-                    <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
-                    <input
-                        value={search}
-                        onChange={e => { setSearch(e.target.value); setPage(1) }}
-                        placeholder="Buscar por nome ou email…"
-                        style={inputStyle({ paddingLeft: 32 })}
-                    />
+                    <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                    <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
+                        placeholder="Buscar por nome ou email…" style={inputSt({ paddingLeft: 30 })} />
                 </div>
-                <select
-                    value={planFilter}
-                    onChange={e => { setPlanFilter(e.target.value as Plan | ''); setPage(1) }}
-                    style={inputStyle({ width: 150 })}
-                >
+                <select value={planFilter} onChange={e => { setPlanFilter(e.target.value as Plan | ''); setPage(1) }} style={inputSt({ width: 148 })}>
                     <option value="">Todos os planos</option>
                     {(['free', 'essencial', 'pro', 'elite', 'admin'] as Plan[]).map(p => (
                         <option key={p} value={p}>{PLAN_LABELS[p]}</option>
                     ))}
                 </select>
-                <button onClick={load} style={btnSecondary}><RefreshCw size={14} /></button>
+                <button onClick={load} style={S.btnSm}><RefreshCw size={13} /></button>
             </div>
 
-            {loading && <LoadingSpinner />}
-            {error && <ErrorMsg msg={error} onRetry={load} />}
-
+            {loading && <Spinner />}
+            {error && <ErrBox msg={error} onRetry={load} />}
             {!loading && !error && (
                 <>
-                    <div style={{ overflowX: 'auto' }}>
+                    <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #1e293b' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                             <thead>
-                                <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                                <tr style={{ background: '#0f172a' }}>
                                     {['Nome / Email', 'Plano', 'Expira em', 'Cobrança', 'Atualizado', ''].map(h => (
-                                        <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                                        <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#475569', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
-                                {users.map(u => (
-                                    <tr key={u.id} style={{ borderBottom: '1px solid #0f172a' }}>
-                                        <td style={{ padding: '10px 12px' }}>
+                                {users.map((u, i) => (
+                                    <tr key={u.id} style={{ borderTop: '1px solid #0f172a', background: i % 2 === 0 ? '#111827' : '#0d1520' }}>
+                                        <td style={{ padding: '11px 14px' }}>
                                             <div style={{ color: '#f1f5f9', fontWeight: 600 }}>{u.full_name || '—'}</div>
                                             <div style={{ color: '#475569', fontSize: 11 }}>{u.email ?? u.id.slice(0, 8)}</div>
                                         </td>
-                                        <td style={{ padding: '10px 12px' }}>
+                                        <td style={{ padding: '11px 14px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 <PlanBadge plan={u.plan} />
-                                                {u.is_admin && (
-                                                    <span title="Admin" style={{ color: '#dc2626', display: 'flex' }}>
-                                                        <Shield size={12} />
-                                                    </span>
-                                                )}
+                                                {u.is_admin && <Shield size={11} style={{ color: '#dc2626' }} title="Admin" />}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{fmtDate(u.plan_expires_at)}</td>
-                                        <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{u.plan_billing ?? '—'}</td>
-                                        <td style={{ padding: '10px 12px', color: '#475569', fontSize: 11 }}>{fmtDate(u.updated_at)}</td>
-                                        <td style={{ padding: '10px 12px' }}>
-                                            <button onClick={() => setEditingUser(u)} style={btnSmall}>Editar</button>
+                                        <td style={{ padding: '11px 14px', color: '#94a3b8', fontSize: 12 }}>{fmtDate(u.plan_expires_at)}</td>
+                                        <td style={{ padding: '11px 14px', color: '#94a3b8', fontSize: 12 }}>{u.plan_billing ?? '—'}</td>
+                                        <td style={{ padding: '11px 14px', color: '#475569', fontSize: 11 }}>{fmtDate(u.updated_at)}</td>
+                                        <td style={{ padding: '11px 14px' }}>
+                                            <button onClick={() => setEditing(u)} style={S.btnXs}>Editar</button>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
-                        {users.length === 0 && (
-                            <p style={{ textAlign: 'center', color: '#475569', padding: 32 }}>Nenhum usuário encontrado.</p>
-                        )}
+                        {users.length === 0 && <p style={{ textAlign: 'center', color: '#475569', padding: 28, fontSize: 13 }}>Nenhum usuário encontrado.</p>}
                     </div>
-
-                    {totalPages > 1 && (
+                    {pages > 1 && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
-                            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} style={btnSecondary}>←</button>
-                            <span style={{ color: '#94a3b8', fontSize: 13 }}>{page} / {totalPages}</span>
-                            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} style={btnSecondary}>→</button>
+                            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} style={S.btnSm}><ChevronLeft size={14} /></button>
+                            <span style={{ color: '#94a3b8', fontSize: 13 }}>{page} / {pages}</span>
+                            <button disabled={page >= pages} onClick={() => setPage(p => p + 1)} style={S.btnSm}><ChevronRight size={14} /></button>
                         </div>
                     )}
                 </>
             )}
-
-            {editingUser && (
-                <EditUserModal
-                    user={editingUser}
-                    token={token}
-                    onClose={() => setEditingUser(null)}
-                    onSaved={() => { setEditingUser(null); load() }}
-                />
-            )}
+            {editing && <EditUserModal user={editing} token={token} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
         </div>
     )
 }
-
-// ─── Edit User Modal ──────────────────────────────────────────────────────────
 
 function EditUserModal({ user, token, onClose, onSaved }: {
     user: AdminUser; token: string; onClose: () => void; onSaved: () => void
@@ -638,57 +526,39 @@ function EditUserModal({ user, token, onClose, onSaved }: {
         try {
             await adminFetch(`/api/admin/users/${user.id}/plan`, token, {
                 method: 'PATCH',
-                body: JSON.stringify({
-                    plan,
-                    plan_expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
-                    plan_billing: billing || null,
-                }),
+                body: JSON.stringify({ plan, plan_expires_at: expiresAt ? new Date(expiresAt).toISOString() : null, plan_billing: billing || null }),
             })
             if (isAdmin !== user.is_admin) {
-                await adminFetch(`/api/admin/users/${user.id}/toggle-admin`, token, {
-                    method: 'POST',
-                    body: JSON.stringify({ is_admin: isAdmin }),
-                })
+                await adminFetch(`/api/admin/users/${user.id}/toggle-admin`, token, { method: 'POST', body: JSON.stringify({ is_admin: isAdmin }) })
             }
             onSaved()
-        } catch (e: unknown) {
-            setErr(e instanceof Error ? e.message : 'Erro ao salvar')
-        } finally {
-            setSaving(false)
-        }
+        } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Erro ao salvar') }
+        finally { setSaving(false) }
     }
 
     return (
-        <div style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 50,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
-        }} onClick={e => e.target === e.currentTarget && onClose()}>
-            <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 16, padding: 28, width: '100%', maxWidth: 420 }}>
-                <h3 style={{ color: '#f1f5f9', fontWeight: 800, fontSize: 16, marginBottom: 4 }}>Editar usuário</h3>
-                <p style={{ color: '#64748b', fontSize: 12, marginBottom: 20 }}>{user.email ?? user.id}</p>
-
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+            onClick={e => e.target === e.currentTarget && onClose()}>
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400 }}>
+                <p style={{ color: '#f1f5f9', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Editar usuário</p>
+                <p style={{ color: '#475569', fontSize: 12, marginBottom: 20 }}>{user.email ?? user.id}</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    <label style={labelStyle}>
-                        Plano
-                        <select value={plan} onChange={e => setPlan(e.target.value as Plan)} style={inputStyle()}>
-                            {(['free', 'essencial', 'pro', 'elite', 'admin'] as Plan[]).map(p => (
-                                <option key={p} value={p}>{PLAN_LABELS[p]}</option>
-                            ))}
+                    <label style={S.label}>Plano
+                        <select value={plan} onChange={e => setPlan(e.target.value as Plan)} style={inputSt()}>
+                            {(['free', 'essencial', 'pro', 'elite', 'admin'] as Plan[]).map(p => <option key={p} value={p}>{PLAN_LABELS[p]}</option>)}
                         </select>
                     </label>
-                    <label style={labelStyle}>
-                        Data de expiração
-                        <input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} style={inputStyle()} />
+                    <label style={S.label}>Data de expiração
+                        <input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} style={inputSt()} />
                     </label>
-                    <label style={labelStyle}>
-                        Cobrança
-                        <select value={billing} onChange={e => setBilling(e.target.value)} style={inputStyle()}>
+                    <label style={S.label}>Cobrança
+                        <select value={billing} onChange={e => setBilling(e.target.value)} style={inputSt()}>
                             <option value="">— sem cobrança —</option>
                             <option value="mensal">Mensal</option>
                             <option value="anual">Anual</option>
                         </select>
                     </label>
-                    <label style={{ ...labelStyle, flexDirection: 'row', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                    <label style={{ ...S.label, flexDirection: 'row', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                         <input type="checkbox" checked={isAdmin} onChange={e => setIsAdmin(e.target.checked)} />
                         <div>
                             <span style={{ color: '#f1f5f9' }}>Acesso de admin</span>
@@ -696,13 +566,11 @@ function EditUserModal({ user, token, onClose, onSaved }: {
                         </div>
                     </label>
                 </div>
-
                 {err && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 12 }}>{err}</p>}
-
                 <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-                    <button onClick={onClose} style={btnSecondary}>Cancelar</button>
-                    <button onClick={save} disabled={saving} style={btnPrimary}>
-                        {saving ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : 'Salvar'}
+                    <button onClick={onClose} style={S.btnSm}>Cancelar</button>
+                    <button onClick={save} disabled={saving} style={S.btnPrimary}>
+                        {saving ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : 'Salvar'}
                     </button>
                 </div>
             </div>
@@ -710,9 +578,260 @@ function EditUserModal({ user, token, onClose, onSaved }: {
     )
 }
 
-// ─── Promoções Tab ────────────────────────────────────────────────────────────
+// ─── Custos ───────────────────────────────────────────────────────────────────
 
-function PromocoesTab({ token }: { token: string }) {
+function Custos({ token }: { token: string }) {
+    const [month, setMonth] = useState(currentMonth())
+    const [costs, setCosts] = useState<Cost[]>([])
+    const [history, setHistory] = useState<CostHistory[]>([])
+    const [mrr, setMrr] = useState(0)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [showForm, setShowForm] = useState(false)
+
+    const load = useCallback(async () => {
+        setLoading(true); setError(null)
+        try {
+            const [c, h, r] = await Promise.all([
+                adminFetch(`/api/admin/costs?month=${month}`, token),
+                adminFetch('/api/admin/costs/history', token),
+                adminFetch('/api/admin/revenue', token),
+            ])
+            setCosts(c.costs); setHistory(h.history); setMrr(r.mrr)
+        } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Erro') }
+        finally { setLoading(false) }
+    }, [token, month])
+
+    useEffect(() => { load() }, [load])
+
+    async function deleteCost(id: number) {
+        if (!confirm('Remover este custo?')) return
+        await adminFetch(`/api/admin/costs/${id}`, token, { method: 'DELETE' })
+        setCosts(c => c.filter(x => x.id !== id))
+    }
+
+    const totalMonth = costs.reduce((s, c) => s + Number(c.amount_brl), 0)
+    const profit = mrr - totalMonth
+    const margin = mrr > 0 ? ((profit / mrr) * 100).toFixed(0) : '—'
+
+    // Agrupado por categoria
+    const byCategory: Record<string, number> = {}
+    for (const c of costs) {
+        byCategory[c.category] = (byCategory[c.category] ?? 0) + Number(c.amount_brl)
+    }
+    const maxCat = Math.max(...Object.values(byCategory), 1)
+
+    // Histórico dos últimos 6 meses
+    const histMax = Math.max(...history.map(h => h.total), 1)
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <BlockTitle icon={Receipt} title="Controle de custos" subtitle="Registre e acompanhe todos os gastos operacionais do FlyWise" />
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input type="month" value={month} onChange={e => setMonth(e.target.value)} style={inputSt({ width: 148 })} />
+                    <button onClick={() => setShowForm(true)} style={S.btnPrimary}><Plus size={14} />Adicionar</button>
+                </div>
+            </div>
+
+            {loading && <Spinner />}
+            {error && <ErrBox msg={error} onRetry={load} />}
+
+            {!loading && !error && (
+                <>
+                    {/* ── KPIs do mês ── */}
+                    <div style={S.grid4}>
+                        <KPI label="Total de custos" value={fmtBRL(totalMonth)} sub={`Referência: ${monthLabel(month)}`}
+                            color={totalMonth > 0 ? '#ef4444' : undefined}
+                            tooltip="Soma de todos os custos registrados no mês selecionado" />
+                        <KPI label="MRR atual" value={fmtBRL(mrr)} sub="Receita mensal recorrente" color="#22c55e"
+                            tooltip="MRR calculado a partir dos planos pagantes ativos" />
+                        <KPI label="Lucro bruto" value={fmtBRL(profit)} sub="MRR − custos"
+                            color={profit >= 0 ? '#22c55e' : '#ef4444'}
+                            tooltip="MRR menos os custos do mês selecionado" />
+                        <KPI label="Margem bruta" value={`${margin}%`} sub="Do MRR"
+                            color={typeof margin === 'string' && parseInt(margin) > 50 ? '#22c55e' : parseInt(margin as string) > 0 ? '#f59e0b' : '#ef4444'}
+                            tooltip="(Lucro bruto / MRR) × 100" />
+                    </div>
+
+                    {/* ── Breakdown por categoria ── */}
+                    {Object.keys(byCategory).length > 0 && (
+                        <div style={S.card}>
+                            <p style={S.cardLabel}>Distribuição por categoria — {monthLabel(month)}</p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
+                                {Object.entries(byCategory).sort((a, b) => b[1] - a[1]).map(([cat, val]) => {
+                                    const color = CATEGORY_COLORS[cat as CostCategory] ?? '#64748b'
+                                    const pct = (val / maxCat) * 100
+                                    return (
+                                        <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                            <span style={{ width: 110, fontSize: 12, fontWeight: 600, color }}>{cat}</span>
+                                            <div style={{ flex: 1, background: '#1e293b', borderRadius: 4, height: 7 }}>
+                                                <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.4s' }} />
+                                            </div>
+                                            <span style={{ width: 72, textAlign: 'right', fontSize: 12, color: '#94a3b8', fontWeight: 700 }}>{fmtBRL(val)}</span>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Histórico 6 meses ── */}
+                    {history.length > 0 && (
+                        <div style={S.card}>
+                            <p style={S.cardLabel}>Custos totais — últimos 6 meses</p>
+                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 64, marginTop: 16 }}>
+                                {history.map(h => (
+                                    <div key={h.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                                        <div title={`${monthLabel(h.month)}: ${fmtBRL(h.total)}`} style={{
+                                            width: '100%', background: h.month === month ? '#ef4444' : '#7f1d1d',
+                                            borderRadius: '3px 3px 0 0',
+                                            height: `${Math.max((h.total / histMax) * 52, 2)}px`,
+                                            transition: 'height 0.3s',
+                                        }} />
+                                        <span style={{ fontSize: 10, color: '#475569' }}>{monthLabel(h.month)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Lista de lançamentos ── */}
+                    <div>
+                        <p style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                            Lançamentos — {monthLabel(month)}
+                        </p>
+                        {costs.length === 0 && (
+                            <div style={{ ...S.card, textAlign: 'center' }}>
+                                <TrendingDown size={28} style={{ color: '#1e293b', margin: '0 auto 8px' }} />
+                                <p style={{ color: '#475569', fontSize: 13, margin: 0 }}>Nenhum custo registrado para este mês.</p>
+                                <p style={{ color: '#334155', fontSize: 12, marginTop: 4 }}>Clique em "Adicionar" para lançar o primeiro.</p>
+                            </div>
+                        )}
+                        {costs.length > 0 && (
+                            <div style={{ borderRadius: 12, border: '1px solid #1e293b', overflow: 'hidden' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                    <thead>
+                                        <tr style={{ background: '#0f172a' }}>
+                                            {['Serviço', 'Categoria', 'Valor', 'Observação', ''].map(h => (
+                                                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#475569', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {costs.map((c, i) => (
+                                            <tr key={c.id} style={{ borderTop: '1px solid #0f172a', background: i % 2 === 0 ? '#111827' : '#0d1520' }}>
+                                                <td style={{ padding: '11px 14px', color: '#f1f5f9', fontWeight: 600 }}>{c.service}</td>
+                                                <td style={{ padding: '11px 14px' }}>
+                                                    <span style={{ fontSize: 11, fontWeight: 700, color: CATEGORY_COLORS[c.category as CostCategory] ?? '#64748b', background: (CATEGORY_COLORS[c.category as CostCategory] ?? '#64748b') + '22', borderRadius: 5, padding: '2px 7px' }}>{c.category}</span>
+                                                </td>
+                                                <td style={{ padding: '11px 14px', color: '#ef4444', fontWeight: 700 }}>{fmtBRL(Number(c.amount_brl))}</td>
+                                                <td style={{ padding: '11px 14px', color: '#64748b', fontSize: 12 }}>{c.notes ?? '—'}</td>
+                                                <td style={{ padding: '11px 14px' }}>
+                                                    <button onClick={() => deleteCost(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: 4, display: 'flex' }} title="Remover">
+                                                        <Trash2 size={13} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
+
+            {showForm && (
+                <AddCostModal
+                    token={token}
+                    defaultMonth={month}
+                    onClose={() => setShowForm(false)}
+                    onSaved={() => { setShowForm(false); load() }}
+                />
+            )}
+        </div>
+    )
+}
+
+function AddCostModal({ token, defaultMonth, onClose, onSaved }: {
+    token: string; defaultMonth: string; onClose: () => void; onSaved: () => void
+}) {
+    const [month, setMonth] = useState(defaultMonth)
+    const [category, setCategory] = useState<CostCategory>('Infraestrutura')
+    const [service, setService] = useState('')
+    const [customService, setCustomService] = useState('')
+    const [amount, setAmount] = useState('')
+    const [notes, setNotes] = useState('')
+    const [saving, setSaving] = useState(false)
+    const [err, setErr] = useState<string | null>(null)
+
+    const finalService = service === '__custom' ? customService : service
+
+    async function save() {
+        if (!finalService || !amount) { setErr('Preencha serviço e valor.'); return }
+        setSaving(true); setErr(null)
+        try {
+            await adminFetch('/api/admin/costs', token, {
+                method: 'POST',
+                body: JSON.stringify({ month, service: finalService, category, amount_brl: parseFloat(amount), notes: notes || null }),
+            })
+            onSaved()
+        } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Erro ao salvar') }
+        finally { setSaving(false) }
+    }
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+            onClick={e => e.target === e.currentTarget && onClose()}>
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 28, width: '100%', maxWidth: 420 }}>
+                <p style={{ color: '#f1f5f9', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Adicionar custo</p>
+                <p style={{ color: '#475569', fontSize: 12, marginBottom: 20 }}>Registre um gasto operacional do FlyWise</p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <label style={S.label}>Mês de referência
+                        <input type="month" value={month} onChange={e => setMonth(e.target.value)} style={inputSt()} />
+                    </label>
+                    <label style={S.label}>Categoria
+                        <select value={category} onChange={e => { setCategory(e.target.value as CostCategory); setService('') }} style={inputSt()}>
+                            {COST_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </label>
+                    <label style={S.label}>Serviço
+                        <select value={service} onChange={e => setService(e.target.value)} style={inputSt()}>
+                            <option value="">Selecione…</option>
+                            {SUGGESTED_SERVICES[category].map(s => <option key={s} value={s}>{s}</option>)}
+                            <option value="__custom">Outro (digitar)</option>
+                        </select>
+                    </label>
+                    {service === '__custom' && (
+                        <label style={S.label}>Nome do serviço
+                            <input value={customService} onChange={e => setCustomService(e.target.value)} placeholder="Ex: Notion, Figma…" style={inputSt()} />
+                        </label>
+                    )}
+                    <label style={S.label}>Valor (R$)
+                        <input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0,00" style={inputSt()} />
+                    </label>
+                    <label style={S.label}>Observação <span style={{ color: '#334155', fontWeight: 400 }}>(opcional)</span>
+                        <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ex: plano Pro, 10 usuários…" style={inputSt()} />
+                    </label>
+                </div>
+
+                {err && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 12 }}>{err}</p>}
+                <div style={{ display: 'flex', gap: 10, marginTop: 22, justifyContent: 'flex-end' }}>
+                    <button onClick={onClose} style={S.btnSm}>Cancelar</button>
+                    <button onClick={save} disabled={saving} style={S.btnPrimary}>
+                        {saving ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : 'Salvar'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// ─── Promoções ────────────────────────────────────────────────────────────────
+
+function Promocoes({ token }: { token: string }) {
     const [promos, setPromos] = useState<TransferPromo[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -722,17 +841,12 @@ function PromocoesTab({ token }: { token: string }) {
     const load = useCallback(async () => {
         setLoading(true); setError(null)
         try {
-            const { data, error: err } = await supabase
-                .from('transfer_promotions')
-                .select('id, card_id, program, bonus_percent, valid_until, active, last_confirmed, is_periodic')
-                .order('card_id')
+            const { data, error: err } = await supabase.from('transfer_promotions')
+                .select('id, card_id, program, bonus_percent, valid_until, active, last_confirmed, is_periodic').order('card_id')
             if (err) throw err
             setPromos(data ?? [])
-        } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : 'Erro ao carregar')
-        } finally {
-            setLoading(false)
-        }
+        } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Erro') }
+        finally { setLoading(false) }
     }, [])
 
     useEffect(() => { load() }, [load])
@@ -741,13 +855,10 @@ function PromocoesTab({ token }: { token: string }) {
         setSyncing(true); setSyncMsg(null)
         try {
             await adminFetch('/api/transfer-promotions/update', token, { method: 'POST' })
-            setSyncMsg('Sync disparado. Aguarde alguns segundos e recarregue.')
+            setSyncMsg('Sync disparado. Recarregue em alguns segundos.')
             await load()
-        } catch (e: unknown) {
-            setSyncMsg(e instanceof Error ? e.message : 'Erro no sync')
-        } finally {
-            setSyncing(false)
-        }
+        } catch (e: unknown) { setSyncMsg(e instanceof Error ? e.message : 'Erro no sync') }
+        finally { setSyncing(false) }
     }
 
     async function toggleActive(id: number, current: boolean) {
@@ -755,65 +866,52 @@ function PromocoesTab({ token }: { token: string }) {
         setPromos(p => p.map(x => x.id === id ? { ...x, active: !current } : x))
     }
 
-    if (loading) return <LoadingSpinner />
-    if (error) return <ErrorMsg msg={error} onRetry={load} />
+    if (loading) return <Spinner />
+    if (error) return <ErrBox msg={error} onRetry={load} />
 
     const active = promos.filter(p => p.active).length
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <SectionTitle
-                icon={Tag}
-                title="Promoções de transferência"
-                description="Bônus de transferência de pontos exibidos no simulador. Ative/desative sem precisar do Supabase."
-            />
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', gap: 10 }}>
-                    <span style={{ fontSize: 12, color: '#22c55e' }}>{active} ativas</span>
-                    <span style={{ fontSize: 12, color: '#475569' }}>·</span>
-                    <span style={{ fontSize: 12, color: '#475569' }}>{promos.length - active} inativas</span>
-                </div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <BlockTitle icon={Tag} title="Promoções de transferência" subtitle="Bônus exibidos no simulador. Ative/desative sem precisar do Supabase." />
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     {syncMsg && <span style={{ fontSize: 12, color: '#94a3b8' }}>{syncMsg}</span>}
-                    <button onClick={syncPromos} disabled={syncing} style={btnSecondary}>
-                        {syncing ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={14} />}
-                        &nbsp;Sincronizar dados
+                    <button onClick={syncPromos} disabled={syncing} style={S.btnSm}>
+                        {syncing ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={13} />}
+                        Sincronizar
                     </button>
                 </div>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
+                <span style={{ color: '#22c55e' }}>{active} ativas</span>
+                <span style={{ color: '#334155' }}>·</span>
+                <span style={{ color: '#475569' }}>{promos.length - active} inativas</span>
+            </div>
+
+            <div style={{ borderRadius: 12, border: '1px solid #1e293b', overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
-                        <tr style={{ borderBottom: '1px solid #1e293b' }}>
-                            {['Cartão', 'Programa', 'Bônus', 'Última confirmação', 'Validade', 'Periódico', 'Ativo'].map(h => (
-                                <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                        <tr style={{ background: '#0f172a' }}>
+                            {['Cartão', 'Programa', 'Bônus', 'Última conf.', 'Periódico', 'Ativo'].map(h => (
+                                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#475569', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody>
-                        {promos.map(p => (
-                            <tr key={p.id} style={{ borderBottom: '1px solid #0f172a', opacity: p.active ? 1 : 0.4 }}>
-                                <td style={{ padding: '10px 12px', color: '#f1f5f9', fontWeight: 600 }}>{p.card_id}</td>
-                                <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{p.program}</td>
-                                <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 700 }}>+{p.bonus_percent}%</td>
-                                <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 11 }}>{p.last_confirmed ?? '—'}</td>
-                                <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 11, maxWidth: 180 }}>{p.valid_until}</td>
-                                <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                                    {p.is_periodic
-                                        ? <CheckCircle size={14} style={{ color: '#22c55e' }} />
-                                        : <XCircle size={14} style={{ color: '#475569' }} />}
+                        {promos.map((p, i) => (
+                            <tr key={p.id} style={{ borderTop: '1px solid #0f172a', background: i % 2 === 0 ? '#111827' : '#0d1520', opacity: p.active ? 1 : 0.4 }}>
+                                <td style={{ padding: '11px 14px', color: '#f1f5f9', fontWeight: 600 }}>{p.card_id}</td>
+                                <td style={{ padding: '11px 14px', color: '#94a3b8' }}>{p.program}</td>
+                                <td style={{ padding: '11px 14px', color: '#22c55e', fontWeight: 700 }}>+{p.bonus_percent}%</td>
+                                <td style={{ padding: '11px 14px', color: '#64748b', fontSize: 11 }}>{p.last_confirmed ?? '—'}</td>
+                                <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                                    {p.is_periodic ? <CheckCircle size={13} style={{ color: '#22c55e' }} /> : <XCircle size={13} style={{ color: '#334155' }} />}
                                 </td>
-                                <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                                    <button
-                                        onClick={() => toggleActive(p.id, p.active)}
-                                        title={p.active ? 'Desativar promoção' : 'Ativar promoção'}
-                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
-                                    >
-                                        {p.active
-                                            ? <CheckCircle size={16} style={{ color: '#22c55e' }} />
-                                            : <XCircle size={16} style={{ color: '#475569' }} />}
+                                <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                                    <button onClick={() => toggleActive(p.id, p.active)} title={p.active ? 'Desativar' : 'Ativar'} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                        {p.active ? <CheckCircle size={15} style={{ color: '#22c55e' }} /> : <XCircle size={15} style={{ color: '#334155' }} />}
                                     </button>
                                 </td>
                             </tr>
@@ -825,70 +923,47 @@ function PromocoesTab({ token }: { token: string }) {
     )
 }
 
-// ─── Logs Tab ─────────────────────────────────────────────────────────────────
+// ─── Logs ─────────────────────────────────────────────────────────────────────
 
-function LogsTab({ token }: { token: string }) {
+function Logs({ token }: { token: string }) {
     const [logs, setLogs] = useState<SyncLog[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
     const load = useCallback(async () => {
         setLoading(true); setError(null)
-        try {
-            const data = await adminFetch('/api/admin/transfer-sync-log', token)
-            setLogs(data.logs)
-        } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : 'Erro ao carregar')
-        } finally {
-            setLoading(false)
-        }
+        try { const data = await adminFetch('/api/admin/transfer-sync-log', token); setLogs(data.logs) }
+        catch (e: unknown) { setError(e instanceof Error ? e.message : 'Erro') }
+        finally { setLoading(false) }
     }, [token])
 
     useEffect(() => { load() }, [load])
 
-    if (loading) return <LoadingSpinner />
-    if (error) return <ErrorMsg msg={error} onRetry={load} />
+    if (loading) return <Spinner />
+    if (error) return <ErrBox msg={error} onRetry={load} />
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                <SectionTitle
-                    icon={FileText}
-                    title="Logs de sincronização"
-                    description="Histórico de execuções do sync automático de promoções de transferência. Útil para detectar falhas ou confirmar que os dados estão atualizados."
-                />
-                <button onClick={load} style={{ ...btnSecondary, marginTop: 2 }}><RefreshCw size={14} /></button>
+                <BlockTitle icon={FileText} title="Logs de sincronização" subtitle="Histórico do sync automático de promoções de transferência. Útil para detectar falhas ou confirmar atualização dos dados." />
+                <button onClick={load} style={{ ...S.btnSm, marginTop: 2 }}><RefreshCw size={13} /></button>
             </div>
-
-            {logs.length === 0 && (
-                <p style={{ color: '#475569', textAlign: 'center', padding: 32 }}>Nenhum log encontrado.</p>
-            )}
-
+            {logs.length === 0 && <p style={{ color: '#475569', textAlign: 'center', padding: 32, fontSize: 13 }}>Nenhum log encontrado.</p>}
             {logs.map(log => (
-                <div key={log.id} style={{
-                    background: '#111827',
-                    border: `1px solid ${log.changes_detected ? '#1e3a5f' : '#1e293b'}`,
-                    borderRadius: 10, padding: '14px 18px',
-                }}>
+                <div key={log.id} style={{ background: '#111827', border: `1px solid ${log.changes_detected ? '#1e3a5f' : '#1e293b'}`, borderRadius: 10, padding: '13px 16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             {log.changes_detected
                                 ? <CheckCircle size={14} style={{ color: '#22c55e', flexShrink: 0 }} />
                                 : <UserX size={14} style={{ color: '#475569', flexShrink: 0 }} />}
                             <span style={{ color: '#f1f5f9', fontSize: 13, fontWeight: 600 }}>
-                                {log.changes_detected
-                                    ? `${log.rows_updated} linha(s) atualizada(s)`
-                                    : 'Sem alterações detectadas'}
+                                {log.changes_detected ? `${log.rows_updated} linha(s) atualizada(s)` : 'Sem alterações detectadas'}
                             </span>
                         </div>
                         <span style={{ color: '#475569', fontSize: 11, whiteSpace: 'nowrap' }}>{fmtDateTime(log.synced_at)}</span>
                     </div>
-                    {log.summary && (
-                        <p style={{ color: '#64748b', fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{log.summary}</p>
-                    )}
-                    <p style={{ color: '#334155', fontSize: 11, marginTop: 4 }}>
-                        {log.sources_scraped} fonte(s) verificada(s)
-                    </p>
+                    {log.summary && <p style={{ color: '#64748b', fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{log.summary}</p>}
+                    <p style={{ color: '#334155', fontSize: 11, marginTop: 4 }}>{log.sources_scraped} fonte(s) verificada(s)</p>
                 </div>
             ))}
         </div>
@@ -897,91 +972,95 @@ function LogsTab({ token }: { token: string }) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-function inputStyle(extra: React.CSSProperties = {}): React.CSSProperties {
-    return {
-        background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8,
-        color: '#f1f5f9', fontSize: 13, padding: '8px 12px', outline: 'none', width: '100%',
-        ...extra,
-    }
+const S = {
+    grid5: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))', gap: 10 } as React.CSSProperties,
+    grid4: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: 10 } as React.CSSProperties,
+    grid3: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: 10 } as React.CSSProperties,
+    card: { background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: '16px 20px' } as React.CSSProperties,
+    cardLabel: { fontSize: 11, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 } as React.CSSProperties,
+    btnPrimary: { background: '#2A60C2', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 } as React.CSSProperties,
+    btnSm: { background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', borderRadius: 8, padding: '7px 13px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 } as React.CSSProperties,
+    btnXs: { background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' } as React.CSSProperties,
+    label: { display: 'flex', flexDirection: 'column', gap: 6, color: '#94a3b8', fontSize: 12, fontWeight: 600 } as React.CSSProperties,
 }
 
-const labelStyle: React.CSSProperties = {
-    display: 'flex', flexDirection: 'column', gap: 6,
-    color: '#94a3b8', fontSize: 12, fontWeight: 600,
+function inputSt(extra: React.CSSProperties = {}): React.CSSProperties {
+    return { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, color: '#f1f5f9', fontSize: 13, padding: '8px 12px', outline: 'none', width: '100%', ...extra }
 }
 
-const btnPrimary: React.CSSProperties = {
-    background: '#2A60C2', color: '#fff', border: 'none', borderRadius: 8,
-    padding: '8px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-    display: 'flex', alignItems: 'center', gap: 6,
-}
-
-const btnSecondary: React.CSSProperties = {
-    background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', borderRadius: 8,
-    padding: '7px 14px', fontSize: 13, cursor: 'pointer',
-    display: 'flex', alignItems: 'center', gap: 6,
-}
-
-const btnSmall: React.CSSProperties = {
-    background: '#1e293b', color: '#94a3b8', border: '1px solid #334155',
-    borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer',
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Layout principal ─────────────────────────────────────────────────────────
 
 export default function Admin() {
-    const { session } = useAuth()
+    const { session, user } = useAuth()
     const navigate = useNavigate()
-    const [tab, setTab] = useState<TabId>('dashboard')
+    const [section, setSection] = useState<SectionId>('dashboard')
     const token = session?.access_token ?? ''
 
+    const active = SECTIONS.find(s => s.id === section)!
+
     return (
-        <div style={{ minHeight: '100vh', background: '#080a10', fontFamily: 'Manrope, sans-serif' }}>
-            <Header />
-            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        <div style={{ minHeight: '100vh', background: '#080a10', fontFamily: 'Manrope, sans-serif', display: 'flex', flexDirection: 'column' }}>
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } * { box-sizing: border-box; }`}</style>
 
-            <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px 80px' }}>
-                {/* Cabeçalho */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-                    <button onClick={() => navigate('/home')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 4 }}>
-                        <ChevronLeft size={20} />
-                    </button>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Shield size={20} style={{ color: '#dc2626' }} />
-                        <div>
-                            <h1 style={{ color: '#f1f5f9', fontSize: 20, fontWeight: 800, margin: 0 }}>Painel Admin</h1>
-                            <p style={{ color: '#475569', fontSize: 12, margin: 0 }}>FlyWise · Acesso restrito</p>
-                        </div>
+            {/* ── Top bar ── */}
+            <div style={{ background: '#0d1117', borderBottom: '1px solid #1e293b', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'sticky', top: 0, zIndex: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ background: '#1a0a0a', border: '1px solid #7f1d1d44', borderRadius: 8, padding: '5px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Shield size={14} style={{ color: '#dc2626' }} />
+                        <span style={{ color: '#ef4444', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em' }}>ADMIN</span>
                     </div>
+                    <span style={{ color: '#1e293b', fontSize: 16 }}>·</span>
+                    <span style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 700 }}>FlyWise</span>
                 </div>
-
-                {/* Tabs */}
-                <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid #1e293b', marginBottom: 28, overflowX: 'auto' }}>
-                    {TABS.map(({ id, label, Icon }) => (
-                        <button
-                            key={id}
-                            onClick={() => setTab(id)}
-                            style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                padding: '10px 16px', borderRadius: '8px 8px 0 0',
-                                color: tab === id ? '#2A60C2' : '#64748b',
-                                borderBottom: tab === id ? '2px solid #2A60C2' : '2px solid transparent',
-                                fontSize: 13, fontWeight: tab === id ? 700 : 500,
-                                display: 'flex', alignItems: 'center', gap: 6,
-                                transition: 'color 0.15s', whiteSpace: 'nowrap',
-                            }}
-                        >
-                            <Icon size={14} />
-                            {label}
-                        </button>
-                    ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ color: '#475569', fontSize: 12 }}>{user?.email}</span>
+                    <button onClick={() => navigate('/home')} style={{ ...S.btnSm, gap: 5 }}>
+                        <Home size={13} /> Voltar ao app
+                    </button>
                 </div>
+            </div>
 
-                {/* Conteúdo */}
-                {tab === 'dashboard' && <DashboardTab token={token} />}
-                {tab === 'usuarios' && <UsuariosTab token={token} />}
-                {tab === 'promocoes' && <PromocoesTab token={token} />}
-                {tab === 'logs' && <LogsTab token={token} />}
+            <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+
+                {/* ── Sidebar ── */}
+                <aside style={{ width: 220, background: '#0d1117', borderRight: '1px solid #1e293b', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, position: 'sticky', top: 56, height: 'calc(100vh - 56px)', overflowY: 'auto' }}>
+                    <p style={{ color: '#334155', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 8px', marginBottom: 8 }}>Navegação</p>
+
+                    {SECTIONS.map(({ id, label, icon: Icon, description }) => {
+                        const isActive = section === id
+                        return (
+                            <button key={id} onClick={() => setSection(id)} style={{
+                                background: isActive ? '#1e293b' : 'none',
+                                border: `1px solid ${isActive ? '#334155' : 'transparent'}`,
+                                borderRadius: 10, padding: '10px 12px', cursor: 'pointer',
+                                textAlign: 'left', width: '100%', transition: 'all 0.15s',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                                    <Icon size={15} style={{ color: isActive ? '#2A60C2' : '#475569', flexShrink: 0 }} />
+                                    <div>
+                                        <p style={{ margin: 0, fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? '#f1f5f9' : '#94a3b8' }}>{label}</p>
+                                        <p style={{ margin: 0, fontSize: 10, color: '#334155', marginTop: 1 }}>{description}</p>
+                                    </div>
+                                </div>
+                            </button>
+                        )
+                    })}
+                </aside>
+
+                {/* ── Conteúdo ── */}
+                <main style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 60px' }}>
+                    {/* Breadcrumb */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
+                        <active.icon size={16} style={{ color: '#2A60C2' }} />
+                        <h1 style={{ color: '#f1f5f9', fontSize: 18, fontWeight: 800, margin: 0 }}>{active.label}</h1>
+                    </div>
+
+                    {section === 'dashboard'  && <Dashboard  token={token} />}
+                    {section === 'usuarios'   && <Usuarios   token={token} />}
+                    {section === 'custos'     && <Custos     token={token} />}
+                    {section === 'promocoes'  && <Promocoes  token={token} />}
+                    {section === 'logs'       && <Logs       token={token} />}
+                </main>
             </div>
         </div>
     )

@@ -2232,6 +2232,91 @@ app.get('/api/admin/api-status', requireAdminJWT, async (_req, res) => {
     res.json({ checks: results, checkedAt: new Date().toISOString() });
 });
 
+// ─── Custos operacionais ──────────────────────────────────────────────────────
+
+// GET /api/admin/costs?month=2026-03 — lista custos de um mês
+app.get('/api/admin/costs', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const month = req.query.month ?? new Date().toISOString().slice(0, 7);
+        const monthStart = `${month}-01`;
+        const [year, mon] = month.split('-').map(Number);
+        const nextMonth = mon === 12
+            ? `${year + 1}-01-01`
+            : `${year}-${String(mon + 1).padStart(2, '0')}-01`;
+
+        const { data, error } = await supabase
+            .from('admin_costs')
+            .select('*')
+            .gte('month', monthStart)
+            .lt('month', nextMonth)
+            .order('category')
+            .order('service');
+        if (error) throw error;
+        res.json({ costs: data ?? [] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/admin/costs/history — totais dos últimos 6 meses
+app.get('/api/admin/costs/history', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+        sixMonthsAgo.setDate(1);
+
+        const { data, error } = await supabase
+            .from('admin_costs')
+            .select('month, amount_brl')
+            .gte('month', sixMonthsAgo.toISOString().slice(0, 10))
+            .order('month');
+        if (error) throw error;
+
+        const byMonth = {};
+        for (const row of data ?? []) {
+            const m = row.month.slice(0, 7);
+            byMonth[m] = (byMonth[m] ?? 0) + parseFloat(row.amount_brl);
+        }
+        res.json({ history: Object.entries(byMonth).map(([month, total]) => ({ month, total })) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/admin/costs — adicionar custo
+app.post('/api/admin/costs', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    const { month, service, category, amount_brl, notes } = req.body;
+    if (!month || !service || !category || amount_brl == null) {
+        return res.status(400).json({ error: 'Campos obrigatórios: month, service, category, amount_brl' });
+    }
+    try {
+        const { data, error } = await supabase
+            .from('admin_costs')
+            .insert({ month: `${month}-01`, service, category, amount_brl, notes: notes || null })
+            .select()
+            .single();
+        if (error) throw error;
+        res.json({ cost: data });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/admin/costs/:id — remover custo
+app.delete('/api/admin/costs/:id', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const { error } = await supabase.from('admin_costs').delete().eq('id', req.params.id);
+        if (error) throw error;
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Localmente: inicia o servidor Express normalmente.
 // Na Vercel: o arquivo é importado como módulo serverless — app.listen não é chamado.
 if (process.env.VERCEL !== '1') {
