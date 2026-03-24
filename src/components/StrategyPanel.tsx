@@ -54,23 +54,23 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
         if (!flight?.id && !seatsContext) return
         setLoading(true); setLlmError(null); setStrategy(null)
         try {
-            // 1. Tenta obter token fresco via refreshSession
-            let token: string | undefined
-            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
-            if (!refreshError && refreshData.session?.access_token) {
-                token = refreshData.session.access_token
-            } else {
-                // Fallback: usa sessão atual do localStorage
-                const { data: sessionData } = await supabase.auth.getSession()
-                token = sessionData.session?.access_token
+            // 1. getUser() valida o token com o servidor e auto-refresha se expirado.
+            //    Mais confiável que refreshSession() — só refresha quando necessário
+            //    e usa retry interno do supabase-js.
+            const { data: userData, error: userError } = await supabase.auth.getUser()
+            if (userError || !userData.user) {
+                await supabase.auth.signOut()
+                navigate('/auth')
+                throw new Error('Sua sessão expirou. Faça login novamente.')
             }
 
-            if (!token) {
-                throw new Error('Sessão não encontrada. Faça logout e login novamente.')
-            }
+            // Após getUser(), a sessão em memória está atualizada com token fresco
+            const { data: { session } } = await supabase.auth.getSession()
+            const token = session?.access_token
+            if (!token) throw new Error('Não foi possível obter token. Faça login novamente.')
 
-            // 2. Chama a Edge Function via fetch direto — evita bugs de ordenação de
-            //    headers do supabase.functions.invoke onde o anon key pode sobrescrever o JWT
+            // 2. fetch direto — controle total sobre Authorization,
+            //    sem o bug de ordenação de headers do supabase.functions.invoke
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
             const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
@@ -91,7 +91,11 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
             })
 
             if (!response.ok) {
-                if (response.status === 401) throw new Error('Sessão expirada. Faça logout e login novamente.')
+                if (response.status === 401) {
+                    await supabase.auth.signOut()
+                    navigate('/auth')
+                    throw new Error('Autenticação falhou. Faça login novamente.')
+                }
                 throw new Error('Erro ao contactar o servidor. Tente novamente em instantes.')
             }
 
