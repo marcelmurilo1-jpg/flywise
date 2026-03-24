@@ -116,7 +116,8 @@ export default function SavedStrategies() {
                                 <AnimatePresence>
                                     {strategies.map((s, i) => {
                                         const allTags: string[] = s.tags ?? []
-                                        const result = (s as any).structured_result
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        const result = s.structured_result as Record<string, any> | null | undefined
 
                                         // Separate the seatsKey tag for route display; filter internal tags from chips
                                         const seatsTag = allTags.find(t => t?.startsWith('seats:'))
@@ -250,14 +251,16 @@ export default function SavedStrategies() {
                                                         </button>
                                                     </div>
                                                 </div>
-                                                <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end' }}>
-                                                    <button
-                                                        onClick={() => s.busca_id && navigate(`/resultados?buscaId=${s.busca_id}`)}
-                                                        style={{ background: 'var(--blue-medium)', color: '#fff', border: 'none', borderRadius: '10px', padding: '8px 18px', fontFamily: 'inherit', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
-                                                    >
-                                                        Ver resultados →
-                                                    </button>
-                                                </div>
+                                                {s.busca_id && (
+                                                    <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end' }}>
+                                                        <button
+                                                            onClick={() => navigate(`/resultados?buscaId=${s.busca_id}`)}
+                                                            style={{ background: 'var(--blue-medium)', color: '#fff', border: 'none', borderRadius: '10px', padding: '8px 18px', fontFamily: 'inherit', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                                                        >
+                                                            Ver resultados →
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </motion.div>
                                         )
                                     })}

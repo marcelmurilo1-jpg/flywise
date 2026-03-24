@@ -93,5 +93,7 @@ export interface Strategy {
     economia_pct?: number
     preco_cash?: number
     preco_estrategia?: number
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    structured_result?: Record<string, any> | null
     created_at?: string
 }

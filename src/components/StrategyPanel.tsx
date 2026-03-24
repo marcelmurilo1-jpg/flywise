@@ -69,11 +69,21 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
             })
 
             const json = res.data as { ok: boolean; strategy: StrategyResult; tokens_used: number; error?: string } | null
-            // Todos os erros agora chegam como HTTP 200 com ok:false — res.data sempre disponível
+
+            // Trata erros HTTP da Edge Function (non-2xx, ex: 500 por falha de compilação Deno)
+            if (res.error) {
+                const errMsg = (res.error as any)?.message ?? String(res.error)
+                // Mapeia a mensagem genérica do Supabase client para uma mensagem mais útil
+                if (errMsg.includes('non-2xx')) {
+                    throw new Error('Erro interno na Edge Function. Tente novamente em instantes.')
+                }
+                throw new Error(errMsg)
+            }
+
+            // Todos os erros de lógica chegam como HTTP 200 com ok:false
             if (json?.error === 'plan_limit_reached') throw new Error('Limite do plano atingido.')
             if (json?.error) throw new Error(json.error)
-            if (res.error) throw new Error(res.error.message)
-            if (!json?.ok || !json.strategy) throw new Error('Resposta inválida da LLM.')
+            if (!json?.ok || !json.strategy) throw new Error('Resposta inválida da IA. Tente novamente.')
             setStrategy(json.strategy)
             setTokensUsed(json.tokens_used ?? null)
             refreshPlan()
@@ -196,9 +206,23 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                                                     </button>
                                                 )
                                             })()}
-                                            <p style={{ fontSize: 11, color: '#94A3B8' }}>
-                                                {strategiesUsed}/{strategyLimit} {plan === 'free' ? 'estratégia usada' : 'estratégias usadas este mês'}
-                                            </p>
+                                            {(() => {
+                                                const now = new Date()
+                                                const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+                                                const renewalStr = nextMonth.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })
+                                                return (
+                                                    <div style={{ textAlign: 'center' }}>
+                                                        <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>
+                                                            {strategiesUsed}/{strategyLimit === 9999 ? '∞' : strategyLimit} estratégia{strategyLimit !== 1 ? 's' : ''} gerada{strategiesUsed !== 1 ? 's' : ''}
+                                                        </p>
+                                                        {plan !== 'free' && strategyLimit !== 9999 && (
+                                                            <p style={{ fontSize: 10, color: '#CBD5E1', margin: '2px 0 0', lineHeight: 1.4 }}>
+                                                                Suas estratégias renovam em {renewalStr}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })()}
                                         </>
                                     ) : (
                                         <>
