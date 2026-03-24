@@ -54,20 +54,30 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
         if (!flight?.id && !seatsContext) return
         setLoading(true); setLlmError(null); setStrategy(null)
         try {
-            // 1. getUser() valida o token com o servidor e auto-refresha se expirado.
-            //    Mais confiável que refreshSession() — só refresha quando necessário
-            //    e usa retry interno do supabase-js.
-            const { data: userData, error: userError } = await supabase.auth.getUser()
-            if (userError || !userData.user) {
-                await supabase.auth.signOut()
-                navigate('/auth')
-                throw new Error('Sua sessão expirou. Faça login novamente.')
+            // 1. getSession() lê da memória/localStorage — sem rede, nunca falha por conexão.
+            //    Se o token estiver expirado, tenta refreshSession(). Se refresh falhar,
+            //    usa o token atual mesmo assim e deixa a Edge Function decidir.
+            //    NUNCA faz logout automático — isso é decisão do usuário.
+            const { data: { session } } = await supabase.auth.getSession()
+            if (!session?.access_token) {
+                throw new Error('Você precisa estar logado para gerar uma estratégia.')
             }
 
-            // Após getUser(), a sessão em memória está atualizada com token fresco
-            const { data: { session } } = await supabase.auth.getSession()
-            const token = session?.access_token
-            if (!token) throw new Error('Não foi possível obter token. Faça login novamente.')
+            let token = session.access_token
+
+            // Verifica expiração do JWT no lado cliente (sem rede)
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+                if (Date.now() > payload.exp * 1000 - 10_000) {
+                    // Token expirado ou expirando em 10s — tenta refresh
+                    const { data: refreshData } = await supabase.auth.refreshSession()
+                    if (refreshData.session?.access_token) {
+                        token = refreshData.session.access_token
+                    }
+                }
+            } catch {
+                // Falha no decode ou refresh — usa token atual
+            }
 
             // 2. fetch direto — controle total sobre Authorization,
             //    sem o bug de ordenação de headers do supabase.functions.invoke
@@ -92,9 +102,7 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
 
             if (!response.ok) {
                 if (response.status === 401) {
-                    await supabase.auth.signOut()
-                    navigate('/auth')
-                    throw new Error('Autenticação falhou. Faça login novamente.')
+                    throw new Error('Sessão expirada. Faça logout e login novamente para gerar estratégias.')
                 }
                 throw new Error('Erro ao contactar o servidor. Tente novamente em instantes.')
             }
