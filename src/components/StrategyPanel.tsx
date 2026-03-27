@@ -3,6 +3,7 @@ import { X, Zap, TrendingDown, ArrowRight, Loader2, AlertTriangle, Tag, Sparkles
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import type { ResultadoVoo } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
 import type { StrategyResult } from '@/lib/llm/buildPrompt'
@@ -29,7 +30,7 @@ interface StrategyPanelProps {
 }
 
 export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice = 0, seatsContext }: StrategyPanelProps) {
-    const { user, session } = useAuth()
+    const { user } = useAuth()
     const navigate = useNavigate()
     const { canGenerateStrategy, strategiesUsed, strategyLimit, plan, refresh: refreshPlan } = usePlan()
     const [loading, setLoading] = useState(false)
@@ -53,13 +54,12 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
         if (!flight?.id && !seatsContext) return
         setLoading(true); setLlmError(null); setStrategy(null)
         try {
-            const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string)
-                || 'https://cwsjdkucffmiptrfvuxn.supabase.co'
-            const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string)
-                || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3c2pka3VjZmZtaXB0cmZ2dXhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MzEyNzAsImV4cCI6MjA4NzEwNzI3MH0.JWiUm_kHbyA30z92AGPAejzKra7EfLAV1glhO2qIC8w'
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
-            // Usa o JWT do usuário autenticado — muito mais confiável que a anon key
-            const authToken = session?.access_token || anonKey
+            // Usa o JWT da sessão do usuário — evita problema de anon key inválida/rotacionada
+            const { data: { session } } = await supabase.auth.getSession()
+            const authToken = session?.access_token ?? anonKey
 
             const response = await fetch(`${supabaseUrl}/functions/v1/strategy`, {
                 method: 'POST',
