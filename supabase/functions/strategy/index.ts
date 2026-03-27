@@ -674,16 +674,34 @@ serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
     try {
-        const { flightId, userId, cashPrice, seatsContext, buscaId } = await req.json()
-        if (!flightId && !seatsContext) {
-            return new Response(JSON.stringify({ ok: false, error: 'flightId or seatsContext required' }),
-                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-        }
+        // ── Auth ─────────────────────────────────────────────────────────────────
+        // Function is deployed with --no-verify-jwt because new Supabase projects
+        // use the sb_publishable_... key format, which breaks gateway-level JWT
+        // verification. We verify the user's JWT manually here instead.
+        const authHeader = req.headers.get('Authorization') ?? ''
+        const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
 
         const sb = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
         )
+
+        if (!jwt) {
+            return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
+        const { data: { user: jwtUser }, error: jwtError } = await sb.auth.getUser(jwt)
+        if (jwtError || !jwtUser) {
+            console.error('[strategy] JWT verification failed:', jwtError?.message)
+            return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
+
+        const { flightId, userId, cashPrice, seatsContext, buscaId } = await req.json()
+        if (!flightId && !seatsContext) {
+            return new Response(JSON.stringify({ ok: false, error: 'flightId or seatsContext required' }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
 
         // 1. Load flight
         let flight: FlightRow | null = null
