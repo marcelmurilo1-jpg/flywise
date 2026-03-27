@@ -211,7 +211,16 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
         const panelWidth = 620 // approximate max width of the calendar panel
         const maxLeft = window.innerWidth - panelWidth - 16 // 16px safety margin from right edge
         const clampedLeft = Math.max(8, Math.min(left, maxLeft))
-        setDropRect({ top: r.bottom + window.scrollY + 8, left, clampedLeft })
+        const panelHeight = 440 // approximate height of calendar panel
+        const spaceBelow = window.innerHeight - r.bottom
+        const spaceAbove = r.top
+        // Open above if not enough space below but more space above
+        const openAbove = spaceBelow < panelHeight + 8 && spaceAbove > spaceBelow
+        if (openAbove) {
+            setDropRect({ top: r.top + window.scrollY - panelHeight - 8, left, clampedLeft })
+        } else {
+            setDropRect({ top: r.bottom + window.scrollY + 8, left, clampedLeft })
+        }
     }
 
     function handleDayClick(d: Date) {
@@ -362,11 +371,13 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
     const panel = open && dropRect ? (
         <div style={{
             position: 'fixed',
-            top: dropRect.top - window.scrollY,
+            top: Math.max(8, dropRect.top - window.scrollY),
             left: dropRect.clampedLeft - window.scrollX,
             zIndex: 999998,
             minWidth: 600,
             maxWidth: 'calc(100vw - 24px)',
+            maxHeight: 'calc(100vh - 16px)',
+            overflowY: 'auto',
         }}>
             {calendarPanel}
         </div>

@@ -147,6 +147,19 @@ async function fetchSeatsAeroAPI(origin, destination, startDate, endDate) {
     return data.data ?? [];
 }
 
+const SOURCE_TO_PROGRAM = {
+    smiles: 'Smiles', delta: 'SkyMiles', american: 'AAdvantage',
+    united: 'MileagePlus', aeroplan: 'Aeroplan', flyingblue: 'Flying Blue',
+    lifemiles: 'Lifemiles', virginatlantic: 'Virgin Points', alaska: 'Mileage Plan',
+    latam: 'LATAM Pass', azul: 'TudoAzul', emirates: 'Skywards',
+    turkish: 'Miles&Smiles', jetblue: 'TrueBlue', iberia: 'Iberia Plus',
+    singapore: 'KrisFlyer', qatar: 'Avios (Qatar)', british: 'Avios (BA)',
+    avianca: 'Lifemiles', aircanada: 'Aeroplan',
+}
+function normalizeSourceKey(raw) {
+    return (raw ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
 function mapSeatsAeroItem(item, tipo = 'ida') {
     const origin = item.Route?.OriginAirport ?? '';
     const dest   = item.Route?.DestinationAirport ?? '';
@@ -207,9 +220,17 @@ function mapSeatsAeroItem(item, tipo = 'ida') {
         premiumEconomy: premEconomy,
         business,
         first,
-        taxas: '0',
+        taxas: (() => {
+            const amt = item.TaxAmount ?? item.Taxes ?? null
+            const cur = item.TaxCurrency ?? 'USD'
+            if (amt && Number(amt) > 0) return `${cur} ${Number(amt) % 1 === 0 ? Number(amt) : Number(amt).toFixed(2)}`
+            const trip = (item.AvailabilityTrips ?? [])[0]
+            if (trip?.TaxAmount && Number(trip.TaxAmount) > 0) return `${trip.TaxCurrency ?? 'USD'} ${Number(trip.TaxAmount).toFixed(2)}`
+            return '0'
+        })(),
         tipo,
         source: item.Source ?? '',
+        programName: SOURCE_TO_PROGRAM[normalizeSourceKey(item.Source ?? '')] ?? item.Source ?? '',
         remainingSeats: {
             economy:       item.YRemainingSeats ?? 0,
             premiumEconomy: item.WRemainingSeats ?? 0,
@@ -221,8 +242,16 @@ function mapSeatsAeroItem(item, tipo = 'ida') {
 
 // Rota de busca via API oficial do Seats.aero
 app.post('/api/search-flights', async (req, res) => {
-    console.log('[Express] 📥 Nova requisição em /api/search-flights (API oficial)');
     const { origem, destino, data_ida, data_volta } = req.body;
+    console.log(`[Express] /api/search-flights — ${req.body?.origem} → ${req.body?.destino} | SEATS_AERO_API_KEY: ${SEATS_AERO_API_KEY ? '✅' : '❌ AUSENTE'}`)
+
+    if (!SEATS_AERO_API_KEY) {
+        console.error('[Express] SEATS_AERO_API_KEY não configurada.')
+        return res.status(200).json({
+            error: 'API Key do Seats.aero não configurada no servidor. Adicione SEATS_AERO_API_KEY nas variáveis do Railway.',
+            voos: [],
+        })
+    }
 
     if (!origem || !destino || !data_ida) {
         return res.status(400).json({ error: 'Origem, destino e data_ida são obrigatórios' });

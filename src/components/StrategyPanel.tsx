@@ -29,7 +29,7 @@ interface StrategyPanelProps {
 }
 
 export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice = 0, seatsContext }: StrategyPanelProps) {
-    const { user } = useAuth()
+    const { user, session } = useAuth()
     const navigate = useNavigate()
     const { canGenerateStrategy, strategiesUsed, strategyLimit, plan, refresh: refreshPlan } = usePlan()
     const [loading, setLoading] = useState(false)
@@ -53,20 +53,19 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
         if (!flight?.id && !seatsContext) return
         setLoading(true); setLlmError(null); setStrategy(null)
         try {
-            // A Edge Function usa userId do body + SUPABASE_SERVICE_ROLE_KEY para DB —
-            // não precisa do JWT do usuário. A anon key (role='anon', válido até 2036)
-            // é suficiente para o gateway do Supabase e nunca expira como o user JWT.
-            // Fallback hardcoded garante funcionamento mesmo se as env vars falharem no build.
             const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string)
                 || 'https://cwsjdkucffmiptrfvuxn.supabase.co'
             const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string)
                 || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3c2pka3VjZmZtaXB0cmZ2dXhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MzEyNzAsImV4cCI6MjA4NzEwNzI3MH0.JWiUm_kHbyA30z92AGPAejzKra7EfLAV1glhO2qIC8w'
 
+            // Usa o JWT do usuário autenticado — muito mais confiável que a anon key
+            const authToken = session?.access_token || anonKey
+
             const response = await fetch(`${supabaseUrl}/functions/v1/strategy`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${anonKey}`,
+                    'Authorization': `Bearer ${authToken}`,
                     'apikey': anonKey,
                 },
                 body: JSON.stringify({
@@ -79,7 +78,9 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
             })
 
             if (!response.ok) {
-                throw new Error('Erro ao contactar o servidor. Tente novamente em instantes.')
+                const errText = await response.text().catch(() => '')
+                console.error('[StrategyPanel] HTTP error:', response.status, errText)
+                throw new Error(`Erro ${response.status} ao contactar o servidor. ${response.status === 401 ? 'Sessão expirada — tente fazer login novamente.' : 'Tente novamente em instantes.'}`)
             }
 
             const json = await response.json() as { ok: boolean; strategy: StrategyResult; tokens_used: number; error?: string } | null

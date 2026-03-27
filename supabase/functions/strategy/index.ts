@@ -884,7 +884,11 @@ REGRAS OBRIGATÓRIAS:
         })
 
         const llmData = await llmRes.json()
-        if (!llmRes.ok) throw new Error(llmData.error?.message ?? 'OpenAI error')
+        if (!llmRes.ok) {
+            const detail = llmData.error?.message ?? llmData.error?.code ?? JSON.stringify(llmData.error ?? {})
+            console.error(`[strategy] OpenAI error ${llmRes.status}:`, detail)
+            throw new Error(`OpenAI ${llmRes.status}: ${detail}`)
+        }
 
         const strategyJson = llmData.choices?.[0]?.message?.content ?? '{}'
         const tokensUsed = llmData.usage?.total_tokens ?? 0

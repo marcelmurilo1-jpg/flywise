@@ -43,6 +43,7 @@ export default function Resultados() {
     // Seats.aero state
     const [seatsFlights, setSeatsFlights] = useState<any[]>([])
     const [seatsLoading, setSeatsLoading] = useState(false)
+    const [seatsError, setSeatsError] = useState<string | null>(null)
     const [activeView, setActiveView] = useState<'reais' | 'milhas'>('reais')
     const [seatsPhase, setSeatsPhase] = useState<'ida' | 'volta' | 'summary'>('ida')
     const [seatsIdaSel, setSeatsIdaSel] = useState<any | null>(null)
@@ -149,6 +150,7 @@ export default function Resultados() {
                     } catch { /* ignore parse errors */ }
 
                     setSeatsLoading(true)
+                    setSeatsError(null)
                     fetch(`${import.meta.env.VITE_API_BASE_URL ?? ''}/api/search-flights`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -159,14 +161,25 @@ export default function Resultados() {
                             data_volta: seatsRet || undefined
                         })
                     })
-                        .then(r => r.json())
+                        .then(r => {
+                            if (!r.ok) throw new Error(`Servidor retornou status ${r.status}`)
+                            return r.json()
+                        })
                         .then(data => {
+                            if (data.error) {
+                                console.warn('[Resultados] Seats.aero erro:', data.error)
+                                setSeatsError(data.error)
+                                return
+                            }
                             if (data.voos && Array.isArray(data.voos) && data.voos.length > 0) {
                                 setSeatsFlights(data.voos)
                                 try { sessionStorage.setItem(sessionKey, JSON.stringify(data.voos)) } catch { /* quota exceeded */ }
                             }
                         })
-                        .catch(err => console.error('[Resultados] Erro Seats.aero:', err))
+                        .catch(err => {
+                            console.error('[Resultados] Erro Seats.aero:', err)
+                            setSeatsError('Não foi possível buscar milhas. Verifique a conexão com o servidor.')
+                        })
                         .finally(() => setSeatsLoading(false))
                 }
 
@@ -547,6 +560,11 @@ export default function Resultados() {
                                             <div style={{ padding: '40px', textAlign: 'center', background: '#fff', borderRadius: '16px', border: '1px solid var(--border-light)' }}>
                                                 <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Buscando passagens emissíveis por milhas na base Pro (Seats.aero)...</p>
                                             </div>
+                                        ) : seatsError ? (
+                                            <div style={{ padding: '24px', textAlign: 'center', background: '#FFF5F5', borderRadius: '16px', border: '1px solid #FCA5A5' }}>
+                                                <p style={{ color: '#DC2626', fontSize: '13px', fontWeight: 600, marginBottom: 6 }}>&#9888;&#65039; Busca de milhas indisponível</p>
+                                                <p style={{ color: '#991B1B', fontSize: '12px', lineHeight: 1.6, margin: 0 }}>{seatsError}</p>
+                                            </div>
                                         ) : seatsFlights.length === 0 ? (
                                             <div style={{ padding: '40px', textAlign: 'center', background: '#fff', borderRadius: '16px', border: '1px solid var(--border-light)' }}>
                                                 <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Nenhum voo encontrado no Seats.aero para esta rota.</p>
@@ -651,7 +669,7 @@ export default function Resultados() {
                                                                     origem: sf.origem ?? '',
                                                                     destino: sf.destino ?? '',
                                                                     cabin: sf.cabineEncontrada ?? 'Economy',
-                                                                    program: SOURCE_PROGRAM[sf.source?.toLowerCase() ?? '']?.name ?? sf.source ?? '',
+                                                                    program: sf.programName || SOURCE_PROGRAM[(sf.source ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')]?.name || sf.source || '',
                                                                     idaMilhas: sf.precoMilhas ?? 0,
                                                                     voltaMilhas: seatsVoltaSel?.precoMilhas,
                                                                     totalMilhas: (sf.precoMilhas ?? 0) + (seatsVoltaSel?.precoMilhas ?? 0),
