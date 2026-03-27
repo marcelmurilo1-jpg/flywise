@@ -1,81 +1,183 @@
 # FlyWise
 
-FlyWise é um assistente inteligente de viagens para o viajante brasileiro. A plataforma reúne busca de voos, gerenciamento de milhas, monitoramento de promoções, estratégias geradas por IA e planejamento de roteiros — tudo em um único lugar.
+FlyWise é uma plataforma completa de viagens para o viajante brasileiro. Reúne busca de voos em tempo real (cash e milhas), carteira de milhas, simulador de transferências, promoções atualizadas, estratégias geradas por IA, roteiros inteligentes, mapa-múndi de viagens e um módulo de intercâmbio médico — tudo em um único lugar.
 
-## Servicos
+---
+
+## Funcionalidades
 
 ### Busca de Voos
-Busca de passagens aéreas em tempo real via Amadeus API. Suporta voos de ida, ida e volta, filtros por cabine, número de escalas e datas. Os resultados são salvos por busca, permitindo comparação histórica.
+Busca de passagens em tempo real com suporte a viagens de ida, ida e volta e múltiplos passageiros. Integra duas fontes:
+- **Google Flights (scraper)** — preços em dinheiro (BRL) via Playwright + Chromium no Railway, com pool de user-agents e cache em memória de 4 horas (LRU, máx. 300 entradas)
+- **Seats.aero Partner API** — disponibilidade de assentos em milhas, com cache de 10 minutos no banco
 
 ### Estratégia com IA
-Para qualquer voo encontrado, o usuário pode acionar uma análise gerada por GPT-4o-mini. A IA considera o voo selecionado, as promoções ativas no banco e o saldo de milhas do usuário para recomendar o melhor programa de fidelidade, estimar a economia em relação ao preço cash e gerar um plano passo a passo para emissão do bilhete. As estratégias geradas podem ser salvas no histórico.
+Para qualquer voo selecionado, a IA (GPT-4o-mini via Edge Function) analisa o voo, o saldo de milhas do usuário e as promoções ativas para recomendar o melhor programa de fidelidade, estimar a economia versus preço cash e gerar um plano passo a passo para emissão. As estratégias podem ser salvas no histórico.
+
+### Busca Avançada por Chat
+Interface conversacional em linguagem natural para buscas mais complexas. O modelo extrai aeroportos, datas, cabine e preferências da conversa e retorna os parâmetros estruturados para consulta no Seats.aero. Histórico de conversas salvo por usuário.
 
 ### Carteira de Milhas
-Painel para o usuário registrar e visualizar seus saldos nos principais programas de fidelidade brasileiros: Smiles, LATAM Pass, TudoAzul, Livelo, entre outros. O saldo é usado como contexto pela IA ao gerar estratégias.
+Painel para registrar e acompanhar saldos em 16+ programas de fidelidade brasileiros (Smiles, LATAM Pass, TudoAzul, Livelo, entre outros). O saldo é usado como contexto nas estratégias de IA.
+
+### Simulador de Transferências *(Pro/Elite)*
+Calcula o melhor caminho de transferência entre programas de pontos, compara CPM (custo por milha) e exibe os bônus de transferência ativos — incluindo tiers de clube (Diamante, Ouro, Prata) e parcerias com Livelo.
 
 ### Promoções em Tempo Real
-Scraper diário que coleta promoções de passagens e milhas de sites especializados (ex: Passageiro de Primeira). As promoções são classificadas por programa, categoria e validade, e ficam disponíveis na aba de promoções do app.
+Scraper que coleta promoções de passagens e milhas de sites especializados via RSS. As promoções são classificadas por categoria (`milhas` / `passagens`), subcategoria e programa, e ficam disponíveis na aba Promoções do app.
 
 ### Alertas por E-mail
-Sistema de notificação que cruza as promoções novas com as preferências de cada usuário (categorias de interesse, programas favoritos) e envia e-mails personalizados via Resend. Cada usuário recebe apenas o que é relevante para ele.
+Sistema de notificação que cruza as promoções com as preferências de cada usuário (categorias, programas favoritos) e envia e-mails personalizados via Resend. Garante que cada usuário receba apenas o que é relevante, sem repetições.
 
 ### Roteiro Inteligente
-Geração de roteiros de viagem via IA com base no destino e nas preferências do usuário. O roteiro é salvo e pode ser consultado posteriormente.
+Geração de roteiros dia a dia com IA a partir do destino, tipo de viajante e estilo de viagem. O roteiro inclui atividades com horários, mapa interativo (Leaflet) com os pontos marcados, seção de "extras" (gastronomia, cultura, natureza, compras) e exportação em PDF.
 
-### Busca Avancada
-Wizard de busca com controles mais detalhados para usuários que querem refinar origem, destino, datas e preferências antes de iniciar a pesquisa.
+### Mapa-Múndi de Viagens
+Mapa interativo com todos os países do mundo. O usuário marca destinos como visitados ou na lista de desejos, acompanha estatísticas por continente e percentual global visitado.
 
 ### Planos e Assinatura
-Pagina de planos com diferentes níveis de acesso à plataforma, com fluxo de checkout integrado.
+Quatro planos: Grátis, Essencial (R$19/mês), Pro (R$39/mês) e Elite (R$69/mês) com desconto anual. Pagamento via PIX com geração de QR code, polling de status e confirmação automática.
 
 ### Onboarding
-Fluxo de configuração inicial para novos usuários, coletando preferências de programas de fidelidade e tipo de viagem para personalizar a experiência desde o primeiro acesso.
+Fluxo de 5 etapas para novos usuários com vídeos explicativos de cada funcionalidade.
+
+### Módulo C1 — Intercâmbio Médico
+Módulo dedicado para estudantes de medicina gerenciarem o processo de intercâmbio:
+- **Explorar Destinos** — catálogo de especialidades médicas e hospitais por cidade
+- **Meu Intercâmbio** — workflow em 4 etapas (Documentos → Emails/CRM → Onboarding → Pré-Partida) com checklist de CV/PS/LoR, gestão de contatos de médicos, rastreio de status de e-mails e agendamento de follow-ups
+
+### Painel Administrativo
+Área restrita com listagem e busca de usuários, monitoramento de custos operacionais por serviço/categoria e controle de planos. Acesso controlado pela flag `is_admin` no perfil.
+
+---
 
 ## Stack
 
 | Camada | Tecnologia |
 |---|---|
-| Frontend | React 18 + TypeScript + Vite |
-| Animacoes | Framer Motion |
-| Backend/BaaS | Supabase (auth, banco, storage) |
+| Frontend | React 19 + TypeScript + Vite |
+| Estilização | Tailwind CSS v4 + Radix UI |
+| Animações | Framer Motion |
+| Mapas | React Leaflet + React Simple Maps + D3 Geo |
+| Backend/BaaS | Supabase (auth, banco, storage, realtime) |
+| API server | Node.js + Express 5 (Railway) |
 | Edge Functions | Deno (Supabase Functions) |
 | IA | OpenAI GPT-4o-mini |
-| Voos | Amadeus Self-Service API |
-| Scraper | Python + Railway (cron diario) |
+| Voos (cash) | Google Flights (scraper via Playwright + Chromium) |
+| Voos (milhas) | Seats.aero Partner API |
+| Scraper | Python + Playwright + Railway cron |
 | E-mail | Resend |
+| Pagamentos | PIX via integração de billing |
+| PDF | @react-pdf/renderer |
 
-## Estrutura do projeto
+---
+
+## Estrutura do Projeto
 
 ```
 flywise/
 ├── src/
-│   ├── pages/          # Landing, Auth, Home, Resultados, Promotions,
-│   │                   # Wallet, SavedStrategies, Roteiro, Configuracoes,
-│   │                   # SearchWizard, Planos, Checkout, Onboarding
-│   ├── components/     # StrategyPanel, FlightResultsGrouped, BottomNav, ...
-│   ├── lib/
-│   │   ├── amadeus.ts              # Busca de voos
-│   │   ├── supabase.ts             # Client e tipos
-│   │   ├── airlineMilesMapping.ts  # Mapa companhia -> programas aceitos
-│   │   └── llm/                   # Builders de contexto para prompts de IA
-│   └── contexts/       # AuthContext, ThemeContext
+│   ├── pages/
+│   │   ├── Home.tsx                  # Tela principal de busca
+│   │   ├── Resultados.tsx            # Resultados de voos + painel de estratégia
+│   │   ├── Promotions.tsx            # Galeria de promoções
+│   │   ├── Wallet.tsx                # Carteira de milhas
+│   │   ├── TransferSimulator.tsx     # Simulador de transferências
+│   │   ├── ChatBuscaAvancada.tsx     # Busca avançada por chat com IA
+│   │   ├── SearchWizard.tsx          # Wizard guiado de busca
+│   │   ├── Roteiro.tsx               # Gerador de roteiros com mapa e PDF
+│   │   ├── Mapa.tsx                  # Mapa-múndi de viagens visitadas
+│   │   ├── SavedStrategies.tsx       # Histórico de estratégias e chats
+│   │   ├── Configuracoes.tsx         # Configurações e preferências do usuário
+│   │   ├── Planos.tsx                # Página de planos e assinatura
+│   │   ├── Checkout.tsx              # Pagamento via PIX
+│   │   ├── Onboarding.tsx            # Tutorial inicial para novos usuários
+│   │   ├── Auth.tsx                  # Login e cadastro (email + Google OAuth)
+│   │   ├── Landing.tsx               # Página pública de apresentação
+│   │   ├── Admin.tsx                 # Painel administrativo
+│   │   └── c1/
+│   │       ├── ExploreDestinos.tsx   # Destinos de intercâmbio médico
+│   │       └── MeuIntercambio.tsx    # Gestão pessoal do intercâmbio
+│   ├── components/
+│   │   ├── StrategyPanel.tsx         # Painel de estratégia de milhas com IA
+│   │   ├── FlightResultsGrouped.tsx  # Lista de voos agrupados por preço/cabine
+│   │   ├── PromotionsSection.tsx     # Grade de promoções com modal de detalhe
+│   │   ├── Sidebar.tsx               # Filtros de voos (companhia, cabine, preço)
+│   │   ├── AirportInput.tsx          # Input de aeroporto com autocomplete
+│   │   ├── DateRangePicker.tsx       # Seletor de datas com calendário
+│   │   ├── SearchBarTop.tsx          # Barra de busca persistente na tela de resultados
+│   │   ├── SearchFormEnhanced.tsx    # Formulário de busca aprimorado
+│   │   ├── Header.tsx                # Cabeçalho de navegação
+│   │   ├── BottomNav.tsx             # Navegação inferior mobile
+│   │   ├── RoteiroPDF.tsx            # Exportação de roteiro em PDF
+│   │   ├── PlaneWindowLoader.tsx     # Loader animado com janela de avião
+│   │   ├── AircraftReveal.tsx        # Hero animado com avião
+│   │   ├── GlobeBackground.tsx       # Globo terrestre de fundo
+│   │   ├── GlobeRoute.tsx            # Visualização de rota no globo
+│   │   ├── NotificationSurvey.tsx    # Survey de opt-in de notificações
+│   │   ├── SlidingNumber.tsx         # Número animado
+│   │   └── ThemeToggle.tsx           # Alternador de tema claro/escuro
+│   ├── contexts/
+│   │   ├── AuthContext.tsx           # Autenticação (email/senha + Google OAuth)
+│   │   ├── ThemeContext.tsx          # Tema claro/escuro
+│   │   └── C1Context.tsx             # Estado do módulo de intercâmbio médico
+│   ├── hooks/
+│   │   ├── usePlan.ts                # Plano ativo, limites e contagem de uso
+│   │   ├── useAdmin.ts               # Detecção de usuário admin
+│   │   ├── useIsMobile.ts            # Detecção de dispositivo mobile
+│   │   └── useNotificationSurvey.ts  # Controle de exibição do survey
+│   └── lib/
+│       ├── supabase.ts               # Client Supabase e tipos principais
+│       ├── amadeus.ts                # Integração Amadeus API
+│       ├── transferData.ts           # Dados de transferências entre programas
+│       ├── airlineMilesMapping.ts    # Mapa companhia → programas aceitos
+│       ├── mockFlights.ts            # Dados mock para desenvolvimento
+│       └── llm/
+│           ├── buildPrompt.ts        # Builder de prompt para estratégia
+│           └── buildPromoContext.ts  # Builder de contexto de promoções para IA
 ├── supabase/
 │   ├── functions/
-│   │   ├── strategy/       # Gera estrategia de milhas com GPT-4o-mini
+│   │   ├── strategy/       # Gera estratégia de milhas com GPT-4o-mini
+│   │   ├── chat-busca/     # Busca avançada por linguagem natural com IA
 │   │   ├── itinerary/      # Gera roteiro de viagem com IA
-│   │   └── refresh-extras/ # Atualiza dados auxiliares
-│   └── migrations/         # Schema SQL versionado
-└── scraper/
-    ├── scrape_passageiro.py        # Coleta promocoes de sites especializados
-    ├── notify.py                   # Envia alertas de email via Resend
-    ├── run.py                      # Entry point do scraper
-    ├── migrate_db.py               # Migrations do banco do scraper
-    ├── delete_expired_dryrun.py    # Lista promocoes expiradas (dry-run)
-    ├── delete_expired_with_backup.py
-    └── backend/                    # FastAPI hospedado no Railway
+│   │   └── refresh-extras/ # Regenera seção "extras" do roteiro
+│   └── migrations/         # Schema SQL versionado (001→018)
+├── scraper/
+│   ├── run.py                        # Entry point — scraping + classificação
+│   ├── scrape_passageiro.py          # Coleta promoções via RSS + Playwright
+│   ├── notify.py                     # Envia alertas de e-mail via Resend
+│   ├── migrate_db.py                 # Utilitário de migrations
+│   ├── delete_expired_dryrun.py      # Preview de promoções expiradas
+│   ├── delete_expired_with_backup.py # Deleta expiradas com backup
+│   └── test_conn.py                  # Teste de conexão ao banco
+└── server.js                         # API Express (Railway) — proxy de voos e scraping
 ```
 
-## Configuracao local
+---
+
+## Banco de Dados
+
+Migrations em `supabase/migrations/`, aplicadas em ordem numérica.
+
+| Tabela | Descrição |
+|---|---|
+| `buscas` | Buscas realizadas pelos usuários (origem, destino, datas, passageiros, saldo de milhas) |
+| `resultados_voos` | Voos retornados pelas APIs (Amadeus e Seats.aero) por busca |
+| `strategies` | Estratégias de milhas geradas pela IA com texto e metadados |
+| `itineraries` | Roteiros de viagem gerados pela IA em JSONB |
+| `promocoes` | Promoções coletadas pelo scraper com categoria, subcategoria e tags de programas |
+| `notification_preferences` | Preferências de alerta por usuário (categorias, programas, alertas) |
+| `user_profiles` | Perfil estendido: plano, preferências, notificações, flag de admin |
+| `user_promotion_log` | Registro de promoções já enviadas por usuário (evita duplicatas) |
+| `seatsaero_searches` | Cache de buscas no Seats.aero (TTL de 10 minutos) |
+| `chat_conversations` | Histórico de conversas da busca avançada por chat |
+| `world_map_visits` | Países visitados e lista de desejos por usuário |
+| `transfer_partners` | Dados de parceiros de transferência de milhas |
+| `admin_costs` | Custos operacionais por serviço/categoria para o painel admin |
+
+---
+
+## Configuração Local
 
 ### Frontend
 
@@ -89,47 +191,63 @@ Crie `.env.local`:
 ```env
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
-VITE_AMADEUS_CLIENT_ID=...
-VITE_AMADEUS_CLIENT_SECRET=...
+VITE_SERVER_URL=...  # URL do servidor Express no Railway
 ```
 
-### Scraper
+### API Server (Express)
+
+```bash
+node server.js
+# ou rode tudo junto:
+npm run dev:all
+```
+
+Variáveis de ambiente necessárias no Railway:
+
+```env
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+SEATS_AERO_API_KEY=...
+SYNC_SECRET=...
+```
+
+### Scraper (Python)
 
 ```bash
 cd scraper
 pip install -r requirements.txt
 cp .env.example .env   # preencha DATABASE_URL, RESEND_API_KEY, FROM_EMAIL
-python run.py          # scraper manual
-python notify.py       # notificacoes manual
+python run.py          # execução manual do scraper
+python notify.py       # envio manual de notificações
 ```
 
 ### Edge Functions
 
 ```bash
 supabase functions deploy strategy
+supabase functions deploy chat-busca
 supabase functions deploy itinerary
 supabase functions deploy refresh-extras
 ```
 
-Secret necessario no Supabase Dashboard:
+Secret necessário no Supabase Dashboard:
 
 ```
 OPENAI_API_KEY
+SEATS_AERO_API_KEY
+SUPABASE_SERVICE_ROLE_KEY
 ```
 
-## Banco de dados
+---
 
-Migrations em `supabase/migrations/`, aplicadas em ordem.
+## Deploy
 
-| Tabela | Descricao |
+| Serviço | Plataforma |
 |---|---|
-| `buscas` | Buscas realizadas pelos usuarios |
-| `resultados_voos` | Voos retornados pela Amadeus |
-| `strategies` | Estrategias de milhas geradas pela IA |
-| `promocoes` | Promocoes coletadas pelo scraper |
-| `notification_preferences` | Preferencias de alerta por usuario |
-| `user_profiles` | Perfil e plano do usuario |
+| Frontend | Vercel |
+| API Server + Scraper | Railway |
+| Banco de dados | Supabase Cloud |
+| Edge Functions | Supabase Functions (Deno) |
+| E-mail | Resend |
 
-## CI/CD
-
-O scraper roda automaticamente via GitHub Actions com schedule diario, hospedado no Railway.
+O scraper roda automaticamente via cron no Railway com schedule diário. As notificações de e-mail são disparadas em seguida pelo `notify.py`.
