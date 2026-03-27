@@ -30,7 +30,7 @@ interface StrategyPanelProps {
 }
 
 export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice = 0, seatsContext }: StrategyPanelProps) {
-    const { user } = useAuth()
+    const { user, session } = useAuth()
     const navigate = useNavigate()
     const { canGenerateStrategy, strategiesUsed, strategyLimit, plan, refresh: refreshPlan } = usePlan()
     const [loading, setLoading] = useState(false)
@@ -54,11 +54,16 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
         if (!flight?.id && !seatsContext) return
         setLoading(true); setLlmError(null); setStrategy(null)
         try {
-            // Garante um token JWT válido antes de chamar a Edge Function.
-            // A anon key do projeto usa o novo formato sb_publishable_... (não é JWT),
-            // então não pode ser usada como Bearer. Forçamos o uso do access_token da sessão.
-            const { data: { session } } = await supabase.auth.getSession()
-            const accessToken = session?.access_token
+            // JWT acquisition — 3-tier strategy:
+            // 1. session from AuthContext (kept fresh by supabase-js onAuthStateChange)
+            // 2. Force server-side refresh if context session is null/expired
+            // 3. Throw if still missing — user must re-login
+            // NEVER uses the anon key (sb_publishable_...) as Bearer — it is not a JWT.
+            let accessToken: string | null = session?.access_token ?? null
+            if (!accessToken) {
+                const { data: refreshData } = await supabase.auth.refreshSession()
+                accessToken = refreshData.session?.access_token ?? null
+            }
             if (!accessToken) throw new Error('Sessão expirada. Faça login novamente.')
 
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
