@@ -3,7 +3,6 @@ import { X, Zap, TrendingDown, ArrowRight, Loader2, AlertTriangle, Tag, Sparkles
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import type { ResultadoVoo } from '@/lib/supabase'
-import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
 import type { StrategyResult } from '@/lib/llm/buildPrompt'
@@ -30,7 +29,7 @@ interface StrategyPanelProps {
 }
 
 export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice = 0, seatsContext }: StrategyPanelProps) {
-    const { user } = useAuth()
+    const { user, session } = useAuth()
     const navigate = useNavigate()
     const { canGenerateStrategy, strategiesUsed, strategyLimit, plan, refresh: refreshPlan } = usePlan()
     const [loading, setLoading] = useState(false)
@@ -57,8 +56,7 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
             const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
-            // Usa o JWT da sessão do usuário — evita problema de anon key inválida/rotacionada
-            const { data: { session } } = await supabase.auth.getSession()
+            // Usa o access_token da sessão gerenciada pelo AuthContext (sempre fresco via onAuthStateChange)
             const authToken = session?.access_token ?? anonKey
 
             const response = await fetch(`${supabaseUrl}/functions/v1/strategy`, {
