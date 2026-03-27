@@ -34,6 +34,10 @@ interface PromoRow {
     bonus_pct: number | null
     parceiro: string | null
     valid_until: string | null
+    // Scraper fields (migration 002 / run.py)
+    subcategoria: string | null
+    programas_tags: string[] | null
+    categoria: string | null
 }
 
 interface UserData {
@@ -174,17 +178,55 @@ function buildFlightString(f: FlightRow, targetProgram: string): string {
     return lines.join('\n')
 }
 
+// ─── Promo helpers ────────────────────────────────────────────────────────────
+
+// Normaliza o tipo: promos do scraper usam subcategoria; promos manuais usam tipo.
+function resolvePromoType(p: PromoRow): string {
+    if (p.tipo) return p.tipo
+    if (p.subcategoria === 'transferencia') return 'bonus_transferencia'
+    if (p.subcategoria === 'clube') return 'clube'
+    return 'outros'
+}
+
+// Verifica se uma promo é do programa alvo — checa tanto campo `programa` quanto `programas_tags`.
+function promoMatchesProgram(p: PromoRow, programName: string): boolean {
+    const target = programName.toLowerCase()
+    if (p.programa?.toLowerCase() === target) return true
+    return (p.programas_tags ?? []).some(t => t.toLowerCase() === target)
+}
+
+// Extrai percentual de bônus do título quando bonus_pct está NULL (promos do scraper).
+function extractBonusFromTitle(titulo: string | null): number {
+    if (!titulo) return 0
+    const m = titulo.match(/\+?\s*(\d{2,3})\s*%/)
+    return m ? parseInt(m[1], 10) : 0
+}
+
+// Retorna o bônus efetivo: usa bonus_pct quando disponível, senão extrai do título.
+function effectiveBonus(p: PromoRow): number {
+    return p.bonus_pct ?? extractBonusFromTitle(p.titulo)
+}
+
 // ─── Promo formatting ─────────────────────────────────────────────────────────
 
 function formatPromoLine(p: PromoRow, i: number): string {
-    const tipoLabel = p.tipo === 'bonus_transferencia' ? '[transferência]'
-        : p.tipo === 'clube' ? '[clube]'
-        : p.tipo === 'boas_vindas' ? '[boas-vindas]'
-        : p.tipo === 'milhas_compra' ? '[compra-milhas]'
+    const tipo = resolvePromoType(p)
+    const tipoLabel = tipo === 'bonus_transferencia' ? '[transferência]'
+        : tipo === 'clube' ? '[clube]'
+        : tipo === 'boas_vindas' ? '[boas-vindas]'
+        : tipo === 'milhas_compra' ? '[compra-milhas]'
         : '[promoção]'
-    const parts = [`${i + 1}. ${tipoLabel} ${p.programa ?? 'Geral'}`]
-    if (p.bonus_pct) parts.push(`+${p.bonus_pct}% bônus`)
+    const bonus = effectiveBonus(p)
+    // Programa: usa campo programa ou primeiro tag do scraper
+    const programaLabel = p.programa ?? (p.programas_tags ?? []).filter(t => !['Nubank', 'Itaú', 'Livelo', 'C6', 'Inter', 'Santander', 'Bradesco'].includes(t))[0] ?? 'Geral'
+    const parts = [`${i + 1}. ${tipoLabel} ${programaLabel}`]
+    if (bonus > 0) parts.push(`+${bonus}% bônus`)
     if (p.parceiro) parts.push(`via ${p.parceiro}`)
+    else if (p.programas_tags && p.programas_tags.length > 1) {
+        // Para promos do scraper, o parceiro (banco) é o segundo tag
+        const bancoTag = p.programas_tags.find(t => ['Nubank', 'Itaú', 'Livelo', 'C6', 'Inter', 'Santander', 'Bradesco', 'Amex', 'Caixa', 'BTG'].some(b => t.includes(b)))
+        if (bancoTag) parts.push(`via ${bancoTag}`)
+    }
     parts.push(`— ${String(p.titulo ?? '').slice(0, 80)}`)
     if (p.valid_until) parts.push(`(expira ${new Date(p.valid_until).toLocaleDateString('pt-BR')})`)
     return parts.join(' ')
@@ -200,55 +242,75 @@ async function fetchPromos(
     try {
         const now = new Date().toISOString()
         const searchPrograms = Array.from(new Set([targetProgram, ...relatedPrograms])).filter(Boolean).slice(0, 7)
+        const fallbackPrograms = searchPrograms.length > 0 ? searchPrograms : ['Smiles', 'LATAM Pass', 'Livelo']
+        const PROMO_SELECT = 'titulo,programa,tipo,bonus_pct,parceiro,valid_until,subcategoria,programas_tags,categoria'
+        const validFilter = 'valid_until.is.null,valid_until.gt.' + now
 
-        const { data: allPromos } = await sb.from('promocoes')
-            .select('titulo,programa,tipo,bonus_pct,parceiro,valid_until')
-            .or('valid_until.is.null,valid_until.gt.' + now)
-            .in('programa', searchPrograms.length > 0 ? searchPrograms : ['Smiles', 'LATAM Pass', 'Livelo'])
+        // Query 1: promos manuais com campo `programa` preenchido (transferData / seeds)
+        const q1 = sb.from('promocoes')
+            .select(PROMO_SELECT)
+            .or(validFilter)
+            .in('programa', fallbackPrograms)
             .order('bonus_pct', { ascending: false, nullsFirst: false })
+            .limit(15)
+
+        // Query 2: promos do scraper RSS — usam `programas_tags` (array) ao invés de `programa`
+        const q2 = sb.from('promocoes')
+            .select(PROMO_SELECT)
+            .or(validFilter)
+            .overlaps('programas_tags', fallbackPrograms)
+            .eq('categoria', 'milhas')
             .order('valid_until', { ascending: true, nullsFirst: false })
-            .limit(20)
+            .limit(15)
 
-        const rows: PromoRow[] = allPromos ?? []
+        const [{ data: d1 }, { data: d2 }] = await Promise.all([q1, q2])
 
-        // Transfer promos INTO the target program (for coverage analysis)
+        // Mescla e deduplica por título (evita duplicatas quando programa E programas_tags estão preenchidos)
+        const seen = new Set<string>()
+        const rows: PromoRow[] = []
+        for (const row of [...(d1 ?? []), ...(d2 ?? [])]) {
+            const key = String(row.titulo ?? '').slice(0, 60).toLowerCase()
+            if (!seen.has(key)) { seen.add(key); rows.push(row as PromoRow) }
+        }
+
+        // Promos de transferência para o programa alvo (usadas na análise de cobertura)
         const transferPromos = rows.filter(p =>
-            p.tipo === 'bonus_transferencia' &&
-            p.programa?.toLowerCase() === targetProgram.toLowerCase()
+            resolvePromoType(p) === 'bonus_transferencia' &&
+            promoMatchesProgram(p, targetProgram)
         )
 
-        // Select best mix: transfers (3) + clubs (1) + purchase (1) + others (1)
-        const transfer = rows.filter(p => p.tipo === 'bonus_transferencia').slice(0, 3)
-        const clube = rows.filter(p => p.tipo === 'clube' || p.tipo === 'boas_vindas').slice(0, 1)
-        const compra = rows.filter(p => p.tipo === 'milhas_compra').slice(0, 1)
-        const outros = rows.filter(p =>
-            p.tipo !== 'bonus_transferencia' && p.tipo !== 'clube' &&
-            p.tipo !== 'boas_vindas' && p.tipo !== 'milhas_compra'
-        ).slice(0, 1)
+        // Mix balanceado para o prompt: transferências (3) + clube (1) + compra (1) + outros (1)
+        const transfer = rows.filter(p => resolvePromoType(p) === 'bonus_transferencia').slice(0, 3)
+        const clube = rows.filter(p => ['clube', 'boas_vindas'].includes(resolvePromoType(p))).slice(0, 1)
+        const compra = rows.filter(p => resolvePromoType(p) === 'milhas_compra').slice(0, 1)
+        const outros = rows.filter(p => !['bonus_transferencia', 'clube', 'boas_vindas', 'milhas_compra'].includes(resolvePromoType(p))).slice(0, 1)
 
         let selected = [...transfer, ...clube, ...compra, ...outros]
 
+        // Fallback: qualquer promoção ativa se não achou nada para os programas do usuário
         if (selected.length === 0) {
             const { data: fallback } = await sb.from('promocoes')
-                .select('titulo,programa,tipo,bonus_pct,parceiro,valid_until')
-                .or('valid_until.is.null,valid_until.gt.' + now)
-                .order('bonus_pct', { ascending: false, nullsFirst: false })
-                .limit(3)
-            selected = fallback ?? []
+                .select(PROMO_SELECT)
+                .or(validFilter)
+                .eq('categoria', 'milhas')
+                .order('valid_until', { ascending: true, nullsFirst: false })
+                .limit(5)
+            selected = (fallback ?? []) as PromoRow[]
         }
 
         const promoStr = selected.length > 0
             ? selected.map(formatPromoLine).join('\n')
-            : 'Nenhuma promoção ativa registrada.'
+            : 'Nenhuma promoção ativa registrada para os programas relevantes.'
 
-        // Purchase promos for the target program (to calculate cost of buying deficit miles)
+        // Promos de compra de milhas para o programa alvo (análise de déficit)
         const purchasePromos = rows.filter(p =>
-            p.tipo === 'milhas_compra' &&
-            p.programa?.toLowerCase() === targetProgram.toLowerCase()
+            resolvePromoType(p) === 'milhas_compra' &&
+            promoMatchesProgram(p, targetProgram)
         )
 
         return { promoStr, transferPromos, purchasePromos }
-    } catch {
+    } catch (err) {
+        console.error('[strategy] fetchPromos error:', err)
         return { promoStr: 'Nenhuma promoção disponível.', transferPromos: [], purchasePromos: [] }
     }
 }
@@ -305,13 +367,20 @@ function buildCoverageSection(
         const sourceBalance = findBalance(miles, base.source)
         if (sourceBalance <= 0) continue
 
-        const promo = transferPromos.find(p =>
-            p.parceiro && (
-                base.source.toLowerCase().includes(p.parceiro.toLowerCase()) ||
-                p.parceiro.toLowerCase().includes(base.source.toLowerCase().split(' ')[0])
-            )
-        )
-        const promoBonus = promo?.bonus_pct ?? 0
+        const sourceFirst = base.source.toLowerCase().split(' ')[0]
+        const promo = transferPromos.find(p => {
+            // Promos manuais: match por parceiro
+            if (p.parceiro) {
+                return base.source.toLowerCase().includes(p.parceiro.toLowerCase()) ||
+                    p.parceiro.toLowerCase().includes(sourceFirst)
+            }
+            // Promos do scraper: match por programas_tags (contém banco + programa)
+            return (p.programas_tags ?? []).some(tag => {
+                const t = tag.toLowerCase()
+                return base.source.toLowerCase().includes(t) || t.includes(sourceFirst)
+            })
+        })
+        const promoBonus = promo ? effectiveBonus(promo) : 0
         const effectiveRatio = base.ratio * (1 + promoBonus / 100)
         const yieldsPoints = Math.floor(sourceBalance * effectiveRatio)
 
@@ -322,7 +391,7 @@ function buildCoverageSection(
             yieldsPoints,
             promoBonus,
             promoLabel: promo
-                ? `★ PROMO ATIVA +${promoBonus}% via ${promo.parceiro}${promo.valid_until ? ` (expira ${new Date(promo.valid_until).toLocaleDateString('pt-BR')})` : ''}`
+                ? `★ PROMO ATIVA +${promoBonus}% ${promo.parceiro ? `via ${promo.parceiro}` : `— ${String(promo.titulo ?? '').slice(0, 60)}`}${promo.valid_until ? ` (expira ${new Date(promo.valid_until).toLocaleDateString('pt-BR')})` : ''}`
                 : null,
         })
     }
@@ -677,8 +746,8 @@ serve(async (req) => {
                             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
                     }
                 } else if (limit.perMonth !== null) {
-                    const monthStart = new Date()
-                    monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
+                    const now2 = new Date()
+                    const monthStart = new Date(Date.UTC(now2.getUTCFullYear(), now2.getUTCMonth(), 1))
                     const { count } = await sb
                         .from('strategies')
                         .select('id', { count: 'exact', head: true })
@@ -729,12 +798,16 @@ serve(async (req) => {
             cached = data
         }
 
-        if (cached?.structured_result) {
+        const cachedResult = cached?.structured_result as Record<string, unknown> | null
+        const isCacheValid = cachedResult &&
+            typeof cachedResult.programa_recomendado === 'string' && cachedResult.programa_recomendado.length > 0 &&
+            Array.isArray(cachedResult.steps) && (cachedResult.steps as unknown[]).length > 0
+        if (isCacheValid) {
             console.log(`[strategy] Cache hit — flight:${flightId ?? 'N/A'} seats:${seatsKey ?? 'N/A'}`)
             return new Response(JSON.stringify({
                 ok: true,
-                strategy: cached.structured_result,
-                tokens_used: cached.tokens_used ?? 0,
+                strategy: cachedResult,
+                tokens_used: cached!.tokens_used ?? 0,
                 cached: true,
             }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
         }
@@ -894,6 +967,16 @@ REGRAS OBRIGATÓRIAS:
         const tokensUsed = llmData.usage?.total_tokens ?? 0
         let parsed: Record<string, unknown> = {}
         try { parsed = JSON.parse(strategyJson) } catch { /* raw fallback */ }
+
+        // Valida campos obrigatórios — evita salvar e retornar estratégia vazia/inválida
+        const hasRequiredFields =
+            typeof parsed.programa_recomendado === 'string' && parsed.programa_recomendado.length > 0 &&
+            Array.isArray(parsed.steps) && (parsed.steps as unknown[]).length > 0 &&
+            Array.isArray(parsed.step_details) && (parsed.step_details as unknown[]).length > 0
+        if (!hasRequiredFields) {
+            console.error('[strategy] GPT response missing required fields:', strategyJson.slice(0, 200))
+            throw new Error('A IA retornou uma resposta incompleta. Tente novamente em instantes.')
+        }
 
         // 7. Save to strategies table (non-blocking)
         if (userId) {
