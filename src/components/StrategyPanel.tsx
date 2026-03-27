@@ -3,6 +3,7 @@ import { X, Zap, TrendingDown, ArrowRight, Loader2, AlertTriangle, Tag, Sparkles
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import type { ResultadoVoo } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
 import type { StrategyResult } from '@/lib/llm/buildPrompt'
@@ -29,7 +30,7 @@ interface StrategyPanelProps {
 }
 
 export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice = 0, seatsContext }: StrategyPanelProps) {
-    const { user, session } = useAuth()
+    const { user } = useAuth()
     const navigate = useNavigate()
     const { canGenerateStrategy, strategiesUsed, strategyLimit, plan, refresh: refreshPlan } = usePlan()
     const [loading, setLoading] = useState(false)
@@ -53,42 +54,32 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
         if (!flight?.id && !seatsContext) return
         setLoading(true); setLlmError(null); setStrategy(null)
         try {
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
-
-            // Usa o access_token da sessão gerenciada pelo AuthContext (sempre fresco via onAuthStateChange)
-            const authToken = session?.access_token ?? anonKey
-
-            const response = await fetch(`${supabaseUrl}/functions/v1/strategy`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`,
-                    'apikey': anonKey,
-                },
-                body: JSON.stringify({
+            // supabase.functions.invoke() monta os headers corretamente para qualquer formato
+            // de chave (JWT antigo ou sb_publishable_... novo) — evita o 401 "Invalid JWT"
+            // que acontecia ao enviar a nova anon key como Bearer token manualmente.
+            const { data: json, error: fnError } = await supabase.functions.invoke('strategy', {
+                body: {
                     flightId: flight?.id || undefined,
                     userId: user?.id,
                     cashPrice: cashPrice || undefined,
                     seatsContext: seatsContext || undefined,
                     buscaId: buscaId || undefined,
-                }),
+                },
             })
 
-            if (!response.ok) {
-                const errText = await response.text().catch(() => '')
-                console.error('[StrategyPanel] HTTP error:', response.status, errText)
-                throw new Error(`Erro ${response.status} ao contactar o servidor. ${response.status === 401 ? 'Sessão expirada — tente fazer login novamente.' : 'Tente novamente em instantes.'}`)
+            if (fnError) {
+                console.error('[StrategyPanel] Function error:', fnError)
+                throw new Error('Erro ao contactar o servidor. Tente novamente em instantes.')
             }
 
-            const json = await response.json() as { ok: boolean; strategy: StrategyResult; tokens_used: number; error?: string } | null
+            const typed = json as { ok: boolean; strategy: StrategyResult; tokens_used: number; error?: string } | null
 
             // Todos os erros de lógica chegam como HTTP 200 com ok:false
-            if (json?.error === 'plan_limit_reached') throw new Error('Limite do plano atingido.')
-            if (json?.error) throw new Error(json.error)
-            if (!json?.ok || !json.strategy) throw new Error('Resposta inválida da IA. Tente novamente.')
-            setStrategy(json.strategy)
-            setTokensUsed(json.tokens_used ?? null)
+            if (typed?.error === 'plan_limit_reached') throw new Error('Limite do plano atingido.')
+            if (typed?.error) throw new Error(typed.error)
+            if (!typed?.ok || !typed.strategy) throw new Error('Resposta inválida da IA. Tente novamente.')
+            setStrategy(typed.strategy)
+            setTokensUsed(typed.tokens_used ?? null)
             refreshPlan()
         } catch (err: any) {
             setLlmError(err?.message ?? 'Erro ao gerar estratégia.')
