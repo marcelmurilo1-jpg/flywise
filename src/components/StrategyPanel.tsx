@@ -3,7 +3,6 @@ import { X, Zap, TrendingDown, ArrowRight, Loader2, AlertTriangle, Tag, Sparkles
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import type { ResultadoVoo } from '@/lib/supabase'
-import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
 import type { StrategyResult } from '@/lib/llm/buildPrompt'
