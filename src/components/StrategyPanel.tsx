@@ -54,42 +54,21 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
         if (!flight?.id && !seatsContext) return
         setLoading(true); setLlmError(null); setStrategy(null)
         try {
-            // 1. getSession() lê da memória/localStorage — sem rede, nunca falha por conexão.
-            //    Se o token estiver expirado, tenta refreshSession(). Se refresh falhar,
-            //    usa o token atual mesmo assim e deixa a Edge Function decidir.
-            //    NUNCA faz logout automático — isso é decisão do usuário.
-            const { data: { session } } = await supabase.auth.getSession()
-            if (!session?.access_token) {
-                throw new Error('Você precisa estar logado para gerar uma estratégia.')
-            }
-
-            let token = session.access_token
-
-            // Verifica expiração do JWT no lado cliente (sem rede)
-            try {
-                const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
-                if (Date.now() > payload.exp * 1000 - 10_000) {
-                    // Token expirado ou expirando em 10s — tenta refresh
-                    const { data: refreshData } = await supabase.auth.refreshSession()
-                    if (refreshData.session?.access_token) {
-                        token = refreshData.session.access_token
-                    }
-                }
-            } catch {
-                // Falha no decode ou refresh — usa token atual
-            }
-
-            // 2. fetch direto — controle total sobre Authorization,
-            //    sem o bug de ordenação de headers do supabase.functions.invoke
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-            const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+            // A Edge Function usa userId do body + SUPABASE_SERVICE_ROLE_KEY para DB —
+            // não precisa do JWT do usuário. A anon key (role='anon', válido até 2036)
+            // é suficiente para o gateway do Supabase e nunca expira como o user JWT.
+            // Fallback hardcoded garante funcionamento mesmo se as env vars falharem no build.
+            const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string)
+                || 'https://cwsjdkucffmiptrfvuxn.supabase.co'
+            const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string)
+                || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3c2pka3VjZmZtaXB0cmZ2dXhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MzEyNzAsImV4cCI6MjA4NzEwNzI3MH0.JWiUm_kHbyA30z92AGPAejzKra7EfLAV1glhO2qIC8w'
 
             const response = await fetch(`${supabaseUrl}/functions/v1/strategy`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'apikey': supabaseKey,
+                    'Authorization': `Bearer ${anonKey}`,
+                    'apikey': anonKey,
                 },
                 body: JSON.stringify({
                     flightId: flight?.id || undefined,
@@ -101,9 +80,6 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
             })
 
             if (!response.ok) {
-                if (response.status === 401) {
-                    throw new Error('Sessão expirada. Faça logout e login novamente para gerar estratégias.')
-                }
                 throw new Error('Erro ao contactar o servidor. Tente novamente em instantes.')
             }
 

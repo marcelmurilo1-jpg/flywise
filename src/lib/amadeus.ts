@@ -127,7 +127,7 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
             { signal: controller.signal }
         ).catch((err: any) => {
             if (err?.name === 'AbortError') throw new Error('A busca demorou muito (timeout). Tente novamente.')
-            throw new Error(`Servidor backend não está respondendo em ${API_BASE}. Certifique-se de que o servidor está rodando com: node server.js`)
+            throw new Error('Busca de voos falhou. O servidor pode estar sobrecarregado — aguarde alguns segundos e tente novamente.')
         })
         data = await res.json()
         if (!res.ok) {
