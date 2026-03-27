@@ -169,7 +169,7 @@ def _promo_block(p: dict) -> str:
     if len(conteudo) == 220:
         conteudo += "…"
 
-    url = p.get("url") or "https://flywisebr.com/promotions"
+    url = "https://flywisebr.com/promotions"
 
     expira = ""
     if p.get("valid_until"):

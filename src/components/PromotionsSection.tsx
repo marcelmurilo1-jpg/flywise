@@ -292,7 +292,7 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
         const load = async () => {
             try {
                 const { data, error } = await supabase
-                    .from('promocoes').select('*')
+                    .from('vw_promocoes_ativas').select('*')
                     .order('created_at', { ascending: false }).limit(limit)
                 if (error) throw error
                 setPromos(data ?? [])
@@ -303,7 +303,7 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
     }, [limit])
 
     const dark = false  // dashboard is now light background — use light cards everywhere
-    const todayPromos = promos.filter(p => p.created_at && isToday(parseISO(p.created_at)))
+    const todayPromos = promos.filter(p => p.valid_until && isToday(parseISO(p.valid_until)))
     const displayPromos = activeTab === 'today' ? promos.filter(p => p.valid_until && isToday(parseISO(p.valid_until))) : promos
 
     // Group promos by date for dashboard mode
