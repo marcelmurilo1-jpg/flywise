@@ -54,24 +54,41 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
         if (!flight?.id && !seatsContext) return
         setLoading(true); setLlmError(null); setStrategy(null)
         try {
-            // supabase.functions.invoke() monta os headers corretamente para qualquer formato
-            // de chave (JWT antigo ou sb_publishable_... novo) — evita o 401 "Invalid JWT"
-            // que acontecia ao enviar a nova anon key como Bearer token manualmente.
-            const { data: json, error: fnError } = await supabase.functions.invoke('strategy', {
-                body: {
+            // Garante um token JWT válido antes de chamar a Edge Function.
+            // A anon key do projeto usa o novo formato sb_publishable_... (não é JWT),
+            // então não pode ser usada como Bearer. Forçamos o uso do access_token da sessão.
+            const { data: { session } } = await supabase.auth.getSession()
+            const accessToken = session?.access_token
+            if (!accessToken) throw new Error('Sessão expirada. Faça login novamente.')
+
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+
+            const response = await fetch(`${supabaseUrl}/functions/v1/strategy`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`,
+                    'apikey': anonKey,
+                },
+                body: JSON.stringify({
                     flightId: flight?.id || undefined,
                     userId: user?.id,
                     cashPrice: cashPrice || undefined,
                     seatsContext: seatsContext || undefined,
                     buscaId: buscaId || undefined,
-                },
+                }),
             })
 
-            if (fnError) {
-                console.error('[StrategyPanel] Function error:', fnError)
-                throw new Error('Erro ao contactar o servidor. Tente novamente em instantes.')
+            if (!response.ok) {
+                const errText = await response.text().catch(() => '')
+                console.error('[StrategyPanel] HTTP error:', response.status, errText)
+                throw new Error(response.status === 401
+                    ? 'Sessão inválida. Faça logout e login novamente.'
+                    : 'Erro ao contactar o servidor. Tente novamente.')
             }
 
+            const json = await response.json()
             const typed = json as { ok: boolean; strategy: StrategyResult; tokens_used: number; error?: string } | null
 
             // Todos os erros de lógica chegam como HTTP 200 com ok:false
