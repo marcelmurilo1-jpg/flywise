@@ -402,7 +402,7 @@ function MyMapsModal({ fileName, onClose }: { fileName: string; onClose: () => v
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Roteiro() {
-    const { user } = useAuth()
+    const { user, session } = useAuth()
     const navigate = useNavigate()
     const { canGenerateRoteiro, roteiroLimit, plan: userPlan, refresh: refreshPlan } = usePlan()
 
@@ -492,15 +492,35 @@ export default function Roteiro() {
 
             setCurrentRowId(row.id)
 
-            const { data, error: fnErr } = await supabase.functions.invoke('itinerary', {
-                body: { itinerary_id: row.id },
+            let accessToken: string | null = session?.access_token ?? null
+            if (!accessToken) {
+                const { data: refreshData } = await supabase.auth.refreshSession()
+                accessToken = refreshData.session?.access_token ?? null
+            }
+            if (!accessToken) throw new Error('Sessão expirada. Faça login novamente.')
+
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+
+            const fnResponse = await fetch(`${supabaseUrl}/functions/v1/itinerary`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`,
+                    'apikey': anonKey,
+                },
+                body: JSON.stringify({ itinerary_id: row.id }),
             })
 
-            if (fnErr) {
-                // Try to extract a more descriptive error from the response
-                const detail = (fnErr as any)?.context?.error || (fnErr as any)?.message || 'Erro ao gerar roteiro. Tente novamente.'
-                throw new Error(detail)
+            if (!fnResponse.ok) {
+                const errText = await fnResponse.text().catch(() => '')
+                console.error('[Roteiro] HTTP error:', fnResponse.status, errText)
+                throw new Error(fnResponse.status === 401
+                    ? 'Sessão inválida. Faça logout e login novamente.'
+                    : 'Erro ao gerar roteiro. Tente novamente.')
             }
+
+            const data = await fnResponse.json()
             if (data?.error) throw new Error(data.error)
 
             const { result } = data
