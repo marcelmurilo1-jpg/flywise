@@ -3,7 +3,7 @@ import {
     Loader2, MapPin, RefreshCw, Lightbulb, Sunrise, Sun, Moon, Sparkles,
     BookmarkPlus, Bookmark, ChevronLeft, ChevronDown, CalendarDays, Users,
     Search, Pencil, Trash2, Plus, Check, UtensilsCrossed, Landmark, TreePine, ShoppingBag, Clock,
-    Maximize2, X, FileDown, Globe,
+    Maximize2, X, FileDown, Globe, Star, AlertTriangle, CalendarCheck,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -27,6 +27,10 @@ interface Activity {
     atividade: string
     local: string
     dica: string
+    fonte?: string
+    popularidade?: number
+    melhor_epoca?: string
+    evitar?: string
     lat?: number
     lng?: number
 }
@@ -47,6 +51,8 @@ interface ExtraItem {
     nome: string
     descricao: string
     dica: string
+    fonte?: string
+    popularidade?: number
     lat?: number
     lng?: number
 }
@@ -1699,6 +1705,32 @@ function EditableDayCard({ day, index, isEditing, collapsed, onToggle, onExpand,
                                                     {act.local && <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}><MapPin size={10} />{act.local}</span>}
                                                     {act.dica && <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'flex-start', gap: '3px' }}><Lightbulb size={10} style={{ flexShrink: 0, marginTop: '1px' }} />{act.dica}</span>}
                                                 </div>
+                                                {(act.fonte || act.popularidade != null || act.melhor_epoca || act.evitar) && (
+                                                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                        {act.fonte && (
+                                                            <span style={{ fontSize: '11px', color: '#4A90E2', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 500 }}>
+                                                                <Globe size={9} />{act.fonte}
+                                                                {act.popularidade != null && (
+                                                                    <span style={{ display: 'inline-flex', gap: '1px', marginLeft: '4px' }}>
+                                                                        {Array.from({ length: 5 }).map((_, si) => (
+                                                                            <Star key={si} size={8} fill={si < act.popularidade! ? '#F59E0B' : 'none'} color={si < act.popularidade! ? '#F59E0B' : 'var(--text-muted)'} />
+                                                                        ))}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                        {act.melhor_epoca && (
+                                                            <span style={{ fontSize: '11px', color: '#16A34A', display: 'flex', alignItems: 'flex-start', gap: '3px' }}>
+                                                                <CalendarCheck size={9} style={{ flexShrink: 0, marginTop: '1px' }} />Melhor: {act.melhor_epoca}
+                                                            </span>
+                                                        )}
+                                                        {act.evitar && (
+                                                            <span style={{ fontSize: '11px', color: '#DC2626', display: 'flex', alignItems: 'flex-start', gap: '3px' }}>
+                                                                <AlertTriangle size={9} style={{ flexShrink: 0, marginTop: '1px' }} />Evitar: {act.evitar}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     ))}
@@ -2016,9 +2048,21 @@ function ExtrasSidebar({ extras, activeTab, onTabChange, onRefresh }: { extras: 
                             key={i}
                             style={{ padding: '12px', borderRadius: '12px', marginBottom: '8px', background: 'var(--snow)', border: '1px solid var(--border-light)' }}
                         >
-                            <div style={{ marginBottom: '4px' }}>
+                            <div style={{ marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                                 <p style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-dark)', margin: 0 }}>{item.nome}</p>
+                                {item.popularidade != null && (
+                                    <span style={{ display: 'inline-flex', gap: '1px', flexShrink: 0 }}>
+                                        {Array.from({ length: 5 }).map((_, si) => (
+                                            <Star key={si} size={9} fill={si < item.popularidade! ? '#F59E0B' : 'none'} color={si < item.popularidade! ? '#F59E0B' : 'var(--text-muted)'} />
+                                        ))}
+                                    </span>
+                                )}
                             </div>
+                            {item.fonte && (
+                                <p style={{ fontSize: '11px', color: '#4A90E2', margin: '0 0 4px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                    <Globe size={9} /> {item.fonte}
+                                </p>
+                            )}
                             <p style={{ fontSize: '12px', color: 'var(--text-body)', margin: '0 0 6px', lineHeight: 1.5 }}>{item.descricao}</p>
                             {item.dica && (
                                 <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, fontStyle: 'italic', display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
