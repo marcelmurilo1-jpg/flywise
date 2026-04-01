@@ -214,6 +214,32 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+        const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
+
+        const supabase = createClient(supabaseUrl, serviceRoleKey)
+
+        // Function deployed with --no-verify-jwt because new Supabase projects
+        // use the sb_publishable_... key format which breaks gateway-level JWT
+        // verification. We verify the user's JWT manually here instead.
+        const authHeader = req.headers.get('Authorization') ?? ''
+        const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+        if (!jwt) {
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                status: 401,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+        }
+        const { data: { user: jwtUser }, error: jwtError } = await supabase.auth.getUser(jwt)
+        if (jwtError || !jwtUser) {
+            console.error('[itinerary] JWT verification failed:', jwtError?.message)
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                status: 401,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+        }
+
         const { itinerary_id } = await req.json()
         if (!itinerary_id) {
             return new Response(JSON.stringify({ error: 'itinerary_id is required' }), {
@@ -222,10 +248,6 @@ Deno.serve(async (req: Request) => {
             })
         }
 
-        const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-        const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
-
         if (!anthropicKey) {
             console.error('[itinerary] ANTHROPIC_API_KEY not set')
             return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY não configurada nos secrets da Edge Function.' }), {
@@ -233,8 +255,6 @@ Deno.serve(async (req: Request) => {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             })
         }
-
-        const supabase = createClient(supabaseUrl, serviceRoleKey)
 
         // 1. Fetch itinerary record
         const { data: itinerary, error: fetchErr } = await supabase
