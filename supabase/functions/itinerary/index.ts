@@ -100,6 +100,44 @@ function buildUserPrompt(
 ): string {
     const researchContext = buildResearchContext(destination, snippets)
 
+    // For trips > 3 days use a compact schema to stay within Haiku's 8192 output token limit.
+    // Full schema for 2 days uses ~7000 output tokens; scaling linearly 7 days would need ~20000.
+    const longTrip = duration > 3
+
+    const activitySchema = longTrip
+        ? `{
+            "horario": "08:00",
+            "atividade": "string",
+            "local": "string",
+            "dica": "string — fonte + melhor horário + o que evitar, máx 12 palavras",
+            "lat": 0.0,
+            "lng": 0.0
+          }`
+        : `{
+            "horario": "08:00",
+            "atividade": "string",
+            "local": "string",
+            "dica": "string",
+            "fonte": "string — ex: TripAdvisor #1, Lonely Planet Best-Of, recomendado por locais",
+            "popularidade": 5,
+            "melhor_epoca": "string — ex: manhã antes das 9h, dias úteis",
+            "evitar": "string — ex: fins de semana, horário 12h-14h",
+            "lat": 0.0,
+            "lng": 0.0
+          }`
+
+    const extrasSchema = longTrip
+        ? `[{ "nome": "string", "descricao": "string", "lat": 0.0, "lng": 0.0 }]`
+        : `[{ "nome": "string", "descricao": "string", "dica": "string", "fonte": "string", "popularidade": 5, "lat": 0.0, "lng": 0.0 }]`
+
+    const activitiesRule = longTrip
+        ? `- Cada período deve ter EXATAMENTE 2 atividades (6 por dia). Seja conciso.`
+        : `- Cada período deve ter 2 a 4 atividades cobrindo o período inteiro com horários calculados.`
+
+    const extrasRule = longTrip
+        ? `- "extras": 2-3 itens por categoria com coordenadas precisas.`
+        : `- "extras": 3-4 itens por categoria com coordenadas precisas, fonte e popularidade.\n- "fonte" deve ser específico e real (ex: "TripAdvisor #3 em ${destination}", "Michelin Guide").\n- "popularidade" de 1 a 5 — seja honesto.\n- "melhor_epoca" e "evitar" são OBRIGATÓRIOS em cada atividade.`
+
     return `${researchContext}
 
 ---
@@ -122,20 +160,7 @@ Responda SOMENTE em JSON com esta estrutura:
       "dia": 1,
       "tema": "string",
       "manha": {
-        "atividades": [
-          {
-            "horario": "08:00",
-            "atividade": "string",
-            "local": "string",
-            "dica": "string",
-            "fonte": "string — ex: TripAdvisor #1, Lonely Planet Best-Of, recomendado por locais, tendência 2025",
-            "popularidade": 5,
-            "melhor_epoca": "string — ex: manhã antes das 9h, dias úteis, evitar alta temporada",
-            "evitar": "string — ex: fins de semana, horário 12h-14h, filas longas sem reserva",
-            "lat": 0.0,
-            "lng": 0.0
-          }
-        ]
+        "atividades": [${activitySchema}]
       },
       "tarde": { "atividades": [] },
       "noite": { "atividades": [] }
@@ -144,21 +169,18 @@ Responda SOMENTE em JSON com esta estrutura:
   "dicas_gerais": ["string"],
   "orcamento_estimado": "string",
   "extras": {
-    "gastronomia": [{ "nome": "string", "descricao": "string", "dica": "string", "fonte": "string", "popularidade": 5, "lat": 0.0, "lng": 0.0 }],
-    "cultura":     [{ "nome": "string", "descricao": "string", "dica": "string", "fonte": "string", "popularidade": 5, "lat": 0.0, "lng": 0.0 }],
-    "natureza":    [{ "nome": "string", "descricao": "string", "dica": "string", "fonte": "string", "popularidade": 5, "lat": 0.0, "lng": 0.0 }],
-    "compras":     [{ "nome": "string", "descricao": "string", "dica": "string", "fonte": "string", "popularidade": 5, "lat": 0.0, "lng": 0.0 }]
+    "gastronomia": ${extrasSchema},
+    "cultura":     ${extrasSchema},
+    "natureza":    ${extrasSchema},
+    "compras":     ${extrasSchema}
   }
 }
 
 Regras:
 - Gere exatamente ${duration} dias.
-- Cada período deve ter 2 a 4 atividades cobrindo o período inteiro com horários calculados.
-- "fonte" deve ser específico e real (ex: "TripAdvisor #3 em ${destination}", "Michelin Guide", "Time Out Best Restaurants").
-- "popularidade" de 1 a 5 — seja honesto. Lugares menos conhecidos podem ter 3-4 se forem ótimos.
-- "melhor_epoca" e "evitar" são OBRIGATÓRIOS em cada atividade.
+${activitiesRule}
 - lat e lng devem ser coordenadas REAIS e PRECISAS do local específico.
-- "extras": 3-4 itens por categoria com coordenadas precisas, fonte e popularidade.`
+${extrasRule}`
 }
 
 // ─── Anthropic API call ───────────────────────────────────────────────────────
