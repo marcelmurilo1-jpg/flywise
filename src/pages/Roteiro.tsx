@@ -416,6 +416,7 @@ export default function Roteiro() {
 
     // Result state
     const [step, setStep] = useState<Step>('form')
+    const [genProgress, setGenProgress] = useState(0)
     const [itinerary, setItinerary] = useState<ItineraryResult | null>(null)
     const [currentRowId, setCurrentRowId] = useState<number | null>(null)
     const [isSaved, setIsSaved] = useState(false)
@@ -455,6 +456,22 @@ export default function Roteiro() {
             prev.includes(style) ? prev.filter(s => s !== style) : [...prev, style]
         )
     }
+
+    // Animate progress bar while generating (ease-out, caps at 90% until result arrives)
+    useEffect(() => {
+        if (step !== 'loading') {
+            setGenProgress(0)
+            return
+        }
+        setGenProgress(0)
+        const start = Date.now()
+        const total = 55000
+        const id = setInterval(() => {
+            const t = Math.min((Date.now() - start) / total, 1)
+            setGenProgress(Math.min(Math.round((1 - Math.pow(1 - t, 2.5)) * 100), 90))
+        }, 300)
+        return () => clearInterval(id)
+    }, [step])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -533,7 +550,8 @@ export default function Roteiro() {
             setActiveTab('gastronomia')
             setCollapsedDays((result.dias ?? []).map((_: unknown, i: number) => i !== 0))
             refreshPlan()
-            setStep('result')
+            setGenProgress(100)
+            setTimeout(() => setStep('result'), 400)
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Erro inesperado.')
             setStep('form')
@@ -1089,9 +1107,23 @@ export default function Roteiro() {
                                     {step === 'list-loading' ? 'Carregando viagens...' : 'Gerando seu roteiro...'}
                                 </p>
                                 {step === 'loading' && (
-                                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
-                                        A IA está elaborando seu roteiro e sugerindo atrações.<br />Isso pode levar alguns segundos.
-                                    </p>
+                                    <>
+                                        <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 20px' }}>
+                                            {genProgress < 20 && `Pesquisando atrações em ${destination}...`}
+                                            {genProgress >= 20 && genProgress < 40 && 'Selecionando os melhores pontos turísticos...'}
+                                            {genProgress >= 40 && genProgress < 60 && 'Calculando horários e deslocamentos...'}
+                                            {genProgress >= 60 && genProgress < 80 && 'Organizando seu roteiro dia a dia...'}
+                                            {genProgress >= 80 && 'Finalizando dicas e recomendações...'}
+                                        </p>
+                                        <div style={{ width: '260px', height: '6px', borderRadius: '99px', background: 'var(--blue-pale-mid)', overflow: 'hidden' }}>
+                                            <motion.div
+                                                animate={{ width: `${genProgress}%` }}
+                                                transition={{ duration: 0.4, ease: 'easeOut' }}
+                                                style={{ height: '100%', borderRadius: '99px', background: 'var(--blue-vibrant)' }}
+                                            />
+                                        </div>
+                                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>{genProgress}%</p>
+                                    </>
                                 )}
                             </div>
                         </motion.div>
