@@ -402,7 +402,7 @@ function MyMapsModal({ fileName, onClose }: { fileName: string; onClose: () => v
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Roteiro() {
-    const { user } = useAuth()
+    const { user, session } = useAuth()
     const navigate = useNavigate()
     const { canGenerateRoteiro, roteiroLimit, plan: userPlan, refresh: refreshPlan } = usePlan()
 
@@ -492,13 +492,16 @@ export default function Roteiro() {
 
             setCurrentRowId(row.id)
 
-            // getSession() refreshes the token automatically if expired
-            let { data: { session: freshSession } } = await supabase.auth.getSession()
-            if (!freshSession) {
+            // JWT acquisition — same 3-tier strategy as StrategyPanel:
+            // 1. session from AuthContext (kept fresh by onAuthStateChange, never stale)
+            // 2. Force server-side refresh if context session is null/expired
+            // 3. Throw if still missing — user must re-login
+            // NEVER uses the anon key (sb_publishable_...) as Bearer — it is not a JWT.
+            let accessToken: string | null = session?.access_token ?? null
+            if (!accessToken) {
                 const { data: refreshData } = await supabase.auth.refreshSession()
-                freshSession = refreshData.session
+                accessToken = refreshData.session?.access_token ?? null
             }
-            const accessToken = freshSession?.access_token ?? null
             if (!accessToken) throw new Error('Sessão expirada. Faça login novamente.')
 
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string

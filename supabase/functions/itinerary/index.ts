@@ -166,6 +166,7 @@ async function callClaude(
     systemPrompt: string,
     userPrompt: string,
     apiKey: string,
+    duration: number,
 ): Promise<{ content: string; tokensUsed: number }> {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -175,8 +176,8 @@ async function callClaude(
             'content-type': 'application/json',
         },
         body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 6000,
+            model: 'claude-sonnet-4-6',
+            max_tokens: Math.min(16000, 4000 + duration * 2000),
             system: systemPrompt,
             messages: [{ role: 'user', content: userPrompt }],
         }),
@@ -301,7 +302,7 @@ Deno.serve(async (req: Request) => {
         const userPrompt = buildUserPrompt(destination, duration, travelerLabel, styleList, budgetLabel, snippets)
 
         // 4. Call Claude
-        const { content: rawContent, tokensUsed } = await callClaude(systemPrompt, userPrompt, anthropicKey)
+        const { content: rawContent, tokensUsed } = await callClaude(systemPrompt, userPrompt, anthropicKey, duration)
 
         // 5. Parse JSON
         const jsonStr = extractJson(rawContent)
@@ -309,7 +310,7 @@ Deno.serve(async (req: Request) => {
         try {
             result = JSON.parse(jsonStr)
         } catch (parseErr) {
-            console.error('[itinerary] JSON parse error:', parseErr, '\nRaw:', rawContent.slice(0, 300))
+            console.error('[itinerary] JSON parse error:', parseErr, '\nRaw:', rawContent.slice(0, 1000))
             return new Response(JSON.stringify({ error: 'A IA retornou uma resposta inválida. Tente novamente.' }), {
                 status: 502,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
