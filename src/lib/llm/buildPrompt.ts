@@ -13,25 +13,56 @@ import { flightContextToString } from './buildFlightContext'
 import { promoContextToString } from './buildPromoContext'
 import { userContextToString } from './buildUserContext'
 
+export interface TransferPathDetail {
+    source: string
+    saldo_usuario: number
+    ratio_base: number
+    promo_bonus_pct: number
+    ratio_efetivo: number
+    milhas_resultantes: number
+    custo_efetivo_por_mil: number
+    promo_label: string | null
+}
+
+export interface ProgramComparison {
+    programa: string
+    milhas_necessarias: number
+    saldo_direto: number
+    transferencias: TransferPathDetail[]
+    total_potencial: number
+    deficit: number
+    custo_compra_milhas_brl: number
+    promo_compra_ativa: string | null
+    custo_efetivo_por_mil: number
+    taxas_estimadas_brl: number
+    custo_total_brl: number
+    economia_vs_cash_brl: number
+    economia_vs_cash_pct: number
+    cpm: number
+    melhor_opcao: boolean
+    disponibilidade_confirmada: boolean
+}
+
 export interface StrategyResult {
     vale_a_pena: boolean               // false = dinheiro é mais vantajoso
     cpm_resgate: number                // centavos por milha, ex: 2.50
     cpm_avaliacao: string              // "EXCELENTE" | "MUITO BOM" | "BOM" | "RAZOÁVEL" | "RUIM"
     programa_recomendado: string       // "Smiles"
-    motivo: string                     // max 2 sentences
+    motivo: string                     // max 3 sentences explaining cost difference
     steps: string[]                    // 3-4 actionable steps (title only)
     step_details: string[]             // one paragraph per step explaining in detail for beginners
     milhas_necessarias: number         // ex: 70000
-    milhas_em_carteira?: number        // saldo direto do usuário no programa alvo
+    milhas_em_carteira?: number        // direct balance in the target program
     milhas_faltantes?: number          // deficit after direct balance + transfers
     como_completar_faltantes?: string  // how to get the missing miles
     taxas_estimadas_brl: number        // ex: 280
     economia_pct: number               // ex: 68
-    economia_brl?: number              // cashPrice - taxas_estimadas_brl
+    economia_brl?: number              // cashPrice - total_cost
     promocao_ativa?: string            // "Bônus 40% Smiles via Nubank (expira 15/03)"
-    alternativa?: string               // fallback program if main is not available
+    alternativa?: string               // second cheapest program from comparison
     aviso?: string                     // any important disclaimer
     regras_promocoes?: string[]        // list of rules/warnings about promos used in the strategy
+    comparacao_programas?: ProgramComparison[]  // server-computed multi-program cost breakdown
 }
 
 export const SYSTEM_PROMPT = `Você é FlyWise, um especialista em programas de fidelidade e milhas aéreas do Brasil.

@@ -47,6 +47,36 @@ interface UserData {
     clubTiers: Record<string, string>
 }
 
+interface TransferPathDetail {
+    source: string
+    saldo_usuario: number
+    ratio_base: number
+    promo_bonus_pct: number
+    ratio_efetivo: number
+    milhas_resultantes: number
+    custo_efetivo_por_mil: number
+    promo_label: string | null
+}
+
+interface ProgramAnalysis {
+    programa: string
+    milhas_necessarias: number
+    saldo_direto: number
+    transferencias: TransferPathDetail[]
+    total_potencial: number
+    deficit: number
+    custo_compra_milhas_brl: number
+    promo_compra_ativa: string | null
+    custo_efetivo_por_mil: number
+    taxas_estimadas_brl: number
+    custo_total_brl: number
+    economia_vs_cash_brl: number
+    economia_vs_cash_pct: number
+    cpm: number
+    melhor_opcao: boolean
+    disponibilidade_confirmada: boolean
+}
+
 // ─── Static mappings ──────────────────────────────────────────────────────────
 
 const AIRLINE_PROGRAMS: Record<string, string[]> = {
@@ -308,10 +338,10 @@ async function fetchPromos(
             promoMatchesProgram(p, targetProgram)
         )
 
-        return { promoStr, transferPromos, purchasePromos }
+        return { promoStr, transferPromos, purchasePromos, allRows: rows }
     } catch (err) {
         console.error('[strategy] fetchPromos error:', err)
-        return { promoStr: 'Nenhuma promoção disponível.', transferPromos: [], purchasePromos: [] }
+        return { promoStr: 'Nenhuma promoção disponível.', transferPromos: [], purchasePromos: [], allRows: [] }
     }
 }
 
@@ -496,6 +526,35 @@ function buildCpmSection(cashPrice: number | null | undefined, totalMilhas: numb
 
 // ─── Purchase analysis ────────────────────────────────────────────────────────
 
+// Market price per 1.000 bank/credit-card points (R$) — for effective cost via transfer
+const BANK_COST_PER_K: Record<string, number> = {
+    'Livelo': 40,
+    'Pontos Itaú': 38,
+    'Esfera': 38,
+    'Membership Rewards': 50,
+    'Diners Club': 50,
+    'C6 Bank': 38,
+    'Inter Milhas': 38,
+}
+
+// Conservative estimated taxes per program (R$) — varies by route/cabin
+const TAXES_BY_PROGRAM: Record<string, number> = {
+    'Smiles': 100,
+    'LATAM Pass': 450,
+    'TudoAzul': 150,
+    'Flying Blue': 200,
+    'Miles&More': 250,
+    'Lifemiles': 80,
+    'TAP Miles&Go': 200,
+    'Aeroplan': 150,
+    'AAdvantage': 100,
+    'MileagePlus': 100,
+    'ShebaMiles': 80,
+    'ConnectMiles': 100,
+    'Miles&Smiles': 80,
+    'SkyMiles': 100,
+}
+
 // Base market price per 1.000 pts (R$) in normal periods — promos often give 20-40% off
 const BASE_COST_PER_K: Record<string, number> = {
     'Smiles': 42,
@@ -616,6 +675,191 @@ function buildPurchaseSection(
     return lines.join('\n')
 }
 
+// ─── Per-program analysis ─────────────────────────────────────────────────────
+
+function analyzeProgram(
+    programa: string,
+    milhasNecessarias: number,
+    userData: UserData | null,
+    allPromos: PromoRow[],
+    cashPrice: number | null | undefined,
+    confirmedProgram: string | null
+): ProgramAnalysis {
+    const miles = userData?.miles ?? {}
+    const saldoDireto = findBalance(miles, programa)
+
+    const transferPromos = allPromos.filter(p =>
+        resolvePromoType(p) === 'bonus_transferencia' &&
+        promoMatchesProgram(p, programa)
+    )
+
+    const bases = TRANSFER_BASES[programa] ?? []
+    const transferencias: TransferPathDetail[] = []
+
+    for (const base of bases) {
+        const saldoUsuario = findBalance(miles, base.source)
+        if (saldoUsuario <= 0) continue
+
+        const sourceFirst = base.source.toLowerCase().split(' ')[0]
+        const promo = transferPromos.find(p => {
+            if (p.parceiro) {
+                return base.source.toLowerCase().includes(p.parceiro.toLowerCase()) ||
+                    p.parceiro.toLowerCase().includes(sourceFirst)
+            }
+            return (p.programas_tags ?? []).some(tag => {
+                const t = tag.toLowerCase()
+                return base.source.toLowerCase().includes(t) || t.includes(sourceFirst)
+            })
+        })
+        const promoBonus = promo ? effectiveBonus(promo) : 0
+        const ratioEfetivo = base.ratio * (1 + promoBonus / 100)
+        const milhasResultantes = Math.floor(saldoUsuario * ratioEfetivo)
+
+        // Effective R$/1k destination miles if user were to BUY source points to transfer
+        const sourceCostPerK = BANK_COST_PER_K[base.source] ?? BASE_COST_PER_K[base.source] ?? 45
+        const custoEfetivoPorMil = Math.round(sourceCostPerK / ratioEfetivo)
+
+        const promoLabel = promo
+            ? `★ +${promoBonus}% ${promo.parceiro ? `via ${promo.parceiro}` : String(promo.titulo ?? '').slice(0, 50)}${promo.valid_until ? ` (expira ${new Date(promo.valid_until).toLocaleDateString('pt-BR')})` : ''}`
+            : null
+
+        transferencias.push({
+            source: base.source,
+            saldo_usuario: saldoUsuario,
+            ratio_base: base.ratio,
+            promo_bonus_pct: promoBonus,
+            ratio_efetivo: ratioEfetivo,
+            milhas_resultantes: milhasResultantes,
+            custo_efetivo_por_mil: custoEfetivoPorMil,
+            promo_label: promoLabel,
+        })
+    }
+
+    const totalTransferivel = transferencias.reduce((s, t) => s + t.milhas_resultantes, 0)
+    const totalPotencial = saldoDireto + totalTransferivel
+    const deficit = Math.max(0, milhasNecessarias - totalPotencial)
+
+    // Cost to buy deficit in the target program directly
+    const baseCostPerK = BASE_COST_PER_K[programa] ?? 50
+    const purchasePromos = allPromos.filter(p =>
+        resolvePromoType(p) === 'milhas_compra' &&
+        promoMatchesProgram(p, programa)
+    )
+    const bestPurchasePromo = [...purchasePromos].sort((a, b) => (b.bonus_pct ?? 0) - (a.bonus_pct ?? 0))[0]
+    const promoCompraBonusPct = bestPurchasePromo?.bonus_pct ?? 0
+
+    const milhasAComprar = deficit > 0 ? Math.ceil(deficit / (1 + promoCompraBonusPct / 100)) : 0
+    const custoCompra = Math.ceil(milhasAComprar / 1000 * baseCostPerK)
+    const custoEfetivoPorMil = promoCompraBonusPct > 0
+        ? Math.round(baseCostPerK / (1 + promoCompraBonusPct / 100))
+        : baseCostPerK
+
+    const promoCompraAtiva = bestPurchasePromo && promoCompraBonusPct > 0
+        ? `${String(bestPurchasePromo.titulo ?? '').slice(0, 60)} (+${promoCompraBonusPct}%${bestPurchasePromo.valid_until ? `, expira ${new Date(bestPurchasePromo.valid_until).toLocaleDateString('pt-BR')}` : ''})`
+        : null
+
+    const taxasEstimadas = TAXES_BY_PROGRAM[programa] ?? 100
+    const custoTotal = custoCompra + taxasEstimadas
+
+    const cashPriceN = cashPrice ?? 0
+    const economiaVsCashBrl = cashPriceN > 0 ? Math.round(cashPriceN - custoTotal) : 0
+    const economiaVsCashPct = cashPriceN > 0 ? Math.round(economiaVsCashBrl / cashPriceN * 100) : 0
+    const cpm = cashPriceN > 0 && milhasNecessarias > 0 ? (cashPriceN * 100) / milhasNecessarias : 0
+
+    return {
+        programa,
+        milhas_necessarias: milhasNecessarias,
+        saldo_direto: saldoDireto,
+        transferencias,
+        total_potencial: totalPotencial,
+        deficit,
+        custo_compra_milhas_brl: custoCompra,
+        promo_compra_ativa: promoCompraAtiva,
+        custo_efetivo_por_mil: custoEfetivoPorMil,
+        taxas_estimadas_brl: taxasEstimadas,
+        custo_total_brl: custoTotal,
+        economia_vs_cash_brl: economiaVsCashBrl,
+        economia_vs_cash_pct: economiaVsCashPct,
+        cpm,
+        melhor_opcao: false,
+        disponibilidade_confirmada: programa === confirmedProgram,
+    }
+}
+
+function buildMultiProgramComparison(
+    programs: string[],
+    milhasNecessarias: number,
+    userData: UserData | null,
+    allPromos: PromoRow[],
+    cashPrice: number | null | undefined,
+    confirmedProgram: string | null
+): { analyses: ProgramAnalysis[]; comparisonStr: string } {
+    if (milhasNecessarias <= 0 || programs.length === 0) {
+        return { analyses: [], comparisonStr: '' }
+    }
+
+    const analyses = programs.map(p =>
+        analyzeProgram(p, milhasNecessarias, userData, allPromos, cashPrice, confirmedProgram)
+    )
+
+    // Sort: full coverage (deficit=0) first, then by total cost ascending
+    analyses.sort((a, b) => {
+        if (a.deficit === 0 && b.deficit > 0) return -1
+        if (b.deficit === 0 && a.deficit > 0) return 1
+        return a.custo_total_brl - b.custo_total_brl
+    })
+    if (analyses.length > 0) analyses[0].melhor_opcao = true
+
+    const lines: string[] = []
+    for (const a of analyses) {
+        const coverageStr = a.total_potencial >= a.milhas_necessarias
+            ? `✓ COBRE TUDO (${a.total_potencial.toLocaleString('pt-BR')} pts disponíveis)`
+            : `FALTAM ${a.deficit.toLocaleString('pt-BR')} pts (tem ${a.total_potencial.toLocaleString('pt-BR')} / precisa ${a.milhas_necessarias.toLocaleString('pt-BR')})`
+
+        lines.push(`${a.melhor_opcao ? '★ MELHOR OPÇÃO — ' : ''}${a.programa} | ${coverageStr}`)
+
+        if (a.saldo_direto > 0) {
+            lines.push(`  Saldo direto: ${a.saldo_direto.toLocaleString('pt-BR')} pts`)
+        }
+        for (const t of a.transferencias) {
+            const ratioStr = t.promo_bonus_pct > 0
+                ? `${t.ratio_base}:1 base + ${t.promo_bonus_pct}% promo = ${t.ratio_efetivo.toFixed(2)}:1 efetivo`
+                : `${t.ratio_base}:1 (sem promo)`
+            lines.push(`  → ${t.saldo_usuario.toLocaleString('pt-BR')} ${t.source} → rende ${t.milhas_resultantes.toLocaleString('pt-BR')} ${a.programa} (${ratioStr})`)
+            if (t.promo_label) lines.push(`    ${t.promo_label}`)
+            lines.push(`    Custo efetivo via transferência: ~R$${t.custo_efetivo_por_mil}/mil ${a.programa} (vs R$${BASE_COST_PER_K[a.programa] ?? 50}/mil compra direta)`)
+        }
+
+        if (a.deficit > 0) {
+            if (a.promo_compra_ativa) {
+                lines.push(`  ★ Promo de compra ativa: ${a.promo_compra_ativa} → custo efetivo R$${a.custo_efetivo_por_mil}/mil`)
+            } else {
+                lines.push(`  Sem promo de compra ativa — preço normal: R$${BASE_COST_PER_K[a.programa] ?? 50}/mil`)
+            }
+            lines.push(`  Comprar ${a.deficit.toLocaleString('pt-BR')} pts faltantes: ~R$ ${a.custo_compra_milhas_brl.toLocaleString('pt-BR')}`)
+        } else {
+            lines.push(`  Custo de compra: R$ 0 (cobre tudo com saldo atual)`)
+        }
+
+        lines.push(`  Taxas estimadas: ~R$ ${a.taxas_estimadas_brl.toLocaleString('pt-BR')}`)
+        const econStr = cashPrice ? ` | Economia: R$ ${a.economia_vs_cash_brl.toLocaleString('pt-BR')} (${a.economia_vs_cash_pct}%)` : ''
+        lines.push(`  CUSTO TOTAL: ~R$ ${a.custo_total_brl.toLocaleString('pt-BR')}${econStr}`)
+        if (!a.disponibilidade_confirmada) {
+            lines.push(`  ⚠ Disponibilidade não confirmada — verifique no site do programa`)
+        }
+        lines.push('')
+    }
+
+    const best = analyses[0]
+    const comparisonStr = [
+        ...lines,
+        `MELHOR OPÇÃO: ${best.programa} — custo total ~R$ ${best.custo_total_brl.toLocaleString('pt-BR')}${cashPrice ? ` (economia de ${best.economia_vs_cash_pct}% vs R$ ${Number(cashPrice).toLocaleString('pt-BR')} em dinheiro)` : ''}`,
+        `Gere os steps/step_details detalhando como executar a estratégia com ${best.programa}.`,
+    ].join('\n')
+
+    return { analyses, comparisonStr }
+}
+
 // ─── User data ────────────────────────────────────────────────────────────────
 
 async function fetchUserData(userId: string, sb: ReturnType<typeof createClient>): Promise<UserData | null> {
@@ -636,34 +880,25 @@ async function fetchUserData(userId: string, sb: ReturnType<typeof createClient>
 
 const JSON_SCHEMA = `{
   "vale_a_pena": <true se CPM >= 1.2 c/pt e a estratégia é executável, false se dinheiro é mais vantajoso>,
-  "cpm_resgate": <número decimal, ex: 2.50>,
-  "cpm_avaliacao": "<EXCELENTE | MUITO BOM | BOM | RAZOÁVEL | RUIM>",
-  "programa_recomendado": "<ex: Smiles | LATAM Pass | TudoAzul | Livelo>",
-  "motivo": "<máx 2 frases. Se vale_a_pena false, explique por que dinheiro é melhor>",
+  "motivo": "<máx 3 frases. Explique POR QUE o programa recomendado é melhor — cite diferenças de custo entre os programas comparados. Se vale_a_pena false, explique por que dinheiro é melhor.>",
   "steps": [
     "<Passo 1 — título curto (máx 8 palavras)>",
     "<Passo 2 — título curto>",
     "<Passo 3 — título curto>",
-    "<Passo 4 — título curto>"
+    "<Passo 4 — título curto se necessário>"
   ],
   "step_details": [
-    "<Passo 1 — explicação completa em 2-4 frases para leigos: onde clicar, qual site/app, o que fazer, quanto tempo leva>",
+    "<Passo 1 — explicação didática completa: onde clicar, qual site/app, o que digitar, quanto tempo leva. Inclua URLs e valores exatos da seção COMPARAÇÃO. Mencione bônus de transferência se aplicável.>",
     "<Passo 2 — mesma estrutura>",
     "<Passo 3 — mesma estrutura>",
-    "<Passo 4 — mesma estrutura>"
+    "<Passo 4 — mesma estrutura se houver>"
   ],
-  "milhas_necessarias": <número inteiro — usar valor real do Seats.aero quando disponível>,
-  "milhas_em_carteira": <número inteiro — saldo direto do usuário no programa alvo, ou 0>,
-  "milhas_faltantes": <número inteiro — max(0, milhas_necessarias - total_potencial_com_transferencias)>,
-  "como_completar_faltantes": "<se milhas_faltantes > 0: melhor forma de obter as milhas que faltam. Se coberto: 'Saldo atual cobre a emissão completa'>",
-  "taxas_estimadas_brl": <número inteiro — taxas reais: Smiles ~R$30-150, LATAM Pass ~R$300-600+>,
-  "economia_pct": <número 0-100. Se vale_a_pena false: 0>,
-  "economia_brl": <número inteiro — cashPrice - taxas_estimadas_brl. Se vale_a_pena false: 0>,
-  "promocao_ativa": "<promoção usada na estratégia, ou null>",
-  "alternativa": "<segundo programa viável ou null>",
+  "como_completar_faltantes": "<se deficit > 0: melhor forma de obter as milhas que faltam com custo estimado e URL. Se coberto: 'Saldo atual cobre a emissão completa'>",
+  "promocao_ativa": "<promoção mais relevante usada na estratégia, ou null>",
+  "alternativa": "<segundo programa mais barato da comparação, ou null>",
   "aviso": "<aviso principal ou null>",
   "regras_promocoes": [
-    "<Regra ou condição importante sobre promoção citada. Ex: 'Bônus Nubank→Smiles limitado a 1 transferência por mês'>",
+    "<Regra importante sobre promoção citada. Ex: 'Bônus Nubank→Smiles limitado a 1 transferência por mês'>",
     "<outra regra se houver>"
   ]
 }`
@@ -841,26 +1076,38 @@ serve(async (req) => {
             userId ? fetchUserData(userId, sb) : Promise.resolve(null),
         ])
 
-        const flightStr = buildFlightString(flight, targetProgram)
-        const cpmSection = buildCpmSection(cashPrice || flight.preco_brl, neededMiles)
-        const coverageResult = userData
-            ? buildCoverageSection(
-                targetProgram, neededMiles,
-                userData.miles, userData.cards, userData.clubs, userData.clubTiers,
-                promoResult.transferPromos
-            )
-            : null
-        const coverageSection = coverageResult?.section ?? ''
-        // When user has no wallet, assume all miles must be acquired from scratch
-        const deficitMiles = userData
-            ? (coverageResult?.deficit ?? 0)
-            : neededMiles
-        const purchaseSection = buildPurchaseSection(
-            targetProgram, deficitMiles, promoResult.purchasePromos, cashPrice || flight.preco_brl
+        // Multi-program cost comparison (deterministic server-side math)
+        const effectiveCashPrice = cashPrice || flight.preco_brl
+        const { analyses, comparisonStr } = buildMultiProgramComparison(
+            programs, neededMiles, userData, promoResult.allRows, effectiveCashPrice,
+            seatsContext?.program ?? null
         )
+        const bestAnalysis = analyses.find(a => a.melhor_opcao) ?? null
+        const effectiveTargetProgram = bestAnalysis?.programa ?? targetProgram
+
+        // CPM (based on best program or target)
+        const cpmSection = buildCpmSection(effectiveCashPrice, neededMiles)
+
+        // Cards compatible with the best program (for the LLM to mention in steps)
+        const compatibleCardsLines: string[] = []
+        if (userData?.cards && userData.cards.length > 0) {
+            const bases = TRANSFER_BASES[effectiveTargetProgram] ?? []
+            const bankPrograms = new Set(bases.map(b => b.source))
+            const compatibleCards = userData.cards
+                .map(id => CARD_TO_BANK_PROGRAM[id])
+                .filter((c): c is { bank: string; label: string } => !!c && bankPrograms.has(c.bank))
+            if (compatibleCards.length > 0) {
+                const transferUrl = PROGRAM_TRANSFER_URLS[effectiveTargetProgram]
+                for (const c of compatibleCards) {
+                    const base = bases.find(b => b.source === c.bank)
+                    compatibleCardsLines.push(`  ${c.label} → ${c.bank} → ${effectiveTargetProgram} (razão base ${base?.ratio ?? 1}:1)`)
+                }
+                if (transferUrl) compatibleCardsLines.push(`  URL de transferência: https://${transferUrl}`)
+            }
+        }
 
         // 5. Assemble prompt
-        const sections: string[] = ['=== VOO SELECIONADO ===', flightStr]
+        const sections: string[] = ['=== VOO SELECIONADO ===', buildFlightString(flight, effectiveTargetProgram)]
 
         if (seatsContext) {
             const lines = [
@@ -881,53 +1128,35 @@ serve(async (req) => {
             sections.push('\n=== ANÁLISE DE VALOR ===', cpmSection)
         }
 
-        if (cashPrice && cashPrice > 0) {
-            sections.push(
-                '\n=== PREÇO EM DINHEIRO (referência) ===',
-                `Melhor preço encontrado: R$ ${Number(cashPrice).toLocaleString('pt-BR')}`,
-                `Use para calcular economia_pct = round((cashPrice - taxas_estimadas_brl) / cashPrice * 100) e economia_brl = cashPrice - taxas_estimadas_brl.`
-            )
-        }
-
-        if (coverageSection) {
-            sections.push('\n=== COBERTURA COM MILHAS DO USUÁRIO ===', coverageSection)
+        if (comparisonStr) {
+            sections.push('\n=== COMPARAÇÃO PRÉ-CALCULADA DE PROGRAMAS (dados verificados) ===', comparisonStr)
+            sections.push('IMPORTANTE: Use os números desta seção nos step_details. NÃO invente custos diferentes.')
         } else if (!userData || Object.keys(userData.miles).length === 0) {
-            // No wallet configured — explicit guidance for the LLM
-            const transferUrl = PROGRAM_TRANSFER_URLS[targetProgram] ?? `${targetProgram.toLowerCase().replace(/\s+/g, '')}.com`
-            sections.push('\n=== CARTEIRA DE MILHAS ===', [
-                'Usuário SEM milhas cadastradas na carteira FlyWise.',
-                `Precisa obter TODAS as ${neededMiles.toLocaleString('pt-BR')} pts de ${targetProgram} do zero.`,
-                'Opções para obter as milhas:',
-                `  1. COMPRAR DIRETAMENTE: veja seção "ANÁLISE DE COMPRA DE MILHAS" abaixo`,
-                `  2. TRANSFERIR de pontos de cartão de crédito bancário para ${targetProgram} — URL: https://${transferUrl}`,
-                `  3. ACUMULAR voando: comprar o voo em dinheiro e acumular milhas para futuros resgates`,
+            // No wallet — show cost to acquire miles from scratch
+            const transferUrl = PROGRAM_TRANSFER_URLS[effectiveTargetProgram] ?? `${effectiveTargetProgram.toLowerCase().replace(/\s+/g, '')}.com`
+            const purchaseSection = buildPurchaseSection(effectiveTargetProgram, neededMiles, promoResult.purchasePromos, effectiveCashPrice)
+            sections.push('\n=== COMO OBTER AS MILHAS (usuário sem carteira cadastrada) ===', [
+                `Usuário SEM milhas cadastradas. Precisa obter TODAS as ${neededMiles.toLocaleString('pt-BR')} pts de ${effectiveTargetProgram}.`,
+                `Opções: (1) COMPRAR no site oficial — ${purchaseSection}`,
+                `(2) TRANSFERIR de cartões de crédito bancários para ${effectiveTargetProgram}: https://${transferUrl}`,
             ].join('\n'))
         }
 
-        // Show which of the user's cards can transfer to the target program
-        if (userData?.cards && userData.cards.length > 0) {
-            const bases = TRANSFER_BASES[targetProgram] ?? []
-            const bankPrograms = new Set(bases.map(b => b.source))
-            const compatibleCards = userData.cards
-                .map(id => CARD_TO_BANK_PROGRAM[id])
-                .filter((c): c is { bank: string; label: string } => !!c && bankPrograms.has(c.bank))
-            if (compatibleCards.length > 0) {
-                const transferUrl = PROGRAM_TRANSFER_URLS[targetProgram]
-                const cardLines = compatibleCards.map(c => {
-                    const base = bases.find(b => b.source === c.bank)
-                    return `  ${c.label} → ${c.bank} → ${targetProgram} (razão base ${base?.ratio ?? 1}:1)`
-                })
-                sections.push('\n=== CARTÕES DO USUÁRIO COMPATÍVEIS COM TRANSFERÊNCIA ===', [
-                    `Os seguintes cartões do usuário podem transferir pontos para ${targetProgram}:`,
-                    ...cardLines,
-                    transferUrl ? `  URL para transferir: https://${transferUrl}` : '',
-                    'IMPORTANTE: o usuário NÃO tem saldo registrado nesses cartões. Sugira verificar o saldo e transferir se disponível.',
-                ].filter(Boolean).join('\n'))
-            }
+        if (compatibleCardsLines.length > 0) {
+            sections.push('\n=== CARTÕES DO USUÁRIO COMPATÍVEIS COM TRANSFERÊNCIA ===', [
+                `Cartões do usuário que podem transferir para ${effectiveTargetProgram}:`,
+                ...compatibleCardsLines,
+                'IMPORTANTE: saldo desses cartões NÃO está na carteira. Sugira verificar e transferir se disponível.',
+            ].join('\n'))
         }
 
-        if (purchaseSection) {
-            sections.push('\n=== ANÁLISE DE COMPRA DE MILHAS (déficit) ===', purchaseSection)
+        // Clubs
+        if (userData?.clubs && userData.clubs.length > 0) {
+            const clubLines = userData.clubs.map(c => {
+                const tier = userData.clubTiers[c]
+                return `  ${c}${tier ? ` (${tier})` : ''}: ${getClubBenefits(c, tier)}`
+            })
+            sections.push('\n=== CLUBES DO USUÁRIO ===', clubLines.join('\n'))
         }
 
         sections.push('\n=== PROMOÇÕES ATIVAS (programas relevantes) ===', promoResult.promoStr)
@@ -935,7 +1164,7 @@ serve(async (req) => {
 
         const userPrompt = sections.join('\n')
         const approxTokens = Math.ceil(userPrompt.length / 4)
-        console.log(`[strategy] Flight ${flightId ?? 'seats'} | ~${approxTokens} input tokens | target: ${targetProgram}`)
+        console.log(`[strategy] Flight ${flightId ?? 'seats'} | ~${approxTokens} input tokens | best: ${effectiveTargetProgram} (${analyses.length} programs analyzed)`)
 
         // 6. Call OpenAI
         const openaiKey = Deno.env.get('OPENAI_API_KEY')
@@ -954,16 +1183,16 @@ Gere uma estratégia HONESTA, PERSONALIZADA e EXECUTÁVEL com base nos dados for
 
 REGRAS OBRIGATÓRIAS:
 1. ANALISE o CPM fornecido. Se CPM < 1.2 c/pt → defina vale_a_pena: false e explique claramente por que dinheiro é melhor.
-2. Se vale_a_pena: true, a estratégia DEVE ser executável com o que o usuário TEM (saldo direto + transferências possíveis conforme "COBERTURA COM MILHAS").
-3. NUNCA sugira solicitar ou contratar novo cartão de crédito — PROIBIDO.
-4. Se a cobertura mostra "✓ COBRE TUDO" ou saldo direto suficiente, o passo 1 DEVE usar esse saldo diretamente.
-5. Se há "★ PROMO ATIVA" na cobertura ou em "CARTÕES DO USUÁRIO COMPATÍVEIS", PRIORIZE essa transferência e explique o bônus no step_details.
-6. Se o usuário tem clube (ex: Smiles Diamante), mencione o benefício EXPLICITAMENTE no passo relevante (ex: "10% desconto nas taxas").
-7. Se milhas_faltantes > 0 OU usuário não tem carteira: OBRIGATÓRIO criar um passo "Comprar milhas no site oficial" em steps/step_details. Use a seção "ANÁLISE DE COMPRA DE MILHAS" para informar o custo real e inclua a URL exata (https://...) no step_details. Como_completar_faltantes DEVE conter: custo estimado em R$, URL e dica de promo se houver.
-8. Se a seção "CARTEIRA DE MILHAS" mostrar que o usuário não tem milhas, o passo 1 DEVE ser como obter as milhas (comprar ou transferir de cartão), não como emitir.
-9. steps: TÍTULO curto (máx 8 palavras). step_details: explicação didática completa — onde clicar, qual site/app, o que esperar, quanto tempo leva. Inclua URLs onde relevante.
-10. Se vale_a_pena: false: steps devem guiar o usuário para o que fazer neste caso (reservar em dinheiro, aguardar promo, acumular mais).
-11. milhas_necessarias: usar o valor REAL do Seats.aero quando fornecido, não estimar.
+2. A seção "COMPARAÇÃO PRÉ-CALCULADA" contém dados verificados — use esses números exatos no motivo e step_details. NÃO invente custos diferentes.
+3. Gere steps/step_details para o programa marcado como "★ MELHOR OPÇÃO" na comparação.
+4. No motivo, explique POR QUE este programa é melhor que os outros — cite as diferenças de custo total entre os programas comparados.
+5. NUNCA sugira solicitar ou contratar novo cartão de crédito — PROIBIDO.
+6. Se a comparação mostra "✓ COBRE TUDO", o passo 1 DEVE usar o saldo existente diretamente.
+7. Se há transferência com "★ PROMO ATIVA" na comparação, PRIORIZE esse caminho e explique o bônus no step_details com o ratio exato (ex: "1:1 base + 80% promo = 1.8:1 efetivo").
+8. Se o usuário tem clube (ex: Smiles Diamante), mencione o benefício EXPLICITAMENTE no passo relevante.
+9. Se deficit > 0 ou usuário não tem carteira: OBRIGATÓRIO um passo "Comprar milhas" com custo exato da comparação e URL do programa.
+10. steps: TÍTULO curto (máx 8 palavras). step_details: explicação didática completa — onde clicar, qual site/app, o que esperar, quanto tempo leva. Inclua URLs exatas.
+11. Se vale_a_pena: false: steps devem guiar o usuário para o que fazer (reservar em dinheiro, aguardar promo, acumular mais).
 12. Responda APENAS em JSON válido, sem texto adicional.`,
                     },
                     { role: 'user', content: userPrompt },
@@ -986,14 +1215,30 @@ REGRAS OBRIGATÓRIAS:
         let parsed: Record<string, unknown> = {}
         try { parsed = JSON.parse(strategyJson) } catch { /* raw fallback */ }
 
-        // Valida campos obrigatórios — evita salvar e retornar estratégia vazia/inválida
+        // Validate required LLM fields (programa_recomendado is now server-side)
         const hasRequiredFields =
-            typeof parsed.programa_recomendado === 'string' && parsed.programa_recomendado.length > 0 &&
             Array.isArray(parsed.steps) && (parsed.steps as unknown[]).length > 0 &&
             Array.isArray(parsed.step_details) && (parsed.step_details as unknown[]).length > 0
         if (!hasRequiredFields) {
             console.error('[strategy] GPT response missing required fields:', strategyJson.slice(0, 200))
             throw new Error('A IA retornou uma resposta incompleta. Tente novamente em instantes.')
+        }
+
+        // Merge server-side computed data with LLM narrative output
+        const cpmResgate = bestAnalysis?.cpm ?? 0
+        const cpmAvaliacao = cpmResgate >= 3.5 ? 'EXCELENTE' : cpmResgate >= 2.5 ? 'MUITO BOM' : cpmResgate >= 1.8 ? 'BOM' : cpmResgate >= 1.2 ? 'RAZOÁVEL' : 'RUIM'
+        const mergedResult: Record<string, unknown> = {
+            ...parsed,
+            programa_recomendado: effectiveTargetProgram,
+            cpm_resgate: parseFloat(cpmResgate.toFixed(2)),
+            cpm_avaliacao: cpmAvaliacao,
+            milhas_necessarias: bestAnalysis?.milhas_necessarias ?? neededMiles,
+            milhas_em_carteira: bestAnalysis?.saldo_direto ?? 0,
+            milhas_faltantes: bestAnalysis?.deficit ?? 0,
+            taxas_estimadas_brl: bestAnalysis?.taxas_estimadas_brl ?? 80,
+            economia_pct: Math.max(0, bestAnalysis?.economia_vs_cash_pct ?? 0),
+            economia_brl: Math.max(0, bestAnalysis?.economia_vs_cash_brl ?? 0),
+            comparacao_programas: analyses.length > 0 ? analyses : undefined,
         }
 
         // 7. Save to strategies table (non-blocking)
@@ -1010,7 +1255,7 @@ REGRAS OBRIGATÓRIAS:
                     resolvedBuscaId = busca?.id ?? null
                 }
 
-                const tags = [parsed.programa_recomendado, iata, seatsKey, 'llm'].filter(Boolean) as string[]
+                const tags = [effectiveTargetProgram, iata, seatsKey, 'llm'].filter(Boolean) as string[]
 
                 await sb.from('strategies').insert({
                     user_id: userId,
@@ -1018,10 +1263,10 @@ REGRAS OBRIGATÓRIAS:
                     flight_id: flightId ?? null,
                     strategy_text: (parsed.steps as string[] ?? []).join('\n\n'),
                     tags,
-                    economia_pct: parsed.economia_pct ?? null,
+                    economia_pct: mergedResult.economia_pct ?? null,
                     preco_cash: flight.preco_brl,
-                    preco_estrategia: parsed.taxas_estimadas_brl ?? null,
-                    structured_result: parsed,
+                    preco_estrategia: mergedResult.taxas_estimadas_brl ?? null,
+                    structured_result: mergedResult,
                     llm_model: 'gpt-4o-mini',
                     tokens_used: tokensUsed,
                 })
@@ -1032,7 +1277,7 @@ REGRAS OBRIGATÓRIAS:
 
         return new Response(JSON.stringify({
             ok: true,
-            strategy: parsed,
+            strategy: mergedResult,
             tokens_used: tokensUsed,
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 

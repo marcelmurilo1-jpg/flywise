@@ -6,7 +6,7 @@ import type { ResultadoVoo } from '@/lib/supabase'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
-import type { StrategyResult } from '@/lib/llm/buildPrompt'
+import type { StrategyResult, ProgramComparison } from '@/lib/llm/buildPrompt'
 
 export interface SeatsContext {
     airlineCode: string
@@ -328,6 +328,99 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                                                 <span style={{ fontSize: 12, fontWeight: 700, color: strategy.cpm_resgate >= 2.5 ? '#15803D' : strategy.cpm_resgate >= 1.8 ? '#1D4ED8' : '#A16207' }}>
                                                     CPM {strategy.cpm_resgate.toFixed(2)} c/pt — {strategy.cpm_avaliacao}
                                                 </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Multi-program comparison cards */}
+                                    {(strategy.comparacao_programas ?? []).length > 1 && (
+                                        <div>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+                                                Comparação de programas
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, scrollSnapType: 'x mandatory' }}>
+                                                {(strategy.comparacao_programas ?? []).map((prog: ProgramComparison) => {
+                                                    const coveragePct = prog.milhas_necessarias > 0 ? Math.min(100, Math.round(prog.total_potencial / prog.milhas_necessarias * 100)) : 100
+                                                    const promoTransfers = prog.transferencias.filter(t => t.promo_bonus_pct > 0)
+                                                    return (
+                                                        <div key={prog.programa} style={{
+                                                            minWidth: 200, maxWidth: 230, flexShrink: 0, scrollSnapAlign: 'start',
+                                                            borderRadius: 12,
+                                                            border: `2px solid ${prog.melhor_opcao ? '#16A34A' : 'var(--border-faint)'}`,
+                                                            background: prog.melhor_opcao ? 'linear-gradient(135deg, #F0FDF4, #DCFCE7)' : 'var(--bg-subtle)',
+                                                            padding: '12px', display: 'flex', flexDirection: 'column', gap: 8,
+                                                        }}>
+                                                            {/* Header */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                                                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>{prog.programa}</span>
+                                                                {prog.melhor_opcao && (
+                                                                    <span style={{ fontSize: 9, fontWeight: 700, background: '#16A34A', color: '#fff', borderRadius: 4, padding: '2px 5px', flexShrink: 0 }}>MELHOR</span>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Coverage bar */}
+                                                            <div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>
+                                                                    <span>Cobertura</span>
+                                                                    <span style={{ fontWeight: 700 }}>{coveragePct}%</span>
+                                                                </div>
+                                                                <div style={{ height: 5, borderRadius: 3, background: 'rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                                                                    <div style={{ height: '100%', width: `${coveragePct}%`, background: prog.deficit === 0 ? '#16A34A' : '#3B82F6', borderRadius: 3, transition: 'width 0.4s ease' }} />
+                                                                </div>
+                                                                <div style={{ fontSize: 10, fontWeight: 700, color: prog.deficit === 0 ? '#16A34A' : '#DC2626', marginTop: 3 }}>
+                                                                    {prog.deficit === 0 ? '✓ Cobre tudo' : `Faltam ${prog.deficit.toLocaleString('pt-BR')} pts`}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Transfer promos highlight */}
+                                                            {promoTransfers.slice(0, 2).map(t => (
+                                                                <div key={t.source} style={{ fontSize: 10, background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 6, padding: '3px 7px', color: '#92400E', fontWeight: 600, lineHeight: 1.4 }}>
+                                                                    ★ {t.source}: ×{t.ratio_base} +{t.promo_bonus_pct}% = ×{t.ratio_efetivo.toFixed(1)} efetivo
+                                                                </div>
+                                                            ))}
+
+                                                            {/* Cost breakdown */}
+                                                            <div style={{ borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                                                {prog.custo_compra_milhas_brl > 0 && (
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
+                                                                        <span>Comprar milhas</span>
+                                                                        <span>R$ {prog.custo_compra_milhas_brl.toLocaleString('pt-BR')}</span>
+                                                                    </div>
+                                                                )}
+                                                                {prog.promo_compra_ativa && (
+                                                                    <div style={{ fontSize: 10, color: '#16A34A', fontWeight: 700 }}>
+                                                                        ★ Promo: R${prog.custo_efetivo_por_mil}/mil (vs R${prog.custo_compra_milhas_brl > 0 ? Math.round(prog.custo_compra_milhas_brl / prog.deficit * 1000) : '?'} normal)
+                                                                    </div>
+                                                                )}
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
+                                                                    <span>Taxas estimadas</span>
+                                                                    <span>~R$ {prog.taxas_estimadas_brl.toLocaleString('pt-BR')}</span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 800, marginTop: 2 }}>
+                                                                    <span style={{ color: 'var(--text-primary)' }}>Total</span>
+                                                                    <span style={{ color: prog.melhor_opcao ? '#16A34A' : 'var(--text-primary)' }}>
+                                                                        R$ {prog.custo_total_brl.toLocaleString('pt-BR')}
+                                                                    </span>
+                                                                </div>
+                                                                {prog.economia_vs_cash_pct > 0 && (
+                                                                    <div style={{ fontSize: 11, color: '#16A34A', textAlign: 'right', fontWeight: 700 }}>
+                                                                        Economia: {prog.economia_vs_cash_pct}%
+                                                                    </div>
+                                                                )}
+                                                                {prog.economia_vs_cash_pct < 0 && (
+                                                                    <div style={{ fontSize: 10, color: '#DC2626', textAlign: 'right', fontWeight: 700 }}>
+                                                                        ⚠ {Math.abs(prog.economia_vs_cash_pct)}% mais caro que dinheiro
+                                                                    </div>
+                                                                )}
+                                                                {!prog.disponibilidade_confirmada && (
+                                                                    <div style={{ fontSize: 10, color: '#F59E0B', fontWeight: 600, marginTop: 2 }}>
+                                                                        ⚠ Verifique disponibilidade
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
                                             </div>
                                         </div>
                                     )}
