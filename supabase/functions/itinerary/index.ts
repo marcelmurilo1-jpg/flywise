@@ -86,7 +86,8 @@ REGRAS ABSOLUTAS:
 4. PERÍODO COMPLETO: manhã=4h(08h-12h), tarde=5h(13h-18h), noite=3h30(19h-22h30). Gere 2 a 4 atividades por período.
 5. COORDENADAS PRECISAS: lat e lng do local ESPECÍFICO, nunca do centro da cidade.
 6. ORÇAMENTO: Respeite 100% o nível de orçamento definido.
-7. Responda APENAS em JSON válido, sem texto fora do JSON.`
+7. Responda APENAS em JSON válido, sem texto fora do JSON.
+8. CONCISÃO OBRIGATÓRIA: cada campo de texto deve ter no máximo 12 palavras. Seja direto — sem frases longas ou ornamentadas.`
 }
 
 function buildUserPrompt(
@@ -166,7 +167,6 @@ async function callClaude(
     systemPrompt: string,
     userPrompt: string,
     apiKey: string,
-    duration: number,
 ): Promise<{ content: string; tokensUsed: number }> {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -176,8 +176,8 @@ async function callClaude(
             'content-type': 'application/json',
         },
         body: JSON.stringify({
-            model: 'claude-sonnet-4-6',
-            max_tokens: Math.min(16000, 4000 + duration * 2000),
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 8192,
             system: systemPrompt,
             messages: [{ role: 'user', content: userPrompt }],
         }),
@@ -302,7 +302,7 @@ Deno.serve(async (req: Request) => {
         const userPrompt = buildUserPrompt(destination, duration, travelerLabel, styleList, budgetLabel, snippets)
 
         // 4. Call Claude
-        const { content: rawContent, tokensUsed } = await callClaude(systemPrompt, userPrompt, anthropicKey, duration)
+        const { content: rawContent, tokensUsed } = await callClaude(systemPrompt, userPrompt, anthropicKey)
 
         // 5. Parse JSON
         const jsonStr = extractJson(rawContent)
