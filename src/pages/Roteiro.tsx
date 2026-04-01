@@ -402,7 +402,7 @@ function MyMapsModal({ fileName, onClose }: { fileName: string; onClose: () => v
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Roteiro() {
-    const { user, session } = useAuth()
+    const { user } = useAuth()
     const navigate = useNavigate()
     const { canGenerateRoteiro, roteiroLimit, plan: userPlan, refresh: refreshPlan } = usePlan()
 
