@@ -492,11 +492,13 @@ export default function Roteiro() {
 
             setCurrentRowId(row.id)
 
-            let accessToken: string | null = session?.access_token ?? null
-            if (!accessToken) {
+            // getSession() refreshes the token automatically if expired
+            let { data: { session: freshSession } } = await supabase.auth.getSession()
+            if (!freshSession) {
                 const { data: refreshData } = await supabase.auth.refreshSession()
-                accessToken = refreshData.session?.access_token ?? null
+                freshSession = refreshData.session
             }
+            const accessToken = freshSession?.access_token ?? null
             if (!accessToken) throw new Error('Sessão expirada. Faça login novamente.')
 
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
