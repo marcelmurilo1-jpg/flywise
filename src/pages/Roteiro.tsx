@@ -984,7 +984,7 @@ export default function Roteiro() {
                                                 <span style={{ flex: 1, textAlign: 'center', fontSize: '15px', fontWeight: 700, color: 'var(--text-dark)' }}>
                                                     {duration} {duration === 1 ? 'dia' : 'dias'}
                                                 </span>
-                                                <button type="button" onClick={() => setDuration(d => Math.min(30, d + 1))} style={stepperBtn}>+</button>
+                                                <button type="button" onClick={() => setDuration(d => Math.min(7, d + 1))} style={stepperBtn}>+</button>
                                             </div>
                                         </div>
 
@@ -1856,7 +1856,7 @@ function DaysMapSection({ dias, collapsedDays }: { dias: ItineraryDay[]; collaps
             if (collapsedDays[i]) return
             const atividades = normalizePeriod(day[key])
             atividades.forEach(act => {
-                if (act.lat != null && act.lng != null) {
+                if (act.lat != null && act.lng != null && !(act.lat === 0 && act.lng === 0)) {
                     pins.push({ lat: act.lat, lng: act.lng, color, dayNum: day.dia, period: key, atividade: act.atividade, local: act.local })
                 }
             })
@@ -1873,7 +1873,7 @@ function DaysMapSection({ dias, collapsedDays }: { dias: ItineraryDay[]; collaps
             for (const { key } of PERIOD_CONFIG) {
                 const atividades = normalizePeriod(day[key])
                 for (const a of atividades) {
-                    if (a.lat != null && a.lng != null) return [a.lat, a.lng]
+                    if (a.lat != null && a.lng != null && !(a.lat === 0 && a.lng === 0)) return [a.lat, a.lng]
                 }
             }
         }
