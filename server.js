@@ -691,17 +691,25 @@ async function scrapeOneway(origin, destination, date) {
                     }
 
                     // ── Horários ─────────────────────────────────────────────────────────────
-                    // PT: "às 05:25 do dia"
+                    // PT: "às 05:25 do dia" ou "às 05:25" (sem "do dia")
                     // EN: "8:00 AM" / "3:30 PM"
                     let partida = '';
                     let chegada = '';
-                    const timesPT = [...aria.matchAll(/às (\d{1,2}:\d{2}) do dia/gi)];
+                    // Aceita "às HH:MM" com ou sem "do dia" a seguir
+                    const timesPT = [...aria.matchAll(/às (\d{1,2}:\d{2})(?:\s+do\s+dia)?/gi)];
                     if (timesPT.length >= 1) partida = timesPT[0][1];
                     if (timesPT.length >= 2) chegada = timesPT[1][1];
                     if (!partida) {
                         const timesEN = [...aria.matchAll(/(\d{1,2}:\d{2})\s*(AM|PM)/gi)];
                         if (timesEN.length >= 1) partida = to24h(timesEN[0][1], timesEN[0][2]);
                         if (timesEN.length >= 2) chegada = to24h(timesEN[1][1], timesEN[1][2]);
+                    }
+                    // Fallback: HH:MM isolado (sem AM/PM e sem "às") — pega o 1º e 2º par
+                    if (!partida) {
+                        const timesRaw = [...aria.matchAll(/\b(\d{1,2}:\d{2})\b/g)]
+                            .filter(m => !/^\d{4}$/.test(m[1])); // exclui anos
+                        if (timesRaw.length >= 1) partida = timesRaw[0][1].padStart(5, '0').replace(/^(\d):/, '0$1:');
+                        if (timesRaw.length >= 2) chegada = timesRaw[1][1].padStart(5, '0').replace(/^(\d):/, '0$1:');
                     }
 
                     // ── Offset de chegada ────────────────────────────────────────────────────
@@ -725,31 +733,54 @@ async function scrapeOneway(origin, destination, date) {
                     // ── Duração total ────────────────────────────────────────────────────────
                     // PT: "Duração total: 12h 15 min" / EN: "Total duration 12 hr 15 min"
                     let duracao_min = 0;
-                    const durPT = aria.match(/Dura[çc][aã]o total: (\d+)h(?:\s*(\d+)\s*min)?/i);
+                    const durPT = aria.match(/Dura[çc][aã]o\s*(?:total)?[:\s]+(\d+)\s*h(?:oras?)?\s*(?:e\s*)?(?:(\d+)\s*min(?:utos?)?)?/i);
                     if (durPT) duracao_min = parseInt(durPT[1]) * 60 + (durPT[2] ? parseInt(durPT[2]) : 0);
                     if (!duracao_min) {
-                        const durEN = aria.match(/Total duration (\d+) hr(?:\s*(\d+) min)?/i);
+                        const durEN = aria.match(/Total\s+duration\s+(\d+)\s*hr?s?\s*(?:(\d+)\s*min)?/i);
                         if (durEN) duracao_min = parseInt(durEN[1]) * 60 + (durEN[2] ? parseInt(durEN[2]) : 0);
                     }
 
-                    // ── Cidade de conexão ────────────────────────────────────────────────────
-                    // PT: "Parada (N de N) de Xh em Cidade"
-                    // EN: "Layover (N of N) Xhr in City"
+                    // ── Cidade de conexão ─────────────────────────────────────────────────────
+                    // Múltiplos padrões PT e EN por ordem de especificidade
                     let layoverCity = '';
-                    const layoverPT = aria.match(/Parada \(\d+ de \d+\) de [^.]+?em\s*([A-ZÀ-Ú][^.(]+?)(?:\s*\([A-Z]{3}\))?\./i);
-                    if (layoverPT) layoverCity = layoverPT[1].trim();
+                    let lm;
+                    // P1 PT: "Parada (N de N) de Xh em Cidade (IATA)."
+                    lm = aria.match(/Parada\s*\(\s*\d+\s*de\s*\d+\s*\)\s*de\s*[^.;]+?em\s+([^.,()\n;]+?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
+                    if (lm) layoverCity = lm[1].trim();
+                    // P2 PT: "Parada de Xh em Cidade" (sem índice)
                     if (!layoverCity) {
-                        const layoverEN = aria.match(/Layover \(\d+ of \d+\) [^.]+?in ([^.(]+?)(?:\s*\([A-Z]{3}\))?\./i);
-                        if (layoverEN) layoverCity = layoverEN[1].trim();
+                        lm = aria.match(/Parada\s+de\s+\d+\s*h[^.;]*?em\s+([^.,()\n;]+?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
+                        if (lm) layoverCity = lm[1].trim();
+                    }
+                    // P3 PT/EN: "em CIDADE (IATA)" — qualquer "em X (XXX)"
+                    if (!layoverCity) {
+                        lm = aria.match(/\bem\s+([^.,()\n;]{3,40}?)\s*\([A-Z]{3}\)/i);
+                        if (lm) layoverCity = lm[1].trim();
+                    }
+                    // P4 EN: "Layover (N of N) Xhr in City (IATA)."
+                    if (!layoverCity) {
+                        lm = aria.match(/Layover\s*\(\s*\d+\s*of\s*\d+\s*\)\s*[^.;]+?in\s+([^.,()\n;]+?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
+                        if (lm) layoverCity = lm[1].trim();
+                    }
+                    // P5 EN: "Layover in City"
+                    if (!layoverCity) {
+                        lm = aria.match(/Layover\s+in\s+([^.,()\n;]{3,40}?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
+                        if (lm) layoverCity = lm[1].trim();
                     }
 
-                    // ── Durações de conexão ──────────────────────────────────────────────────
-                    const ldPT = [...aria.matchAll(/Parada \(\d+ de \d+\) de (\d+)h(?:\s*(\d+)\s*min)?/gi)];
-                    const ldEN = [...aria.matchAll(/Layover \(\d+ of \d+\) (\d+) hr(?:\s*(\d+) min)?/gi)];
-                    const layoverDurations = [
-                        ...ldPT.map(m => parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0)),
-                        ...ldEN.map(m => parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0)),
+                    // ── Durações de conexão ────────────────────────────────────────────────────
+                    // Coleta todos os padrões PT e EN, remove duplicatas
+                    const ldRaw = [
+                        ...[...aria.matchAll(/Parada\s*\(\s*\d+\s*de\s*\d+\s*\)\s*de\s*(\d+)\s*h(?:oras?)?\s*(?:e\s*)?(?:(\d+)\s*min(?:utos?)?)?/gi)]
+                            .map(m => parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0)),
+                        ...[...aria.matchAll(/Parada\s+de\s+(\d+)\s*h(?:oras?)?\s*(?:e\s*)?(?:(\d+)\s*min(?:utos?)?)?/gi)]
+                            .map(m => parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0)),
+                        ...[...aria.matchAll(/Layover\s*\(\s*\d+\s*of\s*\d+\s*\)\s*(\d+)\s*hr?s?\s*(?:(\d+)\s*min)?/gi)]
+                            .map(m => parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0)),
+                        ...[...aria.matchAll(/Layover\s+(\d+)\s*hr?s?\s*(?:(\d+)\s*min)?/gi)]
+                            .map(m => parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0)),
                     ];
+                    const layoverDurations = [...new Set(ldRaw.filter(d => d > 0))];
 
                     // ── Aeronave ─────────────────────────────────────────────────────────────
                     let aeronave = '';
@@ -780,6 +811,22 @@ async function scrapeOneway(origin, destination, date) {
                     };
                 }
 
+                // Lista de companhias conhecidas reutilizada nos fallbacks
+                const KNOWN_AIRLINES = [
+                    'LATAM Airlines','GOL Linhas Aéreas','GOL','Azul Linhas Aéreas','Azul',
+                    'Avianca','Copa Airlines','American Airlines','United Airlines','Delta Air Lines',
+                    'Air France','KLM','Lufthansa','TAP Air Portugal','Iberia','British Airways',
+                    'Emirates','Qatar Airways','Turkish Airlines','Swiss','Austrian Airlines',
+                    'Ethiopian Airlines','Aeromexico','Aeroméxico','Air Europa',
+                    'Singapore Airlines','Cathay Pacific','Japan Airlines','ANA','All Nippon Airways',
+                    'Alaska Airlines','JetBlue','Virgin Atlantic','ITA Airways',
+                    'Aerolíneas Argentinas','Aerolineas Argentinas',
+                    'Air Canada','WestJet','Finnair','SAS','Ryanair','easyJet','Wizz Air',
+                    'Spirit Airlines','Frontier Airlines','Southwest Airlines',
+                    'Korean Air','Air China','China Southern','China Eastern',
+                    'Thai Airways','Malaysia Airlines',
+                ];
+
                 const results = [];
                 const divs = [...document.querySelectorAll('div[data-id]')];
                 for (const el of divs) {
@@ -794,10 +841,59 @@ async function scrapeOneway(origin, destination, date) {
 
                     const aria = flightLink.getAttribute('aria-label') ?? '';
                     const parsed = parseAriaLabel(aria);
-                    if (parsed && parsed.preco_brl > 0 && parsed.partida) {
-                        results.push(parsed);
+                    if (!parsed || parsed.preco_brl <= 0 || !parsed.partida) continue;
+
+                    // ── Fallback 1: outras aria-labels do card (companhia) ────────────────────
+                    if (!parsed.companhia) {
+                        for (const l of links) {
+                            if (l === flightLink) continue;
+                            const oa = l.getAttribute('aria-label') ?? '';
+                            if (!oa) continue;
+                            const ptM = oa.match(/Voo d(?:a|o|as|os|e) ([^,.]+?)(?:\s+com\s+|\.|,|\s*$)/i);
+                            if (ptM) { parsed.companhia = ptM[1].trim(); break; }
+                            const enM = oa.match(/\b([A-Za-z\u00C0-\u024F][A-Za-z\u00C0-\u024F\s]{2,40}?)\s+flight\b/i);
+                            if (enM) {
+                                const c = enM[1].trim();
+                                if (!/^(nonstop|direct|total|from|your|the|a|an)$/i.test(c)) { parsed.companhia = c; break; }
+                            }
+                        }
                     }
 
+                    // ── Fallback 2: img[alt] — logotipo da companhia ──────────────────────────
+                    if (!parsed.companhia) {
+                        const imgs = [...el.querySelectorAll('img[alt]')];
+                        for (const img of imgs) {
+                            const alt = (img.getAttribute('alt') ?? '').replace(/\s*logo\s*/gi, '').trim();
+                            if (!alt || alt.length < 2 || alt.length > 60) continue;
+                            for (const n of KNOWN_AIRLINES) {
+                                if (alt.toLowerCase().includes(n.toLowerCase())) { parsed.companhia = n; break; }
+                            }
+                            // Se o alt não bateu na lista mas parece nome de companhia, usa direto
+                            if (!parsed.companhia && /[A-Za-z]{3}/.test(alt) && !/^\d/.test(alt)) {
+                                parsed.companhia = alt;
+                            }
+                            if (parsed.companhia) break;
+                        }
+                    }
+
+                    // ── Fallback 3: texto visível do card (companhia + cidade conexão) ─────────
+                    const visText = (el.innerText || el.textContent || '');
+                    if (!parsed.companhia && visText) {
+                        for (const n of KNOWN_AIRLINES) {
+                            if (visText.includes(n)) { parsed.companhia = n; break; }
+                        }
+                    }
+
+                    // ── Fallback 4: cidade de conexão pelo texto visível ───────────────────────
+                    // Google Flights mostra "· GRU" ou "• GRU" no card de conexão
+                    if (!parsed.layoverCity && parsed.paradas > 0 && visText) {
+                        // Padrão: "· GRU" ou "• GRU" ou "em GRU" no texto visível
+                        let vm = visText.match(/[·•–]\s*([A-Z]{3})\b/);
+                        if (!vm) vm = visText.match(/\bem\s+([A-Z]{3})\b/);
+                        if (vm) parsed.layoverCity = vm[1];
+                    }
+
+                    results.push(parsed);
                     if (results.length >= 15) break;
                 }
 
@@ -1000,11 +1096,14 @@ async function expandFlightDetails(page, flights) {
             if (i >= cards.length) continue;
             const card = cards[i];
 
+            // Tenta múltiplos seletores de botão de detalhe
             const detailBtn = await card.$([
                 '[aria-label*="mais detalhes"]',
                 '[aria-label*="more details"]',
                 '[aria-label*="detalhes do voo"]',
                 '[aria-label*="flight details"]',
+                '[aria-label*="detalhes"]',
+                '[aria-label*="details"]',
                 '[aria-label*="Ver detalhes"]',
                 '[aria-label*="Expand"]',
                 '[data-expandable]',
@@ -1013,27 +1112,51 @@ async function expandFlightDetails(page, flights) {
 
             const clickTarget = detailBtn || card;
             await clickTarget.click({ timeout: 2000 }).catch(() => null);
-            await new Promise(r => setTimeout(r, randInt(350, 550)));
+            await new Promise(r => setTimeout(r, randInt(500, 800)));
 
-            const dialogText = await page.evaluate(() => {
-                const containers = [
-                    document.querySelector('[role="dialog"]'),
-                    document.querySelector('[data-fid]'),
-                    ...document.querySelectorAll('[aria-expanded="true"]'),
-                ].filter(Boolean);
-                for (const container of containers) {
-                    const text = (container.innerText || container.textContent || '').trim();
-                    if (text.length > 50) return text;
+            const { dialogText, isDialog } = await page.evaluate((idx) => {
+                // Prioridade: dialog, depois data-fid, depois aria-expanded, depois texto do card
+                const dialog = document.querySelector('[role="dialog"]');
+                if (dialog) {
+                    const t = (dialog.innerText || dialog.textContent || '').trim();
+                    if (t.length > 50) return { dialogText: t, isDialog: true };
                 }
-                return '';
-            }).catch(() => '');
+                const fid = document.querySelector('[data-fid]');
+                if (fid) {
+                    const t = (fid.innerText || fid.textContent || '').trim();
+                    if (t.length > 50) return { dialogText: t, isDialog: false };
+                }
+                for (const el of document.querySelectorAll('[aria-expanded="true"]')) {
+                    const t = (el.innerText || el.textContent || '').trim();
+                    if (t.length > 50) return { dialogText: t, isDialog: false };
+                }
+                // Fallback: texto do próprio card (pode ter info de conexão inline)
+                const divs = [...document.querySelectorAll('div[data-id]')];
+                const card = divs[idx];
+                if (card) {
+                    const t = (card.innerText || card.textContent || '').trim();
+                    if (t.length > 80) return { dialogText: t, isDialog: false };
+                }
+                return { dialogText: '', isDialog: false };
+            }, i).catch(() => ({ dialogText: '', isDialog: false }));
 
             if (dialogText && dialogText.length > 30) {
                 const segments = parseSegmentsFromText(dialogText);
-                if (segments.length > 0) flights[i].segmentos = segments;
+                if (segments.length > 0) {
+                    flights[i].segmentos = segments;
+                    // Preenche layoverCity a partir do destino do 1º segmento se ainda não tiver
+                    if (!flights[i].layoverCity && segments.length > 1) {
+                        flights[i].layoverCity = segments[0].destino || '';
+                    }
+                }
+                // Tenta extrair pelo menos o IATA da conexão se layoverCity ainda vazio
+                if (!flights[i].layoverCity) {
+                    const connM = dialogText.match(/(?:[Pp]arada|[Ll]ayover|[Cc]onex[aã]o|[Ee]scala)[^\n]*?([A-Z]{3})\b/);
+                    if (connM) flights[i].layoverCity = connM[1];
+                }
             }
 
-            await page.keyboard.press('Escape').catch(() => null);
+            if (isDialog) await page.keyboard.press('Escape').catch(() => null);
             await new Promise(r => setTimeout(r, randInt(150, 300)));
         } catch (e) {
             console.log(`[GFlights] expand flight ${i} error:`, e.message?.slice(0, 60));
