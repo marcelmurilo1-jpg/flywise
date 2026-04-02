@@ -52,16 +52,33 @@ function extractIata(companhia?: string | null): string {
     return ''
 }
 
-function buildGoogleFlightsUrl(outbound: ResultadoVoo, inbound?: ResultadoVoo | null): string {
-    const origin = outbound.origem ?? ''
-    const dest = outbound.destino ?? ''
+// Gera URL do Google Flights no formato #flt= (pré-preenche rota e datas diretamente)
+function buildGoogleFlightsUrl(
+    outbound: ResultadoVoo,
+    inbound?: ResultadoVoo | null,
+    passageiros = 1
+): string {
+    const o = (outbound.origem ?? '').toUpperCase()
+    const d = (outbound.destino ?? '').toUpperCase()
     const date = outbound.partida?.split('T')[0] ?? ''
     const det = (outbound.detalhes as any) ?? {}
+
+    const cabinMap: Record<string, string> = {
+        economy: 'f', premium_economy: 'w', business: 'b', first: 'j',
+    }
+    const cabin = cabinMap[outbound.cabin_class ?? 'economy'] ?? 'f'
+    const pax = Math.max(1, passageiros)
+
+    // Detecta voo de volta: inbound explícito OU oferta combinada Amadeus (det.returnPartida)
     const returnDate = inbound?.partida?.split('T')[0] ?? det.returnPartida?.split('T')[0]
-    const q = returnDate
-        ? `Flights from ${origin} to ${dest} on ${date} return ${returnDate}`
-        : `Flights from ${origin} to ${dest} on ${date} one way`
-    return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}&curr=BRL&hl=pt-BR`
+    const ro = ((inbound?.origem ?? det.returnOrigem ?? d) as string).toUpperCase()
+    const rd = ((inbound?.destino ?? det.returnDestino ?? o) as string).toUpperCase()
+
+    if (returnDate) {
+        const flt = `${o}.${d}.${date}*${ro}.${rd}.${returnDate}`
+        return `https://www.google.com/travel/flights#flt=${flt};c:BRL;e:${pax};sd:0;t:${cabin}`
+    }
+    return `https://www.google.com/travel/flights#flt=${o}.${d}.${date};c:BRL;e:${pax};sd:1;t:${cabin}`
 }
 
 // ── Individual flight leg ──────────────────────────────────────────────────────
@@ -371,17 +388,32 @@ function FlightCard({
                 )}
             </AnimatePresence>
 
-            {/* Expand toggle */}
-            <button
-                onClick={onToggleExpand}
-                style={{
-                    width: '100%', background: 'none', border: 'none', borderTop: '1px solid #F1F5F9',
-                    padding: '6px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                    cursor: 'pointer', color: '#64748B', fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
-                }}
-            >
-                {isExpanded ? <><ChevronUp size={13} /> Ocultar detalhes</> : <><ChevronDown size={13} /> Ver detalhes do voo</>}
-            </button>
+            {/* Expand toggle + Google Flights link */}
+            <div style={{ borderTop: '1px solid #F1F5F9', display: 'flex', alignItems: 'stretch' }}>
+                <button
+                    onClick={onToggleExpand}
+                    style={{
+                        flex: 1, background: 'none', border: 'none',
+                        padding: '7px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                        cursor: 'pointer', color: '#64748B', fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+                    }}
+                >
+                    {isExpanded ? <><ChevronUp size={13} /> Ocultar detalhes</> : <><ChevronDown size={13} /> Ver detalhes</>}
+                </button>
+                <a
+                    href={buildGoogleFlightsUrl(flight)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        padding: '7px 14px', borderLeft: '1px solid #F1F5F9',
+                        fontSize: 11, fontWeight: 700, color: '#1D6AE5', textDecoration: 'none',
+                        whiteSpace: 'nowrap' as const, flexShrink: 0,
+                    }}
+                >
+                    <ExternalLink size={11} /> Google Flights
+                </a>
+            </div>
         </motion.div>
     )
 }
@@ -504,7 +536,7 @@ export function FlightResultsGrouped({
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
                             <a
-                                href={buildGoogleFlightsUrl(cashIdaSel, cashVoltaSel)}
+                                href={buildGoogleFlightsUrl(cashIdaSel, cashVoltaSel, searchInfo?.passageiros ?? 1)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{

@@ -741,20 +741,22 @@ async function scrapeOneway(origin, destination, date) {
                     }
 
                     // ── Cidade de conexão ─────────────────────────────────────────────────────
-                    // Múltiplos padrões PT e EN por ordem de especificidade
+                    // IMPORTANTE: os padrões devem exigir contexto de PARADA para não confundir
+                    // com o aeroporto de destino ("Chegando em Paris (CDG)" etc.)
                     let layoverCity = '';
                     let lm;
                     // P1 PT: "Parada (N de N) de Xh em Cidade (IATA)."
                     lm = aria.match(/Parada\s*\(\s*\d+\s*de\s*\d+\s*\)\s*de\s*[^.;]+?em\s+([^.,()\n;]+?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
                     if (lm) layoverCity = lm[1].trim();
-                    // P2 PT: "Parada de Xh em Cidade" (sem índice)
+                    // P2 PT: "Parada de Xh em Cidade" (sem índice "(N de N)")
                     if (!layoverCity) {
                         lm = aria.match(/Parada\s+de\s+\d+\s*h[^.;]*?em\s+([^.,()\n;]+?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
                         if (lm) layoverCity = lm[1].trim();
                     }
-                    // P3 PT/EN: "em CIDADE (IATA)" — qualquer "em X (XXX)"
+                    // P3 PT/EN: "em CITY (IATA)" exigindo palavra de parada no mesmo trecho
+                    // (evita capturar "Chegando em Paris (CDG)" como conexão)
                     if (!layoverCity) {
-                        lm = aria.match(/\bem\s+([^.,()\n;]{3,40}?)\s*\([A-Z]{3}\)/i);
+                        lm = aria.match(/(?:[Pp]arada|[Ee]scala|[Cc]onex[aã]o)\b[^.;(]{0,100}?em\s+([^.,()\n;]{3,40}?)\s*\([A-Z]{3}\)/i);
                         if (lm) layoverCity = lm[1].trim();
                     }
                     // P4 EN: "Layover (N of N) Xhr in City (IATA)."
@@ -762,7 +764,7 @@ async function scrapeOneway(origin, destination, date) {
                         lm = aria.match(/Layover\s*\(\s*\d+\s*of\s*\d+\s*\)\s*[^.;]+?in\s+([^.,()\n;]+?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
                         if (lm) layoverCity = lm[1].trim();
                     }
-                    // P5 EN: "Layover in City"
+                    // P5 EN: "Layover in City" (requer palavra Layover — sem capturar destino)
                     if (!layoverCity) {
                         lm = aria.match(/Layover\s+in\s+([^.,()\n;]{3,40}?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
                         if (lm) layoverCity = lm[1].trim();
@@ -876,20 +878,20 @@ async function scrapeOneway(origin, destination, date) {
                         }
                     }
 
-                    // ── Fallback 3: texto visível do card (companhia + cidade conexão) ─────────
+                    // ── Fallback 3: texto visível do card (companhia) ─────────────────────────
                     const visText = (el.innerText || el.textContent || '');
+                    const visLower = visText.toLowerCase();
                     if (!parsed.companhia && visText) {
                         for (const n of KNOWN_AIRLINES) {
-                            if (visText.includes(n)) { parsed.companhia = n; break; }
+                            if (visLower.includes(n.toLowerCase())) { parsed.companhia = n; break; }
                         }
                     }
 
                     // ── Fallback 4: cidade de conexão pelo texto visível ───────────────────────
-                    // Google Flights mostra "· GRU" ou "• GRU" no card de conexão
+                    // Google Flights mostra "· GRU" (bullet + IATA) no card de conexão.
+                    // NÃO usamos "\bem\s+([A-Z]{3})\b" pois capturaria o aeroporto de destino.
                     if (!parsed.layoverCity && parsed.paradas > 0 && visText) {
-                        // Padrão: "· GRU" ou "• GRU" ou "em GRU" no texto visível
-                        let vm = visText.match(/[·•–]\s*([A-Z]{3})\b/);
-                        if (!vm) vm = visText.match(/\bem\s+([A-Z]{3})\b/);
+                        const vm = visText.match(/[·•]\s*([A-Z]{3})\b/);
                         if (vm) parsed.layoverCity = vm[1];
                     }
 
