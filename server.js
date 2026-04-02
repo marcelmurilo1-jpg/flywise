@@ -595,6 +595,12 @@ async function scrapeOneway(origin, destination, date) {
                     }
                     if (!preco_brl) return null;
 
+                    // ── Números de voo (extraídos cedo para usar como fallback de companhia) ──
+                    const flightNumsEarly = [...aria.matchAll(/\b([A-Z]{1,2})\s*(\d{3,5})\b/g)]
+                        .map(m => `${m[1]}${m[2]}`)
+                        .filter(n => !/^\d/.test(n))
+                        .slice(0, 4);
+
                     // ── Companhia ────────────────────────────────────────────────────────────
                     // PT: "Voo da LATAM" / "Voo do United" / "Voo das..." / "Voo dos..."
                     // EN: "American Airlines flight with 1 stop"
@@ -604,8 +610,13 @@ async function scrapeOneway(origin, destination, date) {
                     if (airlinePT) companhia = airlinePT[1].trim();
                     if (!companhia) {
                         // EN: "American Airlines flight" / "Delta Air Lines flight"
-                        const airlineEN = aria.match(/^([A-Za-z][^.]+?)\s+(?:flight|airlines?|air lines?)\b/i);
-                        if (airlineEN) companhia = airlineEN[1].trim();
+                        // Sem âncora ^ para funcionar em qualquer posição do aria-label
+                        const airlineEN = aria.match(/\b([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]{2,40}?)\s+flight\b/i);
+                        if (airlineEN) {
+                            const candidate = airlineEN[1].trim();
+                            if (!/^(nonstop|direct|total|from|your|this|the|a|an)$/i.test(candidate))
+                                companhia = candidate;
+                        }
                     }
                     if (!companhia) {
                         // EN alternativo: "flight on American Airlines"
@@ -632,9 +643,37 @@ async function scrapeOneway(origin, destination, date) {
                             'Aerolíneas Argentinas','Aerolineas Argentinas',
                             'Air Canada','WestJet','Finnair','SAS','Ryanair','easyJet','Wizz Air',
                             'Spirit Airlines','Frontier Airlines','Southwest Airlines',
+                            'GOL Linhas Aereas','Azul Linhas Aereas Brasileiras',
+                            'Korean Air','Air China','China Southern','China Eastern',
+                            'Thai Airways','Malaysia Airlines','Vistara','IndiGo',
                         ];
                         for (const n of knownNames) {
                             if (aria.toLowerCase().includes(n.toLowerCase())) { companhia = n; break; }
+                        }
+                    }
+                    // Último fallback: usa prefixo do número de voo para identificar a companhia
+                    if (!companhia && flightNumsEarly.length > 0) {
+                        const CODE_TO_AIRLINE = {
+                            'LA':'LATAM Airlines','JJ':'LATAM Airlines',
+                            'G3':'GOL Linhas Aéreas','AD':'Azul Linhas Aéreas',
+                            'CM':'Copa Airlines','AV':'Avianca',
+                            'AA':'American Airlines','UA':'United Airlines','DL':'Delta Air Lines',
+                            'WN':'Southwest Airlines','B6':'JetBlue','AS':'Alaska Airlines',
+                            'NK':'Spirit Airlines','F9':'Frontier Airlines',
+                            'AF':'Air France','KL':'KLM','LH':'Lufthansa',
+                            'TP':'TAP Air Portugal','IB':'Iberia','BA':'British Airways',
+                            'EK':'Emirates','QR':'Qatar Airways','TK':'Turkish Airlines',
+                            'LX':'Swiss','OS':'Austrian Airlines','AY':'Finnair',
+                            'SK':'SAS','FR':'Ryanair','U2':'easyJet','W6':'Wizz Air',
+                            'ET':'Ethiopian Airlines','AM':'Aeromexico','UX':'Air Europa',
+                            'SQ':'Singapore Airlines','CX':'Cathay Pacific',
+                            'JL':'Japan Airlines','NH':'ANA','KE':'Korean Air',
+                            'VS':'Virgin Atlantic','AZ':'ITA Airways','AR':'Aerolíneas Argentinas',
+                            'AC':'Air Canada','WS':'WestJet',
+                        };
+                        for (const num of flightNumsEarly) {
+                            const code = num.match(/^([A-Z]{1,2})/)?.[1] ?? '';
+                            if (CODE_TO_AIRLINE[code]) { companhia = CODE_TO_AIRLINE[code]; break; }
                         }
                     }
 
@@ -723,12 +762,6 @@ async function scrapeOneway(origin, destination, date) {
                     else if (/[Pp]rimeira\s+classe|[Ff]irst\s+class/i.test(aria)) cabin = 'first';
                     else if (/[Pp]remium\s+[Ee]conom|[Pp]remière/i.test(aria)) cabin = 'premium_economy';
 
-                    // ── Números de voo ───────────────────────────────────────────────────────
-                    const flightNums = [...aria.matchAll(/\b([A-Z]{1,2})\s*(\d{3,5})\b/g)]
-                        .map(m => `${m[1]}${m[2]}`)
-                        .filter(n => !/^\d/.test(n))
-                        .slice(0, 4);
-
                     return {
                         companhia,
                         partida,
@@ -742,7 +775,7 @@ async function scrapeOneway(origin, destination, date) {
                         aeronave,
                         cabin,
                         segmentos: [],
-                        numeroVoos: flightNums,
+                        numeroVoos: flightNumsEarly,
                         aeronaves: aeronave ? [aeronave] : [],
                     };
                 }

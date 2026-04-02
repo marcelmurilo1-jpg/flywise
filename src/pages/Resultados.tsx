@@ -255,6 +255,7 @@ export default function Resultados() {
                     detalhes: {
                         paradas: o.paradas,
                         voo_numero: o.voo_numero,
+                        carrierCode: (o as any).carrierCode,
                         layoverCity: (o as any).layoverCity,
                         layoverDurations: (o as any).layoverDurations,
                         numeroVoos: (o as any).numeroVoos,
@@ -294,6 +295,7 @@ export default function Resultados() {
                     detalhes: {
                         paradas: o.paradas,
                         voo_numero: o.voo_numero,
+                        carrierCode: (o as any).carrierCode,
                         layoverCity: (o as any).layoverCity,
                         layoverDurations: (o as any).layoverDurations,
                         numeroVoos: (o as any).numeroVoos,

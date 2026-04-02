@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plane, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plane, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ResultadoVoo } from '@/lib/supabase'
 import { format, parseISO } from 'date-fns'
@@ -50,6 +50,18 @@ function extractIata(companhia?: string | null): string {
     if (m) return m[1]
     if (/^[A-Z]{2}$/.test(companhia.trim())) return companhia.trim()
     return ''
+}
+
+function buildGoogleFlightsUrl(outbound: ResultadoVoo, inbound?: ResultadoVoo | null): string {
+    const origin = outbound.origem ?? ''
+    const dest = outbound.destino ?? ''
+    const date = outbound.partida?.split('T')[0] ?? ''
+    const det = (outbound.detalhes as any) ?? {}
+    const returnDate = inbound?.partida?.split('T')[0] ?? det.returnPartida?.split('T')[0]
+    const q = returnDate
+        ? `Flights from ${origin} to ${dest} on ${date} return ${returnDate}`
+        : `Flights from ${origin} to ${dest} on ${date} one way`
+    return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}&curr=BRL&hl=pt-BR`
 }
 
 // ── Individual flight leg ──────────────────────────────────────────────────────
@@ -222,7 +234,7 @@ function FlightCard({
     const det = (flight.detalhes as any) ?? {}
     const segsOut = (flight.segmentos as any[]) ?? []
     const hasReturn = !!det.returnPartida
-    const iata = extractIata(flight.companhia)
+    const iata = det.carrierCode || extractIata(flight.companhia)
     const showReturn = hasReturn && !hasInboundFlights
     const layoverCity = det.layoverCity || ''
     const connectionStr = layoverCity
@@ -490,12 +502,27 @@ export function FlightResultsGrouped({
                                 R$ {cashTotal?.toLocaleString('pt-BR')}
                             </div>
                         </div>
-                        <button
-                            onClick={() => { onSelectCashIda?.(null); onSelectCashVolta?.(null) }}
-                            style={{ background: 'none', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontFamily: 'inherit' }}
-                        >
-                            ← Escolher novamente
-                        </button>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
+                            <a
+                                href={buildGoogleFlightsUrl(cashIdaSel, cashVoltaSel)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                                    background: '#1D6AE5', border: 'none', borderRadius: 8,
+                                    padding: '6px 12px', fontSize: 11, fontWeight: 700,
+                                    color: '#fff', cursor: 'pointer', textDecoration: 'none',
+                                }}
+                            >
+                                <ExternalLink size={11} /> Ver no Google Flights
+                            </a>
+                            <button
+                                onClick={() => { onSelectCashIda?.(null); onSelectCashVolta?.(null) }}
+                                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontFamily: 'inherit' }}
+                            >
+                                ← Escolher novamente
+                            </button>
+                        </div>
                     </div>
                     <FlightCard
                         flight={cashIdaSel} idx={0} isReturn={false} isPinned
