@@ -293,11 +293,35 @@ async function fetchPromos(
             .order('valid_until', { ascending: true, nullsFirst: false })
             .limit(15)
 
-        const [{ data: d1 }, { data: d2 }] = await Promise.all([q1, q2])
+        // Query 3: transfer_promotions — tabela autoritativa com promos por cartão/programa
+        const q3 = sb.from('transfer_promotions')
+            .select('card_id, program, bonus_percent, club_bonus_percent, club_tier_bonuses, valid_until, description, rules, registration_url, is_periodic')
+            .eq('active', true)
+            .in('program', fallbackPrograms)
 
-        // Mescla e deduplica por título (evita duplicatas quando programa E programas_tags estão preenchidos)
+        const [{ data: d1 }, { data: d2 }, { data: d3 }] = await Promise.all([q1, q2, q3])
+
+        // Converte transfer_promotions → PromoRow format
+        const tpRows: PromoRow[] = (d3 ?? []).map((tp: Record<string, unknown>) => ({
+            titulo: String(tp.description ?? `${tp.card_id} → ${tp.program} +${tp.bonus_percent}%`),
+            programa: String(tp.program ?? ''),
+            tipo: 'bonus_transferencia',
+            bonus_pct: typeof tp.bonus_percent === 'number' ? tp.bonus_percent : null,
+            parceiro: String(tp.card_id ?? ''),  // ex: 'nubank_ultravioleta' — matched via BANK_TAG_TO_TRANSFER_SOURCE
+            valid_until: typeof tp.valid_until === 'string' && tp.valid_until.includes('Campanha') ? null : String(tp.valid_until ?? ''),
+            subcategoria: 'transferencia',
+            programas_tags: null,
+            categoria: 'milhas',
+        }))
+
+        // Mescla e deduplica (programa+cartão para transfer_promotions; título para promocoes)
         const seen = new Set<string>()
         const rows: PromoRow[] = []
+        // Transfer_promotions first (authoritative) — dedup key = programa+parceiro
+        for (const row of tpRows) {
+            const key = `tp:${row.programa}:${row.parceiro}`
+            if (!seen.has(key)) { seen.add(key); rows.push(row) }
+        }
         for (const row of [...(d1 ?? []), ...(d2 ?? [])]) {
             const key = String(row.titulo ?? '').slice(0, 60).toLowerCase()
             if (!seen.has(key)) { seen.add(key); rows.push(row as PromoRow) }
@@ -568,6 +592,8 @@ const BASE_COST_PER_K: Record<string, number> = {
     'Aeroplan': 62,
     'AAdvantage': 55,
     'MileagePlus': 55,
+    'Livelo': 40,
+    'SkyMiles': 55,
 }
 
 // Purchase URLs per program (where users can buy miles directly)
@@ -585,11 +611,60 @@ const PROGRAM_PURCHASE_INFO: Record<string, { url: string; notes: string }> = {
 
 // Transfer page URLs per program
 const PROGRAM_TRANSFER_URLS: Record<string, string> = {
-    'Smiles':      'smiles.com.br/acumule-milhas/transferencia-de-pontos',
-    'LATAM Pass':  'latampass.latam.com/pt_br/junte-milhas/transfira-pontos',
-    'TudoAzul':    'tudoazul.voeazul.com.br/acumule/transferencia-de-pontos',
-    'Livelo':      'livelo.com.br/transferencia-de-pontos',
-    'Flying Blue': 'flyingblue.com/en/earn-miles/partners/bank-partners',
+    'Smiles':       'smiles.com.br/acumule-milhas/transferencia-de-pontos',
+    'LATAM Pass':   'latampass.latam.com/pt_br/junte-milhas/transfira-pontos',
+    'TudoAzul':     'tudoazul.voeazul.com.br/acumule/transferencia-de-pontos',
+    'Livelo':       'livelo.com.br/transferencia-de-pontos',
+    'Flying Blue':  'flyingblue.com/en/earn-miles/partners/bank-partners',
+    'Lifemiles':    'lifemiles.com/earn/transfer-partners',
+    'Miles&More':   'miles-and-more.com/miles/earn/partners/bank-partners',
+    'TAP Miles&Go': 'tapmilesandgo.com/pt/earn-miles/partners',
+    'Aeroplan':     'aeroplan.com/en/earn-miles/partners',
+    'AAdvantage':   'aa.com/homePage.do?locale=pt_BR',
+    'MileagePlus':  'united.com/ual/pt/br/flight/mileageplus/earn.html',
+}
+
+// Maps bank/card-id tags to the transfer source program — fixes promo matching for scraped promos
+// that use bank names (ex: "Nubank") instead of the points currency ("Membership Rewards")
+const BANK_TAG_TO_TRANSFER_SOURCE: Record<string, string> = {
+    'nubank': 'Membership Rewards',
+    'nubank_ultravioleta': 'Membership Rewards',
+    'amex': 'Membership Rewards',
+    'amex_platinum': 'Membership Rewards',
+    'amex_gold': 'Membership Rewards',
+    'amex_green': 'Membership Rewards',
+    'american express': 'Membership Rewards',
+    'xp_visa': 'Membership Rewards',
+    'xp': 'Membership Rewards',
+    'btg_pactual': 'Membership Rewards',
+    'btg': 'Membership Rewards',
+    'iupp_itau': 'Pontos Itaú',
+    'iupp': 'Pontos Itaú',
+    'itaú': 'Pontos Itaú',
+    'itau': 'Pontos Itaú',
+    'itau_personnalite': 'Pontos Itaú',
+    'itau_grafite': 'Pontos Itaú',
+    'itau_uniclass': 'Pontos Itaú',
+    'santander_esfera': 'Esfera',
+    'santander': 'Esfera',
+    'esfera_santander': 'Esfera',
+    'esfera': 'Esfera',
+    'c6_atomos': 'C6 Bank',
+    'c6': 'C6 Bank',
+    'inter_black': 'Inter Milhas',
+    'inter_win': 'Inter Milhas',
+    'inter': 'Inter Milhas',
+    'diners_global': 'Diners Club',
+    'diners': 'Diners Club',
+    'livelo': 'Livelo',
+    'bradesco': 'Livelo',
+    'bradesco_livelo': 'Livelo',
+    'livelo_bb': 'Livelo',
+    'livelo_bradesco': 'Livelo',
+    'bb': 'Livelo',
+    'caixa': 'Livelo',
+    'caixa_uau': 'Livelo',
+    'caixa_mastercard': 'Livelo',
 }
 
 // Maps card IDs (from userData.cards) to the bank transfer program they belong to
@@ -702,12 +777,17 @@ function analyzeProgram(
 
         const sourceFirst = base.source.toLowerCase().split(' ')[0]
         const promo = transferPromos.find(p => {
-            if (p.parceiro) {
-                return base.source.toLowerCase().includes(p.parceiro.toLowerCase()) ||
-                    p.parceiro.toLowerCase().includes(sourceFirst)
-            }
+            const parceiro = (p.parceiro ?? '').toLowerCase()
+            // 1. Match via BANK_TAG_TO_TRANSFER_SOURCE (resolve bank name → transfer base)
+            const resolvedSource = BANK_TAG_TO_TRANSFER_SOURCE[parceiro]
+            if (resolvedSource === base.source) return true
+            // 2. Direct substring match on parceiro
+            if (parceiro && (base.source.toLowerCase().includes(parceiro) || parceiro.includes(sourceFirst))) return true
+            // 3. Scraper tags: check via mapping first, then fuzzy
             return (p.programas_tags ?? []).some(tag => {
                 const t = tag.toLowerCase()
+                const tagSource = BANK_TAG_TO_TRANSFER_SOURCE[t]
+                if (tagSource === base.source) return true
                 return base.source.toLowerCase().includes(t) || t.includes(sourceFirst)
             })
         })
@@ -802,10 +882,17 @@ function buildMultiProgramComparison(
         analyzeProgram(p, milhasNecessarias, userData, allPromos, cashPrice, confirmedProgram)
     )
 
-    // Sort: full coverage (deficit=0) first, then by total cost ascending
+    // Sort: programs cheaper than cash first, then by coverage, then by total cost
+    const cashN = (cashPrice ?? 0) > 0 ? cashPrice! : Infinity
     analyses.sort((a, b) => {
+        // 1. Cheaper than cash wins over more expensive than cash
+        const aCheap = a.custo_total_brl < cashN ? 0 : 1
+        const bCheap = b.custo_total_brl < cashN ? 0 : 1
+        if (aCheap !== bCheap) return aCheap - bCheap
+        // 2. Full coverage (deficit=0) before deficit
         if (a.deficit === 0 && b.deficit > 0) return -1
         if (b.deficit === 0 && a.deficit > 0) return 1
+        // 3. Lower total cost
         return a.custo_total_brl - b.custo_total_brl
     })
     if (analyses.length > 0) analyses[0].melhor_opcao = true
@@ -851,10 +938,52 @@ function buildMultiProgramComparison(
     }
 
     const best = analyses[0]
+
+    // Build "ALL transfer routes for best program" section — shown even without user balance
+    // so LLM can generate transfer steps for users who haven't registered their wallet
+    const allRouteLines: string[] = []
+    const bestBases = TRANSFER_BASES[best.programa] ?? []
+    if (bestBases.length > 0) {
+        allRouteLines.push(`\nROTAS DE TRANSFERÊNCIA PARA ${best.programa} (verifique saldo nos cartões — válido mesmo sem saldo cadastrado):`)
+        for (const base of bestBases) {
+            // Find any transfer promo for this source → best.programa
+            const sourceFirst = base.source.toLowerCase().split(' ')[0]
+            const allTransferPromos = allPromos.filter(p => resolvePromoType(p) === 'bonus_transferencia' && promoMatchesProgram(p, best.programa))
+            const promo = allTransferPromos.find(p => {
+                const parceiro = (p.parceiro ?? '').toLowerCase()
+                const resolvedSource = BANK_TAG_TO_TRANSFER_SOURCE[parceiro]
+                if (resolvedSource === base.source) return true
+                if (parceiro && (base.source.toLowerCase().includes(parceiro) || parceiro.includes(sourceFirst))) return true
+                return (p.programas_tags ?? []).some(tag => {
+                    const t = tag.toLowerCase()
+                    return BANK_TAG_TO_TRANSFER_SOURCE[t] === base.source || base.source.toLowerCase().includes(t) || t.includes(sourceFirst)
+                })
+            })
+            const promoBonus = promo ? effectiveBonus(promo) : 0
+            const ratioEfetivo = base.ratio * (1 + promoBonus / 100)
+            const url = PROGRAM_TRANSFER_URLS[best.programa] ?? ''
+            const promoStr = promoBonus > 0 ? ` | ★ PROMO +${promoBonus}% → ratio efetivo ${ratioEfetivo.toFixed(2)}:1` : ` | sem promo ativa (ratio ${base.ratio}:1)`
+            const custoPorMil = Math.round((BANK_COST_PER_K[base.source] ?? 40) / ratioEfetivo)
+            const urlStr = url ? ` | https://${url}` : ''
+            allRouteLines.push(`  • ${base.source} → ${best.programa}: ${base.ratio}:1 base${promoStr} — custo efetivo ~R$${custoPorMil}/mil${urlStr}`)
+            if (promo?.parceiro) {
+                const regUrl = (promo as Record<string, unknown>)._registration_url as string | undefined
+                if (regUrl) allRouteLines.push(`    ⚠ CADASTRO OBRIGATÓRIO antes de transferir: ${regUrl}`)
+            }
+        }
+        allRouteLines.push(`Se o usuário tiver pontos em QUALQUER desses programas, pode transferir para ${best.programa} e poupar em relação à compra direta.`)
+    }
+
+    const bestEconStr = cashPrice
+        ? (best.custo_total_brl < cashPrice
+            ? ` | ECONOMIA: R$ ${best.economia_vs_cash_brl.toLocaleString('pt-BR')} (${best.economia_vs_cash_pct}%)`
+            : ` | ATENÇÃO: ${best.economia_vs_cash_pct < 0 ? `${Math.abs(best.economia_vs_cash_pct)}% MAIS CARO que dinheiro` : 'margem pequena'} — só vale se o usuário JÁ TEM milhas`)
+        : ''
     const comparisonStr = [
         ...lines,
-        `MELHOR OPÇÃO: ${best.programa} — custo total ~R$ ${best.custo_total_brl.toLocaleString('pt-BR')}${cashPrice ? ` (economia de ${best.economia_vs_cash_pct}% vs R$ ${Number(cashPrice).toLocaleString('pt-BR')} em dinheiro)` : ''}`,
-        `Gere os steps/step_details detalhando como executar a estratégia com ${best.programa}.`,
+        `MELHOR OPÇÃO: ${best.programa} — custo total ~R$ ${best.custo_total_brl.toLocaleString('pt-BR')}${bestEconStr}`,
+        ...allRouteLines,
+        `\nGere os steps/step_details detalhando como executar a estratégia com ${best.programa}.`,
     ].join('\n')
 
     return { analyses, comparisonStr }
@@ -1067,7 +1196,7 @@ serve(async (req) => {
 
         // 4. Build context (cache miss)
         const iata = extractIata(flight.companhia)
-        const programs = AIRLINE_PROGRAMS[iata] ?? ['Livelo']
+        const programs = AIRLINE_PROGRAMS[iata] ?? ['Smiles', 'LATAM Pass', 'TudoAzul']
         const targetProgram = seatsContext?.program ?? programs[0] ?? 'Smiles'
         const neededMiles = seatsContext?.totalMilhas ?? (flight.preco_brl ? Math.round((flight.preco_brl * 55) / 1000) * 1000 : 0)
 
@@ -1182,18 +1311,19 @@ serve(async (req) => {
 Gere uma estratégia HONESTA, PERSONALIZADA e EXECUTÁVEL com base nos dados fornecidos.
 
 REGRAS OBRIGATÓRIAS:
-1. ANALISE o CPM fornecido. Se CPM < 1.2 c/pt → defina vale_a_pena: false e explique claramente por que dinheiro é melhor.
-2. A seção "COMPARAÇÃO PRÉ-CALCULADA" contém dados verificados — use esses números exatos no motivo e step_details. NÃO invente custos diferentes.
-3. Gere steps/step_details para o programa marcado como "★ MELHOR OPÇÃO" na comparação.
-4. No motivo, explique POR QUE este programa é melhor que os outros — cite as diferenças de custo total entre os programas comparados.
+1. O campo vale_a_pena JÁ FOI DETERMINADO PELO SERVIDOR (custo_total vs preço cash). Use o valor recebido — NÃO recalcule nem altere.
+2. A seção "COMPARAÇÃO PRÉ-CALCULADA" contém dados verificados. Use os números EXATOS no motivo e step_details. NÃO invente custos diferentes.
+3. Gere steps/step_details para o programa marcado como "★ MELHOR OPÇÃO".
+4. No motivo (máx 3 frases): explique POR QUE este programa é melhor — cite diferenças de custo entre os programas. Se vale_a_pena: false, explique que comprar milhas sai mais caro que o voo em dinheiro, MAS que SE o usuário já tiver milhas o resgate continua sendo bom (CPM X c/pt).
 5. NUNCA sugira solicitar ou contratar novo cartão de crédito — PROIBIDO.
-6. Se a comparação mostra "✓ COBRE TUDO", o passo 1 DEVE usar o saldo existente diretamente.
-7. Se há transferência com "★ PROMO ATIVA" na comparação, PRIORIZE esse caminho e explique o bônus no step_details com o ratio exato (ex: "1:1 base + 80% promo = 1.8:1 efetivo").
-8. Se o usuário tem clube (ex: Smiles Diamante), mencione o benefício EXPLICITAMENTE no passo relevante.
-9. Se deficit > 0 ou usuário não tem carteira: OBRIGATÓRIO um passo "Comprar milhas" com custo exato da comparação e URL do programa.
-10. steps: TÍTULO curto (máx 8 palavras). step_details: explicação didática completa — onde clicar, qual site/app, o que esperar, quanto tempo leva. Inclua URLs exatas.
-11. Se vale_a_pena: false: steps devem guiar o usuário para o que fazer (reservar em dinheiro, aguardar promo, acumular mais).
-12. Responda APENAS em JSON válido, sem texto adicional.`,
+6. ROTAS DE TRANSFERÊNCIA: a seção mostra TODAS as formas de transferir pontos para o programa. SEMPRE gere um passo sobre transferência, mesmo que o usuário não tenha saldo cadastrado — instrua-o a VERIFICAR os pontos nos cartões de crédito que já possui.
+7. Se há promo de transferência (ex: "★ PROMO +30% Nubank→Smiles"), gere um passo dedicado explicando: qual cartão, quanto transferir, o ratio efetivo (ex: "1:1 base + 30% promo = 1.3:1"), quantas milhas vai receber, e o URL de transferência. Mencione o cadastro prévio obrigatório se indicado.
+8. Se há "✓ COBRE TUDO" na comparação, o passo 1 DEVE usar o saldo existente. Se há saldo parcial + transferência, combine os dois.
+9. Se deficit > 0 E comprar milhas não é a melhor opção (vale_a_pena: false): sugira transferir pontos de cartão como alternativa mais barata que comprar. Só recomende compra se for realmente vantajoso.
+10. Se o usuário tem clube (ex: Smiles Diamante), mencione o desconto nas taxas EXPLICITAMENTE.
+11. steps: TÍTULO curto (máx 8 palavras). step_details: explicação didática completa — onde clicar, qual site/app, o que fazer, quanto tempo leva. Inclua URLs exatas e valores em R$.
+12. Se vale_a_pena: false: steps devem ser (1) reservar em dinheiro agora, (2) como acumular/transferir milhas para o futuro, (3) quando monitorar promos.
+13. Responda APENAS em JSON válido, sem texto adicional.`,
                     },
                     { role: 'user', content: userPrompt },
                 ],
@@ -1227,8 +1357,15 @@ REGRAS OBRIGATÓRIAS:
         // Merge server-side computed data with LLM narrative output
         const cpmResgate = bestAnalysis?.cpm ?? 0
         const cpmAvaliacao = cpmResgate >= 3.5 ? 'EXCELENTE' : cpmResgate >= 2.5 ? 'MUITO BOM' : cpmResgate >= 1.8 ? 'BOM' : cpmResgate >= 1.2 ? 'RAZOÁVEL' : 'RUIM'
+
+        // vale_a_pena: server-side truth — custo_total < cashPrice (ignore LLM's CPM-based guess)
+        const serverValeAPena = bestAnalysis
+            ? (effectiveCashPrice ? bestAnalysis.custo_total_brl < effectiveCashPrice : bestAnalysis.cpm >= 1.2)
+            : (parsed.vale_a_pena ?? true)
+
         const mergedResult: Record<string, unknown> = {
             ...parsed,
+            vale_a_pena: serverValeAPena,
             programa_recomendado: effectiveTargetProgram,
             cpm_resgate: parseFloat(cpmResgate.toFixed(2)),
             cpm_avaliacao: cpmAvaliacao,
@@ -1236,8 +1373,9 @@ REGRAS OBRIGATÓRIAS:
             milhas_em_carteira: bestAnalysis?.saldo_direto ?? 0,
             milhas_faltantes: bestAnalysis?.deficit ?? 0,
             taxas_estimadas_brl: bestAnalysis?.taxas_estimadas_brl ?? 80,
-            economia_pct: Math.max(0, bestAnalysis?.economia_vs_cash_pct ?? 0),
-            economia_brl: Math.max(0, bestAnalysis?.economia_vs_cash_brl ?? 0),
+            custo_total_estrategia: bestAnalysis?.custo_total_brl ?? (bestAnalysis?.taxas_estimadas_brl ?? 80),
+            economia_pct: serverValeAPena ? Math.max(0, bestAnalysis?.economia_vs_cash_pct ?? 0) : 0,
+            economia_brl: serverValeAPena ? Math.max(0, bestAnalysis?.economia_vs_cash_brl ?? 0) : 0,
             comparacao_programas: analyses.length > 0 ? analyses : undefined,
         }
 

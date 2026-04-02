@@ -55,9 +55,10 @@ export interface StrategyResult {
     milhas_em_carteira?: number        // direct balance in the target program
     milhas_faltantes?: number          // deficit after direct balance + transfers
     como_completar_faltantes?: string  // how to get the missing miles
-    taxas_estimadas_brl: number        // ex: 280
+    taxas_estimadas_brl: number        // ex: 280 — só as taxas aeroportuárias
+    custo_total_estrategia?: number    // compra de milhas + taxas = custo REAL "com milhas"
     economia_pct: number               // ex: 68
-    economia_brl?: number              // cashPrice - total_cost
+    economia_brl?: number              // cashPrice - custo_total_estrategia
     promocao_ativa?: string            // "Bônus 40% Smiles via Nubank (expira 15/03)"
     alternativa?: string               // second cheapest program from comparison
     aviso?: string                     // any important disclaimer

@@ -113,6 +113,11 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
     const economyPct = strategy?.economia_pct ?? 0
     const milesNeeded = strategy?.milhas_necessarias ?? 0
     const taxesBrl = strategy?.taxas_estimadas_brl ?? 0
+    // custo_total_estrategia = compra de milhas + taxas (valor real "com milhas")
+    // Fallback: custo_total de bestAnalysis via comparacao_programas, ou só taxas se déficit=0
+    const custoTotalComMilhas = strategy?.custo_total_estrategia
+        ?? (strategy?.comparacao_programas?.find(p => p.melhor_opcao)?.custo_total_brl)
+        ?? taxesBrl
 
     return (
         <AnimatePresence>
@@ -463,8 +468,11 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                                                 </div>
                                                 <ArrowRight size={18} color="var(--text-faint)" />
                                                 <div>
-                                                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '3px' }}>Com milhas</div>
-                                                    <div style={{ fontSize: '22px', fontWeight: 900, color: 'var(--green)', letterSpacing: '-0.02em' }}>R$ {taxesBrl.toLocaleString('pt-BR')}</div>
+                                                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '3px' }}>Custo total com milhas</div>
+                                                    <div style={{ fontSize: '22px', fontWeight: 900, color: 'var(--green)', letterSpacing: '-0.02em' }}>R$ {custoTotalComMilhas.toLocaleString('pt-BR')}</div>
+                                                    {custoTotalComMilhas !== taxesBrl && taxesBrl > 0 && (
+                                                        <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>taxas: R$ {taxesBrl.toLocaleString('pt-BR')}</div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
