@@ -605,12 +605,11 @@ async function scrapeOneway(origin, destination, date) {
                     // PT: "Voo da LATAM" / "Voo do United" / "Voo das..." / "Voo dos..."
                     // EN: "American Airlines flight with 1 stop"
                     let companhia = '';
-                    // PT: cobre da/do/das/dos/de (artigo varia conforme gênero da companhia)
-                    const airlinePT = aria.match(/Voo d(?:a|o|as|os|e) ([^,.]+?)(?:\s+com\s+|\.|,|[Oo]perado|\s*$)/i);
+                    // PT: [^,.\n] evita capturar além da linha/sentença
+                    const airlinePT = aria.match(/Voo d(?:a|o|as|os|e) ([^,.\n]+?)(?:\s+com\s+|\.|,|\n|[Oo]perado|\s*$)/i);
                     if (airlinePT) companhia = airlinePT[1].trim();
                     if (!companhia) {
-                        // EN: "American Airlines flight" / "Delta Air Lines flight"
-                        // Sem âncora ^ para funcionar em qualquer posição do aria-label
+                        // EN: "American Airlines flight" — sem âncora ^
                         const airlineEN = aria.match(/\b([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]{2,40}?)\s+flight\b/i);
                         if (airlineEN) {
                             const candidate = airlineEN[1].trim();
@@ -619,12 +618,12 @@ async function scrapeOneway(origin, destination, date) {
                         }
                     }
                     if (!companhia) {
-                        // EN alternativo: "flight on American Airlines"
-                        const flightOn = aria.match(/flight\s+(?:on|with|by)\s+([^,.]+?)(?:\.|,|with|$)/i);
+                        // EN alternativo: "flight on/with/by AIRLINE"
+                        const flightOn = aria.match(/flight\s+(?:on|with|by)\s+([^,.\n]+?)(?:\.|,|\n|with|$)/i);
                         if (flightOn) companhia = flightOn[1].trim();
                     }
                     if (!companhia) {
-                        const operated = aria.match(/(?:[Oo]perado\s+por|[Oo]perated\s+by)\s+([^,.]+?)(?:\.|,|$)/);
+                        const operated = aria.match(/(?:[Oo]perado\s+por|[Oo]perated\s+by)\s+([^,.\n]+?)(?:\.|,|\n|$)/);
                         if (operated) companhia = operated[1].trim();
                     }
                     if (!companhia) {
@@ -643,15 +642,20 @@ async function scrapeOneway(origin, destination, date) {
                             'Aerolíneas Argentinas','Aerolineas Argentinas',
                             'Air Canada','WestJet','Finnair','SAS','Ryanair','easyJet','Wizz Air',
                             'Spirit Airlines','Frontier Airlines','Southwest Airlines',
-                            'GOL Linhas Aereas','Azul Linhas Aereas Brasileiras',
                             'Korean Air','Air China','China Southern','China Eastern',
                             'Thai Airways','Malaysia Airlines','Vistara','IndiGo',
+                            'Vueling','Norwegian','Transavia','Iberia Express','flydubai','Air Arabia',
+                            'VOEPASS','MAP Linhas Aéreas','Condor','TUI Airways','Aegean Airlines',
+                            'Air Serbia','EgyptAir','Royal Air Maroc','Saudia','Oman Air',
+                            'Gulf Air','Air India','Asiana Airlines','China Airlines','EVA Air',
+                            'Vietnam Airlines','Philippine Airlines','Garuda Indonesia',
+                            'Royal Jordanian','Air Algérie','Air Astana','Norse Atlantic',
                         ];
                         for (const n of knownNames) {
                             if (aria.toLowerCase().includes(n.toLowerCase())) { companhia = n; break; }
                         }
                     }
-                    // Último fallback: usa prefixo do número de voo para identificar a companhia
+                    // Fallback pelo prefixo do número de voo (IATA code → companhia)
                     if (!companhia && flightNumsEarly.length > 0) {
                         const CODE_TO_AIRLINE = {
                             'LA':'LATAM Airlines','JJ':'LATAM Airlines',
@@ -670,6 +674,17 @@ async function scrapeOneway(origin, destination, date) {
                             'JL':'Japan Airlines','NH':'ANA','KE':'Korean Air',
                             'VS':'Virgin Atlantic','AZ':'ITA Airways','AR':'Aerolíneas Argentinas',
                             'AC':'Air Canada','WS':'WestJet',
+                            // Adicionais
+                            'VY':'Vueling','DY':'Norwegian','HV':'Transavia','TO':'Transavia France',
+                            'I2':'Iberia Express','FZ':'flydubai','G9':'Air Arabia',
+                            'DE':'Condor','BY':'TUI Airways','A3':'Aegean Airlines',
+                            'JU':'Air Serbia','MS':'EgyptAir','AT':'Royal Air Maroc',
+                            'SV':'Saudia','WY':'Oman Air','GF':'Gulf Air',
+                            'AI':'Air India','OZ':'Asiana Airlines','CI':'China Airlines',
+                            'BR':'EVA Air','VN':'Vietnam Airlines','PR':'Philippine Airlines',
+                            'GA':'Garuda Indonesia','RJ':'Royal Jordanian',
+                            'AH':'Air Algérie','KC':'Air Astana','OA':'Olympic Air',
+                            'PC':'Pegasus Airlines','XQ':'SunExpress','PS':'Ukraine International',
                         };
                         for (const num of flightNumsEarly) {
                             const code = num.match(/^([A-Z]{1,2})/)?.[1] ?? '';
@@ -886,6 +901,19 @@ async function scrapeOneway(origin, destination, date) {
                             if (visLower.includes(n.toLowerCase())) { parsed.companhia = n; break; }
                         }
                     }
+                    // ── Fallback 5 (último recurso): extrai da 1ª linha de texto que pareça
+                    //    nome de companhia — captura qualquer companhia, mesmo desconhecida ──────
+                    if (!parsed.companhia && visText) {
+                        const skipLine = /^(\d{1,2}:\d{2}|R\$|BRL|\d+\s*h(?:\s*\d+\s*min)?|\d+\s*(parada|conexão|escala|stop|min)|sem\s+escala|nonstop|direto|selec|ver\s+det|\d+\s*de\s*\d+|\d+[.,]\d)/i;
+                        const lines = visText.split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length >= 3 && l.length <= 55);
+                        for (const line of lines) {
+                            if (skipLine.test(line)) continue;
+                            if (/^[A-Za-zÀ-ÿ]/.test(line) && /[A-Za-zÀ-ÿ]{2}/.test(line)) {
+                                parsed.companhia = line;
+                                break;
+                            }
+                        }
+                    }
 
                     // ── Fallback 4: cidade de conexão pelo texto visível ───────────────────────
                     // Google Flights mostra "· GRU" (bullet + IATA) no card de conexão.
@@ -992,6 +1020,40 @@ const AIRLINE_NAME_MAP = {
     'china eastern': 'China Eastern',
     'thai airways': 'Thai Airways',
     'malaysia airlines': 'Malaysia Airlines',
+    // Europa adicional
+    'vueling': 'Vueling', 'vueling airlines': 'Vueling',
+    'norwegian': 'Norwegian', 'norwegian air shuttle': 'Norwegian', 'norwegian air': 'Norwegian',
+    'transavia': 'Transavia', 'transavia france': 'Transavia',
+    'iberia express': 'Iberia Express',
+    'condor': 'Condor', 'condor flugdienst': 'Condor',
+    'tui airways': 'TUI Airways', 'tui fly': 'TUI Airways', 'tuifly': 'TUI Airways',
+    'aegean': 'Aegean Airlines', 'aegean airlines': 'Aegean Airlines',
+    'air serbia': 'Air Serbia',
+    'pegasus': 'Pegasus Airlines', 'pegasus airlines': 'Pegasus Airlines',
+    'sunexpress': 'SunExpress', 'sun express': 'SunExpress',
+    'norse atlantic': 'Norse Atlantic', 'norse': 'Norse Atlantic',
+    // Oriente Médio / África
+    'flydubai': 'flydubai', 'fly dubai': 'flydubai',
+    'air arabia': 'Air Arabia',
+    'saudia': 'Saudia', 'saudi arabian airlines': 'Saudia',
+    'oman air': 'Oman Air',
+    'gulf air': 'Gulf Air',
+    'egyptair': 'EgyptAir', 'egypt air': 'EgyptAir',
+    'royal air maroc': 'Royal Air Maroc', 'ram': 'Royal Air Maroc',
+    'royal jordanian': 'Royal Jordanian',
+    'air algérie': 'Air Algérie', 'air algerie': 'Air Algérie',
+    // Ásia-Pacífico adicional
+    'air india': 'Air India',
+    'asiana': 'Asiana Airlines', 'asiana airlines': 'Asiana Airlines',
+    'china airlines': 'China Airlines',
+    'eva air': 'EVA Air',
+    'vietnam airlines': 'Vietnam Airlines',
+    'philippine airlines': 'Philippine Airlines', 'pal': 'Philippine Airlines',
+    'garuda': 'Garuda Indonesia', 'garuda indonesia': 'Garuda Indonesia',
+    'air astana': 'Air Astana',
+    // Brasil regional
+    'voepass': 'VOEPASS', 'passaredo': 'VOEPASS',
+    'map linhas aéreas': 'MAP Linhas Aéreas', 'map linhas aereas': 'MAP Linhas Aéreas',
 };
 
 const AIRLINE_CODE_MAP = {
@@ -1015,6 +1077,16 @@ const AIRLINE_CODE_MAP = {
     'Korean Air': 'KE', 'Air China': 'CA',
     'China Southern': 'CZ', 'China Eastern': 'MU',
     'Thai Airways': 'TG', 'Malaysia Airlines': 'MH',
+    'Vueling': 'VY', 'Norwegian': 'DY', 'Transavia': 'HV',
+    'Iberia Express': 'I2', 'flydubai': 'FZ', 'Air Arabia': 'G9',
+    'Condor': 'DE', 'TUI Airways': 'BY', 'Aegean Airlines': 'A3',
+    'Air Serbia': 'JU', 'EgyptAir': 'MS', 'Royal Air Maroc': 'AT',
+    'Saudia': 'SV', 'Oman Air': 'WY', 'Gulf Air': 'GF',
+    'Air India': 'AI', 'Asiana Airlines': 'OZ', 'China Airlines': 'CI',
+    'EVA Air': 'BR', 'Vietnam Airlines': 'VN', 'Philippine Airlines': 'PR',
+    'Garuda Indonesia': 'GA', 'Royal Jordanian': 'RJ', 'Air Algérie': 'AH',
+    'Air Astana': 'KC', 'Pegasus Airlines': 'PC', 'SunExpress': 'XQ',
+    'Norse Atlantic': 'NO', 'VOEPASS': 'ZP', 'MAP Linhas Aéreas': 'VII',
     'Múltiplas companhias': 'XX',
 };
 

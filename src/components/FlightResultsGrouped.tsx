@@ -388,32 +388,35 @@ function FlightCard({
                 )}
             </AnimatePresence>
 
-            {/* Expand toggle + Google Flights link */}
-            <div style={{ borderTop: '1px solid #F1F5F9', display: 'flex', alignItems: 'stretch' }}>
-                <button
-                    onClick={onToggleExpand}
-                    style={{
-                        flex: 1, background: 'none', border: 'none',
-                        padding: '7px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                        cursor: 'pointer', color: '#64748B', fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
-                    }}
-                >
-                    {isExpanded ? <><ChevronUp size={13} /> Ocultar detalhes</> : <><ChevronDown size={13} /> Ver detalhes</>}
-                </button>
+            {/* Expand toggle */}
+            <button
+                onClick={onToggleExpand}
+                style={{
+                    width: '100%', background: 'none', border: 'none', borderTop: '1px solid #F1F5F9',
+                    padding: '7px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                    cursor: 'pointer', color: '#64748B', fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+                }}
+            >
+                {isExpanded ? <><ChevronUp size={13} /> Ocultar detalhes</> : <><ChevronDown size={13} /> Ver detalhes do voo</>}
+            </button>
+
+            {/* Botão Google Flights — apenas busca só-ida (sem volta disponível) */}
+            {!hasInboundFlights && (
                 <a
                     href={buildGoogleFlightsUrl(flight)}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
-                        display: 'flex', alignItems: 'center', gap: 4,
-                        padding: '7px 14px', borderLeft: '1px solid #F1F5F9',
-                        fontSize: 11, fontWeight: 700, color: '#1D6AE5', textDecoration: 'none',
-                        whiteSpace: 'nowrap' as const, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        padding: '11px 20px', background: '#1A56DB',
+                        fontSize: 12, fontWeight: 700, color: '#fff', textDecoration: 'none',
+                        borderTop: '1px solid #1449C4',
+                        transition: 'background 0.15s',
                     }}
                 >
-                    <ExternalLink size={11} /> Google Flights
+                    <ExternalLink size={13} /> Buscar no Google Flights
                 </a>
-            </div>
+            )}
         </motion.div>
     )
 }
