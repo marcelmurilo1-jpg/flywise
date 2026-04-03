@@ -128,6 +128,8 @@ function _buildTfsUrl(outSegs: _GfSeg[], retSegs?: _GfSeg[], adults = 1): string
     // Volta: field 3 repetido (não field 4) — padrão do protobuf do Google Flights
     if (retSegs?.length) _gfMsg(buf, 3, _buildGfItinProto(retSegs))
     _gfInt(buf, 8, adults) // número de adultos
+    _gfInt(buf, 9, 1)   // required by Google Flights (observed in real URLs)
+    _gfInt(buf, 14, 1)  // required by Google Flights (observed in real URLs)
     // Converter para base64url sem spread (evita limite de argumentos)
     let str = ''
     for (let i = 0; i < buf.length; i++) str += String.fromCharCode(buf[i])

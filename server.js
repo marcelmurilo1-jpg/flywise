@@ -732,51 +732,37 @@ async function scrapeOneway(origin, destination, date) {
                     }
 
                     // ── Cidade de conexão ─────────────────────────────────────────────────────
-                    // IMPORTANTE: os padrões devem exigir contexto de PARADA para não confundir
-                    // com o aeroporto de destino ("Chegando em Paris (CDG)" etc.)
+                    // Estratégia 1: coleta TODOS os IATAs após Parada/Layover em ordem
+                    // Ex: "Parada (1 de 2) de 5h em Brasília (BSB)" → "BSB"
+                    //     "Layover (1 of 2) 5 hr 20 min in Brasilia (BSB)" → "BSB"
                     let layoverCity = '';
+                    {
+                        const iataScanner = /(?:Parada|Escala|Layover)[^.;\n]*?\(([A-Z]{3})\)/gi;
+                        const found = [];
+                        let sm;
+                        while ((sm = iataScanner.exec(aria)) !== null) found.push(sm[1]);
+                        if (found.length > 0) layoverCity = [...new Set(found)].join(' · ');
+                    }
+
+                    // Estratégia 2 (fallback): captura nome de cidade se não encontrou IATA
                     let lm;
-                    // P1 PT: "Parada (N de N) de Xh em Cidade (IATA)."
-                    lm = aria.match(/Parada\s*\(\s*\d+\s*de\s*\d+\s*\)\s*de\s*[^.;]+?em\s+([^.,()\n;]+?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
-                    if (lm) layoverCity = lm[1].trim();
-                    // P2 PT: "Parada de Xh em Cidade" (sem índice "(N de N)")
                     if (!layoverCity) {
-                        lm = aria.match(/Parada\s+de\s+\d+\s*h[^.;]*?em\s+([^.,()\n;]+?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
+                        // PT: "Parada (N de N) de Xh em Cidade"
+                        lm = aria.match(/Parada\s*\(\s*\d+\s*de\s*\d+\s*\)\s*de\s*[^.;]+?em\s+([^.,()\n;]{3,40}?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
                         if (lm) layoverCity = lm[1].trim();
                     }
-                    // P2b PT: "Parada de Xh Ymin Cidade (IATA)" — sem "em" (captura o IATA diretamente)
                     if (!layoverCity) {
-                        lm = aria.match(/Parada\s+de\s+[\d\s]+h[^.;(]{0,30}\(([A-Z]{3})\)/i);
+                        // PT: "Parada de Xh em Cidade"
+                        lm = aria.match(/Parada\s+de\s+\d+\s*h[^.;]*?em\s+([^.,()\n;]{3,40}?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
                         if (lm) layoverCity = lm[1].trim();
                     }
-                    // P3 PT/EN: "em CITY (IATA)" exigindo palavra de parada no mesmo trecho
-                    // (evita capturar "Chegando em Paris (CDG)" como conexão)
                     if (!layoverCity) {
-                        lm = aria.match(/(?:[Pp]arada|[Ee]scala|[Cc]onex[aã]o)\b[^.;(]{0,100}?em\s+([^.,()\n;]{3,40}?)\s*\([A-Z]{3}\)/i);
+                        // EN: "Layover (N of N) Xhr in City"
+                        lm = aria.match(/Layover\s*\(\s*\d+\s*of\s*\d+\s*\)\s*[^.;]+?in\s+([^.,()\n;]{3,40}?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
                         if (lm) layoverCity = lm[1].trim();
                     }
-                    // P4 EN: "Layover (N of N) Xhr in City (IATA)."
-                    if (!layoverCity) {
-                        lm = aria.match(/Layover\s*\(\s*\d+\s*of\s*\d+\s*\)\s*[^.;]+?in\s+([^.,()\n;]+?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
-                        if (lm) layoverCity = lm[1].trim();
-                    }
-                    // P5 EN: "Layover in City" (requer palavra Layover — sem capturar destino)
                     if (!layoverCity) {
                         lm = aria.match(/Layover\s+in\s+([^.,()\n;]{3,40}?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
-                        if (lm) layoverCity = lm[1].trim();
-                    }
-                    // P6 EN: "Layover Xhr Ymin at City (IATA)" ou "Xh Ymin layover at City"
-                    if (!layoverCity) {
-                        lm = aria.match(/Layover\s+[\d\s]+h[^.;(]*(?:at|in)\s+([^.,()\n;]{3,40}?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
-                        if (lm) layoverCity = lm[1].trim();
-                    }
-                    if (!layoverCity) {
-                        lm = aria.match(/[\d\s]+h[^.;(]*layover\s+(?:at|in)\s+([^.,()\n;]{3,40}?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
-                        if (lm) layoverCity = lm[1].trim();
-                    }
-                    // P7 EN: qualquer IATA entre parênteses após "Layover" (último recurso)
-                    if (!layoverCity) {
-                        lm = aria.match(/Layover[^.;]*\(([A-Z]{3})\)/i);
                         if (lm) layoverCity = lm[1].trim();
                     }
 
@@ -1352,15 +1338,24 @@ function parseSegmentsFromText(text) {
     let waitingArrival = false;
 
     for (const line of lines) {
-        // Tempo (HH:MM) — começa ou termina um segmento
-        const timeMatch = line.match(/^(\d{1,2}):(\d{2})$/);
-        if (timeMatch) {
+        // Tempo (HH:MM) — suporta "+1" (voo noturno), "AM/PM" e IATA inline ("09:40 GRU")
+        const timeRaw = line.match(/^(\d{1,2}):(\d{2})(?:\s*([AP]M))?\s*(?:[+-]\d+)?\s*([A-Z]{3})?(?:\s|$)/i);
+        if (timeRaw) {
+            let h = parseInt(timeRaw[1]), m = parseInt(timeRaw[2]);
+            if (timeRaw[3]) { // AM/PM → 24h
+                const isPM = /pm/i.test(timeRaw[3]);
+                h = isPM ? (h === 12 ? 12 : h + 12) : (h === 12 ? 0 : h);
+            }
+            const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            const inlineIata = timeRaw[4]; // ex: "GRU" em "09:40 GRU"
             if (cur && waitingArrival) {
-                cur.chegada = line;
+                cur.chegada = timeStr;
+                if (inlineIata && !cur.destino) cur.destino = inlineIata;
                 waitingArrival = false;
             } else {
                 if (cur) segments.push(cur);
-                cur = { partida: line, chegada: '', origem: '', destino: '', duracao_min: 0, aeronave: '', numero: '', companhia_seg: '' };
+                cur = { partida: timeStr, chegada: '', origem: '', destino: '', duracao_min: 0, aeronave: '', numero: '', companhia_seg: '' };
+                if (inlineIata) cur.origem = inlineIata;
                 waitingArrival = false;
             }
             continue;
