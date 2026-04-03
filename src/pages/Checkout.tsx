@@ -65,6 +65,8 @@ export default function Checkout() {
                     customerName: state!.customerName,
                     customerTaxId: state!.customerTaxId,
                     customerPhone: state!.customerPhone,
+                    userId: user?.id,
+                    billingType: state!.billing,
                 }),
             })
             const data = await res.json()

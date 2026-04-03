@@ -30,8 +30,8 @@ const PLANS = [
         features: ['Buscas ilimitadas de passagens', '5 estratégias/mês', '3 roteiros/mês', 'Alertas de promoções por e-mail', 'Simulador de transferência de pontos'],
     },
     {
-        name: 'Elite', price: 'R$ 69', priceAnual: 'R$ 45',
-        priceVal: 69, priceAnualVal: 45,
+        name: 'Elite', price: 'R$ 59', priceAnual: 'R$ 38',
+        priceVal: 59, priceAnualVal: 38,
         period: '/mês', featured: false,
         desc: 'Para quem não quer perder nenhuma promoção.',
         features: ['Buscas ilimitadas de passagens', '10 estratégias/mês', '5 roteiros/mês', 'Alertas por e-mail e WhatsApp', 'Simulador de transferência de pontos'],
