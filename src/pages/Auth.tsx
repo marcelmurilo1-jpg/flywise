@@ -21,7 +21,9 @@ export default function Auth() {
     const { signIn, signUp, signInWithGoogle, user } = useAuth()
     const navigate = useNavigate()
 
-    useEffect(() => { if (user) navigate('/home') }, [user, navigate])
+    const next = searchParams.get('next') || '/home'
+
+    useEffect(() => { if (user) navigate(next, { replace: true }) }, [user, navigate])
 
     const switchTab = (t: 'login' | 'signup') => { setTab(t); setError(''); setSuccess('') }
 
@@ -33,7 +35,7 @@ export default function Auth() {
             if (formType === 'login') {
                 const { error } = await signIn(email, password)
                 if (error) setError(error.message || 'Credenciais inválidas.')
-                else navigate('/home')
+                else navigate(next, { replace: true })
             } else {
                 const { error } = await signUp(email, password, name)
                 if (error) setError(error.message || 'Erro ao criar conta.')

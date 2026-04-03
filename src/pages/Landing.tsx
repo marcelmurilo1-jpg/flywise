@@ -1405,7 +1405,8 @@ export default function Landing() {
                                             </li>
                                         ))}
                                     </ul>
-                                    <Link to="/auth?tab=signup"
+                                    <Link
+                                        to={plan.price === 'Grátis' ? '/auth?tab=signup' : '/auth?tab=signup&next=/planos'}
                                         style={{
                                             display: 'block', textAlign: 'center', padding: '14px', borderRadius: '12px', textDecoration: 'none', fontWeight: 700, fontSize: '14px', transition: 'all 0.2s',
                                             background: plan.featured ? '#2A60C2' : 'transparent',

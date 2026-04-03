@@ -1542,9 +1542,16 @@ app.post('/api/checkout', async (req, res) => {
             ? { externalId: registeredProductId, name: productName, quantity: 1, price: Math.round(totalBrl * 100) }
             : { externalId, name: productName, quantity: 1, price: Math.round(totalBrl * 100) };
 
+        // paymentMethod: 'pix' | 'cartao' | 'ambos' — default: 'pix'
+        const methodMap = {
+            cartao: ['CARD'],
+            ambos:  ['PIX', 'CARD'],
+        };
+        const methods = methodMap[req.body.paymentMethod] ?? ['PIX'];
+
         const billingPayload = {
             frequency: 'ONE_TIME',
-            methods: ['PIX'],
+            methods,
             customerId,
             products: [productEntry],
             returnUrl: `${req.headers.origin || 'http://localhost:5173'}/onboarding`,
@@ -1588,16 +1595,18 @@ app.post('/api/checkout', async (req, res) => {
 });
 
 // GET /api/checkout/status/:id — verifica status da cobrança
+// AbacatePay v1 não tem GET /billing/:id — usa /billing/list e filtra pelo id
 app.get('/api/checkout/status/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const abRes = await fetch(`${ABACATEPAY_BASE}/billing/${id}`, {
+        const abRes = await fetch(`${ABACATEPAY_BASE}/billing/list`, {
             headers: { 'Authorization': `Bearer ${ABACATEPAY_API_KEY}` },
             signal: AbortSignal.timeout(10000),
         });
         const abData = await abRes.json();
-        const d = abData.data ?? {};
-        res.json({ status: d.status ?? 'PENDING', id: d.id });
+        const billings = Array.isArray(abData.data) ? abData.data : [];
+        const billing = billings.find(b => b.id === id) ?? {};
+        res.json({ status: billing.status ?? 'PENDING', id: billing.id ?? id });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1617,8 +1626,10 @@ app.post('/api/webhook/abacatepay', async (req, res) => {
 
     const body = req.body ?? {};
 
-    // AbacatePay pode enviar o billing diretamente ou dentro de data/billing
-    const billing = body.billing ?? body.data ?? body;
+    // AbacatePay envia formatos diferentes para PIX e cartão:
+    // PIX:    { status, metadata, ... }
+    // Cartão: { event: 'checkout.completed', data: { checkout: { status, metadata } } }
+    const billing = body.billing ?? body.data?.checkout ?? body.data ?? body;
     const status = billing?.status;
     const metadata = billing?.metadata ?? {};
 
@@ -1664,6 +1675,70 @@ app.post('/api/webhook/abacatepay', async (req, res) => {
 
     console.log(`[Webhook AbacatePay] Plano ${plan} ativado para usuário ${userId}`);
     res.json({ ok: true });
+});
+
+// POST /api/checkout/activate — verifica pagamento server-side e ativa o plano
+// O frontend chama este endpoint após detectar PAID via polling, evitando
+// que o cliente escreva diretamente nos campos de plano do Supabase.
+app.post('/api/checkout/activate', async (req, res) => {
+    const { billingId, userId } = req.body;
+    if (!billingId || !userId) {
+        return res.status(400).json({ error: 'billingId e userId são obrigatórios' });
+    }
+
+    try {
+        // 1. Confirmar status diretamente com AbacatePay (v1 só tem /billing/list)
+        const abRes = await fetch(`${ABACATEPAY_BASE}/billing/list`, {
+            headers: { 'Authorization': `Bearer ${ABACATEPAY_API_KEY}` },
+            signal: AbortSignal.timeout(10000),
+        });
+        const abData = await abRes.json();
+        const billings = Array.isArray(abData.data) ? abData.data : [];
+        const d = billings.find(b => b.id === billingId) ?? {};
+
+        if (d.status !== 'PAID' && d.status !== 'COMPLETED') {
+            return res.status(402).json({ error: 'Pagamento ainda não confirmado', status: d.status ?? 'NOT_FOUND' });
+        }
+
+        // 2. Extrair plano dos metadados gravados na criação da cobrança
+        const metadata = d.metadata ?? {};
+        const { billingType, origin, destination } = metadata;
+
+        if (origin !== 'PLANO' || !destination) {
+            return res.status(400).json({ error: 'Cobrança não é de plano' });
+        }
+
+        const plan = ['essencial', 'pro', 'elite'].find(p => destination.toLowerCase().includes(p));
+        if (!plan) {
+            return res.status(400).json({ error: 'Plano não identificado: ' + destination });
+        }
+
+        if (!supabase) {
+            return res.status(500).json({ error: 'Supabase não configurado no servidor' });
+        }
+
+        // 3. Ativar plano via service_role (ignora RLS)
+        const daysToAdd = billingType === 'anual' ? 365 : 30;
+        const expiresAt = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000).toISOString();
+
+        const { error } = await supabase.from('user_profiles').upsert({
+            id: userId,
+            plan,
+            plan_expires_at: expiresAt,
+            plan_billing: billingType ?? 'mensal',
+        });
+
+        if (error) {
+            console.error('[Activate] Erro ao ativar plano:', error);
+            return res.status(500).json({ error: error.message });
+        }
+
+        console.log(`[Activate] Plano ${plan} ativado para ${userId}`);
+        res.json({ ok: true, plan, plan_expires_at: expiresAt });
+    } catch (err) {
+        console.error('[Activate] Exceção:', err.message);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ─── Seats.aero Award Price Sync ─────────────────────────────────────────────

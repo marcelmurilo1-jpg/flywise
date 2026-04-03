@@ -1,12 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, ArrowLeft, Loader2, RefreshCw, Copy, Check, Clock } from 'lucide-react'
+import { CheckCircle2, ArrowLeft, Loader2, RefreshCw, Copy, Check, Clock, CreditCard, Landmark, ExternalLink } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import confetti from 'canvas-confetti'
-import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { normalizePlan } from '@/lib/planLimits'
 
 interface CheckoutState {
     planName: string
@@ -21,31 +19,47 @@ interface CheckoutState {
     customerPhone: string
 }
 
+type PaymentMethod = 'pix' | 'cartao'
+
 export default function Checkout() {
     const navigate = useNavigate()
     const location = useLocation()
     const { user } = useAuth()
     const state = location.state as CheckoutState | undefined
 
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix')
+
+    // PIX state
     const [billingId, setBillingId] = useState<string | null>(null)
     const [billingUrl, setBillingUrl] = useState<string | null>(null)
     const [pixCode, setPixCode] = useState<string | null>(null)
-    const [creating, setCreating] = useState(true)
+    const [creating, setCreating] = useState(false)
     const [createError, setCreateError] = useState<string | null>(null)
     const [paymentStatus, setPaymentStatus] = useState<'PENDING' | 'PAID' | 'EXPIRED'>('PENDING')
     const [copied, setCopied] = useState(false)
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+    // Card state
+    const [cardLoading, setCardLoading] = useState(false)
+    const [cardError, setCardError] = useState<string | null>(null)
+
     useEffect(() => {
         if (!state) navigate('/planos', { replace: true })
     }, [state, navigate])
 
+    // Auto-create PIX billing when PIX tab is selected and no billing exists yet
+    useEffect(() => {
+        if (!state || paymentMethod !== 'pix' || billingId || creating) return
+        createPixBilling()
+    }, [paymentMethod]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Auto-create on first mount with PIX
     useEffect(() => {
         if (!state) return
-        createBilling()
+        createPixBilling()
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-    async function createBilling() {
+    async function createPixBilling() {
         setCreating(true)
         setCreateError(null)
         setPixCode(null)
@@ -67,6 +81,7 @@ export default function Checkout() {
                     customerPhone: state!.customerPhone,
                     userId: user?.id,
                     billingType: state!.billing,
+                    paymentMethod: 'pix',
                 }),
             })
             const data = await res.json()
@@ -81,23 +96,57 @@ export default function Checkout() {
         }
     }
 
-    // Poll payment status
+    // Card: create billing and redirect to AbacatePay hosted checkout
+    async function handleCardPayment() {
+        setCardLoading(true)
+        setCardError(null)
+        try {
+            const res = await fetch('/api/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    origin: 'PLANO',
+                    destination: state!.planName.toUpperCase(),
+                    totalBrl: state!.priceVal,
+                    outboundCompany: `FlyWise ${state!.planName}`,
+                    customerEmail: state!.customerEmail,
+                    customerName: state!.customerName,
+                    customerTaxId: state!.customerTaxId,
+                    customerPhone: state!.customerPhone,
+                    userId: user?.id,
+                    billingType: state!.billing,
+                    paymentMethod: 'cartao',
+                }),
+            })
+            const data = await res.json()
+            if (!res.ok || data.error) throw new Error(data.error || 'Erro ao criar cobrança')
+            if (!data.url) throw new Error('URL de pagamento não retornada')
+
+            // Save billingId so Onboarding can activate the plan on return
+            sessionStorage.setItem('flywise_pending_billing', data.id)
+            sessionStorage.setItem('flywise_pending_plan', state!.planName)
+
+            // Redirect to AbacatePay hosted card checkout
+            window.location.href = data.url
+        } catch (err: any) {
+            setCardError(err.message)
+            setCardLoading(false)
+        }
+    }
+
+    // Poll PIX payment status
     useEffect(() => {
-        if (!billingId || paymentStatus !== 'PENDING') return
+        if (!billingId || paymentStatus !== 'PENDING' || paymentMethod !== 'pix') return
         pollRef.current = setInterval(async () => {
             try {
                 const r = await fetch(`/api/checkout/status/${billingId}`)
                 const d = await r.json()
                 if (d.status === 'PAID' || d.status === 'COMPLETED') {
-                    // Activate plan in user_profiles
-                    if (user && state) {
-                        const daysToAdd = state.billing === 'anual' ? 365 : 30
-                        const expiresAt = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000).toISOString()
-                        await supabase.from('user_profiles').upsert({
-                            id: user.id,
-                            plan: normalizePlan(state.planName),
-                            plan_expires_at: expiresAt,
-                            plan_billing: state.billing,
+                    if (user && billingId) {
+                        await fetch('/api/checkout/activate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ billingId, userId: user.id }),
                         })
                     }
                     setPaymentStatus('PAID')
@@ -111,13 +160,21 @@ export default function Checkout() {
             } catch { /* ignore */ }
         }, 3000)
         return () => { if (pollRef.current) clearInterval(pollRef.current) }
-    }, [billingId, paymentStatus, navigate])
+    }, [billingId, paymentStatus, paymentMethod, navigate])
 
     function copyPix() {
         if (!pixCode) return
         navigator.clipboard.writeText(pixCode)
         setCopied(true)
         setTimeout(() => setCopied(false), 2500)
+    }
+
+    function switchMethod(method: PaymentMethod) {
+        if (method === paymentMethod) return
+        // Stop PIX polling when switching away
+        if (pollRef.current) clearInterval(pollRef.current)
+        setPaymentMethod(method)
+        setCardError(null)
     }
 
     if (!state) return null
@@ -128,7 +185,6 @@ export default function Checkout() {
                 @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
                 @keyframes pulse-glow { 0%,100%{opacity:0.5;transform:scale(1)} 50%{opacity:1;transform:scale(1.08)} }
                 @keyframes pulse-ring { 0%{transform:scale(1);opacity:1} 100%{transform:scale(1.6);opacity:0} }
-                @keyframes ticker { 0%{stroke-dashoffset:0} 100%{stroke-dashoffset:-283} }
                 @media(max-width:860px){
                     .co-grid { flex-direction: column !important; }
                     .co-left { width: 100% !important; min-height: auto !important; padding: 36px 24px 32px !important; }
@@ -143,11 +199,9 @@ export default function Checkout() {
                 padding: '48px 48px', display: 'flex', flexDirection: 'column', gap: 0,
                 position: 'relative', overflow: 'hidden',
             }}>
-                {/* Glows */}
                 <div style={{ position: 'absolute', top: -100, right: -80, width: 340, height: 340, borderRadius: '50%', background: 'rgba(74,144,226,0.07)', filter: 'blur(70px)', pointerEvents: 'none' }} />
                 <div style={{ position: 'absolute', bottom: -80, left: -60, width: 260, height: 260, borderRadius: '50%', background: 'rgba(42,96,194,0.09)', filter: 'blur(55px)', pointerEvents: 'none' }} />
 
-                {/* Back link */}
                 <button
                     onClick={() => navigate('/planos')}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.45)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', padding: 0, marginBottom: 36, position: 'relative', zIndex: 1, width: 'fit-content', transition: 'color .2s' }}
@@ -157,12 +211,10 @@ export default function Checkout() {
                     <ArrowLeft size={15} /> Voltar aos planos
                 </button>
 
-                {/* Logo */}
                 <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} style={{ position: 'relative', zIndex: 1, marginBottom: 32 }}>
                     <img src="/logoLP.png" alt="FlyWise" style={{ height: 52, objectFit: 'contain', display: 'block' }} />
                 </motion.div>
 
-                {/* Plan info */}
                 <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} style={{ position: 'relative', zIndex: 1 }}>
                     <div style={{ fontSize: 10, fontWeight: 800, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
                         Plano selecionado
@@ -181,7 +233,6 @@ export default function Checkout() {
                     <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.50)', margin: '0 0 28px', lineHeight: 1.6 }}>{state.planDesc}</p>
                 </motion.div>
 
-                {/* Features */}
                 <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} style={{ position: 'relative', zIndex: 1, flex: 1 }}>
                     <div style={{ fontSize: 10, fontWeight: 800, color: 'rgba(255,255,255,0.30)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 14 }}>
                         Incluso no plano
@@ -198,7 +249,6 @@ export default function Checkout() {
                     </ul>
                 </motion.div>
 
-                {/* Trust badges */}
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.22 }} style={{ marginTop: 32, position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 9 }}>
                     {['🔒  Pagamento criptografado com SSL', '↩  Cancele a qualquer momento', '✦  Sem fidelidade · sem multa'].map(t => (
                         <div key={t} style={{ fontSize: 11, color: 'rgba(255,255,255,0.32)', display: 'flex', alignItems: 'center', gap: 6 }}>{t}</div>
@@ -206,8 +256,37 @@ export default function Checkout() {
                 </motion.div>
             </div>
 
-            {/* ── RIGHT: PIX payment ── */}
+            {/* ── RIGHT: payment ── */}
             <div className="co-right" style={{ flex: 1, background: '#F0F4FA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 32px' }}>
+
+                {/* Payment method toggle — only show when payment not confirmed */}
+                {paymentStatus !== 'PAID' && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+                        style={{ display: 'flex', background: '#fff', borderRadius: 14, padding: 4, gap: 4, boxShadow: '0 2px 12px rgba(14,42,85,0.08)', marginBottom: 28, border: '1px solid #E2EAF5' }}
+                    >
+                        {([
+                            { id: 'pix', label: 'PIX', icon: <Landmark size={15} /> },
+                            { id: 'cartao', label: 'Cartão de crédito', icon: <CreditCard size={15} /> },
+                        ] as { id: PaymentMethod; label: string; icon: React.ReactNode }[]).map(opt => (
+                            <button
+                                key={opt.id}
+                                onClick={() => switchMethod(opt.id)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 7,
+                                    padding: '9px 18px', borderRadius: 10, border: 'none',
+                                    background: paymentMethod === opt.id ? '#0E2A55' : 'transparent',
+                                    color: paymentMethod === opt.id ? '#fff' : '#64748B',
+                                    fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                                    fontFamily: 'inherit', transition: 'all .2s',
+                                }}
+                            >
+                                {opt.icon} {opt.label}
+                            </button>
+                        ))}
+                    </motion.div>
+                )}
+
                 <AnimatePresence mode="wait">
 
                     {/* PAID */}
@@ -228,137 +307,179 @@ export default function Checkout() {
                         </motion.div>
                     )}
 
-                    {/* EXPIRED */}
-                    {paymentStatus === 'EXPIRED' && (
-                        <motion.div key="expired"
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
-                            <div style={{ fontSize: 18, fontWeight: 700, color: '#DC2626', marginBottom: 4 }}>PIX expirado</div>
-                            <div style={{ fontSize: 13, color: '#64748B', marginBottom: 8 }}>O prazo para pagamento encerrou.</div>
-                            <button onClick={createBilling}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 28px', background: '#0E2A55', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                                <RefreshCw size={15} /> Gerar novo PIX
-                            </button>
-                        </motion.div>
-                    )}
-
-                    {/* Creating */}
-                    {paymentStatus === 'PENDING' && creating && (
-                        <motion.div key="creating"
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-                            <Loader2 size={38} color="#2A60C2" style={{ animation: 'spin 1s linear infinite' }} />
-                            <div style={{ fontSize: 15, color: '#64748B', fontWeight: 500 }}>Gerando cobrança PIX…</div>
-                        </motion.div>
-                    )}
-
-                    {/* Error */}
-                    {paymentStatus === 'PENDING' && !creating && createError && (
-                        <motion.div key="error"
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center' }}>
-                            <div style={{ fontSize: 14, color: '#DC2626', maxWidth: 360 }}>{createError}</div>
-                            <button onClick={createBilling}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 24px', background: '#0E2A55', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                                <RefreshCw size={15} /> Tentar novamente
-                            </button>
-                        </motion.div>
-                    )}
-
-                    {/* PIX ready */}
-                    {paymentStatus === 'PENDING' && !creating && !createError && (
-                        <motion.div key="pix"
-                            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                    {/* ── PIX ── */}
+                    {paymentStatus !== 'PAID' && paymentMethod === 'pix' && (
+                        <motion.div key="pix-section"
+                            initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }}
                             style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-                            {/* Header */}
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#E8F5E9', borderRadius: 999, padding: '5px 14px', marginBottom: 16 }}>
-                                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#16A34A', animation: 'pulse-glow 2s ease-in-out infinite' }} />
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#15803D', letterSpacing: '0.04em' }}>PIX — Aprovação instantânea</span>
-                                </div>
-                                <div style={{ fontSize: 22, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em', marginBottom: 4 }}>Pague com PIX</div>
-                                <div style={{ fontSize: 13, color: '#64748B' }}>Escaneie o QR code ou copie o código abaixo</div>
-                            </div>
-
-                            {/* QR code card */}
-                            <div style={{ background: '#fff', borderRadius: 20, padding: '28px 28px 24px', boxShadow: '0 4px 32px rgba(14,42,85,0.08)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
-
-                                {/* Price */}
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Total a pagar</div>
-                                    <div style={{ fontSize: 36, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em' }}>{state.priceLabel}</div>
-                                    <div style={{ fontSize: 12, color: '#94A3B8' }}>Plano {state.planName} · {state.billing === 'anual' ? 'Anual' : 'Mensal'}</div>
-                                </div>
-
-                                {/* QR */}
-                                <div style={{ padding: 16, background: '#fff', borderRadius: 16, border: '2px solid #E8EEF8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {pixCode ? (
-                                        <QRCodeSVG value={pixCode} size={180} bgColor="#ffffff" fgColor="#0E2A55" level="M" />
-                                    ) : (
-                                        <div style={{ width: 180, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            <Loader2 size={32} color="#2A60C2" style={{ animation: 'spin 1s linear infinite' }} />
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Pix copia e cola */}
-                                {pixCode && (
-                                    <div style={{ width: '100%' }}>
-                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, textAlign: 'center' }}>
-                                            Pix Copia e Cola
-                                        </div>
-                                        <div style={{ display: 'flex', gap: 8 }}>
-                                            <div style={{
-                                                flex: 1, background: '#F7F9FC', border: '1.5px solid #E2EAF5',
-                                                borderRadius: 10, padding: '10px 12px',
-                                                fontSize: 11, color: '#475569', fontFamily: 'monospace',
-                                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                                cursor: 'text', userSelect: 'all',
-                                            }}>
-                                                {pixCode}
-                                            </div>
-                                            <button onClick={copyPix} style={{
-                                                display: 'flex', alignItems: 'center', gap: 6,
-                                                padding: '10px 16px', background: copied ? '#16A34A' : '#0E2A55',
-                                                color: '#fff', border: 'none', borderRadius: 10,
-                                                fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                                                fontFamily: 'inherit', flexShrink: 0, transition: 'background .25s',
-                                                whiteSpace: 'nowrap',
-                                            }}>
-                                                {copied ? <><Check size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Waiting indicator */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                                <Clock size={14} color="#94A3B8" />
-                                <span style={{ fontSize: 12, color: '#94A3B8', fontWeight: 500 }}>Aguardando pagamento…</span>
-                                <span style={{ display: 'inline-flex', gap: 3 }}>
-                                    {[0, 0.3, 0.6].map((d, i) => (
-                                        <span key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: '#2A60C2', animation: `pulse-glow 1.4s ease-in-out ${d}s infinite` }} />
-                                    ))}
-                                </span>
-                            </div>
-
-                            {/* AbacatePay fallback link */}
-                            {billingUrl && (
-                                <div style={{ textAlign: 'center' }}>
-                                    <a
-                                        href={billingUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        style={{ fontSize: 12, color: '#94A3B8', textDecoration: 'none', borderBottom: '1px solid rgba(148,163,184,0.35)', paddingBottom: 1, transition: 'color .2s' }}
-                                        onMouseEnter={e => (e.currentTarget.style.color = '#64748B')}
-                                        onMouseLeave={e => (e.currentTarget.style.color = '#94A3B8')}
-                                    >
-                                        Prefere pagar pelo site da AbacatePay? Clique aqui →
-                                    </a>
+                            {/* EXPIRED */}
+                            {paymentStatus === 'EXPIRED' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center' }}>
+                                    <div style={{ fontSize: 17, fontWeight: 700, color: '#DC2626' }}>PIX expirado</div>
+                                    <div style={{ fontSize: 13, color: '#64748B' }}>O prazo para pagamento encerrou.</div>
+                                    <button onClick={createPixBilling}
+                                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 28px', background: '#0E2A55', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                        <RefreshCw size={15} /> Gerar novo PIX
+                                    </button>
                                 </div>
                             )}
+
+                            {/* Creating */}
+                            {paymentStatus === 'PENDING' && creating && (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+                                    <Loader2 size={38} color="#2A60C2" style={{ animation: 'spin 1s linear infinite' }} />
+                                    <div style={{ fontSize: 15, color: '#64748B', fontWeight: 500 }}>Gerando cobrança PIX…</div>
+                                </div>
+                            )}
+
+                            {/* Error */}
+                            {paymentStatus === 'PENDING' && !creating && createError && (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center' }}>
+                                    <div style={{ fontSize: 14, color: '#DC2626', maxWidth: 360 }}>{createError}</div>
+                                    <button onClick={createPixBilling}
+                                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 24px', background: '#0E2A55', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                        <RefreshCw size={15} /> Tentar novamente
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* PIX ready */}
+                            {paymentStatus === 'PENDING' && !creating && !createError && (
+                                <>
+                                    <div style={{ textAlign: 'center' }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#E8F5E9', borderRadius: 999, padding: '5px 14px', marginBottom: 16 }}>
+                                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#16A34A', animation: 'pulse-glow 2s ease-in-out infinite' }} />
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#15803D', letterSpacing: '0.04em' }}>PIX — Aprovação instantânea</span>
+                                        </div>
+                                        <div style={{ fontSize: 22, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em', marginBottom: 4 }}>Pague com PIX</div>
+                                        <div style={{ fontSize: 13, color: '#64748B' }}>Escaneie o QR code ou copie o código abaixo</div>
+                                    </div>
+
+                                    <div style={{ background: '#fff', borderRadius: 20, padding: '28px 28px 24px', boxShadow: '0 4px 32px rgba(14,42,85,0.08)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Total a pagar</div>
+                                            <div style={{ fontSize: 36, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.03em' }}>R$ {state.priceVal}</div>
+                                            <div style={{ fontSize: 12, color: '#94A3B8' }}>Plano {state.planName} · {state.billing === 'anual' ? 'Anual' : 'Mensal'}</div>
+                                        </div>
+
+                                        <div style={{ padding: 16, background: '#fff', borderRadius: 16, border: '2px solid #E8EEF8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            {pixCode ? (
+                                                <QRCodeSVG value={pixCode} size={180} bgColor="#ffffff" fgColor="#0E2A55" level="M" />
+                                            ) : (
+                                                <div style={{ width: 180, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Loader2 size={32} color="#2A60C2" style={{ animation: 'spin 1s linear infinite' }} />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {pixCode && (
+                                            <div style={{ width: '100%' }}>
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, textAlign: 'center' }}>
+                                                    Pix Copia e Cola
+                                                </div>
+                                                <div style={{ display: 'flex', gap: 8 }}>
+                                                    <div style={{ flex: 1, background: '#F7F9FC', border: '1.5px solid #E2EAF5', borderRadius: 10, padding: '10px 12px', fontSize: 11, color: '#475569', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'text', userSelect: 'all' }}>
+                                                        {pixCode}
+                                                    </div>
+                                                    <button onClick={copyPix} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: copied ? '#16A34A' : '#0E2A55', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, transition: 'background .25s', whiteSpace: 'nowrap' }}>
+                                                        {copied ? <><Check size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                        <Clock size={14} color="#94A3B8" />
+                                        <span style={{ fontSize: 12, color: '#94A3B8', fontWeight: 500 }}>Aguardando pagamento…</span>
+                                        <span style={{ display: 'inline-flex', gap: 3 }}>
+                                            {[0, 0.3, 0.6].map((d, i) => (
+                                                <span key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: '#2A60C2', animation: `pulse-glow 1.4s ease-in-out ${d}s infinite` }} />
+                                            ))}
+                                        </span>
+                                    </div>
+
+                                    {billingUrl && (
+                                        <div style={{ textAlign: 'center' }}>
+                                            <a href={billingUrl} target="_blank" rel="noopener noreferrer"
+                                                style={{ fontSize: 12, color: '#94A3B8', textDecoration: 'none', borderBottom: '1px solid rgba(148,163,184,0.35)', paddingBottom: 1, transition: 'color .2s' }}
+                                                onMouseEnter={e => (e.currentTarget.style.color = '#64748B')}
+                                                onMouseLeave={e => (e.currentTarget.style.color = '#94A3B8')}
+                                            >
+                                                Prefere pagar pelo site da AbacatePay? Clique aqui →
+                                            </a>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </motion.div>
+                    )}
+
+                    {/* ── CARTÃO ── */}
+                    {paymentStatus !== 'PAID' && paymentMethod === 'cartao' && (
+                        <motion.div key="card-section"
+                            initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }}
+                            style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#EEF2F8', borderRadius: 999, padding: '5px 14px', marginBottom: 16 }}>
+                                    <CreditCard size={14} color="#2A60C2" />
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#2A60C2', letterSpacing: '0.04em' }}>Cartão de crédito</span>
+                                </div>
+                                <div style={{ fontSize: 22, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em', marginBottom: 4 }}>Pague com cartão</div>
+                                <div style={{ fontSize: 13, color: '#64748B' }}>Você será redirecionado para a página segura de pagamento</div>
+                            </div>
+
+                            <div style={{ background: '#fff', borderRadius: 20, padding: '28px', boxShadow: '0 4px 32px rgba(14,42,85,0.08)', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+                                {/* Price summary */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', background: '#F7F9FC', borderRadius: 12, border: '1px solid #E2EAF5' }}>
+                                    <div>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>Plano {state.planName}</div>
+                                        <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{state.billing === 'anual' ? 'Cobrança anual única' : 'Cobrança mensal'}</div>
+                                    </div>
+                                    <div style={{ fontSize: 22, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em' }}>R$ {state.priceVal}</div>
+                                </div>
+
+                                {/* Accepted cards */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Aceito</div>
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                        {['VISA', 'Master', 'Elo', 'Amex'].map(brand => (
+                                            <div key={brand} style={{ padding: '3px 8px', background: '#F1F5F9', borderRadius: 6, fontSize: 10, fontWeight: 800, color: '#475569', border: '1px solid #E2EAF5' }}>{brand}</div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {cardError && (
+                                    <div style={{ fontSize: 13, color: '#DC2626', background: '#FEF2F2', borderRadius: 10, padding: '10px 14px', border: '1px solid #FECACA' }}>
+                                        {cardError}
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={handleCardPayment}
+                                    disabled={cardLoading}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '15px', background: cardLoading ? '#94A3B8' : '#0E2A55', color: '#fff', border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 800, cursor: cardLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background .2s' }}
+                                >
+                                    {cardLoading
+                                        ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Aguarde…</>
+                                        : <><ExternalLink size={16} /> Ir para pagamento seguro</>
+                                    }
+                                </button>
+
+                                <div style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', lineHeight: 1.6 }}>
+                                    Você será redirecionado para o ambiente seguro da AbacatePay.<br />
+                                    Após o pagamento, volte aqui automaticamente.
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: 20 }}>
+                                {['🔒 SSL', '🛡️ PCI DSS', '✓ AbacatePay'].map(t => (
+                                    <div key={t} style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600 }}>{t}</div>
+                                ))}
+                            </div>
                         </motion.div>
                     )}
 

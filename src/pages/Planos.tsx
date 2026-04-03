@@ -166,8 +166,14 @@ export default function Planos() {
     }, [billing])
 
     function goToCheckout(plan: typeof PLANS[number], cpf: string, phone: string) {
-        const priceVal = billing === 'anual' ? plan.priceAnualVal! : plan.priceVal!
-        const priceLabel = billing === 'anual' ? `R$ ${plan.priceAnualVal}` : plan.price
+        // Annual billing: priceVal = total one-time charge (12 × monthly rate)
+        // priceLabel = per-month display (shown on the left panel of Checkout)
+        const priceVal = billing === 'anual'
+            ? plan.priceAnualVal! * 12
+            : plan.priceVal!
+        const priceLabel = billing === 'anual'
+            ? `R$ ${plan.priceAnualVal}`
+            : plan.price
         navigate('/checkout', {
             state: {
                 planName: plan.name,

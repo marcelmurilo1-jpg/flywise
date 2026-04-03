@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '@/contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, ChevronRight, ChevronLeft, Search, Sparkles, Map, Wallet, BarChart3, CheckCircle2 } from 'lucide-react'
+import { Play, ChevronRight, ChevronLeft, Search, Sparkles, Map, Wallet, BarChart3, CheckCircle2, Loader2 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 
 interface Step {
@@ -154,14 +155,49 @@ function VideoCard({ step }: { step: Step }) {
 export default function Onboarding() {
     const navigate = useNavigate()
     const location = useLocation()
-    const planName = (location.state as { planName?: string } | null)?.planName ?? 'FlyWise'
+    const { user } = useAuth()
+    const planName = (location.state as { planName?: string } | null)?.planName
+        ?? sessionStorage.getItem('flywise_pending_plan')
+        ?? 'FlyWise'
 
+    const [activating, setActivating] = useState(false)
     const [current, setCurrent] = useState(0)
     const [direction, setDirection] = useState(1)
     const [finished, setFinished] = useState(false)
 
+    // Cartão: ao retornar da AbacatePay, ativa o plano via billingId salvo em sessionStorage
+    useEffect(() => {
+        const billingId = sessionStorage.getItem('flywise_pending_billing')
+        if (!billingId) return
+
+        sessionStorage.removeItem('flywise_pending_billing')
+        sessionStorage.removeItem('flywise_pending_plan')
+
+        setActivating(true)
+        fetch('/api/checkout/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ billingId, userId: user?.id ?? null }),
+        })
+            .catch(() => { /* webhook é a garantia caso activate falhe */ })
+            .finally(() => {
+                setActivating(false)
+                confetti({ particleCount: 200, spread: 120, origin: { y: 0.5 }, colors: ['#16A34A', '#4ADE80', '#2A60C2', '#fff', '#4A90E2'] })
+            })
+    }, [])
+
     const step = STEPS[current]
     const isLast = current === STEPS.length - 1
+
+    if (activating) {
+        return (
+            <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #0B1628 0%, #0E2A55 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, fontFamily: 'Inter, system-ui, sans-serif' }}>
+                <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+                <Loader2 size={44} color="#4A90E2" style={{ animation: 'spin 1s linear infinite' }} />
+                <div style={{ fontSize: 17, fontWeight: 700, color: 'rgba(255,255,255,0.75)' }}>Confirmando seu pagamento…</div>
+            </div>
+        )
+    }
 
     function go(next: number) {
         setDirection(next > current ? 1 : -1)
