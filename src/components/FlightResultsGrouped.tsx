@@ -52,7 +52,89 @@ function extractIata(companhia?: string | null): string {
     return ''
 }
 
-// Gera URL do Google Flights no formato #flt= (pré-preenche rota e datas diretamente)
+// ── Google Flights tfs protobuf builder ───────────────────────────────────────
+// O formato #flt= foi depreciado; Google Flights agora usa ?tfs= (protobuf binário).
+// Itinerários de ida e volta são AMBOS codificados como field 3 repetido.
+
+function _gfVarint(buf: number[], val: number) {
+    while (val > 0x7F) { buf.push((val & 0x7F) | 0x80); val >>>= 7 }
+    buf.push(val & 0x7F)
+}
+function _gfInt(buf: number[], field: number, val: number) {
+    _gfVarint(buf, (field << 3) | 0)
+    _gfVarint(buf, val)
+}
+function _gfStr(buf: number[], field: number, str: string) {
+    _gfVarint(buf, (field << 3) | 2)
+    _gfVarint(buf, str.length)
+    for (let i = 0; i < str.length; i++) buf.push(str.charCodeAt(i))
+}
+function _gfMsg(buf: number[], field: number, bytes: number[]) {
+    _gfVarint(buf, (field << 3) | 2)
+    _gfVarint(buf, bytes.length)
+    for (let i = 0; i < bytes.length; i++) buf.push(bytes[i])
+}
+
+interface _GfSeg { from: string; to: string; date: string; carrier?: string; flightNum?: string }
+
+function _buildGfSegProto(seg: _GfSeg): number[] {
+    const b: number[] = []
+    _gfStr(b, 1, seg.from); _gfStr(b, 2, seg.date); _gfStr(b, 3, seg.to)
+    if (seg.carrier) _gfStr(b, 5, seg.carrier)
+    if (seg.flightNum) _gfStr(b, 6, seg.flightNum)
+    return b
+}
+
+function _buildGfEntity(iata: string): number[] {
+    const b: number[] = []
+    _gfInt(b, 1, 1) // type = 1 (airport code)
+    _gfStr(b, 2, iata)
+    return b
+}
+
+function _buildGfItinProto(segs: _GfSeg[]): number[] {
+    const b: number[] = []
+    if (segs[0]) _gfStr(b, 2, segs[0].date)
+    for (const seg of segs) _gfMsg(b, 4, _buildGfSegProto(seg))
+    // fields 13/14: origin and final-destination airport entities
+    if (segs[0]?.from) _gfMsg(b, 13, _buildGfEntity(segs[0].from))
+    if (segs.length > 0 && segs[segs.length - 1]?.to) _gfMsg(b, 14, _buildGfEntity(segs[segs.length - 1].to))
+    return b
+}
+
+function _segsFromOffer(rawSegs: any[], flightNums: string[], from: string, to: string, date: string): _GfSeg[] {
+    if (rawSegs.length > 0) {
+        return rawSegs.map((s: any, i: number) => {
+            const num = s.numero || flightNums[i] || ''
+            return {
+                from: (s.origem || (i === 0 ? from : '')).toUpperCase(),
+                to: (s.destino || (i === rawSegs.length - 1 ? to : '')).toUpperCase(),
+                date,
+                carrier: num.match(/^([A-Z]{2})/)?.[1],
+                flightNum: num.match(/([0-9]+)$/)?.[1],
+            }
+        }).filter((s: _GfSeg) => s.from && s.to)
+    }
+    // Sem segmentos detalhados: busca simples origem→destino
+    const num = flightNums[0] || ''
+    return [{ from, to, date, carrier: num.match(/^([A-Z]{2})/)?.[1], flightNum: num.match(/([0-9]+)$/)?.[1] }]
+}
+
+function _buildTfsUrl(outSegs: _GfSeg[], retSegs?: _GfSeg[], adults = 1): string {
+    const buf: number[] = []
+    _gfInt(buf, 1, 28) // field 1 = 28
+    _gfInt(buf, 2, 2)  // field 2 = 2
+    _gfMsg(buf, 3, _buildGfItinProto(outSegs))
+    // Volta: field 3 repetido (não field 4) — padrão do protobuf do Google Flights
+    if (retSegs?.length) _gfMsg(buf, 3, _buildGfItinProto(retSegs))
+    _gfInt(buf, 8, adults) // número de adultos
+    // Converter para base64url sem spread (evita limite de argumentos)
+    let str = ''
+    for (let i = 0; i < buf.length; i++) str += String.fromCharCode(buf[i])
+    const b64 = btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+    return `https://www.google.com/travel/flights?tfs=${b64}&hl=pt-BR&gl=BR&curr=BRL`
+}
+
 function buildGoogleFlightsUrl(
     outbound: ResultadoVoo,
     inbound?: ResultadoVoo | null,
@@ -61,24 +143,25 @@ function buildGoogleFlightsUrl(
     const o = (outbound.origem ?? '').toUpperCase()
     const d = (outbound.destino ?? '').toUpperCase()
     const date = outbound.partida?.split('T')[0] ?? ''
+    if (!o || !d || !date) return 'https://www.google.com/travel/flights?hl=pt-BR'
+
     const det = (outbound.detalhes as any) ?? {}
+    const segsOut = (outbound.segmentos as any[]) ?? []
+    const numVoos: string[] = (det.numeroVoos as string[]) ?? []
 
-    const cabinMap: Record<string, string> = {
-        economy: 'f', premium_economy: 'w', business: 'b', first: 'j',
-    }
-    const cabin = cabinMap[outbound.cabin_class ?? 'economy'] ?? 'f'
-    const pax = Math.max(1, passageiros)
+    const outSegs = _segsFromOffer(segsOut, numVoos, o, d, date)
 
-    // Detecta voo de volta: inbound explícito OU oferta combinada Amadeus (det.returnPartida)
+    // Voo de volta: inbound explícito OU oferta combinada Amadeus
     const returnDate = inbound?.partida?.split('T')[0] ?? det.returnPartida?.split('T')[0]
-    const ro = ((inbound?.origem ?? det.returnOrigem ?? d) as string).toUpperCase()
-    const rd = ((inbound?.destino ?? det.returnDestino ?? o) as string).toUpperCase()
-
+    let retSegs: _GfSeg[] | undefined
     if (returnDate) {
-        const flt = `${o}.${d}.${date}*${ro}.${rd}.${returnDate}`
-        return `https://www.google.com/travel/flights#flt=${flt};c:BRL;e:${pax};sd:0;t:${cabin}`
+        const ro = (inbound?.origem ?? det.returnOrigem ?? d as string).toUpperCase()
+        const rd = (inbound?.destino ?? det.returnDestino ?? o as string).toUpperCase()
+        const retRaw = (inbound?.segmentos as any[]) ?? (det.returnSegmentos as any[]) ?? []
+        retSegs = _segsFromOffer(retRaw, [], ro, rd, returnDate)
     }
-    return `https://www.google.com/travel/flights#flt=${o}.${d}.${date};c:BRL;e:${pax};sd:1;t:${cabin}`
+
+    return _buildTfsUrl(outSegs, retSegs, passageiros)
 }
 
 // ── Individual flight leg ──────────────────────────────────────────────────────
@@ -254,13 +337,11 @@ function FlightCard({
     const iata = det.carrierCode || extractIata(flight.companhia)
     const showReturn = hasReturn && !hasInboundFlights
     const layoverCity = det.layoverCity || ''
-    const connectionStr = layoverCity
-        ? `${det.paradas ?? 1} conexão · ${layoverCity}`
-        : stopCodes(segsOut)
+    const connectionStr = layoverCity || stopCodes(segsOut)
 
     const airlineName = flight.companhia && !flight.companhia.startsWith('Companhia')
         ? flight.companhia
-        : (iata || 'Companhia aérea')
+        : (iata && iata !== 'XX' ? iata : 'Companhia aérea')
 
     return (
         <motion.div
