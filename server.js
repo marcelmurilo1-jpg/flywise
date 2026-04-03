@@ -732,38 +732,41 @@ async function scrapeOneway(origin, destination, date) {
                     }
 
                     // ── Cidade de conexão ─────────────────────────────────────────────────────
-                    // Estratégia 1: coleta TODOS os IATAs após Parada/Layover em ordem
+                    // Estratégia 1: IATA em parênteses após Parada/Layover (permite pontos no meio)
+                    // Ex: "Parada de 1h 43min. em Miami (MIA)" → "MIA"
                     // Ex: "Parada (1 de 2) de 5h em Brasília (BSB)" → "BSB"
-                    //     "Layover (1 of 2) 5 hr 20 min in Brasilia (BSB)" → "BSB"
                     let layoverCity = '';
                     {
-                        const iataScanner = /(?:Parada|Escala|Layover)[^.;\n]*?\(([A-Z]{3})\)/gi;
+                        // [^;\n] — permite "." no meio (Google coloca ponto antes da cidade)
+                        const iataScanner = /(?:Parada|Escala|Layover)[^;\n]*?\(([A-Z]{3})\)/gi;
                         const found = [];
                         let sm;
                         while ((sm = iataScanner.exec(aria)) !== null) found.push(sm[1]);
                         if (found.length > 0) layoverCity = [...new Set(found)].join(' · ');
                     }
 
-                    // Estratégia 2 (fallback): captura nome de cidade se não encontrou IATA
+                    // Estratégia 2 (fallback): captura nome de cidade após "em" / "in"
                     let lm;
                     if (!layoverCity) {
-                        // PT: "Parada (N de N) de Xh em Cidade"
-                        lm = aria.match(/Parada\s*\(\s*\d+\s*de\s*\d+\s*\)\s*de\s*[^.;]+?em\s+([^.,()\n;]{3,40}?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
+                        // PT: "Parada ... em Cidade" — para no abre-paren, vírgula, ponto, newline ou palavra-chave
+                        lm = aria.match(/(?:Parada|Escala)[^;\n]*?\bem\s+([A-ZÀ-Ÿa-zà-ÿ][^.,()\n;]{2,35}?)(?=\s*(?:\(|[.;,\n]|$))/i);
                         if (lm) layoverCity = lm[1].trim();
                     }
                     if (!layoverCity) {
-                        // PT: "Parada de Xh em Cidade"
-                        lm = aria.match(/Parada\s+de\s+\d+\s*h[^.;]*?em\s+([^.,()\n;]{3,40}?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
+                        // EN: "Layover ... in City"
+                        lm = aria.match(/Layover[^;\n]*?\bin\s+([A-Z][^.,()\n;]{2,35}?)(?=\s*(?:\(|[.;,\n]|$))/i);
                         if (lm) layoverCity = lm[1].trim();
                     }
+
+                    // Estratégia 3 (last resort): todos os IATAs no aria-label; exclui o de
+                    // partida/chegada (1º e último) — o(s) restante(s) são conexões
                     if (!layoverCity) {
-                        // EN: "Layover (N of N) Xhr in City"
-                        lm = aria.match(/Layover\s*\(\s*\d+\s*of\s*\d+\s*\)\s*[^.;]+?in\s+([^.,()\n;]{3,40}?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
-                        if (lm) layoverCity = lm[1].trim();
-                    }
-                    if (!layoverCity) {
-                        lm = aria.match(/Layover\s+in\s+([^.,()\n;]{3,40}?)(?:\s*\([A-Z]{3}\))?(?:\s*[.;,]|\s*$)/i);
-                        if (lm) layoverCity = lm[1].trim();
+                        const allIata = [...aria.matchAll(/\(([A-Z]{3})\)/g)].map(m => m[1]);
+                        if (allIata.length >= 3) {
+                            // 1º = origem, último = destino, do meio = conexões
+                            const middle = allIata.slice(1, -1);
+                            if (middle.length > 0) layoverCity = [...new Set(middle)].join(' · ');
+                        }
                     }
 
                     // ── Durações de conexão ────────────────────────────────────────────────────
@@ -1311,13 +1314,27 @@ async function expandFlightDetails(page, flights) {
                 }
                 // Tenta extrair pelo menos o IATA da conexão se layoverCity ainda vazio
                 if (!flights[i].layoverCity) {
-                    // Multi-linha: "Parada de 8h 5min\nSão Paulo (GRU)"
+                    // "Parada de 8h 5min\nSão Paulo (GRU)" — multiline
                     const connNext = dialogText.match(/[Pp]arada\s+de[^\n]*\n[^\n]*\(([A-Z]{3})\)/);
                     if (connNext) flights[i].layoverCity = connNext[1];
                 }
                 if (!flights[i].layoverCity) {
-                    const connM = dialogText.match(/(?:[Pp]arada|[Ll]ayover|[Cc]onex[aã]o|[Ee]scala)[^\n]*?([A-Z]{3})\b/);
-                    if (connM) flights[i].layoverCity = connM[1];
+                    // IATA em parênteses na mesma linha que Parada/Layover (permite ponto no meio)
+                    const connInline = dialogText.match(/(?:[Pp]arada|[Ll]ayover)[^;\n]*?\(([A-Z]{3})\)/);
+                    if (connInline) flights[i].layoverCity = connInline[1];
+                }
+                if (!flights[i].layoverCity) {
+                    // "em Cidade (GRU)" perto de parada
+                    const connCity = dialogText.match(/(?:[Pp]arada|[Ll]ayover)[^\n]*\bem\s+[^\n]*?\(([A-Z]{3})\)/);
+                    if (connCity) flights[i].layoverCity = connCity[1];
+                }
+                if (!flights[i].layoverCity) {
+                    // Last resort: IATAs em parênteses no diálogo, excluindo origem e destino
+                    const origin = (flights[i].origem || '').toUpperCase();
+                    const dest = (flights[i].destino || '').toUpperCase();
+                    const allParen = [...dialogText.matchAll(/\(([A-Z]{3})\)/g)].map(m => m[1]);
+                    const conn = allParen.filter(c => c !== origin && c !== dest);
+                    if (conn.length > 0) flights[i].layoverCity = [...new Set(conn)].slice(0, 2).join(' · ');
                 }
             }
 
