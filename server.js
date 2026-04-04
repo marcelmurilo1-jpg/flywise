@@ -1355,8 +1355,9 @@ function parseSegmentsFromText(text) {
     let waitingArrival = false;
 
     for (const line of lines) {
-        // Tempo (HH:MM) — suporta "+1" (voo noturno), "AM/PM" e IATA inline ("09:40 GRU")
-        const timeRaw = line.match(/^(\d{1,2}):(\d{2})(?:\s*([AP]M))?\s*(?:[+-]\d+)?\s*([A-Z]{3})?(?:\s|$)/i);
+        // Tempo (HH:MM) — o aeroporto pode estar na mesma linha: "21:50Aeroporto...(GRU)"
+        // Não exigimos espaço após o tempo; capturamos o IATA do fim da linha separadamente.
+        const timeRaw = line.match(/^(\d{1,2}):(\d{2})(?:\s*([AP]M))?(?:\s*[+-]\d+)?/i);
         if (timeRaw) {
             let h = parseInt(timeRaw[1]), m = parseInt(timeRaw[2]);
             if (timeRaw[3]) { // AM/PM → 24h
@@ -1364,7 +1365,11 @@ function parseSegmentsFromText(text) {
                 h = isPM ? (h === 12 ? 12 : h + 12) : (h === 12 ? 0 : h);
             }
             const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-            const inlineIata = timeRaw[4]; // ex: "GRU" em "09:40 GRU"
+            // IATA no fim da linha: "21:50Aeroporto Internacional...(GRU)"
+            const endIata = line.match(/\(([A-Z]{3})\)\s*$/)?.[1];
+            // IATA inline logo após o tempo: "09:40 GRU"
+            const restOfLine = line.slice(timeRaw[0].length).trim();
+            const inlineIata = endIata || (/^([A-Z]{3})(?:\s|$)/.exec(restOfLine)?.[1]);
             if (cur && waitingArrival) {
                 cur.chegada = timeStr;
                 if (inlineIata && !cur.destino) cur.destino = inlineIata;
@@ -1408,8 +1413,8 @@ function parseSegmentsFromText(text) {
         const aircraftMatch = line.match(/(?:Airbus|Boeing|Embraer|ATR)\s+[A-Z]?\d+[-A-Z0-9]*/i);
         if (aircraftMatch) { cur.aeronave = aircraftMatch[0]; continue; }
 
-        // Número de voo (ex: "LA 4607" ou "LA4607")
-        const flightNumMatch = line.match(/^([A-Z]{1,2})\s*(\d{3,5})$/);
+        // Número de voo (ex: "LA 4607", "LA4607", "UA 63")
+        const flightNumMatch = line.match(/^([A-Z]{1,2})\s*(\d{1,5})$/);
         if (flightNumMatch) { cur.numero = `${flightNumMatch[1]}${flightNumMatch[2]}`; continue; }
 
         // Parada (layover) — fecha o segmento atual
