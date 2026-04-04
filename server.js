@@ -1581,8 +1581,8 @@ app.post('/api/checkout', async (req, res) => {
 
         // Extrair PIX code de possíveis locais na resposta
         const d = abData.data ?? {};
-        const methods = d.methods ?? [];
-        const pixMethod = methods.find(m => m.method === 'PIX') ?? methods[0] ?? {};
+        const responseMethods = d.methods ?? [];
+        const pixMethod = responseMethods.find(m => m.method === 'PIX') ?? responseMethods[0] ?? {};
         const pixCode = pixMethod.pixCode ?? pixMethod.brCode ?? d.brCode ?? d.pixCode ?? d.pixCopyPaste ?? null;
         const pixQrCode = pixMethod.pixQrCode ?? pixMethod.qrCodeImage ?? d.qrCodeImage ?? null;
 
