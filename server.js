@@ -479,7 +479,7 @@ function addDaysToDate(dateStr, days) {
     return d.toISOString().slice(0, 10);
 }
 
-async function scrapeOneway(origin, destination, date) {
+async function scrapeOneway(origin, destination, date, returnDate = null) {
     return scrapeLimit(async () => {
         for (let attempt = 1; attempt <= 2; attempt++) {
         let context;
@@ -523,7 +523,11 @@ async function scrapeOneway(origin, destination, date) {
             window.chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
         }, isMac);
 
-            const query = encodeURIComponent(`Flights from ${origin} to ${destination} on ${date} one way`);
+            // Round-trip URL → Google shows combined prices (outbound + cheapest return)
+            // One-way URL   → Google shows individual one-way prices
+            const query = returnDate
+                ? encodeURIComponent(`Flights from ${origin} to ${destination} on ${date} returning ${returnDate}`)
+                : encodeURIComponent(`Flights from ${origin} to ${destination} on ${date} one way`);
             const url = `https://www.google.com/travel/flights?q=${query}&curr=BRL&hl=pt-BR`;
 
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 22000 });
@@ -923,6 +927,12 @@ async function scrapeOneway(origin, destination, date) {
                 return results;
             });
 
+            // Sinaliza que os preços são totais de ida+volta (busca round-trip no Google)
+            if (returnDate) {
+                flights.forEach(f => { f.is_roundtrip_total = true; });
+                console.log(`[GFlights] ${origin}→${destination}: round-trip mode — ${flights.length} voos com preço total ida+volta`);
+            }
+
             // Expande voos com conexão para extrair segmentos detalhados
             if (flights.length > 0 && flights.some(f => (f.paradas ?? 0) > 0)) {
                 await expandFlightDetails(page, flights).catch(e =>
@@ -1218,6 +1228,7 @@ function mapToFlightOffer(item, origin, destination, date, idx) {
         aeronaves: item.aeronaves || [],
         flight_key: `gf-${origin}-${destination}-${date}-${idx}`,
         provider: 'google',
+        isRoundtripTotal: item.is_roundtrip_total || false,
     };
 }
 
@@ -1240,8 +1251,10 @@ function gfCacheKey(origin, dest, date, returnDate) {
 }
 
 async function doScrape(origin, destination, date, returnDate) {
-    const rawOut = await scrapeOneway(origin, destination, date);
-    const rawIn = returnDate ? await scrapeOneway(destination, origin, returnDate) : [];
+    // Outbound: round-trip URL quando há returnDate → preços reais ida+volta do Google
+    // Inbound: busca one-way separada para mostrar opções de volta
+    const rawOut = await scrapeOneway(origin, destination, date, returnDate ?? null);
+    const rawIn  = returnDate ? await scrapeOneway(destination, origin, returnDate) : [];
     const outbound = rawOut.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
     const inbound  = rawIn.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
     return { outbound, inbound };
@@ -1307,9 +1320,9 @@ async function expandFlightDetails(page, flights) {
                 const segments = parseSegmentsFromText(dialogText);
                 if (segments.length > 0) {
                     flights[i].segmentos = segments;
-                    // Preenche layoverCity a partir do destino do 1º segmento se ainda não tiver
+                    // Preenche layoverCity a partir do IATA da Parada ou destino do 1º segmento
                     if (!flights[i].layoverCity && segments.length > 1) {
-                        flights[i].layoverCity = segments[0].destino || '';
+                        flights[i].layoverCity = segments[0].layoverCity || segments[0].destino || '';
                     }
                 }
                 // Tenta extrair pelo menos o IATA da conexão se layoverCity ainda vazio
@@ -1409,17 +1422,55 @@ function parseSegmentsFromText(text) {
             continue;
         }
 
-        // Aeronave
-        const aircraftMatch = line.match(/(?:Airbus|Boeing|Embraer|ATR)\s+[A-Z]?\d+[-A-Z0-9]*/i);
-        if (aircraftMatch) { cur.aeronave = aircraftMatch[0]; continue; }
+        // Aeronave (pode estar embutida em linha concatenada: "AviancaEconômicaAirbus A320neoAV 160")
+        const aircraftMatch = line.match(/(?:Airbus|Boeing|Embraer|ATR|Bombardier|CRJ|E-?\d{3})\s*[A-Z]?\d+[-A-Z0-9]*/i);
+        if (aircraftMatch && !cur.aeronave) { cur.aeronave = aircraftMatch[0].trim(); }
 
-        // Número de voo (ex: "LA 4607", "LA4607", "UA 63")
-        const flightNumMatch = line.match(/^([A-Z]{1,2})\s*(\d{1,5})$/);
-        if (flightNumMatch) { cur.numero = `${flightNumMatch[1]}${flightNumMatch[2]}`; continue; }
+        // Número de voo — linha inteira ("LA 4607") OU embutido no fim ("AviancaEconômicaAirbus A320neoAV 160")
+        if (!cur.numero) {
+            const flightNumWhole = line.match(/^([A-Z]{1,2})\s*(\d{1,5})$/);
+            const flightNumEnd   = line.match(/\b([A-Z]{1,2})\s*(\d{2,5})(?![a-zA-Z0-9])\s*$/);
+            const fm = flightNumWhole || flightNumEnd;
+            if (fm) cur.numero = `${fm[1]}${fm[2]}`;
+        }
 
-        // Parada (layover) — fecha o segmento atual
+        // Cabine (linha inteira ou embutida: "Econômica", "Business", "Executiva")
+        if (!cur.cabin_class_seg) {
+            const cabinM = line.match(/\b(Econômica\s+Premium|Executiva|Business Class|Business|Primeira\s+Classe|First\s+Class|Econômica|Economy|Premium\s+Economy)\b/i);
+            if (cabinM) cur.cabin_class_seg = cabinM[1].trim();
+        }
+
+        // Companhia aérea embutida na linha de detalhes do voo
+        if (!cur.companhia_seg) {
+            const KNOWN_SEG = ['LATAM Airlines','LATAM','GOL Linhas Aéreas','GOL','Azul Linhas Aéreas','Azul','Avianca','Copa Airlines','American Airlines','United Airlines','Delta Air Lines','Air France','KLM','Lufthansa','TAP Air Portugal','Iberia','British Airways','Emirates','Qatar Airways','Turkish Airlines','Aeromexico','Aeroméxico','Ethiopian Airlines','Air Europa','Swiss','Austrian Airlines','ITA Airways','Aerolíneas Argentinas','Sky Airline','JetSmart','Air Canada','Alaska Airlines','JetBlue'];
+            for (const a of KNOWN_SEG) {
+                if (line.toLowerCase().includes(a.toLowerCase())) { cur.companhia_seg = a; break; }
+            }
+        }
+
+        // Espaço para as pernas (legroom)
+        if (/[Ee]spa[çc]o\s+para\s+as\s+pernas|[Ll]eg\s*room/i.test(line)) {
+            cur.legroom = line.replace(/\s*\(\d+\s*cm\)/i, m => ` ${m.trim()}`).trim();
+            continue;
+        }
+
+        // Amenidades: Wi-Fi, USB, Streaming, Vídeo, Tomada
+        if (/Wi-?Fi/i.test(line))                               { (cur.amenities = cur.amenities || []).push(line.trim()); continue; }
+        if (/Saída\s+USB|USB\s+(?:port|outlet)/i.test(line))   { (cur.amenities = cur.amenities || []).push('Saída USB'); continue; }
+        if (/Streaming/i.test(line))                            { (cur.amenities = cur.amenities || []).push('Streaming'); continue; }
+        if (/[Vv]ídeo\s+sob\s+demanda|[Vv]ideo\s+on\s+demand/i.test(line)) { (cur.amenities = cur.amenities || []).push('Vídeo sob demanda'); continue; }
+        if (/[Tt]omada\s+no\s+assento|[Pp]ower\s+outlet/i.test(line))      { (cur.amenities = cur.amenities || []).push('Tomada no assento'); continue; }
+
+        // Parada (layover) — fecha o segmento atual; captura IATA da conexão se presente
         if (/[Pp]arada\s+de|[Ll]ayover/i.test(line)) {
-            if (cur && cur.partida) { segments.push(cur); cur = null; waitingArrival = false; }
+            if (cur && cur.partida) {
+                const layoverIataM = line.match(/\(([A-Z]{3})\)\s*$/);
+                segments.push(cur);
+                if (layoverIataM && segments.length > 0) {
+                    segments[segments.length - 1].layoverCity = layoverIataM[1];
+                }
+                cur = null; waitingArrival = false;
+            }
         }
     }
 

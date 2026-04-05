@@ -260,6 +260,7 @@ export default function Resultados() {
                         layoverDurations: (o as any).layoverDurations,
                         numeroVoos: (o as any).numeroVoos,
                         aeronaves: (o as any).aeronaves,
+                        isRoundtripTotal: (o as any).isRoundtripTotal || false,
                         returnPartida: o.returnPartida,
                         returnChegada: o.returnChegada,
                         returnOrigem: o.returnOrigem,
@@ -615,7 +616,8 @@ export default function Resultados() {
                                                                 let label: string
                                                                 if (cashIdaSel) {
                                                                     const cashDet = (cashIdaSel.detalhes as any) ?? {}
-                                                                    if (cashDet.returnPartida) {
+                                                                    if (cashDet.returnPartida || cashDet.isRoundtripTotal) {
+                                                                        // Oferta combinada ou preço round-trip do Google — já inclui a volta
                                                                         bestCash = cashIdaSel.preco_brl ?? 0
                                                                         label = 'Total selecionado (ida+volta)'
                                                                     } else {
@@ -650,7 +652,7 @@ export default function Resultados() {
                                                                 let bestCash: number
                                                                 if (cashIdaSel) {
                                                                     const cashDet = (cashIdaSel.detalhes as any) ?? {}
-                                                                    if (cashDet.returnPartida) {
+                                                                    if (cashDet.returnPartida || cashDet.isRoundtripTotal) {
                                                                         bestCash = cashIdaSel.preco_brl ?? 0
                                                                     } else {
                                                                         bestCash = (cashIdaSel.preco_brl ?? 0) + (cashVoltaSel ? (cashVoltaSel.preco_brl ?? 0) : 0)

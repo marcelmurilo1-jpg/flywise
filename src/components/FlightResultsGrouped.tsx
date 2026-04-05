@@ -227,10 +227,19 @@ function FlightDetails({ flight, det, segsOut, layoverCity }: {
                                 </div>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontSize: 12, fontWeight: 700, color: '#0E2A55' }}>{seg.origem}</div>
-                                    <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 6 }}>
+                                    <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 2 }}>
                                         {[seg.companhia_seg || flight.companhia, seg.numero, seg.aeronave].filter(Boolean).join(' · ')}
                                     </div>
-                                    <div style={{ fontSize: 12, fontWeight: 700, color: '#0E2A55' }}>{seg.destino}</div>
+                                    {seg.cabin_class_seg && (
+                                        <div style={{ fontSize: 10, color: '#64748B', marginBottom: 2 }}>{seg.cabin_class_seg}</div>
+                                    )}
+                                    {seg.legroom && (
+                                        <div style={{ fontSize: 10, color: '#64748B', marginBottom: 2 }}>{seg.legroom}</div>
+                                    )}
+                                    {seg.amenities?.length > 0 && (
+                                        <div style={{ fontSize: 10, color: '#64748B', marginBottom: 4 }}>{seg.amenities.join(' · ')}</div>
+                                    )}
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: '#0E2A55', marginTop: 4 }}>{seg.destino}</div>
                                 </div>
                             </div>
                             {si < segsOut.length - 1 && (
@@ -397,11 +406,15 @@ function FlightCard({
                 </div>
                 <div className="fly-card-right" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#0E2A55', textTransform: 'uppercase', marginBottom: 2 }}>Preço</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#0E2A55', textTransform: 'uppercase', marginBottom: 2 }}>
+                            {det.isRoundtripTotal ? 'Ida + Volta' : 'Preço'}
+                        </div>
                         <div style={{ fontSize: 18, fontWeight: 800, color: '#0E2A55', letterSpacing: '-0.01em' }}>
                             {(flight.preco_brl ?? 0) > 0 ? `R$ ${flight.preco_brl?.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}` : '—'}
                         </div>
-                        <div style={{ fontSize: 9, color: '#94A3B8' }}>{(flight.preco_brl ?? 0) > 0 ? 'preço final' : 'incl. na ida'}</div>
+                        <div style={{ fontSize: 9, color: '#94A3B8' }}>
+                            {det.isRoundtripTotal ? 'total ida+volta' : ((flight.preco_brl ?? 0) > 0 ? 'preço final' : 'incl. na ida')}
+                        </div>
                     </div>
                     {canSelect && !isPinned && (flight.preco_brl ?? 0) > 0 && (
                         <button
@@ -568,7 +581,8 @@ export function FlightResultsGrouped({
     const cashTotal = (() => {
         if (!cashIdaSel) return null
         const det = (cashIdaSel.detalhes as any) ?? {}
-        if (det.returnPartida) return cashIdaSel.preco_brl ?? 0
+        // Combined Amadeus offer or Google round-trip total → price already covers both legs
+        if (det.returnPartida || det.isRoundtripTotal) return cashIdaSel.preco_brl ?? 0
         return (cashIdaSel.preco_brl ?? 0) + (cashVoltaSel ? (cashVoltaSel.preco_brl ?? 0) : 0)
     })()
 
