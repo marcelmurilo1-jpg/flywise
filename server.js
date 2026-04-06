@@ -843,7 +843,9 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
 
                 const results = [];
                 const divs = [...document.querySelectorAll('div[data-id]')];
+                let _divIdx = 0;
                 for (const el of divs) {
+                    const _curDivIdx = _divIdx++;
                     // Encontra o elemento filho com aria-label de voo (PT ou EN)
                     const links = [...el.querySelectorAll('[aria-label]')];
                     const flightLink = links.find(l => {
@@ -912,14 +914,43 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                         }
                     }
 
-                    // ── Fallback 4: cidade de conexão pelo texto visível ───────────────────────
-                    // Google Flights mostra "· GRU" (bullet + IATA) no card de conexão.
-                    // NÃO usamos "\bem\s+([A-Z]{3})\b" pois capturaria o aeroporto de destino.
+                    // ── Fallback 4: cidade de conexão pelo texto visível ─────────────────────
                     if (!parsed.layoverCity && parsed.paradas > 0 && visText) {
-                        const vm = visText.match(/[·•]\s*([A-Z]{3})\b/);
-                        if (vm) parsed.layoverCity = vm[1];
+                        const orig = parsed.origem || '';
+                        const dest = parsed.destino || '';
+                        // 4a. Bullet or dot separator: "GRU · BOG · MIA" → BOG
+                        const bulletM = visText.match(/[·•–\|]\s*([A-Z]{3})\b/g);
+                        if (bulletM) {
+                            const iatas = bulletM.map(m => m.replace(/[·•–\|\s]/g, '')).filter(c => c !== orig && c !== dest);
+                            if (iatas.length > 0) parsed.layoverCity = [...new Set(iatas)].join(' · ');
+                        }
+                        // 4b. "Via BOG" / "via BOG"
+                        if (!parsed.layoverCity) {
+                            const viaM = visText.match(/\bvia\s+([A-Z]{3})\b/i);
+                            if (viaM && viaM[1] !== orig && viaM[1] !== dest) parsed.layoverCity = viaM[1];
+                        }
+                        // 4c. Row of IATAs: "GRU BOG MIA" — any uppercase 3-letter word between origin and dest
+                        if (!parsed.layoverCity && orig && dest) {
+                            const allIataVis = [...visText.matchAll(/\b([A-Z]{3})\b/g)].map(m => m[1]);
+                            const mid = allIataVis.filter(c => c !== orig && c !== dest && /^[A-Z]{3}$/.test(c));
+                            if (mid.length > 0) parsed.layoverCity = [...new Set(mid)].slice(0, 2).join(' · ');
+                        }
+                    }
+                    // ── Fallback 5: inner aria-labels de outros elementos do card ────────────
+                    if (!parsed.layoverCity && parsed.paradas > 0) {
+                        const orig = parsed.origem || '';
+                        const dest = parsed.destino || '';
+                        for (const l of links) {
+                            if (l === flightLink) continue;
+                            const oa = l.getAttribute('aria-label') ?? '';
+                            // "Voo de Avianca de GRU para BOG" — a leg aria-label naming an intermediate airport
+                            const legIatas = [...oa.matchAll(/\b([A-Z]{3})\b/g)].map(m => m[1]);
+                            const mid = legIatas.filter(c => c !== orig && c !== dest);
+                            if (mid.length > 0) { parsed.layoverCity = [...new Set(mid)].slice(0, 2).join(' · '); break; }
+                        }
                     }
 
+                    parsed._domIdx = _curDivIdx; // store DOM index for expandFlightDetails
                     results.push(parsed);
                     if (results.length >= 15) break;
                 }
@@ -1261,60 +1292,81 @@ async function doScrape(origin, destination, date, returnDate) {
 }
 
 // Expande até MAX_EXPAND voos com conexão para extrair segmentos (limitado para não atrasar a resposta)
-const MAX_EXPAND = 5;
+const MAX_EXPAND = 6;
 async function expandFlightDetails(page, flights) {
     let expanded = 0;
     for (let i = 0; i < flights.length && expanded < MAX_EXPAND; i++) {
         if ((flights[i].paradas ?? 0) === 0) continue;
         expanded++;
+        // Use the stored DOM index to find the correct card (fixes off-by-N bug when cards are filtered)
+        const domIdx = flights[i]._domIdx ?? i;
         try {
             const cards = await page.$$('div[data-id]');
-            if (i >= cards.length) continue;
-            const card = cards[i];
+            if (domIdx >= cards.length) continue;
+            const card = cards[domIdx];
 
-            // Tenta múltiplos seletores de botão de detalhe
-            const detailBtn = await card.$([
-                '[aria-label*="mais detalhes"]',
-                '[aria-label*="more details"]',
-                '[aria-label*="detalhes do voo"]',
-                '[aria-label*="flight details"]',
-                '[aria-label*="detalhes"]',
-                '[aria-label*="details"]',
-                '[aria-label*="Ver detalhes"]',
-                '[aria-label*="Expand"]',
-                '[data-expandable]',
-                'button:not([aria-label])',
-            ].join(', ')).catch(() => null);
+            // 1. Prefer [aria-expanded="false"] toggle inside the card
+            let clickTarget = await card.$('[aria-expanded="false"]').catch(() => null);
 
-            const clickTarget = detailBtn || card;
-            await clickTarget.click({ timeout: 2000 }).catch(() => null);
-            await new Promise(r => setTimeout(r, randInt(500, 800)));
+            // 2. Fallback: button with detail-related aria-label
+            if (!clickTarget) {
+                clickTarget = await card.$([
+                    '[aria-label*="mais detalhes"]',
+                    '[aria-label*="more details"]',
+                    '[aria-label*="detalhes do voo"]',
+                    '[aria-label*="flight details"]',
+                    '[aria-label*="Ver detalhes"]',
+                    '[aria-label*="Expand"]',
+                    '[data-expandable]',
+                ].join(', ')).catch(() => null);
+            }
 
-            const { dialogText, isDialog } = await page.evaluate((idx) => {
-                // Prioridade: dialog, depois data-fid, depois aria-expanded, depois texto do card
+            // 3. Last resort: click the card row itself
+            const clickEl = clickTarget || card;
+            await clickEl.click({ timeout: 2000, force: true }).catch(() => null);
+
+            // Wait for expansion: prefer waitForSelector, fall back to fixed delay
+            await page.waitForSelector('[aria-expanded="true"], [role="dialog"], [data-fid]', { timeout: 2500 })
+                .catch(() => new Promise(r => setTimeout(r, 900)));
+
+            const { dialogText, isDialog } = await page.evaluate((dIdx) => {
+                // 1. Modal dialog
                 const dialog = document.querySelector('[role="dialog"]');
                 if (dialog) {
                     const t = (dialog.innerText || dialog.textContent || '').trim();
                     if (t.length > 50) return { dialogText: t, isDialog: true };
                 }
+                // 2. data-fid panel
                 const fid = document.querySelector('[data-fid]');
                 if (fid) {
                     const t = (fid.innerText || fid.textContent || '').trim();
                     if (t.length > 50) return { dialogText: t, isDialog: false };
                 }
+                // 3. aria-expanded="true" — look for expanded sibling/child content
                 for (const el of document.querySelectorAll('[aria-expanded="true"]')) {
-                    const t = (el.innerText || el.textContent || '').trim();
-                    if (t.length > 50) return { dialogText: t, isDialog: false };
+                    // Try next sibling element (common accordion pattern)
+                    let sib = el.nextElementSibling;
+                    while (sib) {
+                        const t = (sib.innerText || sib.textContent || '').trim();
+                        if (t.length > 50) return { dialogText: t, isDialog: false };
+                        sib = sib.nextElementSibling;
+                    }
+                    // Try parent's next sibling
+                    const parentSib = el.parentElement?.nextElementSibling;
+                    if (parentSib) {
+                        const t = (parentSib.innerText || parentSib.textContent || '').trim();
+                        if (t.length > 50) return { dialogText: t, isDialog: false };
+                    }
                 }
-                // Fallback: texto do próprio card (pode ter info de conexão inline)
+                // 4. Whole card text after expansion (includes segment detail lines)
                 const divs = [...document.querySelectorAll('div[data-id]')];
-                const card = divs[idx];
+                const card = divs[dIdx];
                 if (card) {
                     const t = (card.innerText || card.textContent || '').trim();
                     if (t.length > 80) return { dialogText: t, isDialog: false };
                 }
                 return { dialogText: '', isDialog: false };
-            }, i).catch(() => ({ dialogText: '', isDialog: false }));
+            }, domIdx).catch(() => ({ dialogText: '', isDialog: false }));
 
             if (dialogText && dialogText.length > 30) {
                 const segments = parseSegmentsFromText(dialogText);
@@ -1349,12 +1401,22 @@ async function expandFlightDetails(page, flights) {
                     const conn = allParen.filter(c => c !== origin && c !== dest);
                     if (conn.length > 0) flights[i].layoverCity = [...new Set(conn)].slice(0, 2).join(' · ');
                 }
+                // Fallback: derive layoverCity from parsed segments' destinations
+                if (!flights[i].layoverCity && flights[i].segmentos?.length > 1) {
+                    const origin = (flights[i].origem || '').toUpperCase();
+                    const dest = (flights[i].destino || '').toUpperCase();
+                    const midIatas = flights[i].segmentos.slice(0, -1)
+                        .map(s => (s.destino || s.layoverCity || '').toUpperCase())
+                        .filter(c => c && c !== origin && c !== dest);
+                    if (midIatas.length > 0) flights[i].layoverCity = [...new Set(midIatas)].join(' · ');
+                }
             }
 
+            console.log(`[GFlights] expand[${i}] domIdx=${domIdx} textLen=${dialogText.length} segs=${flights[i].segmentos?.length ?? 0} layover=${flights[i].layoverCity || '(empty)'}`);
             if (isDialog) await page.keyboard.press('Escape').catch(() => null);
             await new Promise(r => setTimeout(r, randInt(150, 300)));
         } catch (e) {
-            console.log(`[GFlights] expand flight ${i} error:`, e.message?.slice(0, 60));
+            console.log(`[GFlights] expand flight ${i} domIdx=${domIdx} error:`, e.message?.slice(0, 80));
         }
     }
     return flights;

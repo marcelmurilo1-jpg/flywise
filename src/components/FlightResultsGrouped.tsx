@@ -261,45 +261,54 @@ function FlightDetails({ flight, det, segsOut, layoverCity }: {
     const arr = formatTime(flight.chegada)
     const paradas = det.paradas ?? 0
     const layoverDurs: number[] = det.layoverDurations ?? []
+    const flightNums: string[] = det.numeroVoos ?? []
+    const aircrafts: string[] = det.aeronaves ?? []
+
+    // Build virtual "points" for the timeline
+    // Each layoverCity may be "BOG" or "BOG · MIA" (multi-stop)
+    const stopCities = layoverCity ? layoverCity.split(' · ') : Array(paradas).fill('')
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {/* Departure point */}
+            {/* Departure */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0' }}>
                 <div style={{ minWidth: 40, textAlign: 'right' }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: '#0E2A55' }}>{dep}</div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 4 }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #2A60C2', background: '#fff' }} />
-                    {paradas === 0 && <div style={{ width: 2, height: 32, background: '#E2EAF5', margin: '3px 0' }} />}
+                    <div style={{ width: 2, flex: 1, minHeight: 20, background: '#E2EAF5', margin: '3px 0' }} />
                 </div>
                 <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#0E2A55' }}>{flight.origem}</div>
+                    <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
+                        {[flight.companhia, flightNums[0]].filter(Boolean).join(' · ')}
+                        {aircrafts[0] && <span style={{ marginLeft: 4 }}>· {aircrafts[0]}</span>}
+                    </div>
                     {formatDur(flight.duracao_min) && (
-                        <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
-                            Duração total: {formatDur(flight.duracao_min)}
-                        </div>
+                        <div style={{ fontSize: 10, color: '#94A3B8' }}>Duração total: {formatDur(flight.duracao_min)}</div>
                     )}
                 </div>
             </div>
 
-            {/* Layover(s) */}
-            {paradas > 0 && layoverCity && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 58px', borderTop: '1px dashed #E2EAF5', borderBottom: '1px dashed #E2EAF5', margin: '2px 0' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#F97316', background: '#FFF7ED', padding: '2px 8px', borderRadius: 6 }}>
-                        Parada em {layoverCity}{layoverDurs[0] ? ` · ${formatDur(layoverDurs[0])}` : ''}
-                    </span>
+            {/* Layover banners */}
+            {stopCities.map((city, si) => (
+                <div key={si}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0 5px 58px', borderTop: '1px dashed #E2EAF5', borderBottom: '1px dashed #E2EAF5', margin: '2px 0' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#F97316', background: '#FFF7ED', padding: '2px 8px', borderRadius: 6 }}>
+                            {city ? `Conexão em ${city}` : `Conexão ${si + 1}`}{layoverDurs[si] ? ` · ${formatDur(layoverDurs[si])}` : ''}
+                        </span>
+                    </div>
+                    {/* Next leg info between stops */}
+                    {si < stopCities.length - 1 && flightNums[si + 1] && (
+                        <div style={{ padding: '4px 0 4px 58px', fontSize: 10, color: '#94A3B8' }}>
+                            {[flightNums[si + 1], aircrafts[si + 1]].filter(Boolean).join(' · ')}
+                        </div>
+                    )}
                 </div>
-            )}
-            {paradas > 0 && !layoverCity && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 58px', borderTop: '1px dashed #E2EAF5', borderBottom: '1px dashed #E2EAF5', margin: '2px 0' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#F97316', background: '#FFF7ED', padding: '2px 8px', borderRadius: 6 }}>
-                        {paradas} {paradas === 1 ? 'conexão' : 'conexões'}{layoverDurs[0] ? ` · ${formatDur(layoverDurs[0])}` : ''}
-                    </span>
-                </div>
-            )}
+            ))}
 
-            {/* Arrival point */}
+            {/* Arrival */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0' }}>
                 <div style={{ minWidth: 40, textAlign: 'right' }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: '#0E2A55' }}>{arr}</div>
@@ -309,9 +318,9 @@ function FlightDetails({ flight, det, segsOut, layoverCity }: {
                 </div>
                 <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#0E2A55' }}>{flight.destino}</div>
-                    {(det.numeroVoos?.length > 0 || det.aeronaves?.length > 0) && (
+                    {flightNums.length > 1 && (
                         <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
-                            {[...(det.numeroVoos ?? []), ...(det.aeronaves ?? [])].join(' · ')}
+                            {[flightNums[flightNums.length - 1], aircrafts[aircrafts.length - 1]].filter(Boolean).join(' · ')}
                         </div>
                     )}
                 </div>
