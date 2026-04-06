@@ -669,7 +669,8 @@ export default function Landing() {
             const priceVal = billing === 'anual'
                 ? checkoutPlan!.priceAnualVal! * 12
                 : checkoutPlan!.priceVal!
-            const res = await fetch('/api/checkout', {
+            const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
+            const res = await fetch(`${apiBase}/api/checkout`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -1672,8 +1672,8 @@ app.post('/api/checkout', async (req, res) => {
             methods,
             customerId,
             products: [productEntry],
-            returnUrl: `${req.headers.origin || 'http://localhost:5173'}${returnPath || '/onboarding'}`,
-            completionUrl: `${req.headers.origin || 'http://localhost:5173'}${returnPath || '/onboarding'}`,
+            returnUrl: `${process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:5173'}${returnPath || '/onboarding'}`,
+            completionUrl: `${process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:5173'}${returnPath || '/onboarding'}`,
             metadata: { origin, destination, departureDate, returnDate, outboundCompany, returnCompany, userId, billingType },
         };
 
