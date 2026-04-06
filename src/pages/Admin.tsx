@@ -5,7 +5,7 @@ import {
     AlertTriangle, Search, Activity, Zap,
     DollarSign, MapPin, Clock, UserX, Receipt,
     Plus, Trash2, ChevronLeft, ChevronRight,
-    TrendingDown, Home,
+    TrendingDown, Home, Image,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
@@ -13,7 +13,7 @@ import { supabase } from '@/lib/supabase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SectionId = 'dashboard' | 'usuarios' | 'custos' | 'promocoes' | 'logs'
+type SectionId = 'dashboard' | 'usuarios' | 'custos' | 'promocoes' | 'logs' | 'posts'
 type Plan = 'free' | 'essencial' | 'pro' | 'elite' | 'admin'
 
 interface Stats {
@@ -75,6 +75,7 @@ const SECTIONS: { id: SectionId; label: string; icon: React.ElementType; descrip
     { id: 'custos',     label: 'Custos',       icon: Receipt,    description: 'Controle de gastos' },
     { id: 'promocoes',  label: 'Promoções',    icon: Tag,        description: 'Bônus de transferência' },
     { id: 'logs',       label: 'Logs',         icon: FileText,   description: 'Histórico de sincronização' },
+    { id: 'posts',      label: 'Posts',        icon: Image,      description: 'Gerador de slides Instagram' },
 ]
 
 const PLAN_LABELS: Record<Plan, string> = {
@@ -970,6 +971,336 @@ function Logs({ token }: { token: string }) {
     )
 }
 
+// ─── PostGenerator ────────────────────────────────────────────────────────────
+
+type SlideBg = 'navy' | 'white' | 'snow' | 'vibrant'
+
+interface SlideData {
+    background: SlideBg
+    tag: string
+    headline: string
+    headlineSize: number
+    body: string
+    swipeHint: string
+}
+
+const BG_LABELS: Record<SlideBg, string> = { navy: 'Navy', white: 'Branco', snow: 'Snow', vibrant: 'Azul CTA' }
+const BG_COLORS: Record<SlideBg, string> = { navy: '#0E2A55', white: '#e2e8f0', snow: '#F7F9FC', vibrant: '#2A60C2' }
+const BG_TEXT:   Record<SlideBg, string> = { navy: '#fff',    white: '#0E2A55', snow: '#0E2A55', vibrant: '#fff' }
+
+const CALENDAR_REC: Record<number, { format: string; pilar: string; label: string }> = {
+    1: { format: 'carrossel', pilar: 'estrategia', label: 'Segunda → Carrossel Estratégia' },
+    2: { format: 'isolado',   pilar: 'produto',    label: 'Terça → Post Isolado Produto' },
+    3: { format: 'isolado',   pilar: 'produto',    label: 'Quarta → Post Isolado Produto / Inspiração' },
+    4: { format: 'carrossel', pilar: 'inspiracao', label: 'Quinta → Carrossel Inspiração' },
+    5: { format: 'carrossel', pilar: 'prova',      label: 'Sexta → Carrossel Prova' },
+    6: { format: 'story',     pilar: 'estrategia', label: 'Sábado → Story Urgente' },
+    0: { format: 'story',     pilar: 'inspiracao', label: 'Domingo → Story Inspiração' },
+}
+
+const DAY_NAMES = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
+
+function PostGenerator({ token }: { token: string }) {
+    const today = new Date()
+    const dow = today.getDay()
+    const rec = CALENDAR_REC[dow]
+
+    const [format, setFormat] = useState(rec.format)
+    const [pilar, setPilar] = useState(rec.pilar)
+    const [topic, setTopic] = useState('')
+    const [aiLoading, setAiLoading] = useState(false)
+    const [aiErr, setAiErr] = useState<string | null>(null)
+
+    const [slides, setSlides] = useState<SlideData[]>([])
+    const [caption, setCaption] = useState('')
+    const [imgLoading, setImgLoading] = useState(false)
+    const [images, setImages] = useState<{ name: string; data: string }[]>([])
+    const [imgErr, setImgErr] = useState<string | null>(null)
+
+    const updateSlide = (i: number, field: keyof SlideData, value: string | number) =>
+        setSlides(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s))
+
+    const addSlide = () => {
+        if (slides.length >= 7) return
+        setSlides(prev => [...prev, { background: 'white', tag: '', headline: '', headlineSize: 0, body: '', swipeHint: '' }])
+    }
+
+    const removeSlide = (i: number) =>
+        setSlides(prev => prev.filter((_, idx) => idx !== i))
+
+    const generateContent = async () => {
+        setAiLoading(true)
+        setAiErr(null)
+        setImages([])
+        try {
+            const data = await adminFetch('/api/admin/generate-post-content', token, {
+                method: 'POST',
+                body: JSON.stringify({ format, pilar, topic, dayOfWeek: DAY_NAMES[dow] }),
+            })
+            setSlides(data.slides ?? [])
+            setCaption(data.caption ?? '')
+        } catch (e: unknown) {
+            setAiErr(e instanceof Error ? e.message : String(e))
+        } finally {
+            setAiLoading(false)
+        }
+    }
+
+    const generateImages = async () => {
+        if (!slides.length) return
+        setImgLoading(true)
+        setImgErr(null)
+        setImages([])
+        try {
+            const data = await adminFetch('/api/admin/generate-post', token, {
+                method: 'POST',
+                body: JSON.stringify({ slides }),
+            })
+            setImages(data.images)
+        } catch (e: unknown) {
+            setImgErr(e instanceof Error ? e.message : String(e))
+        } finally {
+            setImgLoading(false)
+        }
+    }
+
+    const downloadAll = () => {
+        images.forEach(({ name, data }, i) => {
+            setTimeout(() => {
+                const a = document.createElement('a')
+                a.href = `data:image/png;base64,${data}`
+                a.download = name
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+            }, i * 350)
+        })
+    }
+
+    const labelSt: React.CSSProperties = {
+        color: '#475569', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em',
+        textTransform: 'uppercase', display: 'block', marginBottom: 6,
+    }
+
+    const chipSt = (active: boolean, color = '#2A60C2'): React.CSSProperties => ({
+        padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+        background: active ? color : '#1e293b',
+        border: `1.5px solid ${active ? color : '#334155'}`,
+        color: active ? '#fff' : '#64748b',
+        transition: 'all 0.15s',
+    })
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <BlockTitle icon={Image} title="Gerador de Posts" subtitle="Crie conteúdo para o Instagram do FlyWise com IA" />
+
+            {/* ── Painel de Criação ── */}
+            <div style={{ background: '#0d1117', border: '1px solid #1e293b', borderRadius: 12, padding: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+                    <Zap size={14} style={{ color: '#2A60C2' }} />
+                    <span style={{ color: '#f1f5f9', fontSize: 13, fontWeight: 700 }}>Gerar conteúdo com IA</span>
+                    <span style={{ marginLeft: 'auto', color: '#334155', fontSize: 11, background: '#111827', border: '1px solid #1e293b', borderRadius: 6, padding: '3px 8px' }}>
+                        {rec.label}
+                    </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div>
+                        <label style={labelSt}>Formato</label>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {[
+                                { id: 'carrossel', label: 'Carrossel Feed' },
+                                { id: 'isolado',   label: 'Post Isolado Feed' },
+                                { id: 'story',     label: 'Story' },
+                            ].map(f => (
+                                <button key={f.id} onClick={() => setFormat(f.id)} style={chipSt(format === f.id)}>
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style={labelSt}>Pilar</label>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {[
+                                { id: 'estrategia', label: 'Estratégia' },
+                                { id: 'produto',    label: 'Produto' },
+                                { id: 'inspiracao', label: 'Inspiração' },
+                                { id: 'prova',      label: 'Prova' },
+                            ].map(p => (
+                                <button key={p.id} onClick={() => setPilar(p.id)} style={chipSt(pilar === p.id, '#7c3aed')}>
+                                    {p.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style={labelSt}>Tema ou ângulo (opcional)</label>
+                        <input
+                            value={topic}
+                            onChange={e => setTopic(e.target.value)}
+                            placeholder="Ex: como saber se vale usar milhas numa viagem internacional"
+                            style={inputSt()}
+                            onKeyDown={e => e.key === 'Enter' && generateContent()}
+                        />
+                        <p style={{ color: '#334155', fontSize: 11, marginTop: 6 }}>
+                            Deixe em branco para a IA escolher o melhor tema para o {DAY_NAMES[dow].toLowerCase()}.
+                        </p>
+                    </div>
+
+                    {aiErr && (
+                        <div style={{ background: '#2a0a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: '#fca5a5', fontSize: 12 }}>
+                            {aiErr}
+                        </div>
+                    )}
+
+                    <button onClick={generateContent} disabled={aiLoading} style={{
+                        background: aiLoading ? '#1e293b' : 'linear-gradient(135deg, #2A60C2, #7c3aed)',
+                        border: 'none', borderRadius: 10, color: aiLoading ? '#475569' : '#fff',
+                        fontSize: 14, fontWeight: 700, padding: '13px 22px', cursor: aiLoading ? 'not-allowed' : 'pointer',
+                        alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s',
+                    }}>
+                        {aiLoading
+                            ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Gerando conteúdo...</>
+                            : <><Zap size={15} /> Gerar conteúdo</>}
+                    </button>
+                </div>
+            </div>
+
+            {/* ── Editor de Slides ── */}
+            {slides.length > 0 && <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <p style={{ color: '#64748b', fontSize: 12, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0 }}>
+                        {slides.length} slides gerados — edite se necessário
+                    </p>
+                    {slides.length < 7 && (
+                        <button onClick={addSlide} style={{ ...S.btnSm, gap: 5 }}>
+                            <Plus size={12} /> Adicionar slide
+                        </button>
+                    )}
+                </div>
+
+                {slides.map((slide, i) => (
+                    <div key={i} style={{ background: '#0d1117', border: '1px solid #1e293b', borderRadius: 12, padding: 20 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ width: 18, height: 18, borderRadius: 4, background: BG_COLORS[slide.background], border: '1px solid #334155', flexShrink: 0 }} />
+                                <span style={{ color: '#94a3b8', fontSize: 13, fontWeight: 700 }}>Slide {i + 1}</span>
+                            </div>
+                            {slides.length > 1 && (
+                                <button onClick={() => removeSlide(i)} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: 4 }}>
+                                    <Trash2 size={13} />
+                                </button>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+                            {(['navy', 'white', 'snow', 'vibrant'] as SlideBg[]).map(bg => (
+                                <button key={bg} onClick={() => updateSlide(i, 'background', bg)} style={{
+                                    padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                    background: slide.background === bg ? BG_COLORS[bg] : '#1e293b',
+                                    border: `1.5px solid ${slide.background === bg ? BG_COLORS[bg] : '#334155'}`,
+                                    color: slide.background === bg ? BG_TEXT[bg] : '#64748b',
+                                    transition: 'all 0.12s',
+                                }}>
+                                    {BG_LABELS[bg]}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                            <div>
+                                <label style={labelSt}>Tag</label>
+                                <input value={slide.tag} onChange={e => updateSlide(i, 'tag', e.target.value)}
+                                    placeholder="O PROBLEMA" style={inputSt()} />
+                            </div>
+                            <div>
+                                <label style={labelSt}>Swipe hint</label>
+                                <input value={slide.swipeHint} onChange={e => updateSlide(i, 'swipeHint', e.target.value)}
+                                    placeholder="arrasta →" style={inputSt()} />
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: 10 }}>
+                            <label style={labelSt}>Headline</label>
+                            <textarea value={slide.headline} onChange={e => updateSlide(i, 'headline', e.target.value)}
+                                rows={3} placeholder="Título principal"
+                                style={inputSt({ fontFamily: 'Manrope, sans-serif', fontWeight: 800, resize: 'vertical', height: 84 })} />
+                        </div>
+
+                        <div>
+                            <label style={labelSt}>Corpo</label>
+                            <textarea value={slide.body} onChange={e => updateSlide(i, 'body', e.target.value)}
+                                rows={3} placeholder="Texto do corpo (↵ = nova linha)"
+                                style={inputSt({ resize: 'vertical', height: 96 })} />
+                        </div>
+                    </div>
+                ))}
+
+                {/* Caption */}
+                <div style={{ background: '#0d1117', border: '1px solid #1e293b', borderRadius: 12, padding: 20 }}>
+                    <label style={labelSt}>Caption (Instagram)</label>
+                    <textarea value={caption} onChange={e => setCaption(e.target.value)}
+                        rows={6} placeholder="Caption com hashtags..."
+                        style={inputSt({ resize: 'vertical', height: 160 })} />
+                    {caption && (
+                        <button onClick={() => navigator.clipboard.writeText(caption)}
+                            style={{ ...S.btnXs, marginTop: 8 }}>
+                            Copiar caption
+                        </button>
+                    )}
+                </div>
+
+                {/* Gerar imagens */}
+                {imgErr && (
+                    <div style={{ background: '#2a0a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: '#fca5a5', fontSize: 12 }}>
+                        {imgErr}
+                    </div>
+                )}
+
+                <button onClick={generateImages} disabled={imgLoading} style={{
+                    background: imgLoading ? '#1e293b' : '#2A60C2', border: 'none', borderRadius: 10,
+                    color: imgLoading ? '#475569' : '#fff', fontSize: 14, fontWeight: 700, padding: '13px 22px',
+                    cursor: imgLoading ? 'not-allowed' : 'pointer', alignSelf: 'flex-start',
+                    display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
+                }}>
+                    {imgLoading
+                        ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Renderizando slides...</>
+                        : <><Image size={15} /> Gerar {slides.length} Slides (PNG)</>}
+                </button>
+
+                {/* Resultados */}
+                {images.length > 0 && (
+                    <div style={{ background: '#0d1117', border: '1px solid #166534', borderRadius: 12, padding: 24 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <CheckCircle size={15} style={{ color: '#22c55e' }} />
+                                <span style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 700 }}>{images.length} slides prontos</span>
+                            </div>
+                            <button onClick={downloadAll} style={{ ...S.btnSm, background: '#14532d', borderColor: '#166534', color: '#4ade80' }}>
+                                Baixar tudo ({images.length} PNGs)
+                            </button>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                            {images.map(({ name, data }) => (
+                                <a key={name} href={`data:image/png;base64,${data}`} download={name}
+                                    style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', textDecoration: 'none' }}
+                                    title={`Clique para baixar ${name}`}>
+                                    <img src={`data:image/png;base64,${data}`} alt={name}
+                                        style={{ width: 100, height: 125, objectFit: 'cover', borderRadius: 8, border: '1px solid #1e293b', transition: 'border-color 0.15s' }} />
+                                    <span style={{ color: '#475569', fontSize: 10 }}>{name}</span>
+                                </a>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </>}
+        </div>
+    )
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const S = {
@@ -1055,11 +1386,12 @@ export default function Admin() {
                         <h1 style={{ color: '#f1f5f9', fontSize: 18, fontWeight: 800, margin: 0 }}>{active.label}</h1>
                     </div>
 
-                    {section === 'dashboard'  && <Dashboard  token={token} />}
-                    {section === 'usuarios'   && <Usuarios   token={token} />}
-                    {section === 'custos'     && <Custos     token={token} />}
-                    {section === 'promocoes'  && <Promocoes  token={token} />}
-                    {section === 'logs'       && <Logs       token={token} />}
+                    {section === 'dashboard'  && <Dashboard      token={token} />}
+                    {section === 'usuarios'   && <Usuarios      token={token} />}
+                    {section === 'custos'     && <Custos         token={token} />}
+                    {section === 'promocoes'  && <Promocoes      token={token} />}
+                    {section === 'logs'       && <Logs           token={token} />}
+                    {section === 'posts'      && <PostGenerator  token={token} />}
                 </main>
             </div>
         </div>

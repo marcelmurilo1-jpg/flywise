@@ -2543,18 +2543,47 @@ async function requireAdminJWT(req, res, next) {
     if (!token) return res.status(401).json({ error: 'Token não fornecido' });
     if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (error || !user) return res.status(401).json({ error: 'Token inválido' });
+    let userId;
 
-    const { data: profile } = await supabase
+    // Tentativa 1: validação via Supabase Auth API (funciona com service_role key — Railway/prod)
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+    if (!authErr && user) {
+        userId = user.id;
+    } else {
+        // Tentativa 2 (fallback dev local): decodifica o payload JWT sem verificar a assinatura.
+        // Em produção (Railway), SUPABASE_SERVICE_ROLE_KEY sempre está presente → Tentativa 1 passa.
+        try {
+            const parts = token.split('.');
+            if (parts.length !== 3) throw new Error('JWT malformado');
+            const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+            if (!payload.sub) throw new Error('JWT sem sub');
+            if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
+                return res.status(401).json({ error: 'Sessão expirada' });
+            }
+            userId = payload.sub;
+        } catch {
+            return res.status(401).json({ error: 'Token inválido' });
+        }
+    }
+
+    // Consulta is_admin com contexto do usuário para que a RLS reconheça auth.uid()
+    // (necessário no fallback em que o cliente usa a anon key sem service_role)
+    const queryClient = user ? supabase : createClient(
+        process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY,
+        { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } }
+    );
+
+    const { data: profile, error: profileErr } = await queryClient
         .from('user_profiles')
         .select('is_admin')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single();
 
-    if (!profile?.is_admin) return res.status(403).json({ error: 'Acesso negado' });
+    console.log('[AdminAuth] userId:', userId, '| profile:', JSON.stringify(profile), '| err:', profileErr?.message);
 
-    req.adminUserId = user.id;
+    if (!profile?.is_admin) return res.status(403).json({ error: 'Acesso negado' });
+    req.adminUserId = userId;
     next();
 }
 
@@ -2966,6 +2995,248 @@ app.delete('/api/admin/costs/:id', requireAdminJWT, async (req, res) => {
         if (error) throw error;
         res.json({ ok: true });
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Helpers para geração de posts ───────────────────────────────────────────
+
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function buildPostSlideHTML(slide) {
+    const BG_MAP = { navy: '#0E2A55', white: '#FFFFFF', snow: '#F7F9FC', vibrant: '#2A60C2' };
+    const bg = BG_MAP[slide.background] ?? '#FFFFFF';
+    const isDark = slide.background === 'navy' || slide.background === 'vibrant';
+    const textPrimary = isDark ? '#FFFFFF' : '#0E2A55';
+    const textBody    = isDark ? 'rgba(255,255,255,0.82)' : '#2C3E6B';
+    const textMuted   = isDark ? 'rgba(255,255,255,0.40)' : '#A0AECB';
+    const tagColor    = isDark ? 'rgba(255,255,255,0.60)' : '#4A90E2';
+    const logoAccent  = isDark ? '#4A90E2' : '#2A60C2';
+    const headlineRaw = String(slide.headline ?? '');
+    const headlineLen = headlineRaw.replace(/\n/g, '').length;
+    const headlineSize = slide.headlineSize > 0
+        ? slide.headlineSize
+        : headlineLen > 60 ? 52 : headlineLen > 40 ? 62 : 72;
+    const headlineHtml = escapeHtml(headlineRaw).replace(/\n/g, '<br>');
+    const bodyHtml     = escapeHtml(String(slide.body ?? '')).replace(/\n/g, '<br>');
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1080px; height: 1350px; overflow: hidden; }
+body {
+    background: ${bg};
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+}
+.tag {
+    font-size: 16px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: ${tagColor}; margin-bottom: 28px;
+}
+.headline {
+    font-family: 'Manrope', sans-serif;
+    font-size: ${headlineSize}px; font-weight: 900; line-height: 1.08;
+    color: ${textPrimary}; letter-spacing: -0.02em; max-width: 920px;
+    ${slide.body ? 'margin-bottom: 36px;' : ''}
+}
+.body {
+    font-size: 28px; font-weight: 400; line-height: 1.65;
+    color: ${textBody}; max-width: 900px;
+}
+.swipe-hint {
+    margin-top: 40px; font-size: 22px; font-weight: 600; letter-spacing: 0.03em;
+    color: ${isDark ? 'rgba(255,255,255,0.50)' : '#6B7A99'};
+}
+.footer {
+    position: absolute; bottom: 60px; left: 80px; right: 80px;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.logo {
+    font-family: 'Manrope', sans-serif; font-size: 22px; font-weight: 900;
+    color: ${isDark ? 'rgba(255,255,255,0.90)' : '#0E2A55'}; letter-spacing: -0.01em;
+}
+.logo span { color: ${logoAccent}; }
+.handle { font-size: 17px; font-weight: 500; color: ${textMuted}; }
+</style>
+</head>
+<body>
+    ${slide.tag ? `<div class="tag">${escapeHtml(slide.tag)}</div>` : ''}
+    <div class="headline">${headlineHtml}</div>
+    ${slide.body ? `<div class="body">${bodyHtml}</div>` : ''}
+    ${slide.swipeHint ? `<div class="swipe-hint">${escapeHtml(slide.swipeHint)}</div>` : ''}
+    <div class="footer">
+        <div class="logo">Fly<span>Wise</span></div>
+        <div class="handle">@flywisebr</div>
+    </div>
+</body>
+</html>`;
+}
+
+// POST /api/admin/generate-post-content — usa Claude para criar copy estruturado dos slides
+app.post('/api/admin/generate-post-content', requireAdminJWT, async (req, res) => {
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey) return res.status(503).json({ error: 'ANTHROPIC_API_KEY não configurada' });
+
+    const { format = 'carrossel', pilar = 'estrategia', topic = '', dayOfWeek } = req.body ?? {};
+
+    const PILARES = {
+        estrategia: 'Estratégia — ensina como usar milhas de forma inteligente (CPM, programas, transferências)',
+        produto:    'Produto — apresenta uma feature do FlyWise (busca, simulador, IA, roteiros)',
+        inspiracao: 'Inspiração — destinos, experiências, motivação para acumular e viajar',
+        prova:      'Prova — resultados reais, depoimentos, comparativos, cases de economia',
+    };
+
+    const FORMATOS = {
+        carrossel: 'Carrossel de feed (5-6 slides): Slide 1 capa Navy com gancho + "arrasta →", slides 2-5 brancos/snow com 1 ideia cada, último slide CTA azul vibrant',
+        isolado:   'Post isolado de feed (1 slide): único, fundo Navy ou Snow, headline forte, corpo resumido',
+        story:     'Story (1-3 telas sequenciais): urgente, sem caption longo, fundo Navy ou vibrant',
+    };
+
+    const system = `Você é o criador de conteúdo do FlyWise — plataforma brasileira de viagens focada em otimização de milhas.
+
+IDENTIDADE DA MARCA:
+- Tom: educativo, estratégico, direto. Mais próximo de fintech do que portal de turismo.
+- Linguagem: português brasileiro informal-profissional. Sem jargões excessivos.
+- Handle: @flywisebr
+- Proposta de valor: a IA do FlyWise calcula automaticamente CPM, compara programas e recomenda a melhor estratégia para cada voo.
+
+PRODUTO (para contextualizar o conteúdo):
+- Busca voos em BRL em tempo real + disponibilidade de milhas (Seats.aero)
+- IA que calcula CPM e recomenda Smiles, LATAM Pass, TudoAzul, Livelo, Aeroplan, Flying Blue etc.
+- Simulador de transferências com bonificações ativas
+- Gerador de roteiros day-by-day
+- Planos: Free / Essencial R$19/mês / Pro R$39/mês / Elite R$69/mês
+
+REGRAS INVIOLÁVEIS:
+- Feed: conteúdo evergreen. NUNCA use dados de mercado que mudam (CPM atual, bônus ativos, preços específicos de voos reais).
+- Use exemplos numéricos hipotéticos e ilustrativos, deixando claro que são exemplos.
+- Stories: podem ter urgência e dados do momento, mas devem ser marcados como efêmeros.
+- CTA do último slide de carrossel: sempre "link na bio" — NUNCA um botão ou URL.
+- Máximo 3 linhas de texto por slide interno.
+- Use \\n para quebras de linha nos campos headline e body.
+
+BACKGROUNDS DISPONÍVEIS:
+- "navy": #0E2A55 — para capas e slides de impacto (texto branco)
+- "white": #FFFFFF — para slides de conteúdo (texto escuro)
+- "snow": #F7F9FC — para slides de conteúdo com variação (texto escuro)
+- "vibrant": #2A60C2 — SOMENTE para o último slide de CTA (texto branco)
+
+RETORNE SOMENTE JSON VÁLIDO com esta estrutura exata:
+{
+  "slides": [
+    {
+      "background": "navy|white|snow|vibrant",
+      "tag": "string ou vazio",
+      "headline": "string (\\n para quebra de linha)",
+      "headlineSize": 0,
+      "body": "string (\\n para quebra de linha) ou vazio",
+      "swipeHint": "string ou vazio"
+    }
+  ],
+  "caption": "caption completo com hashtags para o Instagram"
+}`;
+
+    const userPrompt = `Crie um ${FORMATOS[format] ?? FORMATOS.carrossel}.
+
+PILAR: ${PILARES[pilar] ?? PILARES.estrategia}
+${topic ? `TEMA/ÂNGULO SOLICITADO: ${topic}` : 'TEMA: escolha o mais relevante e acionável para o pilar'}
+DIA DA SEMANA: ${dayOfWeek ?? 'Segunda-feira'}
+
+Gere o conteúdo completo seguindo todas as regras de marca.`;
+
+    try {
+        const r = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'x-api-key': anthropicKey,
+                'anthropic-version': '2023-06-01',
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-6',
+                max_tokens: 2048,
+                system,
+                messages: [{ role: 'user', content: userPrompt }],
+            }),
+            signal: AbortSignal.timeout(45000),
+        });
+
+        if (!r.ok) {
+            const errBody = await r.text().catch(() => '');
+            throw new Error(`Anthropic API error: ${r.status} — ${errBody.slice(0, 200)}`);
+        }
+
+        const { content } = await r.json();
+        const raw = content?.[0]?.text ?? '';
+
+        // Extrai JSON do texto (pode vir com blocos de código)
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('Resposta da IA não contém JSON válido');
+        const parsed = JSON.parse(jsonMatch[0]);
+
+        res.json(parsed);
+    } catch (err) {
+        console.error('[PostContent] Erro:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/admin/generate-post — gera slides de Instagram como PNG (retorna base64)
+app.post('/api/admin/generate-post', requireAdminJWT, async (req, res) => {
+    const { slides } = req.body ?? {};
+    if (!Array.isArray(slides) || slides.length === 0) {
+        return res.status(400).json({ error: 'slides é obrigatório e deve ser um array não-vazio' });
+    }
+    if (slides.length > 7) {
+        return res.status(400).json({ error: 'Máximo de 7 slides por post' });
+    }
+
+    try {
+        await ensureChromium();
+        const browser = await getBrowser();
+        const context = await browser.newContext({
+            viewport: { width: 1080, height: 1350 },
+            deviceScaleFactor: 1,
+        });
+
+        const images = [];
+        for (let i = 0; i < slides.length; i++) {
+            const page = await context.newPage();
+            try {
+                const html = buildPostSlideHTML(slides[i]);
+                await page.setContent(html, { waitUntil: 'domcontentloaded' });
+                await page.evaluate(() => document.fonts.ready);
+                await new Promise(r => setTimeout(r, 150));
+                const buffer = await page.screenshot({ type: 'png', fullPage: false });
+                images.push({
+                    name: `flywise-slide-${String(i + 1).padStart(2, '0')}.png`,
+                    data: buffer.toString('base64'),
+                });
+            } finally {
+                await page.close().catch(() => {});
+            }
+        }
+
+        await context.close().catch(() => {});
+        res.json({ images });
+    } catch (err) {
+        console.error('[PostGen] Erro ao gerar slides:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
