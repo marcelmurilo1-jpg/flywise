@@ -35,11 +35,21 @@ export default function Auth() {
             if (formType === 'login') {
                 const { error } = await signIn(email, password)
                 if (error) setError(error.message || 'Credenciais inválidas.')
-                else navigate(next, { replace: true })
+                else {
+                    const pendingBilling = sessionStorage.getItem('flywise_pending_billing')
+                    navigate(pendingBilling ? '/onboarding' : next, { replace: true })
+                }
             } else {
                 const { error } = await signUp(email, password, name)
                 if (error) setError(error.message || 'Erro ao criar conta.')
-                else setSuccess('Conta criada! Verifique seu email ou faça login.')
+                else {
+                    const pendingBilling = sessionStorage.getItem('flywise_pending_billing')
+                    if (pendingBilling) {
+                        setSuccess('Conta criada! Faça login para ativar seu plano.')
+                    } else {
+                        setSuccess('Conta criada! Verifique seu email ou faça login.')
+                    }
+                }
             }
         } finally { setLoading(false) }
     }

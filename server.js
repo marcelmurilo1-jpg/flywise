@@ -1607,7 +1607,7 @@ const ABACATEPAY_PRODUCT_IDS = {
 };
 
 app.post('/api/checkout', async (req, res) => {
-    const { origin, destination, departureDate, returnDate, totalBrl, outboundCompany, returnCompany, customerName, customerEmail, customerTaxId, customerPhone, userId, billingType } = req.body;
+    const { origin, destination, departureDate, returnDate, totalBrl, outboundCompany, returnCompany, customerName, customerEmail, customerTaxId, customerPhone, userId, billingType, returnPath } = req.body;
 
     if (!totalBrl || totalBrl <= 0) {
         return res.status(400).json({ error: 'totalBrl é obrigatório e deve ser maior que zero' });
@@ -1672,8 +1672,8 @@ app.post('/api/checkout', async (req, res) => {
             methods,
             customerId,
             products: [productEntry],
-            returnUrl: `${req.headers.origin || 'http://localhost:5173'}/onboarding`,
-            completionUrl: `${req.headers.origin || 'http://localhost:5173'}/onboarding`,
+            returnUrl: `${req.headers.origin || 'http://localhost:5173'}${returnPath || '/onboarding'}`,
+            completionUrl: `${req.headers.origin || 'http://localhost:5173'}${returnPath || '/onboarding'}`,
             metadata: { origin, destination, departureDate, returnDate, outboundCompany, returnCompany, userId, billingType },
         };
 
