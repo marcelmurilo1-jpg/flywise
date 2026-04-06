@@ -1054,7 +1054,7 @@ function PostGenerator({ token }: { token: string }) {
         try {
             const data = await adminFetch('/api/admin/generate-post', token, {
                 method: 'POST',
-                body: JSON.stringify({ slides }),
+                body: JSON.stringify({ slides, postFormat: format === 'story' ? 'story' : 'feed' }),
             })
             setImages(data.images)
         } catch (e: unknown) {
@@ -1284,15 +1284,18 @@ function PostGenerator({ token }: { token: string }) {
                             </button>
                         </div>
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                            {images.map(({ name, data }) => (
-                                <a key={name} href={`data:image/png;base64,${data}`} download={name}
-                                    style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', textDecoration: 'none' }}
-                                    title={`Clique para baixar ${name}`}>
-                                    <img src={`data:image/png;base64,${data}`} alt={name}
-                                        style={{ width: 100, height: 125, objectFit: 'cover', borderRadius: 8, border: '1px solid #1e293b', transition: 'border-color 0.15s' }} />
-                                    <span style={{ color: '#475569', fontSize: 10 }}>{name}</span>
-                                </a>
-                            ))}
+                            {images.map(({ name, data }) => {
+                                const th = format === 'story' ? 171 : 120
+                                return (
+                                    <a key={name} href={`data:image/png;base64,${data}`} download={name}
+                                        style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', textDecoration: 'none' }}
+                                        title={`Clique para baixar ${name}`}>
+                                        <img src={`data:image/png;base64,${data}`} alt={name}
+                                            style={{ width: 96, height: th, objectFit: 'cover', borderRadius: 8, border: '1px solid #1e293b' }} />
+                                        <span style={{ color: '#475569', fontSize: 10 }}>{name}</span>
+                                    </a>
+                                )
+                            })}
                         </div>
                     </div>
                 )}

@@ -3009,22 +3009,23 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-function buildPostSlideHTML(slide) {
+function buildPostSlideHTML(slide, slideHeight = 1350) {
     const BG_MAP = { navy: '#0E2A55', white: '#FFFFFF', snow: '#F7F9FC', vibrant: '#2A60C2' };
-    const bg = BG_MAP[slide.background] ?? '#FFFFFF';
-    const isDark = slide.background === 'navy' || slide.background === 'vibrant';
-    const textPrimary = isDark ? '#FFFFFF' : '#0E2A55';
-    const textBody    = isDark ? 'rgba(255,255,255,0.82)' : '#2C3E6B';
-    const textMuted   = isDark ? 'rgba(255,255,255,0.40)' : '#A0AECB';
-    const tagColor    = isDark ? 'rgba(255,255,255,0.60)' : '#4A90E2';
-    const logoAccent  = isDark ? '#4A90E2' : '#2A60C2';
-    const headlineRaw = String(slide.headline ?? '');
-    const headlineLen = headlineRaw.replace(/\n/g, '').length;
+    const bg      = BG_MAP[slide.background] ?? '#FFFFFF';
+    const isDark  = slide.background === 'navy' || slide.background === 'vibrant';
+    const isNavy  = slide.background === 'navy';
+    const isLight = !isDark;
+
+    const headlineRaw  = String(slide.headline ?? '');
+    const headlineLen  = headlineRaw.replace(/\n/g, '').length;
     const headlineSize = slide.headlineSize > 0
         ? slide.headlineSize
-        : headlineLen > 60 ? 52 : headlineLen > 40 ? 62 : 72;
+        : headlineLen > 70 ? 58 : headlineLen > 50 ? 68 : headlineLen > 30 ? 78 : 88;
     const headlineHtml = escapeHtml(headlineRaw).replace(/\n/g, '<br>');
     const bodyHtml     = escapeHtml(String(slide.body ?? '')).replace(/\n/g, '<br>');
+
+    const vPad  = slideHeight === 1920 ? 110 : 80;   // vertical padding
+    const lPad  = isDark ? 96 : 80;                  // left padding (dark has accent bar)
 
     return `<!DOCTYPE html>
 <html>
@@ -3034,54 +3035,137 @@ function buildPostSlideHTML(slide) {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800;900&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { width: 1080px; height: 1350px; overflow: hidden; }
+html, body { width: 1080px; height: ${slideHeight}px; overflow: hidden; }
+
 body {
     background: ${bg};
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
-    padding: 80px;
+    position: relative;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    position: relative;
+    padding: ${vPad}px 80px ${vPad}px ${lPad}px;
 }
+
+/* ─── Barra de acento lateral (slides escuros) ─── */
+.accent-bar {
+    position: absolute; left: 0; top: ${vPad}px; bottom: ${vPad}px;
+    width: 6px;
+    background: linear-gradient(180deg, #4A90E2 0%, #2A60C2 60%, rgba(42,96,194,0) 100%);
+    border-radius: 0 4px 4px 0;
+}
+
+/* ─── Barra de progresso superior (slides claros) ─── */
+.progress-bar {
+    position: absolute; top: 0; left: 0; right: 0; height: 5px;
+    background: linear-gradient(90deg, #2A60C2 0%, #4A90E2 100%);
+}
+
+/* ─── Elementos decorativos geométricos ─── */
+.deco-ring {
+    position: absolute;
+    top: ${slideHeight === 1920 ? '-180px' : '-140px'}; right: -140px;
+    width: ${slideHeight === 1920 ? '680px' : '580px'};
+    height: ${slideHeight === 1920 ? '680px' : '580px'};
+    border-radius: 50%;
+    border: ${isDark ? '1px solid rgba(74,144,226,0.12)' : '1px solid rgba(42,96,194,0.06)'};
+    pointer-events: none;
+}
+.deco-ring-2 {
+    position: absolute;
+    top: ${slideHeight === 1920 ? '-80px' : '-60px'}; right: -60px;
+    width: ${slideHeight === 1920 ? '420px' : '360px'};
+    height: ${slideHeight === 1920 ? '420px' : '360px'};
+    border-radius: 50%;
+    background: ${isNavy ? 'rgba(74,144,226,0.06)' : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(42,96,194,0.04)'};
+    pointer-events: none;
+}
+.deco-dot-grid {
+    position: absolute; bottom: 120px; right: 80px;
+    width: 120px; height: 120px;
+    background-image: radial-gradient(circle, ${isDark ? 'rgba(74,144,226,0.25)' : 'rgba(42,96,194,0.12)'} 1.5px, transparent 1.5px);
+    background-size: 20px 20px;
+    pointer-events: none;
+}
+
+/* ─── Tag ─── */
 .tag {
-    font-size: 16px; font-weight: 700; letter-spacing: 0.12em;
-    text-transform: uppercase; color: ${tagColor}; margin-bottom: 28px;
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-bottom: 28px; width: fit-content;
 }
+.tag-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    background: ${isDark ? '#4A90E2' : '#2A60C2'};
+}
+.tag-label {
+    font-size: 13px; font-weight: 700;
+    letter-spacing: 0.13em; text-transform: uppercase;
+    color: ${isDark ? '#4A90E2' : '#2A60C2'};
+}
+
+/* ─── Headline ─── */
 .headline {
     font-family: 'Manrope', sans-serif;
-    font-size: ${headlineSize}px; font-weight: 900; line-height: 1.08;
-    color: ${textPrimary}; letter-spacing: -0.02em; max-width: 920px;
-    ${slide.body ? 'margin-bottom: 36px;' : ''}
+    font-size: ${headlineSize}px; font-weight: 900;
+    line-height: 1.04; letter-spacing: -0.028em;
+    color: ${isDark ? '#FFFFFF' : '#0E2A55'};
+    max-width: 920px;
+    ${slide.body ? 'margin-bottom: 32px;' : ''}
 }
+
+/* ─── Corpo ─── */
 .body {
-    font-size: 28px; font-weight: 400; line-height: 1.65;
-    color: ${textBody}; max-width: 900px;
+    font-size: ${slideHeight === 1920 ? '30px' : '27px'};
+    font-weight: 400; line-height: 1.72;
+    color: ${isDark ? 'rgba(255,255,255,0.70)' : '#2C3E6B'};
+    max-width: 900px;
 }
+
+/* ─── Swipe hint ─── */
 .swipe-hint {
-    margin-top: 40px; font-size: 22px; font-weight: 600; letter-spacing: 0.03em;
-    color: ${isDark ? 'rgba(255,255,255,0.50)' : '#6B7A99'};
+    margin-top: 48px;
+    font-size: 17px; font-weight: 600; letter-spacing: 0.07em;
+    color: ${isDark ? 'rgba(255,255,255,0.36)' : '#C8D4E8'};
+    text-transform: uppercase;
 }
+
+/* ─── Footer ─── */
 .footer {
-    position: absolute; bottom: 60px; left: 80px; right: 80px;
+    position: absolute;
+    bottom: ${slideHeight === 1920 ? '80px' : '52px'};
+    left: ${lPad}px; right: 80px;
     display: flex; justify-content: space-between; align-items: center;
 }
 .logo {
-    font-family: 'Manrope', sans-serif; font-size: 22px; font-weight: 900;
-    color: ${isDark ? 'rgba(255,255,255,0.90)' : '#0E2A55'}; letter-spacing: -0.01em;
+    font-family: 'Manrope', sans-serif;
+    font-size: 19px; font-weight: 900; letter-spacing: -0.01em;
+    color: ${isDark ? 'rgba(255,255,255,0.85)' : '#0E2A55'};
+    display: flex; align-items: center; gap: 7px;
 }
-.logo span { color: ${logoAccent}; }
-.handle { font-size: 17px; font-weight: 500; color: ${textMuted}; }
+.logo-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: ${isDark ? '#4A90E2' : '#2A60C2'};
+}
+.handle {
+    font-size: 14px; font-weight: 500; letter-spacing: 0.03em;
+    color: ${isDark ? 'rgba(255,255,255,0.28)' : '#C8D4E8'};
+}
 </style>
 </head>
 <body>
-    ${slide.tag ? `<div class="tag">${escapeHtml(slide.tag)}</div>` : ''}
+    ${isDark ? '<div class="accent-bar"></div>' : '<div class="progress-bar"></div>'}
+    <div class="deco-ring"></div>
+    <div class="deco-ring-2"></div>
+    <div class="deco-dot-grid"></div>
+
+    ${slide.tag ? `<div class="tag"><div class="tag-dot"></div><div class="tag-label">${escapeHtml(slide.tag)}</div></div>` : ''}
     <div class="headline">${headlineHtml}</div>
     ${slide.body ? `<div class="body">${bodyHtml}</div>` : ''}
     ${slide.swipeHint ? `<div class="swipe-hint">${escapeHtml(slide.swipeHint)}</div>` : ''}
+
     <div class="footer">
-        <div class="logo">Fly<span>Wise</span></div>
+        <div class="logo"><div class="logo-dot"></div>FlyWise</div>
         <div class="handle">@flywisebr</div>
     </div>
 </body>
@@ -3199,7 +3283,7 @@ Gere o conteúdo completo seguindo todas as regras de marca.`;
 
 // POST /api/admin/generate-post — gera slides de Instagram como PNG (retorna base64)
 app.post('/api/admin/generate-post', requireAdminJWT, async (req, res) => {
-    const { slides } = req.body ?? {};
+    const { slides, postFormat = 'feed' } = req.body ?? {};
     if (!Array.isArray(slides) || slides.length === 0) {
         return res.status(400).json({ error: 'slides é obrigatório e deve ser um array não-vazio' });
     }
@@ -3207,11 +3291,13 @@ app.post('/api/admin/generate-post', requireAdminJWT, async (req, res) => {
         return res.status(400).json({ error: 'Máximo de 7 slides por post' });
     }
 
+    const slideHeight = postFormat === 'story' ? 1920 : 1350;
+
     try {
         await ensureChromium();
         const browser = await getBrowser();
         const context = await browser.newContext({
-            viewport: { width: 1080, height: 1350 },
+            viewport: { width: 1080, height: slideHeight },
             deviceScaleFactor: 1,
         });
 
@@ -3219,7 +3305,7 @@ app.post('/api/admin/generate-post', requireAdminJWT, async (req, res) => {
         for (let i = 0; i < slides.length; i++) {
             const page = await context.newPage();
             try {
-                const html = buildPostSlideHTML(slides[i]);
+                const html = buildPostSlideHTML(slides[i], slideHeight);
                 await page.setContent(html, { waitUntil: 'domcontentloaded' });
                 await page.evaluate(() => document.fonts.ready);
                 await new Promise(r => setTimeout(r, 150));
