@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Wallet as WalletIcon, Plus, Pencil, Check, X, Trash2, Loader2, ArrowLeftRight, Crown, ChevronDown, ChevronUp, Lock } from 'lucide-react'
+import { Wallet as WalletIcon, Plus, Pencil, Check, X, Trash2, Loader2, ArrowLeftRight, Crown, ChevronDown, ChevronUp, Lock, Globe } from 'lucide-react'
 import { Header } from '@/components/Header'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -8,10 +8,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { PROGRAMS } from '@/lib/airlineMilesMapping'
 import { MILES_CLUBS, CREDIT_CARDS } from '@/lib/transferData'
 import TransferSimulator from '@/pages/TransferSimulator'
+import ParaOndeVoo from '@/pages/ParaOndeVoo'
 import { usePlan } from '@/hooks/usePlan'
 
 type MilesMap = Record<string, number>
-type Tab = 'carteira' | 'simulador'
+type Tab = 'carteira' | 'simulador' | 'para_onde'
 
 // Cores por programa
 const PROGRAM_COLORS: Record<string, string> = {
@@ -186,6 +187,7 @@ export default function Wallet() {
                     {([
                         { id: 'carteira', label: 'Meus Saldos', Icon: WalletIcon },
                         { id: 'simulador', label: 'Simulador de Transferência', Icon: ArrowLeftRight },
+                        { id: 'para_onde', label: 'Para onde posso voar?', Icon: Globe },
                     ] as const).map(tab => (
                         <button
                             key={tab.id}
@@ -547,6 +549,19 @@ export default function Wallet() {
                             ) : (
                                 <TransferSimulator activeClubs={activeClubs} activeClubTiers={activeClubTiers} activeCards={activeCards} />
                             )}
+                        </motion.div>
+                    )}
+
+                    {/* ── Tab: Para onde posso voar? ── */}
+                    {activeTab === 'para_onde' && (
+                        <motion.div key="para_onde" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
+                            <ParaOndeVoo
+                                milesMap={miles}
+                                cardPoints={cardPoints}
+                                activeCards={activeCards}
+                                activeClubs={activeClubs}
+                                activeClubTiers={activeClubTiers}
+                            />
                         </motion.div>
                     )}
 
