@@ -1,0 +1,238 @@
+// src/lib/discoverDestinations.ts
+
+export type Region =
+    | 'nordeste'
+    | 'sul_sudeste'
+    | 'norte_co'
+    | 'america_sul'
+    | 'america_norte'
+    | 'caribe'
+    | 'europa'
+    | 'oriente_medio'
+    | 'asia_oceania'
+    | 'africa'
+
+export const REGION_LABELS: Record<Region, string> = {
+    nordeste:       '🇧🇷 Nordeste',
+    sul_sudeste:    '🇧🇷 Sul/Sudeste',
+    norte_co:       '🇧🇷 Norte/Centro-Oeste',
+    america_sul:    '🌎 América do Sul',
+    america_norte:  '🌎 América do Norte',
+    caribe:         '🏝️ Caribe',
+    europa:         '🌍 Europa',
+    oriente_medio:  '🌙 Oriente Médio',
+    asia_oceania:   '🌏 Ásia/Oceania',
+    africa:         '🌍 África',
+}
+
+export interface Destination {
+    iata:   string
+    name:   string
+    city:   string   // displayed in card (e.g. "Salvador — BA")
+    region: Region
+    emoji:  string
+}
+
+export const DESTINATIONS: Destination[] = [
+    // ── Nordeste ──────────────────────────────────────────────────────────────
+    { iata:'SSA', name:'Salvador',      city:'Salvador — BA',       region:'nordeste',    emoji:'🌴' },
+    { iata:'REC', name:'Recife',        city:'Recife — PE',         region:'nordeste',    emoji:'🌊' },
+    { iata:'FOR', name:'Fortaleza',     city:'Fortaleza — CE',      region:'nordeste',    emoji:'🏖️' },
+    { iata:'NAT', name:'Natal',         city:'Natal — RN',          region:'nordeste',    emoji:'🌅' },
+    { iata:'MCZ', name:'Maceió',        city:'Maceió — AL',         region:'nordeste',    emoji:'🏝️' },
+    { iata:'JPA', name:'João Pessoa',   city:'João Pessoa — PB',    region:'nordeste',    emoji:'🌴' },
+    { iata:'AJU', name:'Aracaju',       city:'Aracaju — SE',        region:'nordeste',    emoji:'🌊' },
+    { iata:'SLZ', name:'São Luís',      city:'São Luís — MA',       region:'nordeste',    emoji:'🏛️' },
+    { iata:'THE', name:'Teresina',      city:'Teresina — PI',       region:'nordeste',    emoji:'🌵' },
+    { iata:'IMP', name:'Imperatriz',    city:'Imperatriz — MA',     region:'nordeste',    emoji:'🌿' },
+    { iata:'STM', name:'Santarém',      city:'Santarém — PA',       region:'nordeste',    emoji:'🌊' },
+    { iata:'MCP', name:'Macapá',        city:'Macapá — AP',         region:'nordeste',    emoji:'🌿' },
+    // ── Sul/Sudeste ───────────────────────────────────────────────────────────
+    { iata:'GRU', name:'Guarulhos',       city:'São Paulo — SP',       region:'sul_sudeste', emoji:'🏙️' },
+    { iata:'GIG', name:'Galeão',          city:'Rio de Janeiro — RJ',  region:'sul_sudeste', emoji:'🏖️' },
+    { iata:'SDU', name:'Santos Dumont',   city:'Rio (centro) — RJ',    region:'sul_sudeste', emoji:'✈️' },
+    { iata:'CNF', name:'Confins',         city:'Belo Horizonte — MG',  region:'sul_sudeste', emoji:'⛰️' },
+    { iata:'VCP', name:'Viracopos',       city:'Campinas — SP',         region:'sul_sudeste', emoji:'✈️' },
+    { iata:'VIX', name:'Eurico de Aguiar',city:'Vitória — ES',          region:'sul_sudeste', emoji:'🌊' },
+    { iata:'POA', name:'Salgado Filho',   city:'Porto Alegre — RS',     region:'sul_sudeste', emoji:'🍷' },
+    { iata:'CWB', name:'Afonso Pena',     city:'Curitiba — PR',         region:'sul_sudeste', emoji:'🌲' },
+    { iata:'FLN', name:'Hercílio Luz',    city:'Florianópolis — SC',    region:'sul_sudeste', emoji:'🏖️' },
+    { iata:'IGU', name:'Cataratas',       city:'Foz do Iguaçu — PR',   region:'sul_sudeste', emoji:'💧' },
+    { iata:'LDB', name:'Londrina',        city:'Londrina — PR',         region:'sul_sudeste', emoji:'🌾' },
+    { iata:'MGF', name:'Maringá',         city:'Maringá — PR',          region:'sul_sudeste', emoji:'🌾' },
+    { iata:'JOI', name:'Joinville',       city:'Joinville — SC',        region:'sul_sudeste', emoji:'🌿' },
+    { iata:'NVT', name:'Navegantes',      city:'Navegantes — SC',       region:'sul_sudeste', emoji:'🌊' },
+    { iata:'UDI', name:'Uberlândia',      city:'Uberlândia — MG',       region:'sul_sudeste', emoji:'🌾' },
+    { iata:'RAO', name:'Ribeirão Preto',  city:'Ribeirão Preto — SP',   region:'sul_sudeste', emoji:'🌾' },
+    // ── Norte/Centro-Oeste ────────────────────────────────────────────────────
+    { iata:'BSB', name:'Brasília',        city:'Brasília — DF',         region:'norte_co', emoji:'🏛️' },
+    { iata:'GYN', name:'Santa Genoveva',  city:'Goiânia — GO',          region:'norte_co', emoji:'🌾' },
+    { iata:'MAN', name:'Eduardo Gomes',   city:'Manaus — AM',            region:'norte_co', emoji:'🌿' },
+    { iata:'BEL', name:'Val de Cans',     city:'Belém — PA',             region:'norte_co', emoji:'🌿' },
+    { iata:'CGB', name:'Marechal Rondon', city:'Cuiabá — MT',            region:'norte_co', emoji:'🌾' },
+    { iata:'CGR', name:'Campo Grande',    city:'Campo Grande — MS',      region:'norte_co', emoji:'🌾' },
+    { iata:'PMW', name:'Palmas',          city:'Palmas — TO',            region:'norte_co', emoji:'🌿' },
+    { iata:'PVH', name:'Belmonte',        city:'Porto Velho — RO',       region:'norte_co', emoji:'🌿' },
+    { iata:'RBR', name:'Plácido de Castro',city:'Rio Branco — AC',       region:'norte_co', emoji:'🌿' },
+    { iata:'BVB', name:'Atlas Brasil',    city:'Boa Vista — RR',         region:'norte_co', emoji:'🌿' },
+    { iata:'CZS', name:'Cruzeiro do Sul', city:'Cruzeiro do Sul — AC',  region:'norte_co', emoji:'🌿' },
+    { iata:'MAB', name:'Marabá',          city:'Marabá — PA',            region:'norte_co', emoji:'🌿' },
+    // ── América do Sul ────────────────────────────────────────────────────────
+    { iata:'EZE', name:'Ezeiza',           city:'Buenos Aires — AR', region:'america_sul', emoji:'🥩' },
+    { iata:'SCL', name:'Arturo Merino',    city:'Santiago — CL',      region:'america_sul', emoji:'⛰️' },
+    { iata:'LIM', name:'Jorge Chávez',     city:'Lima — PE',           region:'america_sul', emoji:'🏛️' },
+    { iata:'BOG', name:'El Dorado',        city:'Bogotá — CO',         region:'america_sul', emoji:'🌸' },
+    { iata:'MDE', name:'Olaya Herrera',    city:'Medellín — CO',       region:'america_sul', emoji:'🌸' },
+    { iata:'CTG', name:'Rafael Núñez',     city:'Cartagena — CO',      region:'america_sul', emoji:'🏖️' },
+    { iata:'CLO', name:'Alfonso Bonilla',  city:'Cali — CO',           region:'america_sul', emoji:'🌿' },
+    { iata:'UIO', name:'Mariscal Sucre',   city:'Quito — EC',          region:'america_sul', emoji:'🌋' },
+    { iata:'GYE', name:'José J. de Olmedo',city:'Guayaquil — EC',      region:'america_sul', emoji:'🌊' },
+    { iata:'MVD', name:'Carrasco',         city:'Montevidéu — UY',     region:'america_sul', emoji:'🏙️' },
+    { iata:'ASU', name:'Silvio Pettirossi',city:'Assunção — PY',       region:'america_sul', emoji:'🌿' },
+    { iata:'CCS', name:'Simón Bolívar',    city:'Caracas — VE',        region:'america_sul', emoji:'🌴' },
+    { iata:'LPB', name:'El Alto',          city:'La Paz — BO',         region:'america_sul', emoji:'⛰️' },
+    { iata:'VVI', name:'Viru Viru',        city:'Santa Cruz — BO',     region:'america_sul', emoji:'🌿' },
+    { iata:'CBB', name:'Jorge Wilstermann',city:'Cochabamba — BO',     region:'america_sul', emoji:'⛰️' },
+    // ── América do Norte ──────────────────────────────────────────────────────
+    { iata:'MIA', name:'Miami',            city:'Miami — EUA',          region:'america_norte', emoji:'🌴' },
+    { iata:'JFK', name:'John F. Kennedy',  city:'Nova York — EUA',      region:'america_norte', emoji:'🗽' },
+    { iata:'LAX', name:'Los Angeles',      city:'Los Angeles — EUA',    region:'america_norte', emoji:'🎬' },
+    { iata:'MCO', name:'Orlando',          city:'Orlando — EUA',        region:'america_norte', emoji:'🎢' },
+    { iata:'ORD', name:"O'Hare",           city:'Chicago — EUA',        region:'america_norte', emoji:'🏙️' },
+    { iata:'IAH', name:'George Bush',      city:'Houston — EUA',        region:'america_norte', emoji:'🤠' },
+    { iata:'ATL', name:'Hartsfield-Jackson',city:'Atlanta — EUA',       region:'america_norte', emoji:'✈️' },
+    { iata:'BOS', name:'Logan',            city:'Boston — EUA',         region:'america_norte', emoji:'🦞' },
+    { iata:'SFO', name:'San Francisco',    city:'San Francisco — EUA',  region:'america_norte', emoji:'🌉' },
+    { iata:'LAS', name:'Harry Reid',       city:'Las Vegas — EUA',      region:'america_norte', emoji:'🎰' },
+    { iata:'DFW', name:'Dallas Fort Worth',city:'Dallas — EUA',         region:'america_norte', emoji:'🤠' },
+    { iata:'DEN', name:'Denver',           city:'Denver — EUA',         region:'america_norte', emoji:'⛰️' },
+    { iata:'SEA', name:'Seattle-Tacoma',   city:'Seattle — EUA',        region:'america_norte', emoji:'☁️' },
+    { iata:'PHX', name:'Phoenix',          city:'Phoenix — EUA',        region:'america_norte', emoji:'🌵' },
+    { iata:'EWR', name:'Newark',           city:'Newark — EUA',         region:'america_norte', emoji:'🗽' },
+    { iata:'DTW', name:'Detroit',          city:'Detroit — EUA',        region:'america_norte', emoji:'🚗' },
+    { iata:'MSP', name:'Minneapolis',      city:'Minneapolis — EUA',    region:'america_norte', emoji:'❄️' },
+    { iata:'CUN', name:'Cancún',           city:'Cancún — MX',          region:'america_norte', emoji:'🌮' },
+    { iata:'MEX', name:'Benito Juárez',    city:'Cidade do México — MX',region:'america_norte', emoji:'🌮' },
+    { iata:'GDL', name:'Don Miguel Hidalgo',city:'Guadalajara — MX',   region:'america_norte', emoji:'🌵' },
+    { iata:'MTY', name:'Mariano Escobedo', city:'Monterrey — MX',       region:'america_norte', emoji:'🏙️' },
+    { iata:'YYZ', name:'Pearson',          city:'Toronto — CA',         region:'america_norte', emoji:'🍁' },
+    { iata:'YVR', name:'Vancouver',        city:'Vancouver — CA',       region:'america_norte', emoji:'🍁' },
+    { iata:'YUL', name:'Trudeau',          city:'Montreal — CA',        region:'america_norte', emoji:'🍁' },
+    // ── Caribe ────────────────────────────────────────────────────────────────
+    { iata:'PUJ', name:'Punta Cana',      city:'Punta Cana — RD',  region:'caribe', emoji:'🏖️' },
+    { iata:'HAV', name:'José Martí',      city:'Havana — CU',       region:'caribe', emoji:'🎺' },
+    { iata:'NAS', name:'Lynden Pindling', city:'Nassau — BS',       region:'caribe', emoji:'🏝️' },
+    { iata:'SJU', name:'Luis Muñoz Marín',city:'San Juan — PR',     region:'caribe', emoji:'🌴' },
+    { iata:'AUA', name:'Reina Beatrix',   city:'Aruba — AW',        region:'caribe', emoji:'🏝️' },
+    { iata:'CUR', name:'Hato',            city:'Curaçao — CW',      region:'caribe', emoji:'🏝️' },
+    { iata:'BGI', name:'Grantley Adams',  city:'Bridgetown — BB',   region:'caribe', emoji:'🏖️' },
+    { iata:'MBJ', name:'Sangster',        city:'Montego Bay — JM',  region:'caribe', emoji:'🎵' },
+    { iata:'KIN', name:'Norman Manley',   city:'Kingston — JM',     region:'caribe', emoji:'🎵' },
+    { iata:'GCM', name:'Owen Roberts',    city:'Grand Cayman — KY', region:'caribe', emoji:'🏝️' },
+    { iata:'CZM', name:'Cozumel',         city:'Cozumel — MX',      region:'caribe', emoji:'🐠' },
+    { iata:'STT', name:'Cyril E. King',   city:'St. Thomas — VI',   region:'caribe', emoji:'🌊' },
+    { iata:'BDA', name:'L.F. Wade',       city:'Bermuda — BM',      region:'caribe', emoji:'🏝️' },
+    // ── Europa ────────────────────────────────────────────────────────────────
+    { iata:'LIS', name:'Humberto Delgado',city:'Lisboa — PT',       region:'europa', emoji:'🗼' },
+    { iata:'MAD', name:'Barajas',          city:'Madrid — ES',       region:'europa', emoji:'🥘' },
+    { iata:'CDG', name:'Charles de Gaulle',city:'Paris — FR',        region:'europa', emoji:'🗼' },
+    { iata:'FCO', name:'Fiumicino',        city:'Roma — IT',         region:'europa', emoji:'🍕' },
+    { iata:'LHR', name:'Heathrow',         city:'Londres — GB',      region:'europa', emoji:'💂' },
+    { iata:'FRA', name:'Frankfurt',        city:'Frankfurt — DE',    region:'europa', emoji:'🍺' },
+    { iata:'AMS', name:'Schiphol',         city:'Amsterdam — NL',    region:'europa', emoji:'🌷' },
+    { iata:'BCN', name:'El Prat',          city:'Barcelona — ES',    region:'europa', emoji:'🎨' },
+    { iata:'ZRH', name:'Zürich',           city:'Zurique — CH',      region:'europa', emoji:'🏔️' },
+    { iata:'MUC', name:'Franz Josef Strauss',city:'Munique — DE',   region:'europa', emoji:'🍺' },
+    { iata:'VIE', name:'Wien',             city:'Viena — AT',        region:'europa', emoji:'🎻' },
+    { iata:'DUB', name:'Dublin',           city:'Dublin — IE',       region:'europa', emoji:'🍀' },
+    { iata:'CPH', name:'Kastrup',          city:'Copenhague — DK',   region:'europa', emoji:'🧜' },
+    { iata:'ARN', name:'Arlanda',          city:'Estocolmo — SE',    region:'europa', emoji:'🎯' },
+    { iata:'OSL', name:'Gardermoen',       city:'Oslo — NO',         region:'europa', emoji:'🌄' },
+    { iata:'HEL', name:'Helsinki-Vantaa', city:'Helsinque — FI',    region:'europa', emoji:'🦌' },
+    { iata:'WAW', name:'Chopin',           city:'Varsóvia — PL',     region:'europa', emoji:'🥟' },
+    { iata:'BUD', name:'Ferihegy',         city:'Budapeste — HU',    region:'europa', emoji:'🏰' },
+    { iata:'PRG', name:'Václav Havel',     city:'Praga — CZ',        region:'europa', emoji:'🏰' },
+    { iata:'MXP', name:'Malpensa',         city:'Milão — IT',        region:'europa', emoji:'👗' },
+    { iata:'NCE', name:"Côte d'Azur",     city:'Nice — FR',         region:'europa', emoji:'🌊' },
+    { iata:'ATH', name:'Eleftherios Venizelos',city:'Atenas — GR',  region:'europa', emoji:'🏛️' },
+    { iata:'IST', name:'İstanbul',         city:'Istambul — TR',     region:'europa', emoji:'🕌' },
+    { iata:'BER', name:'Brandenburg',      city:'Berlim — DE',       region:'europa', emoji:'🐻' },
+    { iata:'BRU', name:'Zaventem',         city:'Bruxelas — BE',     region:'europa', emoji:'🍫' },
+    { iata:'GVA', name:'Genebra',          city:'Genebra — CH',      region:'europa', emoji:'🕊️' },
+    { iata:'EDI', name:'Edinburgh',        city:'Edimburgo — GB',    region:'europa', emoji:'🏴' },
+    { iata:'LYS', name:'Saint-Exupéry',   city:'Lyon — FR',         region:'europa', emoji:'🍷' },
+    { iata:'OTP', name:'Henri Coandă',     city:'Bucareste — RO',    region:'europa', emoji:'🏰' },
+    { iata:'BEG', name:'Nikola Tesla',     city:'Belgrado — RS',     region:'europa', emoji:'⚡' },
+    { iata:'KEF', name:'Keflavík',         city:'Reiquiavique — IS', region:'europa', emoji:'🌋' },
+    { iata:'MLA', name:'Malta',            city:'Malta — MT',        region:'europa', emoji:'🏝️' },
+    { iata:'TLL', name:'Lennart Meri',     city:'Tallinn — EE',      region:'europa', emoji:'🏰' },
+    { iata:'RIX', name:'Riga',             city:'Riga — LV',         region:'europa', emoji:'🏰' },
+    { iata:'VNO', name:'Vilnius',          city:'Vilnius — LT',      region:'europa', emoji:'🏰' },
+    { iata:'LJU', name:'Jože Pučnik',      city:'Ljubljana — SI',    region:'europa', emoji:'🐉' },
+    { iata:'BTS', name:'Milan R. Štefánik',city:'Bratislava — SK',  region:'europa', emoji:'🏰' },
+    { iata:'LUX', name:'Luxembourg',       city:'Luxemburgo — LU',   region:'europa', emoji:'💎' },
+    { iata:'TIA', name:'Nënë Tereza',      city:'Tirana — AL',       region:'europa', emoji:'🦅' },
+    // ── Oriente Médio ─────────────────────────────────────────────────────────
+    { iata:'DXB', name:'Dubai',        city:'Dubai — AE',       region:'oriente_medio', emoji:'🏙️' },
+    { iata:'DOH', name:'Hamad',        city:'Doha — QA',        region:'oriente_medio', emoji:'🏟️' },
+    { iata:'AUH', name:'Abu Dhabi',    city:'Abu Dhabi — AE',   region:'oriente_medio', emoji:'🏙️' },
+    { iata:'RUH', name:'King Khalid',  city:'Riade — SA',       region:'oriente_medio', emoji:'🕌' },
+    { iata:'AMM', name:'Queen Alia',   city:'Amã — JO',         region:'oriente_medio', emoji:'🏛️' },
+    { iata:'BEY', name:'Rafic Hariri', city:'Beirute — LB',     region:'oriente_medio', emoji:'🌲' },
+    { iata:'CAI', name:'Cairo',        city:'Cairo — EG',       region:'oriente_medio', emoji:'🏛️' },
+    { iata:'TLV', name:'Ben Gurion',   city:'Tel Aviv — IL',    region:'oriente_medio', emoji:'✡️' },
+    { iata:'MCT', name:'Muscat',       city:'Mascate — OM',     region:'oriente_medio', emoji:'🏰' },
+    { iata:'KWI', name:'Kuwait',       city:'Kuwait City — KW', region:'oriente_medio', emoji:'🛢️' },
+    // ── Ásia/Oceania ──────────────────────────────────────────────────────────
+    { iata:'NRT', name:'Narita',             city:'Tóquio — JP',        region:'asia_oceania', emoji:'🗾' },
+    { iata:'HND', name:'Haneda',             city:'Tóquio (centro) — JP',region:'asia_oceania',emoji:'🗾' },
+    { iata:'KIX', name:'Kansai',             city:'Osaka — JP',          region:'asia_oceania', emoji:'⛩️' },
+    { iata:'ICN', name:'Incheon',            city:'Seul — KR',           region:'asia_oceania', emoji:'🎎' },
+    { iata:'SIN', name:'Changi',             city:'Singapura — SG',      region:'asia_oceania', emoji:'🦁' },
+    { iata:'BKK', name:'Suvarnabhumi',       city:'Bangkok — TH',        region:'asia_oceania', emoji:'🐘' },
+    { iata:'HKG', name:'Chek Lap Kok',       city:'Hong Kong — HK',      region:'asia_oceania', emoji:'🏙️' },
+    { iata:'PEK', name:'Capital',            city:'Pequim — CN',         region:'asia_oceania', emoji:'🏯' },
+    { iata:'PVG', name:'Pudong',             city:'Xangai — CN',         region:'asia_oceania', emoji:'🏙️' },
+    { iata:'TPE', name:'Taoyuan',            city:'Taipei — TW',         region:'asia_oceania', emoji:'🏮' },
+    { iata:'KUL', name:'KLIA',               city:'Kuala Lumpur — MY',   region:'asia_oceania', emoji:'🏙️' },
+    { iata:'MNL', name:'Ninoy Aquino',       city:'Manila — PH',         region:'asia_oceania', emoji:'🌺' },
+    { iata:'DEL', name:'Indira Gandhi',      city:'Nova Délhi — IN',     region:'asia_oceania', emoji:'🕌' },
+    { iata:'BOM', name:'Chhatrapati Shivaji',city:'Mumbai — IN',         region:'asia_oceania', emoji:'🎬' },
+    { iata:'SYD', name:'Kingsford Smith',    city:'Sydney — AU',         region:'asia_oceania', emoji:'🦘' },
+    { iata:'MEL', name:'Melbourne',          city:'Melbourne — AU',      region:'asia_oceania', emoji:'🦘' },
+    { iata:'AKL', name:'Auckland',           city:'Auckland — NZ',       region:'asia_oceania', emoji:'🥝' },
+    { iata:'CGK', name:'Soekarno-Hatta',     city:'Jakarta — ID',        region:'asia_oceania', emoji:'🏝️' },
+    { iata:'DPS', name:'Ngurah Rai',         city:'Bali — ID',           region:'asia_oceania', emoji:'🌺' },
+    { iata:'HAN', name:'Nội Bài',            city:'Hanói — VN',          region:'asia_oceania', emoji:'🍜' },
+    { iata:'SGN', name:'Tân Sơn Nhất',       city:'Ho Chi Minh — VN',    region:'asia_oceania', emoji:'🍜' },
+    { iata:'CMB', name:'Bandaranaike',        city:'Colombo — LK',        region:'asia_oceania', emoji:'🍵' },
+    { iata:'PNH', name:'Phnom Penh',          city:'Phnom Penh — KH',     region:'asia_oceania', emoji:'🏛️' },
+    { iata:'KTM', name:'Tribhuvan',           city:'Catmandu — NP',       region:'asia_oceania', emoji:'🏔️' },
+    { iata:'PER', name:'Perth',               city:'Perth — AU',          region:'asia_oceania', emoji:'🦘' },
+    { iata:'BNE', name:'Brisbane',            city:'Brisbane — AU',       region:'asia_oceania', emoji:'🦘' },
+    // ── África ────────────────────────────────────────────────────────────────
+    { iata:'JNB', name:'O.R. Tambo',            city:'Joanesburgo — ZA', region:'africa', emoji:'🦁' },
+    { iata:'CPT', name:'Cape Town',              city:'Cidade do Cabo — ZA',region:'africa',emoji:'🏔️' },
+    { iata:'ADD', name:'Bole',                   city:'Adis Abeba — ET',  region:'africa', emoji:'🦒' },
+    { iata:'NBO', name:'Jomo Kenyatta',          city:'Nairóbi — KE',     region:'africa', emoji:'🦒' },
+    { iata:'LOS', name:'Murtala Muhammed',       city:'Lagos — NG',       region:'africa', emoji:'🌍' },
+    { iata:'ABV', name:'Nnamdi Azikiwe',         city:'Abuja — NG',       region:'africa', emoji:'🌍' },
+    { iata:'CMN', name:'Mohammed V',             city:'Casablanca — MA',  region:'africa', emoji:'🕌' },
+    { iata:'DKR', name:'Léopold Sédar Senghor', city:'Dacar — SN',       region:'africa', emoji:'🌍' },
+    { iata:'ACC', name:'Kotoka',                 city:'Acra — GH',        region:'africa', emoji:'🌍' },
+    { iata:'MPM', name:'Maputo',                 city:'Maputo — MZ',      region:'africa', emoji:'🌍' },
+    { iata:'LAD', name:'Quatro de Fevereiro',    city:'Luanda — AO',      region:'africa', emoji:'🌍' },
+    { iata:'TUN', name:'Tunis-Carthage',         city:'Tunis — TN',       region:'africa', emoji:'🏛️' },
+    { iata:'ALG', name:'Houari Boumediene',      city:'Argel — DZ',       region:'africa', emoji:'🏛️' },
+    { iata:'DAR', name:'Julius Nyerere',         city:'Dar es Salaam — TZ',region:'africa',emoji:'🦒' },
+    { iata:'LUN', name:'Kenneth Kaunda',         city:'Lusaca — ZM',      region:'africa', emoji:'🌍' },
+]
+
+export function getDestinationsByRegions(regions: Region[]): Destination[] {
+    if (regions.length === 0) return DESTINATIONS
+    return DESTINATIONS.filter(d => regions.includes(d.region))
+}
+
+export function getDestinationByIata(iata: string): Destination | undefined {
+    return DESTINATIONS.find(d => d.iata === iata)
+}
