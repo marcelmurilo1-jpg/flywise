@@ -169,11 +169,11 @@ Gerencie seus alertas em Configurações → Rotas monitoradas.
 
 **Template milhas:**
 ```
-Assunto: ✈️ Alerta FlyWise — GRU→LIS Smiles Business: 70.000 milhas
+Assunto: ✈️ Alerta FlyWise — Preço em milhas Caiu! GRU→LIS Smiles Business: 70.000 milhas
 
 Oi [nome],
 
-A disponibilidade em milhas que você monitorava está abaixo do seu limite!
+O preço em milhas que você monitorava caiu abaixo do seu limite!
 
   GRU → LIS · Smiles · Business
   ✈️ 70.000 milhas  (você queria abaixo de 85.000)
