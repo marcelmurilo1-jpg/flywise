@@ -314,6 +314,112 @@ app.post('/api/search-flights', async (req, res) => {
     }
 });
 
+// ─── Discover Routes — "Para onde posso voar?" ───────────────────────────────
+// POST /api/discover-routes
+// Body: { origin: string, destinations: string[], months: string[], cabin: 'economy'|'business' }
+// Returns: { routes: RouteResult[] }
+app.post('/api/discover-routes', async (req, res) => {
+    const { origin, destinations, months, cabin = 'economy' } = req.body ?? {};
+
+    if (!SEATS_AERO_API_KEY) {
+        return res.status(200).json({ error: 'SEATS_AERO_API_KEY não configurada.', routes: [] });
+    }
+    if (!origin || !Array.isArray(destinations) || destinations.length === 0 || !Array.isArray(months) || months.length === 0) {
+        return res.status(400).json({ error: 'origin, destinations[] e months[] são obrigatórios' });
+    }
+
+    const DISCOVER_TTL_MS = 4 * 60 * 60 * 1000; // 4 horas
+
+    function getSampleDates(months) {
+        const dates = [];
+        for (const m of months) {
+            dates.push(`${m}-05`, `${m}-15`, `${m}-25`);
+        }
+        return dates;
+    }
+
+    const sampleDates = getSampleDates(months);
+    const discoverLimit = pLimit(3);
+
+    const tasks = destinations.map(destination => discoverLimit(async () => {
+        const byProgram = {};
+
+        for (const date of sampleDates) {
+            let items = null;
+            if (supabase) {
+                const ttlLimit = new Date(Date.now() - DISCOVER_TTL_MS).toISOString();
+                const { data: cached } = await supabase
+                    .from('seatsaero_searches')
+                    .select('dados')
+                    .eq('origem', origin.toUpperCase())
+                    .eq('destino', destination.toUpperCase())
+                    .eq('data_ida', date)
+                    .gte('criado_em', ttlLimit)
+                    .order('criado_em', { ascending: false })
+                    .limit(1)
+                    .single();
+                if (cached?.dados) items = cached.dados;
+            }
+
+            if (!items) {
+                try {
+                    const raw = await fetchSeatsAeroAPI(origin.toUpperCase(), destination.toUpperCase(), date);
+                    items = raw.map(i => mapSeatsAeroItem(i, 'ida'));
+                    if (supabase && items.length > 0) {
+                        await supabase.from('seatsaero_searches').insert([{
+                            origem: origin.toUpperCase(),
+                            destino: destination.toUpperCase(),
+                            data_ida: date,
+                            dados: items,
+                        }]).then(({ error }) => {
+                            if (error && error.code !== '23505')
+                                console.warn(`[Discover] Cache write error ${origin}→${destination}:`, error.message);
+                        });
+                    }
+                } catch (e) {
+                    console.warn(`[Discover] ${origin}→${destination} ${date}:`, e.message);
+                    continue;
+                }
+            }
+
+            for (const item of (items ?? [])) {
+                const src = (item.source ?? 'unknown').toLowerCase();
+                if (!byProgram[src]) {
+                    byProgram[src] = {
+                        source: item.source ?? '',
+                        programName: item.programName ?? item.source ?? '',
+                        economy_miles: null,
+                        business_miles: null,
+                        economy_direct: false,
+                        business_direct: false,
+                        sampleDate: date,
+                    };
+                }
+                const p = byProgram[src];
+                if (item.economy != null && (p.economy_miles === null || item.economy < p.economy_miles)) {
+                    p.economy_miles = item.economy;
+                    p.economy_direct = item.paradas === 0;
+                    p.sampleDate = date;
+                }
+                if (item.business != null && (p.business_miles === null || item.business < p.business_miles)) {
+                    p.business_miles = item.business;
+                    p.business_direct = item.paradas === 0;
+                }
+            }
+        }
+
+        const results = Object.values(byProgram).filter(p =>
+            cabin === 'business' ? p.business_miles != null : p.economy_miles != null
+        );
+
+        return results.length > 0 ? { destination, results_by_program: results } : null;
+    }));
+
+    const settled = await Promise.all(tasks);
+    const routes = settled.filter(Boolean);
+    res.json({ routes });
+});
+
 // ─── Amadeus Proxy (apenas aeroportos) ───────────────────────────────────────
 const AMADEUS_BASE = 'https://test.api.amadeus.com';
 const AMADEUS_CLIENT_ID = process.env.AMADEUS_CLIENT_ID || process.env.VITE_AMADEUS_CLIENT_ID;
@@ -3330,20 +3436,12 @@ app.post('/api/admin/generate-post', requireAdminJWT, async (req, res) => {
 // Localmente: inicia o servidor Express normalmente.
 // Na Vercel: o arquivo é importado como módulo serverless — app.listen não é chamado.
 if (process.env.VERCEL !== '1') {
-    // Toda segunda-feira às 04:00 BRT (07:00 UTC) — preços Seats.aero
-    cron.schedule('0 7 * * 1', () => {
-        console.log('[Cron] Disparando sync semanal de preços de milhas (Seats.aero)...');
-        syncAwardPrices().catch(console.error);
-    });
+    // ── Crons removidos do servidor — agora disparados via GitHub Actions ────────
+    // syncAwardPrices  → .github/workflows/sync-award-prices.yml  (toda segunda, 07h UTC)
+    // syncTransferData → .github/workflows/sync-transfer-data.yml (diário, 14h UTC)
+    // Isso permite ativar Railway Sleep on Idle sem perder nenhuma execução agendada.
 
-    // Todo dia às 11h BRT (14:00 UTC) — sync completo de dados de transferência via Claude
-    // (o próprio syncTransferData chama refreshPromotionsCache ao final — cron de refresh separado removido)
-    cron.schedule('0 14 * * *', () => {
-        console.log('[Cron] Iniciando sync automático de dados de transferência...');
-        syncTransferData().catch(err => console.error('[Cron:TransferSync] Erro:', err.message));
-    });
-
-    // A cada 30 minutos: fecha browser Playwright ocioso para liberar memória
+    // A cada 5 minutos: fecha browser Playwright ocioso para liberar memória
     setInterval(async () => {
         if (_browser && _browser.isConnected()) {
             try {
@@ -3355,7 +3453,7 @@ if (process.env.VERCEL !== '1') {
                 _browser = null;
             }
         }
-    }, 30 * 60 * 1000);
+    }, 5 * 60 * 1000);
 
     const PORT = process.env.PORT || 3001;
     app.listen(PORT, () => {
