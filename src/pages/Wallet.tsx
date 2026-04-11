@@ -58,6 +58,8 @@ export default function Wallet() {
     const [activeClubTiers, setActiveClubTiers] = useState<Record<string, string>>({})
     // Bancos/cartões ativos do usuário
     const [activeCards, setActiveCards] = useState<string[]>([])
+    // Pontos por cartão
+    const [cardPoints, setCardPoints] = useState<Record<string, number>>({})
     // Colapsar seções
     const [clubsExpanded, setClubsExpanded] = useState(false)
     const [cardsExpanded, setCardsExpanded] = useState(false)
@@ -68,10 +70,12 @@ export default function Wallet() {
         const clubs: string[] = (user.user_metadata?.activeClubs as string[]) ?? []
         const tiers: Record<string, string> = (user.user_metadata?.activeClubTiers as Record<string, string>) ?? {}
         const cards: string[] = (user.user_metadata?.activeCards as string[]) ?? []
+        const pts: Record<string, number> = (user.user_metadata?.card_points as Record<string, number>) ?? {}
         setMiles(stored)
         setActiveClubs(clubs)
         setActiveClubTiers(tiers)
         setActiveCards(cards)
+        setCardPoints(pts)
         setLoading(false)
     }, [user])
 
@@ -84,6 +88,14 @@ export default function Wallet() {
 
     const saveClubs = async (clubs: string[], tiers: Record<string, string>) => {
         await supabase.auth.updateUser({ data: { activeClubs: clubs, activeClubTiers: tiers } })
+    }
+
+    const saveCardPoints = async (updated: Record<string, number>) => {
+        setCardPoints(updated)
+        if (!user) return
+        await supabase.auth.updateUser({
+            data: { ...user.user_metadata, card_points: updated },
+        })
     }
 
     const toggleCard = async (cardId: string) => {
@@ -359,31 +371,55 @@ export default function Wallet() {
                                             {CREDIT_CARDS.map(card => {
                                                 const isActive = activeCards.includes(card.id)
                                                 return (
-                                                    <button
-                                                        key={card.id}
-                                                        onClick={() => toggleCard(card.id)}
-                                                        style={{
-                                                            width: '100%',
-                                                            background: isActive ? `${card.color}12` : 'var(--snow)',
-                                                            border: `2px solid ${isActive ? card.color : 'var(--border-light)'}`,
-                                                            borderRadius: 12,
-                                                            padding: '11px 14px',
-                                                            cursor: 'pointer', fontFamily: 'inherit',
-                                                            display: 'flex', alignItems: 'center', gap: 10,
-                                                            transition: 'all .18s', textAlign: 'left',
-                                                        }}
-                                                    >
-                                                        <div style={{ width: 32, height: 32, borderRadius: 8, background: card.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                            <span style={{ fontSize: 10, fontWeight: 900, color: '#fff' }}>{card.initials}</span>
-                                                        </div>
-                                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                                            <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? card.color : 'var(--text-dark)', lineHeight: 1.2 }}>{card.name}</div>
-                                                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{card.currency} · {card.partners.map(p => p.program).join(', ')}</div>
-                                                        </div>
-                                                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: isActive ? card.color : 'var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background .18s' }}>
-                                                            {isActive && <Check size={11} color="#fff" />}
-                                                        </div>
-                                                    </button>
+                                                    <div key={card.id} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                                                        <button
+                                                            onClick={() => toggleCard(card.id)}
+                                                            style={{
+                                                                width: '100%',
+                                                                background: isActive ? `${card.color}12` : 'var(--snow)',
+                                                                border: `2px solid ${isActive ? card.color : 'var(--border-light)'}`,
+                                                                borderRadius: isActive ? '12px 12px 0 0' : 12,
+                                                                padding: '11px 14px',
+                                                                cursor: 'pointer', fontFamily: 'inherit',
+                                                                display: 'flex', alignItems: 'center', gap: 10,
+                                                                transition: 'all .18s', textAlign: 'left',
+                                                            }}
+                                                        >
+                                                            <div style={{ width: 32, height: 32, borderRadius: 8, background: card.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                                <span style={{ fontSize: 10, fontWeight: 900, color: '#fff' }}>{card.initials}</span>
+                                                            </div>
+                                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                                <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? card.color : 'var(--text-dark)', lineHeight: 1.2 }}>{card.name}</div>
+                                                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{card.currency} · {card.partners.map(p => p.program).join(', ')}</div>
+                                                            </div>
+                                                            <div style={{ width: 18, height: 18, borderRadius: '50%', background: isActive ? card.color : 'var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background .18s' }}>
+                                                                {isActive && <Check size={11} color="#fff" />}
+                                                            </div>
+                                                        </button>
+                                                        {isActive && (
+                                                            <div style={{ border: `2px solid ${card.color}`, borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '8px 14px', background: `${card.color}06`, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                                                                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 'auto' }}>Saldo de pontos:</span>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                    <input
+                                                                        type="number"
+                                                                        min={0}
+                                                                        placeholder="Pontos"
+                                                                        value={cardPoints[card.id] ?? ''}
+                                                                        onChange={e => {
+                                                                            const val = parseInt(e.target.value) || 0
+                                                                            saveCardPoints({ ...cardPoints, [card.id]: val })
+                                                                        }}
+                                                                        style={{
+                                                                            width: 110, padding: '6px 10px', borderRadius: 8,
+                                                                            border: '1.5px solid #D1E0F5', fontSize: 13,
+                                                                            color: '#0E2A55', fontFamily: 'inherit', textAlign: 'right',
+                                                                        }}
+                                                                    />
+                                                                    <span style={{ fontSize: 12, color: '#64748B' }}>pts</span>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 )
                                             })}
                                         </div>
