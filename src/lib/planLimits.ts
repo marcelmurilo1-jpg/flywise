@@ -10,6 +10,7 @@ export interface PlanConfig {
     notifications: boolean
     unlimitedSearch: boolean
     transferSimulator: boolean
+    watchlistSlots: number
 }
 
 export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
@@ -21,6 +22,7 @@ export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
         notifications: true,
         unlimitedSearch: true,
         transferSimulator: true,
+        watchlistSlots: 999,
     },
     free: {
         label: 'Free',
@@ -30,6 +32,7 @@ export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
         notifications: false,
         unlimitedSearch: false,
         transferSimulator: false,
+        watchlistSlots: 0,
     },
     essencial: {
         label: 'Essencial',
@@ -39,6 +42,7 @@ export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
         notifications: false,
         unlimitedSearch: true,
         transferSimulator: false,
+        watchlistSlots: 3,
     },
     pro: {
         label: 'Pro',
@@ -48,6 +52,7 @@ export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
         notifications: true,
         unlimitedSearch: true,
         transferSimulator: true,
+        watchlistSlots: 10,
     },
     elite: {
         label: 'Elite',
@@ -57,6 +62,7 @@ export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
         notifications: true,
         unlimitedSearch: true,
         transferSimulator: true,
+        watchlistSlots: 999,
     },
 }
 
@@ -75,4 +81,8 @@ export function normalizePlan(raw: string | null | undefined): Plan {
     const valid: Plan[] = ['free', 'essencial', 'pro', 'elite', 'admin']
     const lower = (raw ?? '').toLowerCase() as Plan
     return valid.includes(lower) ? lower : 'free'
+}
+
+export function getWatchlistLimit(plan: Plan): number {
+    return PLAN_LIMITS[plan].watchlistSlots
 }
