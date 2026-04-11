@@ -365,6 +365,16 @@ export default function Configuracoes() {
     const saveSection = async (section: SectionId, partial?: Partial<UserProfile>) => {
         setSavingSection(section)
         await upsertProfile(partial ?? {})
+        // Sync home airport fields to user_metadata so other components can read them
+        if (section === 'viagem') {
+            await supabase.auth.updateUser({
+                data: {
+                    home_airport:       profile.home_airport,
+                    home_airport_label: profile.home_airport_label,
+                    home_airport_lock:  profile.home_airport_lock,
+                }
+            })
+        }
         setSavingSection(null)
         markSaved(section)
     }
