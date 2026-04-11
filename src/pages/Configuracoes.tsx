@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Header } from '@/components/Header'
+import { AirportInput } from '@/components/AirportInput'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,9 @@ interface UserProfile {
     preferred_currency: string
     notifications_email: boolean
     notifications_promotions: boolean
+    home_airport: string
+    home_airport_label: string
+    home_airport_lock: boolean
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -112,6 +116,9 @@ const DEFAULT_PROFILE: UserProfile = {
     preferred_currency: 'BRL',
     notifications_email: true,
     notifications_promotions: true,
+    home_airport: '',
+    home_airport_label: '',
+    home_airport_lock: true,
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -298,6 +305,9 @@ export default function Configuracoes() {
                     preferred_currency: profileData.preferred_currency ?? 'BRL',
                     notifications_email: profileData.notifications_email ?? true,
                     notifications_promotions: profileData.notifications_promotions ?? true,
+                    home_airport:       (profileData.home_airport as string)       ?? '',
+                    home_airport_label: (profileData.home_airport_label as string) ?? '',
+                    home_airport_lock:  (profileData.home_airport_lock as boolean) ?? true,
                 })
                 setPlanoAtivo(profileData.plano_ativo ?? null)
             }
@@ -748,6 +758,33 @@ export default function Configuracoes() {
                                             <svg style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                                         </div>
                                     </Field>
+
+                                    {/* ── Aeroporto de origem padrão ── */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                        <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                                            Aeroporto de origem padrão
+                                        </label>
+                                        <div style={{ ...inputStyle, display: 'flex', alignItems: 'center', padding: '10px 14px' }}>
+                                            <AirportInput
+                                                value={profile.home_airport_label}
+                                                iataCode={profile.home_airport}
+                                                onChange={(label, iata) => setProfile(p => ({
+                                                    ...p,
+                                                    home_airport: iata,
+                                                    home_airport_label: label,
+                                                }))}
+                                                placeholder="Ex: GRU — Guarulhos, São Paulo"
+                                            />
+                                        </div>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#64748B' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={profile.home_airport_lock}
+                                                onChange={e => setProfile(p => ({ ...p, home_airport_lock: e.target.checked }))}
+                                            />
+                                            Usar sempre este aeroporto (pode alterar na busca)
+                                        </label>
+                                    </div>
                                 </div>
 
                                 <SaveButton
