@@ -8,6 +8,9 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { Resend } from 'resend';
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const RESEND_FROM = process.env.RESEND_FROM ?? 'FlyWise <alertas@flywise.app>';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -418,6 +421,101 @@ app.post('/api/discover-routes', async (req, res) => {
     const settled = await Promise.all(tasks);
     const routes = settled.filter(Boolean);
     res.json({ routes });
+});
+
+// ─── Watchlist CRUD ───────────────────────────────────────────────────────────
+
+// GET /api/watchlist — list user's active watchlist items
+app.get('/api/watchlist', requireUserJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    const limit = await getWatchlistLimit(req.userId);
+    const { data, error } = await supabase
+        .from('watchlist_items')
+        .select('*')
+        .eq('user_id', req.userId)
+        .eq('active', true)
+        .order('created_at', { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ items: data ?? [], limit, used: (data ?? []).length });
+});
+
+// POST /api/watchlist — create a new watchlist item
+app.post('/api/watchlist', requireUserJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+
+    const limit = await getWatchlistLimit(req.userId);
+    if (limit === 0) return res.status(403).json({ error: 'Seu plano não inclui watchlist. Faça upgrade.' });
+
+    const { count } = await supabase
+        .from('watchlist_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', req.userId)
+        .eq('active', true);
+    if ((count ?? 0) >= limit) {
+        return res.status(403).json({ error: `Limite de ${limit} rotas atingido. Exclua uma ou faça upgrade.` });
+    }
+
+    const { type, origin, destination, threshold_brl, airline, travel_date,
+            threshold_miles, program, cabin, channel } = req.body ?? {};
+
+    if (!type || !origin || !destination) {
+        return res.status(400).json({ error: 'type, origin e destination são obrigatórios' });
+    }
+    if (type === 'cash' && !threshold_brl) {
+        return res.status(400).json({ error: 'threshold_brl obrigatório para type=cash' });
+    }
+    if (type === 'miles' && !threshold_miles) {
+        return res.status(400).json({ error: 'threshold_miles obrigatório para type=miles' });
+    }
+
+    const { data, error } = await supabase.from('watchlist_items').insert([{
+        user_id: req.userId,
+        type,
+        origin: origin.toUpperCase(),
+        destination: destination.toUpperCase(),
+        threshold_brl: threshold_brl ?? null,
+        airline: airline ?? null,
+        travel_date: travel_date ?? null,
+        threshold_miles: threshold_miles ?? null,
+        program: program ?? null,
+        cabin: cabin ?? null,
+        channel: channel ?? 'email',
+    }]).select().single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json({ item: data });
+});
+
+// PATCH /api/watchlist/:id — update channel or threshold
+app.patch('/api/watchlist/:id', requireUserJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    const { channel, threshold_brl, threshold_miles } = req.body ?? {};
+    const updates = {};
+    if (channel) updates.channel = channel;
+    if (threshold_brl != null) updates.threshold_brl = threshold_brl;
+    if (threshold_miles != null) updates.threshold_miles = threshold_miles;
+    const { data, error } = await supabase
+        .from('watchlist_items')
+        .update(updates)
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId)
+        .select()
+        .single();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: 'Item não encontrado' });
+    res.json({ item: data });
+});
+
+// DELETE /api/watchlist/:id — soft delete (active = false)
+app.delete('/api/watchlist/:id', requireUserJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    const { error } = await supabase
+        .from('watchlist_items')
+        .update({ active: false })
+        .eq('id', req.params.id)
+        .eq('user_id', req.userId);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true });
 });
 
 // ─── Amadeus Proxy (apenas aeroportos) ───────────────────────────────────────
@@ -2643,6 +2741,15 @@ app.get('/api/admin/transfer-sync-log', requireSyncSecret, async (req, res) => {
 
 // ─── Admin API (autenticada por JWT + is_admin) ───────────────────────────────
 
+// Returns how many watchlist slots the user's plan allows
+const WATCHLIST_PLAN_LIMITS = { free: 0, essencial: 3, pro: 10, elite: 999, admin: 999 };
+async function getWatchlistLimit(userId) {
+    if (!supabase) return 0;
+    const { data } = await supabase.from('user_profiles').select('plan').eq('id', userId).single();
+    const plan = (data?.plan ?? 'free').toLowerCase();
+    return WATCHLIST_PLAN_LIMITS[plan] ?? 0;
+}
+
 async function requireAdminJWT(req, res, next) {
     const authHeader = req.headers['authorization'] ?? '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -2690,6 +2797,18 @@ async function requireAdminJWT(req, res, next) {
 
     if (!profile?.is_admin) return res.status(403).json({ error: 'Acesso negado' });
     req.adminUserId = userId;
+    next();
+}
+
+// ─── User JWT middleware (non-admin endpoints) ────────────────────────────────
+async function requireUserJWT(req, res, next) {
+    const authHeader = req.headers['authorization'] ?? '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ error: 'Token não fornecido' });
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return res.status(401).json({ error: 'Token inválido' });
+    req.userId = user.id;
     next();
 }
 
