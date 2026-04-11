@@ -458,14 +458,14 @@ app.post('/api/watchlist', requireUserJWT, async (req, res) => {
     const { type, origin, destination, threshold_brl, airline, travel_date,
             threshold_miles, program, cabin, channel } = req.body ?? {};
 
-    if (!type || !origin || !destination) {
-        return res.status(400).json({ error: 'type, origin e destination são obrigatórios' });
+    if (!type || !['cash', 'miles'].includes(type) || !origin || !destination) {
+        return res.status(400).json({ error: 'type deve ser "cash" ou "miles", origin e destination são obrigatórios' });
     }
-    if (type === 'cash' && !threshold_brl) {
-        return res.status(400).json({ error: 'threshold_brl obrigatório para type=cash' });
+    if (type === 'cash' && (!threshold_brl || isNaN(Number(threshold_brl)) || Number(threshold_brl) <= 0)) {
+        return res.status(400).json({ error: 'threshold_brl deve ser um número positivo' });
     }
-    if (type === 'miles' && !threshold_miles) {
-        return res.status(400).json({ error: 'threshold_miles obrigatório para type=miles' });
+    if (type === 'miles' && (!threshold_miles || isNaN(Number(threshold_miles)) || Number(threshold_miles) <= 0)) {
+        return res.status(400).json({ error: 'threshold_miles deve ser um número positivo' });
     }
 
     const { data, error } = await supabase.from('watchlist_items').insert([{
@@ -509,12 +509,14 @@ app.patch('/api/watchlist/:id', requireUserJWT, async (req, res) => {
 // DELETE /api/watchlist/:id — soft delete (active = false)
 app.delete('/api/watchlist/:id', requireUserJWT, async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
-    const { error } = await supabase
+    const { data, error } = await supabase
         .from('watchlist_items')
         .update({ active: false })
         .eq('id', req.params.id)
-        .eq('user_id', req.userId);
+        .eq('user_id', req.userId)
+        .select();
     if (error) return res.status(500).json({ error: error.message });
+    if (!data || data.length === 0) return res.status(404).json({ error: 'Item não encontrado' });
     res.json({ ok: true });
 });
 
