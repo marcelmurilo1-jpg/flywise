@@ -14,7 +14,21 @@ import { AirportInput } from '@/components/AirportInput'
 
 type TravelerType = 'solo' | 'casal' | 'familia' | 'amigos'
 type TravelStyle = 'Econômico' | 'Cultural' | 'Gastronômico' | 'Aventura' | 'Compras'
-type SectionId = 'perfil' | 'seguranca' | 'viagem' | 'notificacoes' | 'plano' | 'conta'
+type SectionId = 'perfil' | 'seguranca' | 'viagem' | 'notificacoes' | 'watchlist' | 'plano' | 'conta'
+
+interface WatchlistItem {
+    id: string
+    type: 'cash' | 'miles'
+    origin: string
+    destination: string
+    threshold_brl?: number
+    threshold_miles?: number
+    airline?: string
+    program?: string
+    cabin?: string
+    channel: string
+    created_at: string
+}
 
 interface NotifPrefs {
     notificacoes_ativas: boolean
@@ -81,6 +95,7 @@ const SECTIONS: { id: SectionId; label: string; Icon: React.ElementType }[] = [
     { id: 'seguranca', label: 'Segurança', Icon: Lock },
     { id: 'viagem', label: 'Preferências', Icon: Plane },
     { id: 'notificacoes', label: 'Notificações', Icon: Bell },
+    { id: 'watchlist', label: 'Rotas Monitoradas', Icon: Bell },
     { id: 'plano', label: 'Plano', Icon: Crown },
     { id: 'conta', label: 'Conta', Icon: ShieldCheck },
 ]
@@ -281,6 +296,11 @@ export default function Configuracoes() {
     // Plan state
     const [planoAtivo, setPlanoAtivo] = useState<string | null>(null)
 
+    // Watchlist state
+    const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([])
+    const [watchlistLimit, setWatchlistLimit] = useState(0)
+    const [watchlistLoading, setWatchlistLoading] = useState(false)
+
     // Active section highlight for nav
     const [activeSection, setActiveSection] = useState<SectionId>('perfil')
     const observerRef = useRef<IntersectionObserver | null>(null)
@@ -348,6 +368,10 @@ export default function Configuracoes() {
         return () => observerRef.current?.disconnect()
     }, [loadingProfile])
 
+    useEffect(() => {
+        if (activeSection === 'watchlist') loadWatchlist()
+    }, [activeSection])
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     const markSaved = (section: SectionId) => {
@@ -355,11 +379,42 @@ export default function Configuracoes() {
         setTimeout(() => setSavedSection(null), 2000)
     }
 
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
+
     const upsertProfile = async (partial: Partial<UserProfile>) => {
         if (!user) return
         await supabase
             .from('user_profiles')
             .upsert({ id: user.id, ...profile, ...partial })
+    }
+
+    const loadWatchlist = async () => {
+        if (!user) return
+        setWatchlistLoading(true)
+        try {
+            const { data: { session } } = await supabase.auth.getSession()
+            if (!session) return
+            const res = await fetch(`${apiBase}/api/watchlist`, {
+                headers: { Authorization: `Bearer ${session.access_token}` },
+            })
+            const d = await res.json()
+            setWatchlistItems(d.items ?? [])
+            setWatchlistLimit(d.limit ?? 0)
+        } catch (e) {
+            console.error('Erro ao carregar watchlist:', e)
+        } finally {
+            setWatchlistLoading(false)
+        }
+    }
+
+    const deleteWatchlistItem = async (id: string) => {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+        await fetch(`${apiBase}/api/watchlist/${id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+        setWatchlistItems(prev => prev.filter(i => i.id !== id))
     }
 
     const saveSection = async (section: SectionId, partial?: Partial<UserProfile>) => {
@@ -1001,6 +1056,84 @@ export default function Configuracoes() {
                                         </button>
                                     </div>
                                 </div>
+                            </SectionCard>
+
+                            {/* ── Rotas Monitoradas ─────────────────────────────────── */}
+                            <SectionCard id="watchlist" title="Rotas Monitoradas" description="Gerencie seus alertas de preço" Icon={Bell}>
+                                {watchlistLoading ? (
+                                    <div style={{ fontSize: 13, color: '#6B7A99', textAlign: 'center', padding: 16 }}>Carregando...</div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>
+                                                {watchlistItems.length} de {watchlistLimit === 999 ? '∞' : watchlistLimit} usadas
+                                            </span>
+                                            {watchlistLimit < 999 && (
+                                                <button
+                                                    onClick={() => navigate('/planos')}
+                                                    style={{ fontSize: 12, color: '#2A60C2', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                                                >
+                                                    upgrade →
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {watchlistItems.length === 0 && (
+                                            <div style={{ fontSize: 13, color: '#A0AECB', textAlign: 'center', padding: '16px 0', fontWeight: 600 }}>
+                                                Nenhuma rota monitorada ainda.<br />Use o botão 🔔 nos resultados de busca.
+                                            </div>
+                                        )}
+
+                                        {watchlistItems.map(item => (
+                                            <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 0', borderBottom: '1px solid #E2EAF5' }}>
+                                                <div style={{ width: 34, height: 34, borderRadius: 10, background: item.type === 'cash' ? 'rgba(234,179,8,0.10)' : 'rgba(42,96,194,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
+                                                    {item.type === 'cash' ? '💰' : '✈️'}
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontSize: 13, fontWeight: 800, color: '#0E2A55', marginBottom: 2 }}>
+                                                        {item.origin} → {item.destination}
+                                                        {item.type === 'cash' && item.airline ? ` · ${item.airline}` : ''}
+                                                        {item.type === 'miles' && item.program ? ` · ${item.program}` : ''}
+                                                    </div>
+                                                    <div style={{ fontSize: 11, color: '#6B7A99', fontWeight: 600, marginBottom: 6 }}>
+                                                        {item.type === 'cash'
+                                                            ? `Cash · abaixo de R$ ${(item.threshold_brl ?? 0).toLocaleString('pt-BR')}`
+                                                            : `Milhas · abaixo de ${(item.threshold_miles ?? 0).toLocaleString('pt-BR')} · ${item.cabin === 'business' ? 'Business' : 'Economy'}`
+                                                        }
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                                                        <span style={{ fontSize: 10, fontWeight: 700, color: '#A0AECB', marginRight: 2 }}>VIA</span>
+                                                        <button
+                                                            style={{ padding: '3px 9px', borderRadius: 20, fontSize: 11, fontWeight: 700, border: '1.5px solid #2A60C2', background: '#EEF6FF', color: '#2A60C2', cursor: 'default' }}
+                                                        >
+                                                            ✉️ Email
+                                                        </button>
+                                                        <button
+                                                            disabled
+                                                            style={{ padding: '3px 9px', borderRadius: 20, fontSize: 10, fontWeight: 700, border: '1.5px solid #E2EAF5', background: '#F7F9FC', color: '#C0CFEA', cursor: 'not-allowed' }}
+                                                        >
+                                                            💬 WPP em breve
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => deleteWatchlistItem(item.id)}
+                                                    style={{ width: 30, height: 30, borderRadius: 8, background: '#FEF2F2', border: 'none', color: '#EF4444', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                                                >
+                                                    🗑
+                                                </button>
+                                            </div>
+                                        ))}
+
+                                        {/* Empty slots */}
+                                        {Array.from({ length: Math.max(0, Math.min(watchlistLimit === 999 ? 0 : watchlistLimit - watchlistItems.length, 3)) }).map((_, i) => (
+                                            <div key={`empty-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', opacity: 0.5 }}>
+                                                <div style={{ width: 34, height: 34, borderRadius: 10, border: '1.5px dashed #C0CFEA', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#C0CFEA', fontSize: 16 }}>+</div>
+                                                <span style={{ fontSize: 12, color: '#A0AECB', fontWeight: 600 }}>Slot disponível</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </SectionCard>
 
                             {/* ── Plano ──────────────────────────────────────── */}
