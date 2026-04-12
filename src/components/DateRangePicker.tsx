@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { getPriceTint, type PriceTint } from '../lib/priceTint'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isAfter, isBefore, isToday, startOfDay, getDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -118,6 +119,10 @@ function Calendar({ viewDate, selectedStart, selectedEnd, hoverDate, onDayClick,
                     const inRange = isInRange(day)
                     const isT = isToday(day)
                     const inCurMonth = isSameMonth(day, viewDate)
+                    const tint: PriceTint | undefined =
+                        !isPast && inCurMonth && !isStart && !isEnd && !inRange
+                            ? getPriceTint(day)
+                            : undefined
 
                     let bg = 'transparent'
                     let color = inCurMonth ? '#1E293B' : '#CBD5E1'
@@ -161,14 +166,24 @@ function Calendar({ viewDate, selectedStart, selectedEnd, hoverDate, onDayClick,
                                 })(),
                             }}>
                                 <div style={{
-                                    height: 34, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    borderRadius, background: bg, color,
+                                    height: 34, width: '100%', display: 'flex', flexDirection: 'column',
+                                    alignItems: 'center', justifyContent: 'center', gap: 2,
+                                    borderRadius,
+                                    background: tint === 'green' ? '#F0FDF4' : tint === 'yellow' ? '#FEFCE8' : tint === 'red' ? '#FFF1F2' : bg,
+                                    color,
                                     fontSize: 13, fontWeight,
                                     ...(isT && !isStart && !isEnd ? { outline: '1.5px solid #2A60C2', outlineOffset: '-1px' } : {}),
                                     opacity: isPast || !inCurMonth ? 0.35 : 1,
                                     transition: 'background 0.12s',
                                 }}>
                                     {format(day, 'd')}
+                                    {tint && (
+                                        <div style={{
+                                            width: 4, height: 4, borderRadius: '50%',
+                                            background: tint === 'green' ? '#4ADE80' : tint === 'yellow' ? '#FBBF24' : '#FCA5A5',
+                                            flexShrink: 0,
+                                        }} />
+                                    )}
                                 </div>
                             </div>
                         </button>
@@ -349,6 +364,24 @@ export function DateRangePicker({ dateGo, dateBack, tripType, onDateGoChange, on
                         showNav="both"
                     />
                 </div>
+            </div>
+
+            {/* Price tint legend */}
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', paddingTop: 4 }}>
+                {([
+                    { tint: 'green',  dot: '#4ADE80', label: 'Geralmente mais barato' },
+                    { tint: 'yellow', dot: '#FBBF24', label: 'Preço médio' },
+                    { tint: 'red',    dot: '#FCA5A5', label: 'Alta demanda' },
+                ] as const).map(({ tint, dot, label }) => (
+                    <div key={tint} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{
+                            width: 14, height: 14, borderRadius: 4, flexShrink: 0,
+                            background: tint === 'green' ? '#F0FDF4' : tint === 'yellow' ? '#FEFCE8' : '#FFF1F2',
+                            border: `1.5px solid ${dot}`,
+                        }} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#4B5563' }}>{label}</span>
+                    </div>
+                ))}
             </div>
 
             {/* Footer hint */}
