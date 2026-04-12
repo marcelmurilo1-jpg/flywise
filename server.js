@@ -691,9 +691,10 @@ app.post('/api/watchlist/check', requireSyncSecret, async (req, res) => {
                     return d.toISOString().slice(0, 10);
                 })();
                 const raw = await fetchSeatsAeroAPI(item.origin, item.destination, date);
+                const mapped = raw.map(r => mapSeatsAeroItem(r, 'ida'));
                 const cabin = item.cabin === 'business' ? 'business' : 'economy';
-                const candidates = raw.filter(r => {
-                    const src = (r.Source ?? r.source ?? '').toLowerCase();
+                const candidates = mapped.filter(r => {
+                    const src = (r.source ?? r.programName ?? '').toLowerCase();
                     const prog = (item.program ?? '').toLowerCase();
                     return (!item.program || src.includes(prog) || prog.includes(src)) && r[cabin] != null;
                 });
