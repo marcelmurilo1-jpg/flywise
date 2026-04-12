@@ -529,7 +529,7 @@ async function sendWatchlistEmail({ toEmail, toName, item, triggeredValue }) {
         ? `✈️ Alerta FlyWise — Preço caiu! ${item.origin}→${item.destination} R$ ${triggeredValue.toLocaleString('pt-BR')}`
         : `✈️ Alerta FlyWise — Preço em milhas Caiu! ${item.origin}→${item.destination} ${item.program} ${triggeredValue.toLocaleString('pt-BR')} milhas`;
 
-    const appUrl = process.env.APP_URL ?? 'https://flywise.app';
+    const appUrl = process.env.FRONTEND_URL ?? process.env.APP_URL ?? 'https://flywise.app';
     const ctaUrl = isCash
         ? `${appUrl}/resultados?orig=${item.origin}&dest=${item.destination}&date=${item.travel_date ?? ''}`
         : `${appUrl}/resultados?orig=${item.origin}&dest=${item.destination}`;
