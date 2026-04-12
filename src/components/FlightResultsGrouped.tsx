@@ -20,6 +20,7 @@ interface FlightResultsGroupedProps {
     onSelectCashIda?: (f: ResultadoVoo | null) => void
     cashVoltaSel?: ResultadoVoo | null
     onSelectCashVolta?: (f: ResultadoVoo | null) => void
+    onMonitorar?: (flight: ResultadoVoo) => void
 }
 
 function formatTime(iso?: string) {
@@ -343,13 +344,14 @@ interface FlightCardProps {
     onClear?: () => void
     hasInboundFlights: boolean
     sortBy?: string
+    onMonitorar?: (flight: ResultadoVoo) => void
 }
 
 function FlightCard({
     flight, idx, isReturn = false, isPinned = false,
     isExpanded, onToggleExpand,
     canSelect, isSelected, onSelect, onClear,
-    hasInboundFlights, sortBy,
+    hasInboundFlights, sortBy, onMonitorar,
 }: FlightCardProps) {
     const det = (flight.detalhes as any) ?? {}
     const segsOut = (flight.segmentos as any[]) ?? []
@@ -438,6 +440,17 @@ function FlightCard({
                             }}
                         >
                             {isSelected ? '✓ Selecionado' : isReturn ? 'Selecionar volta' : 'Selecionar ida'}
+                        </button>
+                    )}
+                    {onMonitorar && (flight.preco_brl ?? 0) > 0 && (
+                        <button
+                            onClick={() => onMonitorar(flight)}
+                            style={{
+                                background: '#FEF3C7', color: '#D97706', border: 'none', borderRadius: 8,
+                                padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const,
+                            }}
+                        >
+                            🔔
                         </button>
                     )}
                 </div>
@@ -529,7 +542,7 @@ function FlightCard({
 // ── Main export ────────────────────────────────────────────────────────────────
 export function FlightResultsGrouped({
     flights, inboundFlights = [], searchInfo, onNewSearch, sidebarFilters,
-    cashIdaSel, onSelectCashIda, cashVoltaSel, onSelectCashVolta,
+    cashIdaSel, onSelectCashIda, cashVoltaSel, onSelectCashVolta, onMonitorar,
 }: Omit<FlightResultsGroupedProps, 'buscaId' | 'returnDate'> & { buscaId?: number; returnDate?: string }) {
     const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({})
 
@@ -712,6 +725,7 @@ export function FlightResultsGrouped({
                                 canSelect isSelected={cashVoltaSel?.flight_key === flight.flight_key}
                                 onSelect={() => onSelectCashVolta?.(cashVoltaSel?.flight_key === flight.flight_key ? null : flight)}
                                 hasInboundFlights={hasInbound}
+                                onMonitorar={onMonitorar}
                             />
                         ))}
                     </AnimatePresence>
@@ -732,6 +746,7 @@ export function FlightResultsGrouped({
                             onSelect={() => onSelectCashIda?.(cashIdaSel?.flight_key === flight.flight_key ? null : flight)}
                             hasInboundFlights={hasInbound}
                             sortBy={sidebarFilters?.sortBy}
+                            onMonitorar={onMonitorar}
                         />
                     ))}
                 </AnimatePresence>
@@ -754,6 +769,7 @@ export function FlightResultsGrouped({
                                 onToggleExpand={() => toggleExpand(flight.flight_key ?? `in-${idx}`)}
                                 canSelect={false} isSelected={false} onSelect={() => {}}
                                 hasInboundFlights={hasInbound}
+                                onMonitorar={onMonitorar}
                             />
                         ))}
                     </AnimatePresence>

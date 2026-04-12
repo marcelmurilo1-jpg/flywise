@@ -11,6 +11,7 @@ import { PlaneWindowLoader } from '@/components/PlaneWindowLoader'
 import { Sidebar, type FilterState } from '@/components/Sidebar'
 import { SearchBarTop } from '@/components/SearchBarTop'
 import { motion, AnimatePresence } from 'framer-motion'
+import { WatchlistModal, type WatchlistModalProps } from '@/components/WatchlistModal'
 
 // Global guard (multi-layer) to prevent infinite loops even if component remounts
 let GLOBAL_LAST_BUSCA_ID: number | null = null;
@@ -62,6 +63,9 @@ export default function Resultados() {
     // Sidebar state
     const [filters, setFilters] = useState<FilterState>({ sortBy: 'best', stops: [], airlines: [], maxPrice: null })
     const [showMobileFilters, setShowMobileFilters] = useState(false)
+
+    // Watchlist modal state
+    const [watchlistModal, setWatchlistModal] = useState<Omit<WatchlistModalProps, 'open' | 'onClose'> | null>(null)
 
     // Derived values for sidebar
     const allAirlines = useMemo(() =>
@@ -543,6 +547,14 @@ export default function Resultados() {
                                         onSelectCashIda={setCashIdaSel}
                                         cashVoltaSel={cashVoltaSel}
                                         onSelectCashVolta={setCashVoltaSel}
+                                        onMonitorar={(flight) => setWatchlistModal({
+                                            type: 'cash',
+                                            origin: flight.origem || originIata || '',
+                                            destination: flight.destino || destIata || '',
+                                            currentPriceBrl: flight.preco_brl ?? 0,
+                                            airline: flight.companhia ?? undefined,
+                                            travelDate: flight.partida ? flight.partida.slice(0, 10) : (dateGo || undefined),
+                                        })}
                                     />
                                 </div>
 
@@ -809,6 +821,23 @@ export default function Resultados() {
                                                                             style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
                                                                             Selecionar →
                                                                         </button>
+                                                                        <button
+                                                                            onClick={() => setWatchlistModal({
+                                                                                type: 'miles',
+                                                                                origin: originIata || '',
+                                                                                destination: destIata || '',
+                                                                                currentMiles: typeof sf.precoMilhas === 'number' ? sf.precoMilhas : parseInt(sf.precoMilhas ?? '0') || 0,
+                                                                                program: sf.source ?? undefined,
+                                                                                cabin: (sf.cabineEncontrada ?? 'Economy').toLowerCase() === 'business' ? 'business' : 'economy',
+                                                                                travelDate: sf.dataVoo ?? undefined,
+                                                                            })}
+                                                                            style={{
+                                                                                background: '#EDE9FE', color: '#7C3AED', border: 'none', borderRadius: 8,
+                                                                                padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const,
+                                                                            }}
+                                                                        >
+                                                                            🔔
+                                                                        </button>
                                                                     </div>
                                                                 </div>
 
@@ -909,6 +938,13 @@ export default function Resultados() {
                 onClose={() => setStratOpen(false)}
             />
         )}
+
+        {/* Watchlist modal */}
+        <WatchlistModal
+            open={watchlistModal !== null}
+            onClose={() => setWatchlistModal(null)}
+            {...(watchlistModal ?? { type: 'cash', origin: '', destination: '' })}
+        />
         </>
     )
 }
