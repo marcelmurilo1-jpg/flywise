@@ -1,0 +1,34 @@
+name: Watchlist Check — FlyWise
+
+on:
+  schedule:
+    - cron: '0 7 * * *'   # Todo dia às 7h UTC (4h BRT)
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Check watchlist price alerts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Trigger watchlist check on Railway
+        env:
+          RAILWAY_API_URL: ${{ secrets.RAILWAY_API_URL }}
+          SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
+        run: |
+          echo "Disparando verificação de watchlist..."
+          RESPONSE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X POST "${RAILWAY_API_URL}/api/watchlist/check" \
+            -H "x-sync-secret: ${SYNC_SECRET}" \
+            -H "Content-Type: application/json" \
+            --max-time 120)
+
+          echo "HTTP Status: $RESPONSE"
+          echo "Response:"
+          cat /tmp/response.json
+
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Erro: backend retornou status $RESPONSE"
+            exit 1
+          fi
