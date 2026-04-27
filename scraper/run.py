@@ -75,13 +75,13 @@ def delete_expired(conn):
 # ─── Classifier ───────────────────────────────────────────────────────────────
 
 _PROGRAMAS_KEYWORDS: dict[str, list[str]] = {
-    "Smiles":      ["smiles", "gol"],
-    "TudoAzul":    ["tudoazul", "tudo azul", "azul"],
-    "LATAM Pass":  ["latam pass", "latam"],
+    "Smiles":      ["smiles"],
+    "TudoAzul":    ["tudoazul", "tudo azul", "azul fidelidade"],
+    "LATAM Pass":  ["latam pass", "latam fidelidade", "latam pass"],
     "Livelo":      ["livelo"],
-    "Esfera":      ["esfera", "santander"],
+    "Esfera":      ["esfera"],
     "Flying Blue": ["flying blue", "air france", "klm"],
-    "AAdvantage":  ["aadvantage", "american airlines", "aa miles"],
+    "AAdvantage":  ["aadvantage", "american airlines"],
     "MileagePlus": ["mileageplus", "united"],
 }
 
@@ -89,6 +89,7 @@ _MILHAS_KEYWORDS = [
     "milhas", "pontos", "transferência", "transferencia", "bônus", "bonus",
     "clube", "assinatura", "award", "resgate", "acúmulo", "acumulo",
     "programa de fidelidade", "cartão de crédito", "cartao de credito",
+    "pontos por real", "por real gasto", "milhas por real",
 ] + [kw for kws in _PROGRAMAS_KEYWORDS.values() for kw in kws]
 
 _PASSAGENS_KEYWORDS = [
@@ -102,25 +103,33 @@ _TRANSFERENCIA_KEYWORDS = [
     "transferência", "transferencia", "bônus de transferência", "bonus de transferencia",
     "bônus transferência", "bonus transferencia", "transfer bonus",
     "bônus de pontos", "bonus de pontos", "promoção de transferência",
-    "promocao de transferencia", "pontos extras",
+    "promocao de transferencia",
 ]
 
 _CLUBE_KEYWORDS = [
-    "clube", "club smiles", "club latam", "club azul",
+    "club smiles", "club latam", "club azul", "clube livelo",
     "tudoazul família", "tudoazul familia", "tudoazul club",
     "assinatura", "mensalidade", "clube de assinatura", "plano clube",
+]
+
+_ACUMULO_KEYWORDS = [
+    "pontos por real", "pontos por r$", "milhas por real", "por real gasto",
+    "acumule", "acúmulo acelerado", "ganhe pontos", "ganhe milhas",
+    "pontos no cartão", "milhas no cartão",
 ]
 
 
 def classificar(titulo: str, conteudo: str) -> tuple[str | None, str | None, list[str]]:
     """Retorna (categoria, subcategoria, programas_tags) a partir do texto da promoção."""
-    texto = (titulo + " " + (conteudo or "")).lower()
-
+    # programas_tags: detecta pelo TÍTULO apenas para evitar falsos positivos
+    titulo_lower = titulo.lower()
     programas_tags = [
         prog for prog, kws in _PROGRAMAS_KEYWORDS.items()
-        if any(kw in texto for kw in kws)
+        if any(kw in titulo_lower for kw in kws)
     ]
 
+    # categoria e subcategoria: usa título + conteúdo
+    texto = (titulo + " " + (conteudo or "")).lower()
     milhas_score = sum(1 for kw in _MILHAS_KEYWORDS if kw in texto)
     passagens_score = sum(1 for kw in _PASSAGENS_KEYWORDS if kw in texto)
 
@@ -128,14 +137,18 @@ def classificar(titulo: str, conteudo: str) -> tuple[str | None, str | None, lis
         return None, None, []
     elif milhas_score >= passagens_score:
         categoria = "milhas"
-        trans_score = sum(1 for kw in _TRANSFERENCIA_KEYWORDS if kw in texto)
-        clube_score = sum(1 for kw in _CLUBE_KEYWORDS if kw in texto)
-        if trans_score > clube_score:
+        trans_score  = sum(1 for kw in _TRANSFERENCIA_KEYWORDS if kw in texto)
+        clube_score  = sum(1 for kw in _CLUBE_KEYWORDS if kw in texto)
+        acumulo_score = sum(1 for kw in _ACUMULO_KEYWORDS if kw in texto)
+        top = max(trans_score, clube_score, acumulo_score)
+        if top == 0:
+            subcategoria = None
+        elif trans_score == top:
             subcategoria = "transferencia"
-        elif clube_score > trans_score:
+        elif clube_score == top:
             subcategoria = "clube"
         else:
-            subcategoria = None
+            subcategoria = "acumulo"
         return categoria, subcategoria, programas_tags
     else:
         return "passagens", None, []
