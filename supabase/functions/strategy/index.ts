@@ -31,13 +31,14 @@ interface PromoRow {
     titulo: string
     programa: string | null
     tipo: string | null
-    bonus_pct: number | null
+    bonus_pct: number | null       // para clube: desconto na compra (%)
     parceiro: string | null
     valid_until: string | null
     // Scraper fields (migration 002 / run.py)
     subcategoria: string | null
     programas_tags: string[] | null
     categoria: string | null
+    preco_clube: number | null     // R$/mês — migration 023
 }
 
 interface UserData {
@@ -273,7 +274,7 @@ async function fetchPromos(
         const now = new Date().toISOString()
         const searchPrograms = Array.from(new Set([targetProgram, ...relatedPrograms])).filter(Boolean).slice(0, 7)
         const fallbackPrograms = searchPrograms.length > 0 ? searchPrograms : ['Smiles', 'LATAM Pass', 'Livelo']
-        const PROMO_SELECT = 'titulo,programa,tipo,bonus_pct,parceiro,valid_until,subcategoria,programas_tags,categoria'
+        const PROMO_SELECT = 'titulo,programa,tipo,bonus_pct,parceiro,valid_until,subcategoria,programas_tags,categoria,preco_clube'
         const validFilter = 'valid_until.is.null,valid_until.gt.' + now
 
         // Query 1: promos manuais com campo `programa` preenchido (transferData / seeds)
@@ -750,6 +751,58 @@ function buildPurchaseSection(
     return lines.join('\n')
 }
 
+// ─── Club ROI ─────────────────────────────────────────────────────────────────
+
+interface ClubRoi {
+    promo: PromoRow
+    preco_mensal: number
+    desconto_compra_pct: number
+    economia_nesta_emissao: number   // R$ economizados nesta compra de milhas com o clube
+    meses_payback: number | null     // null = clube já se paga nesta emissão
+    label: string
+}
+
+function calcClubRoi(
+    programa: string,
+    deficitMiles: number,
+    allPromos: PromoRow[]
+): ClubRoi | null {
+    const clubPromo = allPromos.find(p =>
+        resolvePromoType(p) === 'clube' && promoMatchesProgram(p, programa)
+    )
+    if (!clubPromo) return null
+
+    const descontoPct = effectiveBonus(clubPromo)   // bonus_pct = desconto na compra
+    const precoMensal = clubPromo.preco_clube ?? null
+    if (descontoPct <= 0 || precoMensal === null) return null
+
+    const baseCostPerK = BASE_COST_PER_K[programa] ?? 50
+    const milhasAComprar = deficitMiles > 0 ? deficitMiles : 0
+
+    // Economia nesta emissão: quanto a menos gasta comprando as milhas com o desconto do clube
+    const economiaEmissao = Math.round(milhasAComprar / 1000 * baseCostPerK * descontoPct / 100)
+
+    // Meses para o clube se pagar (economiaEmissao pode cobrir vários meses de assinatura)
+    let mesesPayback: number | null = null
+    if (economiaEmissao > 0) {
+        mesesPayback = economiaEmissao >= precoMensal
+            ? null   // se paga nesta emissão
+            : parseFloat((precoMensal / economiaEmissao).toFixed(1))
+    }
+
+    const expiry = clubPromo.valid_until
+        ? ` (promoção expira ${new Date(clubPromo.valid_until).toLocaleDateString('pt-BR')})`
+        : ''
+
+    const paybackStr = mesesPayback === null
+        ? 'se paga nesta emissão'
+        : `payback em ${mesesPayback} mês${mesesPayback > 1 ? 'es' : ''}`
+
+    const label = `★ CLUBE ${programa.toUpperCase()}: R$ ${precoMensal.toFixed(2)}/mês | ${descontoPct}% desconto na compra → economia de ~R$ ${economiaEmissao} nesta emissão (${paybackStr})${expiry}`
+
+    return { promo: clubPromo, preco_mensal: precoMensal, desconto_compra_pct: descontoPct, economia_nesta_emissao: economiaEmissao, meses_payback: mesesPayback, label }
+}
+
 // ─── Per-program analysis ─────────────────────────────────────────────────────
 
 function analyzeProgram(
@@ -821,6 +874,11 @@ function analyzeProgram(
 
     // Cost to buy deficit in the target program directly
     const baseCostPerK = BASE_COST_PER_K[programa] ?? 50
+
+    // Clube: desconto na compra de milhas (ex: Club Smiles 20% OFF)
+    const clubRoi = calcClubRoi(programa, deficit, allPromos)
+    const clubDescontoPct = clubRoi?.desconto_compra_pct ?? 0
+
     const purchasePromos = allPromos.filter(p =>
         resolvePromoType(p) === 'milhas_compra' &&
         promoMatchesProgram(p, programa)
@@ -828,15 +886,20 @@ function analyzeProgram(
     const bestPurchasePromo = [...purchasePromos].sort((a, b) => (b.bonus_pct ?? 0) - (a.bonus_pct ?? 0))[0]
     const promoCompraBonusPct = bestPurchasePromo?.bonus_pct ?? 0
 
-    const milhasAComprar = deficit > 0 ? Math.ceil(deficit / (1 + promoCompraBonusPct / 100)) : 0
+    // Aplica o melhor desconto disponível: clube OU promo de compra (usa o maior)
+    const melhorDescontoPct = Math.max(clubDescontoPct, promoCompraBonusPct)
+
+    const milhasAComprar = deficit > 0 ? Math.ceil(deficit / (1 + melhorDescontoPct / 100)) : 0
     const custoCompra = Math.ceil(milhasAComprar / 1000 * baseCostPerK)
-    const custoEfetivoPorMil = promoCompraBonusPct > 0
-        ? Math.round(baseCostPerK / (1 + promoCompraBonusPct / 100))
+    const custoEfetivoPorMil = melhorDescontoPct > 0
+        ? Math.round(baseCostPerK / (1 + melhorDescontoPct / 100))
         : baseCostPerK
 
-    const promoCompraAtiva = bestPurchasePromo && promoCompraBonusPct > 0
-        ? `${String(bestPurchasePromo.titulo ?? '').slice(0, 60)} (+${promoCompraBonusPct}%${bestPurchasePromo.valid_until ? `, expira ${new Date(bestPurchasePromo.valid_until).toLocaleDateString('pt-BR')}` : ''})`
-        : null
+    const promoCompraAtiva = clubRoi
+        ? clubRoi.label
+        : bestPurchasePromo && promoCompraBonusPct > 0
+            ? `${String(bestPurchasePromo.titulo ?? '').slice(0, 60)} (+${promoCompraBonusPct}%${bestPurchasePromo.valid_until ? `, expira ${new Date(bestPurchasePromo.valid_until).toLocaleDateString('pt-BR')}` : ''})`
+            : null
 
     const taxasEstimadas = TAXES_BY_PROGRAM[programa] ?? 100
     const custoTotal = custoCompra + taxasEstimadas
@@ -919,9 +982,10 @@ function buildMultiProgramComparison(
 
         if (a.deficit > 0) {
             if (a.promo_compra_ativa) {
-                lines.push(`  ★ Promo de compra ativa: ${a.promo_compra_ativa} → custo efetivo R$${a.custo_efetivo_por_mil}/mil`)
+                lines.push(`  ★ ${a.promo_compra_ativa}`)
+                lines.push(`    → custo efetivo: R$${a.custo_efetivo_por_mil}/mil (base R$${BASE_COST_PER_K[a.programa] ?? 50}/mil)`)
             } else {
-                lines.push(`  Sem promo de compra ativa — preço normal: R$${BASE_COST_PER_K[a.programa] ?? 50}/mil`)
+                lines.push(`  Sem promo de compra ou clube ativo — preço normal: R$${BASE_COST_PER_K[a.programa] ?? 50}/mil`)
             }
             lines.push(`  Comprar ${a.deficit.toLocaleString('pt-BR')} pts faltantes: ~R$ ${a.custo_compra_milhas_brl.toLocaleString('pt-BR')}`)
         } else {
@@ -1321,6 +1385,7 @@ REGRAS OBRIGATÓRIAS:
 8. Se há "✓ COBRE TUDO" na comparação, o passo 1 DEVE usar o saldo existente. Se há saldo parcial + transferência, combine os dois.
 9. Se deficit > 0 E comprar milhas não é a melhor opção (vale_a_pena: false): sugira transferir pontos de cartão como alternativa mais barata que comprar. Só recomende compra se for realmente vantajoso.
 10. Se o usuário tem clube (ex: Smiles Diamante), mencione o desconto nas taxas EXPLICITAMENTE.
+11. Se a comparação mostrar "★ CLUBE X: R$ Y/mês | Z% desconto → economia de ~R$ W nesta emissão", gere um passo dedicado explicando: o que é o clube, quanto custa por mês, quanto economiza NESTA emissão específica, e se o clube se paga nessa compra ou em quantos meses. Seja específico com os valores R$ da seção COMPARAÇÃO.
 11. steps: TÍTULO curto (máx 8 palavras). step_details: explicação didática completa — onde clicar, qual site/app, o que fazer, quanto tempo leva. Inclua URLs exatas e valores em R$.
 12. Se vale_a_pena: false: steps devem ser (1) reservar em dinheiro agora, (2) como acumular/transferir milhas para o futuro, (3) quando monitorar promos.
 13. Responda APENAS em JSON válido, sem texto adicional.`,

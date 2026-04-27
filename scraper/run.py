@@ -17,13 +17,12 @@ Schema da tabela 'promocoes':
   updated_at TIMESTAMPTZ
 """
 import os
+import re
 import time
-import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 import psycopg2
-from psycopg2.extras import Json
 
 # Importa as funções do scraper original
 import sys
@@ -142,6 +141,48 @@ def classificar(titulo: str, conteudo: str) -> tuple[str | None, str | None, lis
         return "passagens", None, []
 
 
+# ─── Extração de dados de clube ───────────────────────────────────────────────
+
+# Padrões: "R$ 34,90/mês" | "R$ 34.90 por mês" | "R$34,90 mensais" | "R$ 34,90 ao mês"
+_PRECO_CLUBE_RE = re.compile(
+    r'r\$\s*(\d{1,3}(?:[.,]\d{2,3})?)\s*(?:/\s*m[eê]s|por\s+m[eê]s|mensais?|ao\s+m[eê]s)',
+    re.IGNORECASE,
+)
+
+# Padrões: "20% de desconto na compra" | "20% OFF na compra de milhas" | "desconto de 20%"
+# Exclui padrões de transferência/bônus de acúmulo para não confundir
+_BONUS_COMPRA_RE = re.compile(
+    r'(\d{1,3})\s*%\s*(?:de\s+)?(?:desconto|off)\s+(?:na\s+)?compra|'
+    r'desconto\s+de\s+(\d{1,3})\s*%\s+(?:na\s+)?compra',
+    re.IGNORECASE,
+)
+
+
+def _extrair_preco_clube(texto: str) -> float | None:
+    """Extrai o preço mensal do clube em reais. Ex: 'R$ 34,90/mês' → 34.90"""
+    m = _PRECO_CLUBE_RE.search(texto)
+    if not m:
+        return None
+    valor = m.group(1).replace(".", "").replace(",", ".")
+    try:
+        return float(valor)
+    except ValueError:
+        return None
+
+
+def _extrair_bonus_compra_pct(texto: str) -> int | None:
+    """Extrai o desconto na compra de milhas do clube. Ex: '20% de desconto na compra' → 20"""
+    m = _BONUS_COMPRA_RE.search(texto)
+    if not m:
+        return None
+    raw = m.group(1) or m.group(2)
+    try:
+        v = int(raw)
+        return v if 5 <= v <= 60 else None  # desconto razoável: 5–60%
+    except (ValueError, TypeError):
+        return None
+
+
 # ─── Upsert ───────────────────────────────────────────────────────────────────
 
 def upsert_promocao(conn, data: dict, fonte: str = "passageirodeprimeira.com"):
@@ -152,18 +193,26 @@ def upsert_promocao(conn, data: dict, fonte: str = "passageirodeprimeira.com"):
     cur = conn.cursor()
     now = datetime.now(TZ)
 
-    # Monta o conteúdo: usa content_html (HTML formatado) como principal
     conteudo = data.get("content_html") or data.get("content_text") or ""
+    texto_plano = data.get("content_text") or ""
 
     titulo = data.get("title") or "Sem título"
     categoria, subcategoria, programas_tags = classificar(titulo, conteudo)
 
+    # Para promos de clube: extrai preço mensal e desconto na compra de milhas
+    preco_clube: float | None = None
+    bonus_pct: int | None = None
+    if subcategoria == "clube":
+        preco_clube = _extrair_preco_clube(titulo + " " + texto_plano)
+        bonus_pct = _extrair_bonus_compra_pct(titulo + " " + texto_plano)
+
     cur.execute(
         """
         INSERT INTO promocoes
-            (titulo, conteudo, url, fonte, valid_until, categoria, subcategoria, programas_tags, created_at, updated_at)
+            (titulo, conteudo, url, fonte, valid_until, categoria, subcategoria,
+             programas_tags, bonus_pct, preco_clube, created_at, updated_at)
         VALUES
-            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (url) DO UPDATE SET
             titulo         = EXCLUDED.titulo,
             conteudo       = EXCLUDED.conteudo,
@@ -172,6 +221,8 @@ def upsert_promocao(conn, data: dict, fonte: str = "passageirodeprimeira.com"):
             categoria      = EXCLUDED.categoria,
             subcategoria   = EXCLUDED.subcategoria,
             programas_tags = EXCLUDED.programas_tags,
+            bonus_pct      = EXCLUDED.bonus_pct,
+            preco_clube    = EXCLUDED.preco_clube,
             updated_at     = EXCLUDED.updated_at
         """,
         (
@@ -183,6 +234,8 @@ def upsert_promocao(conn, data: dict, fonte: str = "passageirodeprimeira.com"):
             categoria,
             subcategoria,
             programas_tags if programas_tags else None,
+            bonus_pct,
+            preco_clube,
             now,
             now,
         ),
