@@ -38,6 +38,8 @@ interface NotifPrefs {
     alerta_promocao: boolean
     alerta_award_space: boolean
     alerta_acumulo: boolean
+    alerta_noticias: boolean
+    alerta_compras: boolean
 }
 
 interface UserProfile {
@@ -79,6 +81,8 @@ const DEFAULT_NOTIF_PREFS: NotifPrefs = {
     alerta_promocao: true,
     alerta_award_space: true,
     alerta_acumulo: false,
+    alerta_noticias: false,
+    alerta_compras: false,
 }
 
 const CURRENCY_OPTIONS = [
@@ -342,6 +346,8 @@ export default function Configuracoes() {
                     alerta_promocao: notifData.alerta_promocao ?? true,
                     alerta_award_space: notifData.alerta_award_space ?? true,
                     alerta_acumulo: notifData.alerta_acumulo ?? false,
+                    alerta_noticias: notifData.alerta_noticias ?? false,
+                    alerta_compras: notifData.alerta_compras ?? false,
                 })
             }
             setLoadingProfile(false)
@@ -934,12 +940,40 @@ export default function Configuracoes() {
                                         <div>
                                             <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)' }}>Milhas</div>
                                             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                                                Promoções de transferência e espaço em award.
+                                                Promoções de transferência, clubes e acúmulo.
                                             </div>
                                         </div>
                                         <Toggle
                                             value={notifPrefs.milhas}
                                             onChange={() => setNotifPrefs(p => ({ ...p, milhas: !p.milhas }))}
+                                        />
+                                    </div>
+
+                                    {/* Notícias toggle */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                                        <div>
+                                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)' }}>Notícias do setor aéreo</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                                Novidades sobre companhias, rotas e regulamentações.
+                                            </div>
+                                        </div>
+                                        <Toggle
+                                            value={notifPrefs.alerta_noticias}
+                                            onChange={() => setNotifPrefs(p => ({ ...p, alerta_noticias: !p.alerta_noticias }))}
+                                        />
+                                    </div>
+
+                                    {/* Compras toggle */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                                        <div>
+                                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-dark)' }}>Ofertas e compras</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                                Descontos em produtos, câmbio e contas internacionais.
+                                            </div>
+                                        </div>
+                                        <Toggle
+                                            value={notifPrefs.alerta_compras}
+                                            onChange={() => setNotifPrefs(p => ({ ...p, alerta_compras: !p.alerta_compras }))}
                                         />
                                     </div>
 
