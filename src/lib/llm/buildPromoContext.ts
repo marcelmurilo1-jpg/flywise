@@ -63,15 +63,6 @@ export async function buildPromoContext(programs: string[]): Promise<PromoContex
             )
         }
 
-        // Q3: promos de passagens (mostrar independente do programa — contexto de rota)
-        fetches.push(
-            supabase.from('vw_promocoes_ativas')
-                .select(SELECT)
-                .eq('categoria', 'passagens')
-                .or(validFilter)
-                .order('valid_until', { ascending: true, nullsFirst: false })
-                .limit(3) as Promise<{ data: unknown[] | null }>
-        )
 
         const results = await Promise.all(fetches)
 
@@ -153,30 +144,10 @@ function mapPromo(row: Record<string, unknown>): PromoContext {
     }
 }
 
-/** Serializa para string compacta no prompt — separado por tipo para clareza */
+/** Serializa para string compacta no prompt — ~500 tokens para 6 promos */
 export function promoContextToString(promos: PromoContext[]): string {
     if (!promos.length) return 'Nenhuma promoção ativa no banco.'
-
-    const milhas = promos.filter(p => p.categoria === 'milhas' || p.type === 'bonus_transferencia' || p.type === 'clube')
-    const passagens = promos.filter(p => p.categoria === 'passagens' || p.type === 'passagem')
-    const outros = promos.filter(p => !milhas.includes(p) && !passagens.includes(p))
-
-    const lines: string[] = []
-
-    if (milhas.length > 0) {
-        lines.push('PROMOÇÕES DE MILHAS:')
-        milhas.forEach((p, i) => lines.push(formatPromoLine(p, i + 1)))
-    }
-    if (passagens.length > 0) {
-        lines.push('PROMOÇÕES DE PASSAGENS:')
-        passagens.forEach((p, i) => lines.push(formatPromoLine(p, i + 1)))
-    }
-    if (outros.length > 0) {
-        lines.push('OUTRAS PROMOÇÕES:')
-        outros.forEach((p, i) => lines.push(formatPromoLine(p, i + 1)))
-    }
-
-    return lines.join('\n')
+    return promos.map((p, i) => formatPromoLine(p, i + 1)).join('\n')
 }
 
 function formatPromoLine(p: PromoContext, i: number): string {

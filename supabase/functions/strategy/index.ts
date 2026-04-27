@@ -299,15 +299,7 @@ async function fetchPromos(
             .eq('active', true)
             .in('program', fallbackPrograms)
 
-        // Query 4: promos de passagens aéreas — contexto de rota para o LLM
-        const q4 = sb.from('promocoes')
-            .select(PROMO_SELECT)
-            .or(validFilter)
-            .eq('categoria', 'passagens')
-            .order('valid_until', { ascending: true, nullsFirst: false })
-            .limit(5)
-
-        const [{ data: d1 }, { data: d2 }, { data: d3 }, { data: d4 }] = await Promise.all([q1, q2, q3, q4])
+        const [{ data: d1 }, { data: d2 }, { data: d3 }] = await Promise.all([q1, q2, q3])
 
         // Converte transfer_promotions → PromoRow format
         const tpRows: PromoRow[] = (d3 ?? []).map((tp: Record<string, unknown>) => ({
@@ -335,13 +327,6 @@ async function fetchPromos(
             if (!seen.has(key)) { seen.add(key); rows.push(row as PromoRow) }
         }
 
-        // Promos de passagens — mantidas separadas para seção dedicada no prompt
-        const passagensRows: PromoRow[] = []
-        for (const row of (d4 ?? []) as PromoRow[]) {
-            const key = String(row.titulo ?? '').slice(0, 60).toLowerCase()
-            if (!seen.has(key)) { seen.add(key); passagensRows.push(row) }
-        }
-
         // Promos de transferência para o programa alvo (usadas na análise de cobertura)
         const transferPromos = rows.filter(p =>
             resolvePromoType(p) === 'bonus_transferencia' &&
@@ -354,29 +339,22 @@ async function fetchPromos(
         const compra = rows.filter(p => resolvePromoType(p) === 'milhas_compra').slice(0, 1)
         const outros = rows.filter(p => !['bonus_transferencia', 'clube', 'boas_vindas', 'milhas_compra'].includes(resolvePromoType(p))).slice(0, 1)
 
-        let selectedMilhas = [...transfer, ...clube, ...compra, ...outros]
+        let selected = [...transfer, ...clube, ...compra, ...outros]
 
         // Fallback: qualquer promo de milhas ativa se não achou nada para os programas do usuário
-        if (selectedMilhas.length === 0) {
+        if (selected.length === 0) {
             const { data: fallback } = await sb.from('promocoes')
                 .select(PROMO_SELECT)
                 .or(validFilter)
                 .eq('categoria', 'milhas')
                 .order('valid_until', { ascending: true, nullsFirst: false })
                 .limit(5)
-            selectedMilhas = (fallback ?? []) as PromoRow[]
+            selected = (fallback ?? []) as PromoRow[]
         }
 
-        // Monta string de promos para o prompt — milhas + passagens separados
-        const milhasStr = selectedMilhas.length > 0
-            ? 'PROMOÇÕES DE MILHAS/TRANSFERÊNCIA:\n' + selectedMilhas.map(formatPromoLine).join('\n')
-            : 'Nenhuma promoção de milhas ativa para os programas relevantes.'
-
-        const passagensStr = passagensRows.length > 0
-            ? '\nPROPOSIÇÕES DE PASSAGENS (referência de preço para a rota):\n' + passagensRows.map(formatPromoLine).join('\n')
-            : ''
-
-        const promoStr = milhasStr + passagensStr
+        const promoStr = selected.length > 0
+            ? selected.map(formatPromoLine).join('\n')
+            : 'Nenhuma promoção ativa registrada para os programas relevantes.'
 
         // Promos de compra de milhas para o programa alvo (análise de déficit)
         const purchasePromos = rows.filter(p =>
