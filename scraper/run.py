@@ -77,12 +77,13 @@ def delete_expired(conn):
 _PROGRAMAS_KEYWORDS: dict[str, list[str]] = {
     "Smiles":      ["smiles"],
     "TudoAzul":    ["tudoazul", "tudo azul", "azul fidelidade"],
-    "LATAM Pass":  ["latam pass", "latam fidelidade", "latam pass"],
+    "LATAM Pass":  ["latam pass", "latam fidelidade"],
     "Livelo":      ["livelo"],
     "Esfera":      ["esfera"],
     "Flying Blue": ["flying blue", "air france", "klm"],
     "AAdvantage":  ["aadvantage", "american airlines"],
     "MileagePlus": ["mileageplus", "united"],
+    "Avios":       ["avios", "mundo avios", "british airways", "iberia plus"],
 }
 
 _MILHAS_KEYWORDS = [
@@ -118,6 +119,23 @@ _ACUMULO_KEYWORDS = [
     "pontos no cartão", "milhas no cartão",
 ]
 
+_COMPRAS_KEYWORDS = [
+    "cupom de desconto", "cupom exclusivo", "% de desconto", "r$ de desconto",
+    "desconto em compras", "shopee", "amazon", "americanas",
+    "iof zero", "conta global", "cartão pré-pago", "compre dólares",
+    "compre euros", "câmbio", "dólar baixo", "abra sua conta",
+]
+
+_NOTICIAS_KEYWORDS = [
+    "vai reforçar", "vai inaugurar", "vai construir", "vai receber",
+    "retomará voos", "anuncia novo", "anuncia que", "planeja introduzir",
+    "proíbe", "torna obrigatório", "nova regra", "obrigatório",
+    "frota com airbus", "frota com boeing", "a330", "737 max",
+    "resort", "novo resort", "novo hotel", "eletrocardiograma",
+    "power bank", "power banks", "lei ", "regulamento",
+    "fusão", "acordo", "parceria estratégica",
+]
+
 
 def classificar(titulo: str, conteudo: str) -> tuple[str | None, str | None, list[str]]:
     """Retorna (categoria, subcategoria, programas_tags) a partir do texto da promoção."""
@@ -130,10 +148,29 @@ def classificar(titulo: str, conteudo: str) -> tuple[str | None, str | None, lis
 
     # categoria e subcategoria: usa título + conteúdo
     texto = (titulo + " " + (conteudo or "")).lower()
+
+    # Notícias têm prioridade máxima — frases que indicam conteúdo editorial
+    _NOTICIAS_DEFINITIVAS = [
+        "vai reforçar frota", "vai inaugurar", "vai construir", "vai receber",
+        "retomará voos", "planeja introduzir", "planeja lançar", "anuncia que",
+        "proíbe recarga", "torna obrigatório", "nova regra obrigatória",
+        "vai construir resort", "rede internacional vai", "novo resort",
+        "eletrocardiograma a bordo", "power banks a bordo",
+    ]
+    if any(nd in texto for nd in _NOTICIAS_DEFINITIVAS):
+        return "noticias", None, []
+
     milhas_score = sum(1 for kw in _MILHAS_KEYWORDS if kw in texto)
     passagens_score = sum(1 for kw in _PASSAGENS_KEYWORDS if kw in texto)
 
     if milhas_score == 0 and passagens_score == 0:
+        # Sem sinal de milhas/passagens — tenta compras ou notícias genéricas
+        compras_score  = sum(1 for kw in _COMPRAS_KEYWORDS if kw in texto)
+        noticias_score = sum(1 for kw in _NOTICIAS_KEYWORDS if kw in texto)
+        if compras_score > 0:
+            return "compras", None, programas_tags
+        if noticias_score > 0:
+            return "noticias", None, []
         return None, None, []
     elif milhas_score >= passagens_score:
         categoria = "milhas"
