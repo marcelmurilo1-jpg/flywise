@@ -40,6 +40,7 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
     const [openSteps, setOpenSteps] = useState<Set<number>>(new Set())
     const [rulesOpen, setRulesOpen] = useState(false)
     const [activePromos, setActivePromos] = useState<Promocao[]>([])
+    const [cpmHistorico, setCpmHistorico] = useState<{ avg: number; count: number } | null>(null)
     function toggleStep(i: number) { setOpenSteps(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n }) }
 
     useEffect(() => {
@@ -54,6 +55,31 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
             .limit(3)
             .then(({ data }) => setActivePromos(data ?? []))
     }, [open, seatsContext?.program])
+
+    useEffect(() => {
+        if (!strategy?.programa_recomendado || !user?.id) return
+        setCpmHistorico(null)
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+        supabase
+            .from('strategies')
+            .select('structured_result')
+            .eq('user_id', user.id)
+            .gte('created_at', thirtyDaysAgo)
+            .not('structured_result', 'is', null)
+            .limit(20)
+            .then(({ data }) => {
+                if (!data || data.length === 0) return
+                const cpms = data
+                    .map(r => {
+                        const sr = r.structured_result as Record<string, unknown>
+                        return typeof sr?.cpm_resgate === 'number' ? sr.cpm_resgate : null
+                    })
+                    .filter((v): v is number => v !== null && v > 0)
+                if (cpms.length < 2) return
+                const avg = cpms.reduce((s, v) => s + v, 0) / cpms.length
+                setCpmHistorico({ avg: parseFloat(avg.toFixed(2)), count: cpms.length })
+            })
+    }, [strategy?.programa_recomendado, user?.id])
 
     // Must have either a DB flight or seatsContext to render
     if (!flight && !seatsContext) return null
@@ -370,18 +396,32 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
 
                                     {/* CPM badge (only when vale_a_pena: true) */}
                                     {strategy.vale_a_pena !== false && strategy.cpm_resgate > 0 && (
-                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                                            <div style={{
-                                                display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
-                                                background: strategy.cpm_resgate >= 2.5 ? '#DCFCE7' : strategy.cpm_resgate >= 1.8 ? '#DBEAFE' : '#FEF9C3',
-                                                border: `1px solid ${strategy.cpm_resgate >= 2.5 ? '#86EFAC' : strategy.cpm_resgate >= 1.8 ? '#93C5FD' : '#FDE047'}`,
-                                                borderRadius: 20,
-                                            }}>
-                                                <TrendingUp size={13} color={strategy.cpm_resgate >= 2.5 ? '#16A34A' : strategy.cpm_resgate >= 1.8 ? '#2563EB' : '#CA8A04'} />
-                                                <span style={{ fontSize: 12, fontWeight: 700, color: strategy.cpm_resgate >= 2.5 ? '#15803D' : strategy.cpm_resgate >= 1.8 ? '#1D4ED8' : '#A16207' }}>
-                                                    CPM {strategy.cpm_resgate.toFixed(2)} c/pt — {strategy.cpm_avaliacao}
-                                                </span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                                <div style={{
+                                                    display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
+                                                    background: strategy.cpm_resgate >= 2.5 ? '#DCFCE7' : strategy.cpm_resgate >= 1.8 ? '#DBEAFE' : '#FEF9C3',
+                                                    border: `1px solid ${strategy.cpm_resgate >= 2.5 ? '#86EFAC' : strategy.cpm_resgate >= 1.8 ? '#93C5FD' : '#FDE047'}`,
+                                                    borderRadius: 20,
+                                                }}>
+                                                    <TrendingUp size={13} color={strategy.cpm_resgate >= 2.5 ? '#16A34A' : strategy.cpm_resgate >= 1.8 ? '#2563EB' : '#CA8A04'} />
+                                                    <span style={{ fontSize: 12, fontWeight: 700, color: strategy.cpm_resgate >= 2.5 ? '#15803D' : strategy.cpm_resgate >= 1.8 ? '#1D4ED8' : '#A16207' }}>
+                                                        CPM {strategy.cpm_resgate.toFixed(2)} c/pt — {strategy.cpm_avaliacao}
+                                                    </span>
+                                                </div>
                                             </div>
+                                            {cpmHistorico && (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '10.5px', color: '#64748B' }}>
+                                                    {strategy.cpm_resgate > cpmHistorico.avg
+                                                        ? <TrendingUp size={11} color="#16A34A" />
+                                                        : <TrendingDown size={11} color="#DC2626" />
+                                                    }
+                                                    {strategy.cpm_resgate > cpmHistorico.avg
+                                                        ? `Acima da sua média dos últimos 30 dias (${cpmHistorico.avg.toFixed(2)} c/pt)`
+                                                        : `Abaixo da sua média dos últimos 30 dias (${cpmHistorico.avg.toFixed(2)} c/pt)`
+                                                    }
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 

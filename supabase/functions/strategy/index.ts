@@ -300,7 +300,16 @@ async function fetchPromos(
             .eq('active', true)
             .in('program', fallbackPrograms)
 
-        const [{ data: d1 }, { data: d2 }, { data: d3 }] = await Promise.all([q1, q2, q3])
+        // Query 4: promos de acúmulo (ganhe pontos em parceiros — sem comprar milhas)
+        const q4 = sb.from('promocoes')
+            .select(PROMO_SELECT)
+            .or(validFilter)
+            .eq('subcategoria', 'acumulo')
+            .overlaps('programas_tags', fallbackPrograms)
+            .order('valid_until', { ascending: true, nullsFirst: false })
+            .limit(3)
+
+        const [{ data: d1 }, { data: d2 }, { data: d3 }, { data: d4 }] = await Promise.all([q1, q2, q3, q4])
 
         // Converte transfer_promotions → PromoRow format
         const tpRows: PromoRow[] = (d3 ?? []).map((tp: Record<string, unknown>) => ({
@@ -353,9 +362,25 @@ async function fetchPromos(
             selected = (fallback ?? []) as PromoRow[]
         }
 
-        const promoStr = selected.length > 0
+        const milhasStr = selected.length > 0
             ? selected.map(formatPromoLine).join('\n')
             : 'Nenhuma promoção ativa registrada para os programas relevantes.'
+
+        // Promos de acúmulo — seção separada para o LLM usar em cenários de déficit
+        const acumuloRows = (d4 ?? []) as PromoRow[]
+        const acumuloStr = acumuloRows.length > 0
+            ? '\nPROMOÇÕES DE ACÚMULO (ganhe pontos sem comprar milhas):\n' +
+              acumuloRows.map((p, i) => {
+                  const prog = p.programa ?? (p.programas_tags ?? []).filter(t =>
+                      !['Nubank','Itaú','Livelo','C6','Inter','Santander','Bradesco','Amex'].includes(t)
+                  )[0] ?? 'Geral'
+                  const parts = [`${i + 1}. [acúmulo] ${prog} — ${String(p.titulo ?? '').slice(0, 80)}`]
+                  if (p.valid_until) parts.push(`(expira ${new Date(p.valid_until).toLocaleDateString('pt-BR')})`)
+                  return parts.join(' ')
+              }).join('\n')
+            : ''
+
+        const promoStr = milhasStr + acumuloStr
 
         // Promos de compra de milhas para o programa alvo (análise de déficit)
         const purchasePromos = rows.filter(p =>
@@ -1388,6 +1413,7 @@ REGRAS OBRIGATÓRIAS:
 11. Se a comparação mostrar "★ CLUBE X: R$ Y/mês | Z% desconto → economia de ~R$ W nesta emissão", gere um passo dedicado explicando: o que é o clube, quanto custa por mês, quanto economiza NESTA emissão específica, e se o clube se paga nessa compra ou em quantos meses. Seja específico com os valores R$ da seção COMPARAÇÃO.
 11. steps: TÍTULO curto (máx 8 palavras). step_details: explicação didática completa — onde clicar, qual site/app, o que fazer, quanto tempo leva. Inclua URLs exatas e valores em R$.
 12. Se vale_a_pena: false: steps devem ser (1) reservar em dinheiro agora, (2) como acumular/transferir milhas para o futuro, (3) quando monitorar promos.
+13. Se há "PROMOÇÕES DE ACÚMULO" e o usuário tem déficit de milhas, gere um passo dedicado: qual programa, qual parceiro, quanto gastar para cobrir o déficit. Ex: "Comprando R$ 670 na Natura esta semana você ganha 10.050 pts Livelo — suficiente para cobrir o déficit sem comprar milhas diretamente."
 13. Responda APENAS em JSON válido, sem texto adicional.`,
                     },
                     { role: 'user', content: userPrompt },

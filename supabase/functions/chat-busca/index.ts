@@ -6,6 +6,12 @@
 //   SEATS_AERO_API_KEY  — Seats.aero Partner API key
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const sbAdmin = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+)
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -379,6 +385,32 @@ serve(async (req) => {
             flightContext = `Não foi possível identificar códigos IATA para: origem="${wizard_data.origin}", destino="${wizard_data.destination}". Responda com base em conhecimento geral.`
         }
 
+        // 4a. Busca promos de passagens ativas para o destino (não bloqueia se falhar)
+        let passagensContext = ''
+        try {
+            const keyword = wizard_data.destination?.replace(/\b[A-Z]{3}\b/g, '').trim() || wizard_data.destination
+            if (keyword && keyword.length >= 3) {
+                const { data: passPromos } = await sbAdmin
+                    .from('vw_promocoes_ativas')
+                    .select('titulo, valid_until')
+                    .eq('categoria', 'passagens')
+                    .ilike('titulo', `%${keyword}%`)
+                    .order('valid_until', { ascending: true, nullsFirst: false })
+                    .limit(3)
+                if (passPromos && passPromos.length > 0) {
+                    const lines = passPromos.map((p: Record<string, unknown>, i: number) => {
+                        const expiry = p.valid_until
+                            ? ` (expira ${new Date(p.valid_until as string).toLocaleDateString('pt-BR')})`
+                            : ''
+                        return `${i + 1}. ${p.titulo}${expiry}`
+                    })
+                    passagensContext = '\n\nPROMOÇÕES DE PASSAGENS ATIVAS PARA ESTE DESTINO:\n' +
+                        lines.join('\n') +
+                        '\n→ Se o usuário não tem data fixa, mencione essas promoções e sugira buscar nessas datas.'
+                }
+            }
+        } catch { /* silencioso — não bloqueia o chat */ }
+
         // 4. Build system prompt
         const cabinPt = CABIN_PT[wizard_data.cabinClass] ?? wizard_data.cabinClass
         const datePeriod = wizard_data.dateGo
@@ -414,7 +446,7 @@ Seja ESPECÍFICO e use os números reais dos dados acima. Não invente valores. 
 Formate com markdown. Use tabelas quando listar múltiplas opções.
 Ao final convide para perguntas de follow-up.
 
-Para MENSAGENS SEGUINTES: responda às perguntas mantendo o contexto dos dados acima. Se perguntarem sobre outras datas/rotas que não estão nos dados, deixe claro que está respondendo com conhecimento histórico, não dados em tempo real.`
+Para MENSAGENS SEGUINTES: responda às perguntas mantendo o contexto dos dados acima. Se perguntarem sobre outras datas/rotas que não estão nos dados, deixe claro que está respondendo com conhecimento histórico, não dados em tempo real.${passagensContext}`
 
         // 5. Call OpenAI
         const openaiMessages = [

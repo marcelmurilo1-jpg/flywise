@@ -521,7 +521,23 @@ app.delete('/api/watchlist/:id', requireUserJWT, async (req, res) => {
 });
 
 // ─── Watchlist email sender ───────────────────────────────────────────────────
-async function sendWatchlistEmail({ toEmail, toName, item, triggeredValue }) {
+async function fetchPromosParaPrograma(program) {
+    if (!program || !supabase) return []
+    try {
+        const now = new Date().toISOString()
+        const { data } = await supabase
+            .from('promocoes')
+            .select('titulo, subcategoria, bonus_pct, valid_until')
+            .or(`valid_until.is.null,valid_until.gt.${now}`)
+            .eq('categoria', 'milhas')
+            .overlaps('programas_tags', [program])
+            .order('valid_until', { ascending: true, nullsFirst: false })
+            .limit(3)
+        return data ?? []
+    } catch { return [] }
+}
+
+async function sendWatchlistEmail({ toEmail, toName, item, triggeredValue, promosAtivas = [] }) {
     if (!resend) { console.warn('[Watchlist] Resend não configurado.'); return; }
 
     const isCash = item.type === 'cash';
@@ -606,6 +622,17 @@ async function sendWatchlistEmail({ toEmail, toName, item, triggeredValue }) {
     </div>
   </div>
   <div class="sav">💚 ${diffLabel} — aproveite antes de subir!</div>
+  ${promosAtivas.length > 0 ? `
+  <div style="margin:0 32px 20px;padding:16px;background:#EDE9FE;border-radius:12px;">
+    <div style="font-size:11px;font-weight:700;color:#6D28D9;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">⚡ Promoções ativas para ${item.program ?? ''}</div>
+    ${promosAtivas.map(p => `
+      <div style="font-size:13px;color:#374151;margin-bottom:4px;">
+        ${p.subcategoria === 'transferencia' ? '🔄' : p.subcategoria === 'clube' ? '⭐' : '📍'}
+        ${p.titulo}
+        ${p.valid_until ? `<span style="font-size:11px;color:#6D28D9;"> · expira ${new Date(p.valid_until).toLocaleDateString('pt-BR')}</span>` : ''}
+      </div>
+    `).join('')}
+  </div>` : ''}
   <div class="cta"><a href="${ctaUrl}" class="btn">${ctaText}</a></div>
   <div class="ftr">
     Você receberá outro aviso em 7 dias se o preço continuar baixo.<br>
@@ -720,11 +747,13 @@ app.post('/api/watchlist/check', requireSyncSecret, async (req, res) => {
             // Send email
             const toEmail = emailMap[item.user_id];
             if (toEmail) {
+                const promosAtivas = item.program ? await fetchPromosParaPrograma(item.program) : []
                 await sendWatchlistEmail({
                     toEmail,
                     toName: nameMap[item.user_id],
                     item,
                     triggeredValue,
+                    promosAtivas,
                 });
                 await supabase.from('watchlist_items')
                     .update({ last_notified_at: now.toISOString() })
