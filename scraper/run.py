@@ -76,7 +76,7 @@ def delete_expired(conn):
 
 _PROGRAMAS_KEYWORDS: dict[str, list[str]] = {
     "Smiles":      ["smiles"],
-    "TudoAzul":    ["tudoazul", "tudo azul", "azul fidelidade"],
+    "TudoAzul":    ["tudoazul", "tudo azul", "azul fidelidade", "azul oferece", "pontos azul", "clube azul", "azul retomará", "azul lança", "azul anuncia"],
     "LATAM Pass":  ["latam pass", "latam fidelidade"],
     "Livelo":      ["livelo"],
     "Esfera":      ["esfera"],
