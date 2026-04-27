@@ -41,6 +41,10 @@ from scrape_passageiro import (
     extrair_conteudo,
     delete_expired as _delete_expired_legacy,
 )
+from scrape_melhores_destinos import (
+    posts_de_hoje as md_posts_de_hoje,
+    extrair_conteudo as md_extrair_conteudo,
+)
 
 
 def db_connect():
@@ -140,7 +144,7 @@ def classificar(titulo: str, conteudo: str) -> tuple[str | None, str | None, lis
 
 # ─── Upsert ───────────────────────────────────────────────────────────────────
 
-def upsert_promocao(conn, data: dict):
+def upsert_promocao(conn, data: dict, fonte: str = "passageirodeprimeira.com"):
     """
     Insere ou atualiza uma promoção na tabela 'promocoes' do Supabase.
     Mapeia os campos do scraper para o schema do Supabase e classifica automaticamente.
@@ -174,7 +178,7 @@ def upsert_promocao(conn, data: dict):
             titulo,
             conteudo[:50000] if conteudo else None,
             data.get("url"),
-            "passageirodeprimeira.com",
+            fonte,
             data.get("valid_until"),
             categoria,
             subcategoria,
@@ -235,6 +239,48 @@ def main():
     print(f"\n🏁  Concluído — {saved}/{len(items)} posts salvos no Supabase.")
 
 
+def main_melhores_destinos():
+    print("=" * 55)
+    print("✈️   FlyWise Scraper — Melhores Destinos")
+    print(f"⏰  {datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')}")
+    print("=" * 55)
+
+    conn = db_connect()
+    print("✅  Conectado ao Supabase com sucesso.")
+
+    items = md_posts_de_hoje()
+    if not items:
+        print("📭  Nenhum post de hoje encontrado no RSS do Melhores Destinos.")
+        conn.close()
+        return
+
+    print(f"\n📬  {len(items)} post(s) de hoje encontrados.\n")
+
+    saved = 0
+    for i, it in enumerate(items, start=1):
+        print(f"[{i}/{len(items)}] ⏳ {it['link']}")
+        try:
+            data = md_extrair_conteudo(
+                it["link"],
+                feed_title=it.get("feed_title"),
+                published_dt=it.get("published"),
+            )
+            upsert_promocao(conn, data, fonte="melhoresdestinos.com.br")
+            saved += 1
+            titulo = (data.get("title") or "")[:60]
+            cat, sub, tags = classificar(titulo, data.get("content_text") or "")
+            print(f"   ✅ Salvo: {titulo}")
+            print(f"   ↳  Categoria: {cat or '?'}  |  Sub: {sub or '—'}  |  Tags: {tags or '—'}")
+            if data.get("valid_until"):
+                print(f"   ↳  Expira: {data['valid_until'].strftime('%d/%m/%Y %H:%M')}")
+        except Exception as e:
+            print(f"   ❌ Erro: {e}")
+        time.sleep(1.5)
+
+    conn.close()
+    print(f"\n🏁  Concluído — {saved}/{len(items)} posts salvos no Supabase.")
+
+
 if __name__ == "__main__":
     import signal
 
@@ -243,6 +289,7 @@ if __name__ == "__main__":
     if os.environ.get("GITHUB_ACTIONS") == "true":
         print("📋  Modo GitHub Actions — execução única")
         main()
+        main_melhores_destinos()
     else:
         # Railway / servidor local — loop eterno, roda a cada hora
         INTERVAL_SECONDS = 3600
@@ -258,6 +305,7 @@ if __name__ == "__main__":
         while True:
             try:
                 main()
+                main_melhores_destinos()
             except Exception as e:
                 print(f"❌  Erro em main(): {e}")
             print(f"\n⏳  Próxima execução em {INTERVAL_SECONDS // 60} minutos...\n")
