@@ -249,6 +249,11 @@ def upsert_promocao(conn, data: dict, fonte: str = "passageirodeprimeira.com"):
     titulo = data.get("title") or "Sem título"
     categoria, subcategoria, programas_tags = classificar(titulo, conteudo)
 
+    # Noticias e compras não têm validade real — valid_until seria a data de publicação
+    valid_until = data.get("valid_until")
+    if categoria in ("noticias", "compras"):
+        valid_until = None
+
     # Para promos de clube: extrai preço mensal e desconto na compra de milhas
     preco_clube: float | None = None
     bonus_pct: int | None = None
@@ -280,7 +285,7 @@ def upsert_promocao(conn, data: dict, fonte: str = "passageirodeprimeira.com"):
             conteudo[:50000] if conteudo else None,
             data.get("url"),
             fonte,
-            data.get("valid_until"),
+            valid_until,
             categoria,
             subcategoria,
             programas_tags if programas_tags else None,
