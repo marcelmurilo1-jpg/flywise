@@ -66,6 +66,13 @@ export interface Promocao {
     conteudo?: string
     imagens?: unknown
     created_at?: string
+    // Campos do scraper
+    categoria?: 'milhas' | 'passagens' | null
+    subcategoria?: 'transferencia' | 'clube' | null
+    programas_tags?: string[] | null
+    bonus_pct?: number | null
+    preco_clube?: number | null
+    fonte?: string | null
 }
 
 export interface ChatMessage {
