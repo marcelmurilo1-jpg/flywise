@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 load_dotenv()
 TZ = ZoneInfo("America/Sao_Paulo")
-DB_URL = os.getenv("DATABASE_URL")
+DB_URL = (os.getenv("DATABASE_URL") or "").strip()
 if not DB_URL:
     raise RuntimeError("DATABASE_URL não encontrado no .env")
 
