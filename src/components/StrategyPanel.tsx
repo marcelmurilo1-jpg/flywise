@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Zap, TrendingDown, ArrowRight, Loader2, AlertTriangle, Tag, Sparkles, Lock, ChevronDown, ChevronUp, TrendingUp, Coins } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import type { ResultadoVoo } from '@/lib/supabase'
+import type { ResultadoVoo, Promocao } from '@/lib/supabase'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
@@ -39,7 +39,21 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
     const [tokensUsed, setTokensUsed] = useState<number | null>(null)
     const [openSteps, setOpenSteps] = useState<Set<number>>(new Set())
     const [rulesOpen, setRulesOpen] = useState(false)
+    const [activePromos, setActivePromos] = useState<Promocao[]>([])
     function toggleStep(i: number) { setOpenSteps(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n }) }
+
+    useEffect(() => {
+        if (!open) return
+        const program = seatsContext?.program ?? null
+        if (!program) return
+        supabase
+            .from('vw_promocoes_ativas')
+            .select('id, titulo, subcategoria, bonus_pct, preco_clube, programas_tags, valid_until')
+            .overlaps('programas_tags', [program])
+            .order('valid_until', { ascending: true, nullsFirst: false })
+            .limit(3)
+            .then(({ data }) => setActivePromos(data ?? []))
+    }, [open, seatsContext?.program])
 
     // Must have either a DB flight or seatsContext to render
     if (!flight && !seatsContext) return null
@@ -189,6 +203,40 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                                                         {seatsContext.taxas && <div style={{ fontSize: 10, color: '#94A3B8' }}>+ {seatsContext.taxas} taxas</div>}
                                                     </div>
                                                 )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Banner promos ativas */}
+                                    {activePromos.length > 0 && (
+                                        <div style={{
+                                            width: '100%', background: 'linear-gradient(135deg, #EDE9FE, #F5F3FF)',
+                                            border: '1px solid #C4B5FD', borderRadius: 12, padding: '12px 16px', textAlign: 'left',
+                                        }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                                                ⚡ Promoções ativas · {seatsContext?.program}
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                {activePromos.map(p => (
+                                                    <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                                        <span style={{
+                                                            flexShrink: 0, fontSize: '10px', fontWeight: 700,
+                                                            padding: '2px 7px', borderRadius: '999px',
+                                                            background: p.subcategoria === 'clube' ? '#FEF3C7' : '#EDE9FE',
+                                                            color: p.subcategoria === 'clube' ? '#B45309' : '#6D28D9',
+                                                        }}>
+                                                            {p.subcategoria === 'clube' ? 'Clube' : p.subcategoria === 'transferencia' ? 'Transferência' : 'Promo'}
+                                                        </span>
+                                                        <span style={{ fontSize: '12px', color: '#374151', lineHeight: 1.4 }}>
+                                                            {(p.titulo ?? '').slice(0, 80)}{(p.titulo ?? '').length > 80 ? '…' : ''}
+                                                            {p.bonus_pct ? <strong style={{ color: '#6D28D9' }}> +{p.bonus_pct}%</strong> : null}
+                                                            {p.preco_clube ? <span style={{ color: '#B45309' }}> · R$ {p.preco_clube.toFixed(2)}/mês</span> : null}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div style={{ fontSize: '10.5px', color: '#7C3AED', marginTop: 8, fontStyle: 'italic' }}>
+                                                A IA considera estas promoções automaticamente.
                                             </div>
                                         </div>
                                     )}

@@ -95,6 +95,16 @@ function PromoModal({ promo, onClose }: { promo: Promocao; onClose: () => void }
                                 <Clock size={12} />{expiresText}
                             </span>
                         )}
+                        {promo.preco_clube && (
+                            <span style={{
+                                display: 'flex', alignItems: 'center', gap: '5px',
+                                fontSize: '12px', fontWeight: 600, color: '#B45309',
+                                background: '#FEF3C7', padding: '3px 10px', borderRadius: '999px',
+                            }}>
+                                Clube · R$ {promo.preco_clube.toFixed(2)}/mês
+                                {promo.bonus_pct ? ` · ${promo.bonus_pct}% OFF compra` : ''}
+                            </span>
+                        )}
                     </div>
 
                     {/* Scoped CSS for the HTML article body */}
@@ -203,14 +213,30 @@ function PromoCard({ promo, idx, onClick, dark = false }: {
                 </div>
             )}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <div style={{
-                    width: '32px', height: '32px', borderRadius: '8px',
+                    width: '32px', height: '32px', borderRadius: '8px', flexShrink: 0,
                     background: dark ? 'rgba(74,144,226,0.12)' : '#EEF2F8',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                     <Tag size={15} color="#4a90e2" />
                 </div>
+                {promo.subcategoria === 'clube' && (
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', background: '#FEF3C7', color: '#B45309' }}>Clube</span>
+                )}
+                {promo.subcategoria === 'transferencia' && (
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', background: '#EDE9FE', color: '#6D28D9' }}>Transferência</span>
+                )}
+                {promo.categoria === 'passagens' && (
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', background: '#E0F2FE', color: '#0369A1' }}>Passagem</span>
+                )}
+                {(promo.programas_tags ?? []).slice(0, 2).map(tag => (
+                    <span key={tag} style={{
+                        fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: '999px',
+                        background: dark ? 'rgba(74,144,226,0.15)' : '#EEF2F8',
+                        color: dark ? '#93C5FD' : '#2A60C2',
+                    }}>{tag}</span>
+                ))}
             </div>
 
             <h3 style={{
@@ -286,33 +312,49 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
     const [activeTab, setActiveTab] = useState<'all' | 'today'>('all')
+    const [activeCategory, setActiveCategory] = useState<'all' | 'milhas' | 'passagens'>('all')
+    const [activeProgram, setActiveProgram] = useState<string | null>(null)
     const [selectedPromo, setSelectedPromo] = useState<Promocao | null>(null)
 
     useEffect(() => {
         const load = async () => {
             try {
+                const fetchLimit = landingMode ? limit : 100
                 const { data, error } = await supabase
                     .from('vw_promocoes_ativas').select('*')
-                    .order('created_at', { ascending: false }).limit(limit)
+                    .order('created_at', { ascending: false }).limit(fetchLimit)
                 if (error) throw error
                 setPromos(data ?? [])
             } catch { setError('Não foi possível carregar.') }
             finally { setLoading(false) }
         }
         load()
-    }, [limit])
+    }, [limit, landingMode])
 
     const dark = false  // dashboard is now light background — use light cards everywhere
     const todayPromos = promos.filter(p => p.valid_until && isToday(parseISO(p.valid_until)))
-    const displayPromos = activeTab === 'today' ? promos.filter(p => p.valid_until && isToday(parseISO(p.valid_until))) : promos
+
+    // Programas únicos para chips de filtro
+    const availablePrograms = Array.from(
+        new Set(promos.flatMap(p => p.programas_tags ?? []))
+    ).sort()
+
+    // Filtro combinado: tab prazo + categoria + programa
+    const filteredPromos = promos.filter(p => {
+        if (activeTab === 'today' && !(p.valid_until && isToday(parseISO(p.valid_until)))) return false
+        if (activeCategory === 'milhas' && p.categoria !== 'milhas') return false
+        if (activeCategory === 'passagens' && p.categoria !== 'passagens') return false
+        if (activeProgram && !(p.programas_tags ?? []).includes(activeProgram)) return false
+        return true
+    })
 
     // Group promos by date for dashboard mode
     const groupedPromos: { label: string; items: Promocao[] }[] = (() => {
-        if (landingMode || displayPromos.length === 0) return []
+        if (landingMode || filteredPromos.length === 0) return []
         const today: Promocao[] = []
         const yesterday: Promocao[] = []
         const older: Promocao[] = []
-        for (const p of displayPromos) {
+        for (const p of filteredPromos) {
             if (!p.created_at) { older.push(p); continue }
             const d = parseISO(p.created_at)
             if (isToday(d)) today.push(p)
@@ -366,38 +408,83 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
 
     return (
         <>
-            {/* Tabs — dashboard mode only */}
+            {/* Filtros — dashboard mode only */}
             {!landingMode && (
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-                    {[
-                        { key: 'all', label: `Todas (${promos.length})`, icon: <Tag size={13} /> },
-                        { key: 'today', label: `Acaba hoje${todayPromos.length > 0 ? ` (${todayPromos.length})` : ''}`, icon: <Flame size={13} /> },
-                    ].map(tab => {
-                        const isActive = activeTab === tab.key
-                        const isToday = tab.key === 'today'
-                        return (
-                            <button key={tab.key} onClick={() => setActiveTab(tab.key as 'all' | 'today')}
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: '6px',
-                                    padding: '8px 18px', borderRadius: '10px', cursor: 'pointer',
-                                    fontFamily: 'inherit', fontWeight: 600, fontSize: '13px',
-                                    transition: 'all 0.18s',
-                                    background: isActive ? (isToday ? 'rgba(220,38,38,0.10)' : 'rgba(74,144,226,0.12)') : 'rgba(255,255,255,0.04)',
-                                    color: isActive ? (isToday ? '#F87171' : '#4a90e2') : '#475569',
-                                    border: isActive
-                                        ? (isToday ? '1.5px solid rgba(220,38,38,0.25)' : '1.5px solid rgba(74,144,226,0.25)')
-                                        : '1.5px solid transparent',
-                                }}
-                            >
-                                {tab.icon}{tab.label}
-                            </button>
-                        )
-                    })}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
+                    {/* Linha 1: tabs de prazo */}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        {[
+                            { key: 'all', label: `Todas (${promos.length})`, icon: <Tag size={13} /> },
+                            { key: 'today', label: `Acaba hoje${todayPromos.length > 0 ? ` (${todayPromos.length})` : ''}`, icon: <Flame size={13} /> },
+                        ].map(tab => {
+                            const isActive = activeTab === tab.key
+                            const isTodayTab = tab.key === 'today'
+                            return (
+                                <button key={tab.key} onClick={() => setActiveTab(tab.key as 'all' | 'today')}
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                        padding: '8px 18px', borderRadius: '10px', cursor: 'pointer',
+                                        fontFamily: 'inherit', fontWeight: 600, fontSize: '13px',
+                                        transition: 'all 0.18s',
+                                        background: isActive ? (isTodayTab ? 'rgba(220,38,38,0.10)' : 'rgba(74,144,226,0.12)') : 'rgba(255,255,255,0.04)',
+                                        color: isActive ? (isTodayTab ? '#F87171' : '#4a90e2') : '#475569',
+                                        border: isActive
+                                            ? (isTodayTab ? '1.5px solid rgba(220,38,38,0.25)' : '1.5px solid rgba(74,144,226,0.25)')
+                                            : '1.5px solid transparent',
+                                    }}
+                                >
+                                    {tab.icon}{tab.label}
+                                </button>
+                            )
+                        })}
+                    </div>
+
+                    {/* Linha 2: categoria */}
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        {(['all', 'milhas', 'passagens'] as const).map(cat => {
+                            const label = cat === 'all' ? 'Todas' : cat === 'milhas' ? '✦ Milhas' : '✈ Passagens'
+                            const isActive = activeCategory === cat
+                            return (
+                                <button key={cat} onClick={() => { setActiveCategory(cat); setActiveProgram(null) }}
+                                    style={{
+                                        padding: '5px 14px', borderRadius: '999px', cursor: 'pointer',
+                                        fontFamily: 'inherit', fontSize: '12px', fontWeight: 600,
+                                        background: isActive ? '#0E2A55' : 'transparent',
+                                        color: isActive ? '#fff' : '#64748B',
+                                        border: isActive ? '1.5px solid #0E2A55' : '1.5px solid #E2EAF5',
+                                        transition: 'all 0.15s',
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            )
+                        })}
+                    </div>
+
+                    {/* Linha 3: chips de programa (só quando milhas) */}
+                    {activeCategory === 'milhas' && availablePrograms.length > 0 && (
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {[null, ...availablePrograms].map(prog => (
+                                <button key={prog ?? '__all'} onClick={() => setActiveProgram(prog)}
+                                    style={{
+                                        padding: '4px 12px', borderRadius: '999px', cursor: 'pointer',
+                                        fontFamily: 'inherit', fontSize: '11.5px', fontWeight: 600,
+                                        background: activeProgram === prog ? '#2A60C2' : 'transparent',
+                                        color: activeProgram === prog ? '#fff' : '#64748B',
+                                        border: activeProgram === prog ? '1.5px solid #2A60C2' : '1.5px solid #E2EAF5',
+                                        transition: 'all 0.15s',
+                                    }}
+                                >
+                                    {prog ?? 'Todos'}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
 
             {/* "Acaba hoje" empty state */}
-            {activeTab === 'today' && displayPromos.length === 0 && (
+            {activeTab === 'today' && filteredPromos.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '48px', color: '#475569' }}>
                     <Flame size={28} style={{ marginBottom: '10px', opacity: 0.4 }} />
                     <p>Nenhuma promoção expira hoje.</p>
@@ -430,7 +517,7 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
                         }
                     `}</style>
                     <div className="promo-landing-grid">
-                        {displayPromos.map((promo, idx) => (
+                        {promos.slice(0, limit).map((promo, idx) => (
                             <Link key={promo.id} to="/auth" className="promo-card-link">
                                 <PromoCard promo={promo} idx={idx} onClick={() => {}} dark={false} />
                             </Link>
@@ -440,7 +527,7 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
             )}
 
             {/* Dashboard mode — grouped by date */}
-            {!landingMode && displayPromos.length > 0 && (
+            {!landingMode && filteredPromos.length > 0 && (
                 <div style={gridStyle}>
                     {groupedPromos.map(group => (
                         <React.Fragment key={group.label}>
