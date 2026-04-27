@@ -37,45 +37,30 @@ export async function buildPromoContext(programs: string[]): Promise<PromoContex
         const now = new Date().toISOString()
         const validFilter = `valid_until.is.null,valid_until.gt.${now}`
 
-        const fetches: Promise<{ data: unknown[] | null }>[] = []
-
         // Q1: promos manuais com campo `programa` preenchido
-        if (programs.length > 0) {
-            fetches.push(
-                supabase.from('vw_promocoes_ativas')
-                    .select(SELECT)
-                    .in('programa', programs)
-                    .or(validFilter)
-                    .order('valid_until', { ascending: true, nullsFirst: false })
-                    .limit(MAX_PROMOS) as Promise<{ data: unknown[] | null }>
-            )
-        }
+        const q1 = programs.length > 0
+            ? supabase.from('vw_promocoes_ativas').select(SELECT)
+                .in('programa', programs).or(validFilter)
+                .order('valid_until', { ascending: true, nullsFirst: false }).limit(MAX_PROMOS)
+            : Promise.resolve({ data: [] as unknown[] })
 
         // Q2: promos do scraper com `programas_tags` (array overlap)
-        if (programs.length > 0) {
-            fetches.push(
-                supabase.from('vw_promocoes_ativas')
-                    .select(SELECT)
-                    .overlaps('programas_tags', programs)
-                    .or(validFilter)
-                    .order('valid_until', { ascending: true, nullsFirst: false })
-                    .limit(MAX_PROMOS) as Promise<{ data: unknown[] | null }>
-            )
-        }
+        const q2 = programs.length > 0
+            ? supabase.from('vw_promocoes_ativas').select(SELECT)
+                .overlaps('programas_tags', programs).or(validFilter)
+                .order('valid_until', { ascending: true, nullsFirst: false }).limit(MAX_PROMOS)
+            : Promise.resolve({ data: [] as unknown[] })
 
-
-        const results = await Promise.all(fetches)
+        const [r1, r2] = await Promise.all([q1, q2])
 
         // Mescla e deduplica por título
         const seen = new Set<string>()
         const merged: Record<string, unknown>[] = []
-        for (const { data } of results) {
-            for (const row of (data ?? []) as Record<string, unknown>[]) {
-                const key = String(row.titulo ?? '').slice(0, 60).toLowerCase()
-                if (!seen.has(key)) {
-                    seen.add(key)
-                    merged.push(row)
-                }
+        for (const row of ([...(r1.data ?? []), ...(r2.data ?? [])]) as Record<string, unknown>[]) {
+            const key = String(row.titulo ?? '').slice(0, 60).toLowerCase()
+            if (!seen.has(key)) {
+                seen.add(key)
+                merged.push(row)
             }
         }
 
