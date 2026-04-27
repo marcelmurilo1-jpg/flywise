@@ -37,6 +37,7 @@ interface NotifPrefs {
     programas: string[]
     alerta_promocao: boolean
     alerta_award_space: boolean
+    alerta_acumulo: boolean
 }
 
 interface UserProfile {
@@ -67,7 +68,7 @@ const STYLE_OPTIONS: TravelStyle[] = ['Econômico', 'Cultural', 'Gastronômico',
 
 const PROGRAMAS_MILHAS = [
     'Smiles', 'TudoAzul', 'LATAM Pass', 'Livelo',
-    'Esfera', 'Flying Blue', 'AAdvantage', 'MileagePlus',
+    'Esfera', 'Flying Blue', 'AAdvantage', 'MileagePlus', 'Avios',
 ]
 
 const DEFAULT_NOTIF_PREFS: NotifPrefs = {
@@ -77,6 +78,7 @@ const DEFAULT_NOTIF_PREFS: NotifPrefs = {
     programas: [],
     alerta_promocao: true,
     alerta_award_space: true,
+    alerta_acumulo: false,
 }
 
 const CURRENCY_OPTIONS = [
@@ -339,6 +341,7 @@ export default function Configuracoes() {
                     programas: notifData.programas ?? [],
                     alerta_promocao: notifData.alerta_promocao ?? true,
                     alerta_award_space: notifData.alerta_award_space ?? true,
+                    alerta_acumulo: notifData.alerta_acumulo ?? false,
                 })
             }
             setLoadingProfile(false)
@@ -999,13 +1002,18 @@ export default function Configuracoes() {
                                                             {[
                                                                 {
                                                                     key: 'alerta_promocao' as const,
-                                                                    label: 'Promoções de transferência',
-                                                                    desc: 'Bônus para turbinar seus pontos (ex: Smiles 80%).',
+                                                                    label: 'Bônus de transferência',
+                                                                    desc: 'Bônus para turbinar seus pontos (ex: +80% Smiles via Nubank).',
                                                                 },
                                                                 {
                                                                     key: 'alerta_award_space' as const,
-                                                                    label: 'Promoções de clubes de assinatura',
-                                                                    desc: 'Ofertas de clubes como Club Smiles, TudoAzul Família e similares.',
+                                                                    label: 'Clubes de assinatura',
+                                                                    desc: 'Promoções de Club Smiles, TudoAzul Família e similares.',
+                                                                },
+                                                                {
+                                                                    key: 'alerta_acumulo' as const,
+                                                                    label: 'Promoções de acúmulo',
+                                                                    desc: 'Ganhe pontos em compras no dia a dia (ex: 15 pts/real na Natura).',
                                                                 },
                                                             ].map(({ key, label, desc }) => (
                                                                 <div
