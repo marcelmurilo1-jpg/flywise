@@ -5,15 +5,13 @@ Segue o mesmo contrato de scrape_passageiro.py:
   - extrair_conteudo(url, feed_title, published_dt) → dict com keys:
       url, title, content_html, content_text, valid_until, date_published
 """
-import calendar
 import os
+import re
 import sys
-import time
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta, timezone
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
-import feedparser
 import requests
 from bs4 import BeautifulSoup
 
@@ -22,8 +20,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from scrape_passageiro import detect_valid_until  # noqa: E402
 
 TZ = ZoneInfo("America/Sao_Paulo")
-RSS_URL = "https://melhoresdestinos.com.br/feed/"
-SITE_BASE = "https://melhoresdestinos.com.br"
+HOMEPAGE_URL = "https://www.melhoresdestinos.com.br/"
+SITE_BASE = "https://www.melhoresdestinos.com.br"
 RATE_SECONDS = 1.5
 REQUEST_TIMEOUT = 20
 HEADERS = {
@@ -58,39 +56,71 @@ _REMOVE_TAGS = {"script", "style", "iframe", "ins", "noscript", "svg", "form", "
 _TEXT_TAGS = {"p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "div", "span", "a"}
 
 
-# ─── RSS ──────────────────────────────────────────────────────────────────────
+# ─── Homepage scraping ────────────────────────────────────────────────────────
 
-def _parse_published(entry) -> datetime | None:
-    if hasattr(entry, "published_parsed") and entry.published_parsed:
-        ts = calendar.timegm(entry.published_parsed)
-        return datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(TZ)
+_TEMPO_RE = re.compile(r"há\s+(\d+)\s+(minuto|minutos|hora|horas|dia|dias)")
+
+
+def _relative_to_datetime(texto: str) -> datetime | None:
+    """Converte 'há X minutos/horas/dias' em datetime absoluto (BRT)."""
+    m = _TEMPO_RE.search(texto.lower())
+    if not m:
+        return None
+    n, unit = int(m.group(1)), m.group(2)
+    now = datetime.now(TZ)
+    if "minuto" in unit:
+        return now - timedelta(minutes=n)
+    if "hora" in unit:
+        return now - timedelta(hours=n)
+    if "dia" in unit:
+        return now - timedelta(days=n)
     return None
 
 
 def posts_de_hoje() -> list[dict]:
     """
-    Busca os posts publicados hoje no RSS do Melhores Destinos.
+    Raspa a homepage do Melhores Destinos e retorna posts das últimas 24h.
     Retorna lista de dicts: {link, feed_title, published}
     """
-    today = date.today()
     try:
-        feed = feedparser.parse(RSS_URL)
+        resp = requests.get(HOMEPAGE_URL, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "lxml")
     except Exception as e:
-        print(f"[MD] Erro ao ler RSS: {e}")
+        print(f"[MD] Erro ao acessar homepage: {e}")
         return []
 
+    cutoff = datetime.now(TZ) - timedelta(hours=24)
+    seen_urls: set[str] = set()
     results = []
-    for entry in feed.entries:
-        pub = _parse_published(entry)
-        if pub is None:
+
+    # Dois estilos de card na homepage: div.card (principal) e div.fim-card (sidebar/lista)
+    for span in soup.find_all("span", string=_TEMPO_RE):
+        pub = _relative_to_datetime(span.get_text())
+        if pub is None or pub < cutoff:
             continue
-        if pub.astimezone(TZ).date() != today:
+
+        # Sobe até encontrar o <a> ancestral com href do site
+        a_tag = span.find_parent("a")
+        if not a_tag:
+            card = span.find_parent("div", class_=re.compile(r"card"))
+            if card:
+                a_tag = card.find_parent("a")
+        if not a_tag:
             continue
-        results.append({
-            "link": entry.get("link", ""),
-            "feed_title": entry.get("title", ""),
-            "published": pub,
-        })
+
+        link = a_tag.get("href", "")
+        if not link.startswith("https://www.melhoresdestinos.com.br"):
+            continue
+        if link in seen_urls:
+            continue
+        seen_urls.add(link)
+
+        # Título: h2 dentro do card ou feed_title vazio (extrair_conteudo pega do HTML)
+        title_el = a_tag.find("h2") or a_tag.find("h3") or a_tag.find("p")
+        feed_title = title_el.get_text(strip=True) if title_el else ""
+
+        results.append({"link": link, "feed_title": feed_title, "published": pub})
 
     return results
 
@@ -179,7 +209,7 @@ def extrair_conteudo(
         content_text = soup.get_text(" ", strip=True)[:5_000]
         content_html = None
 
-    valid_until = detect_valid_until(content_text, url)
+    valid_until = detect_valid_until(content_text, published_dt)
 
     return {
         "url": url,
