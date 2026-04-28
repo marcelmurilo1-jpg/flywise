@@ -153,6 +153,8 @@ function buildUserPrompt(
     snippets: ResearchSnippets | null,
     dateCtx: DateContext,
     curadoria: string,
+    bairroHospedagem?: string,
+    contextEspecial?: string,
 ): string {
     const researchContext = buildResearchContext(destination, curadoria, snippets, dateCtx)
 
@@ -194,6 +196,9 @@ function buildUserPrompt(
         ? `- "extras": 2-3 itens por categoria com coordenadas precisas.`
         : `- "extras": 3-4 itens por categoria com coordenadas precisas, fonte e popularidade.\n- "fonte" deve ser específico e real (ex: "TripAdvisor #3 em ${destination}", "Michelin Guide").\n- "popularidade" de 1 a 5 — seja honesto.\n- "melhor_epoca" e "evitar" são OBRIGATÓRIOS em cada atividade.`
 
+    const hospedagemLine = bairroHospedagem ? `\n- Bairro de hospedagem: ${bairroHospedagem} — organize os dias para minimizar deslocamentos desnecessários` : ''
+    const contextoLine = contextEspecial ? `\n- Contexto especial obrigatório: ${contextEspecial} — adapte TODAS as atividades a isso` : ''
+
     return `${researchContext}
 
 ---
@@ -203,7 +208,7 @@ function buildUserPrompt(
 - Duração: ${duration} dia${duration > 1 ? 's' : ''}
 - Perfil do viajante: ${travelerLabel}
 - Estilo de viagem: ${styleList}
-- Nível de orçamento: ${budgetLabel}
+- Nível de orçamento: ${budgetLabel}${hospedagemLine}${contextoLine}
 
 Com base EXCLUSIVAMENTE nas informações de pesquisa acima (priorizando-as) e complementando com seu conhecimento, gere um roteiro completo.
 
@@ -284,7 +289,11 @@ function buildCurationPrompt(
     travelerLabel: string,
     budgetLabel: string,
     dateCtx: DateContext,
+    bairroHospedagem?: string,
+    contextEspecial?: string,
 ): string {
+    const hospedagem = bairroHospedagem ? `\n- Hospedagem: ${bairroHospedagem} (priorize atrações nesta área e adjacências)` : ''
+    const contexto = contextEspecial ? `\n- Contexto especial: ${contextEspecial}` : ''
     return `Você é um especialista em viagens que conhece ${destination} profundamente — bairros, estabelecimentos reais, o que mudou recentemente, o que locais frequentam vs o que é armadilha turística.
 
 Contexto temporal: ${dateCtx.dataCompleta} | ${dateCtx.dicaEpoca}
@@ -292,7 +301,7 @@ Contexto temporal: ${dateCtx.dataCompleta} | ${dateCtx.dicaEpoca}
 Faça uma curadoria honesta para:
 - Perfil: ${travelerLabel}
 - Estilo: ${styleList}
-- Orçamento: ${budgetLabel}
+- Orçamento: ${budgetLabel}${hospedagem}${contexto}
 
 Responda em texto corrido, organizado nestas seções:
 
@@ -318,6 +327,8 @@ async function runCurationPass(
     apiKey: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     sb: any,
+    bairroHospedagem?: string,
+    contextEspecial?: string,
 ): Promise<{ curadoria: string; tokensUsed: number }> {
     // Cache key: destino + estilos normalizados (ex: "paris|gastronômico,cultural")
     const styleKey = styleList.toLowerCase().replace(/\s/g, '')
@@ -340,7 +351,7 @@ async function runCurationPass(
 
     console.log(`[itinerary] Curation cache MISS — rodando Passe 1 para ${cacheKey}`)
 
-    const curationPrompt = buildCurationPrompt(destination, styleList, travelerLabel, budgetLabel, dateCtx)
+    const curationPrompt = buildCurationPrompt(destination, styleList, travelerLabel, budgetLabel, dateCtx, bairroHospedagem, contextEspecial)
     const { content: curadoria, tokensUsed } = await callClaude(
         'Você é um especialista em curadoria de viagens. Responda de forma direta, específica e honesta.',
         curationPrompt,
@@ -408,7 +419,8 @@ Deno.serve(async (req: Request) => {
             })
         }
 
-        const { itinerary_id } = await req.json()
+        const body = await req.json()
+        const { itinerary_id, day_to_regenerate, bairro_hospedagem, context_especial } = body
         if (!itinerary_id) {
             return new Response(JSON.stringify({ error: 'itinerary_id is required' }), {
                 status: 400,
@@ -469,13 +481,50 @@ Deno.serve(async (req: Request) => {
 
         // 4. Passe 1 — curadoria de lugares (Sonnet, ~2000 tokens, com cache por destino+estilo)
         const { curadoria, tokensUsed: curationTokens } = await runCurationPass(
-            destination, styleList, travelerLabel, budgetLabel, dateCtx, anthropicKey, supabase
+            destination, styleList, travelerLabel, budgetLabel, dateCtx, anthropicKey, supabase,
+            bairro_hospedagem, context_especial
         )
         console.log(`[itinerary] Passe 1 concluído — ${curationTokens} tokens`)
 
+        // 4b. Modo regeneração de dia único — gera apenas o dia solicitado
+        if (day_to_regenerate) {
+            const dayNum = Number(day_to_regenerate)
+            const otherDays = (itinerary.result?.dias ?? [])
+                .filter((d: Record<string, unknown>) => d.dia !== dayNum)
+                .map((d: Record<string, unknown>) => `Dia ${d.dia}: ${d.tema}`)
+                .join(', ')
+
+            const dayPrompt = `${curadoria ? `[CURADORIA]\n${curadoria}\n\n` : ''}
+Gere APENAS o Dia ${dayNum} de um roteiro de ${duration} dias para ${destination}.
+Perfil: ${travelerLabel} | Estilo: ${styleList} | Orçamento: ${budgetLabel}
+${bairro_hospedagem ? `Hospedagem: ${bairro_hospedagem}` : ''}
+${context_especial ? `Contexto especial: ${context_especial}` : ''}
+${otherDays ? `Outros dias já existentes no roteiro: ${otherDays}` : ''}
+Gere algo diferente do que normalmente seria sugerido — varie a experiência.
+
+Responda APENAS em JSON com a estrutura de UM dia:
+{
+  "dia": ${dayNum},
+  "tema": "string",
+  "manha": { "atividades": [{ "horario": "08:00", "atividade": "string", "local": "string", "dica": "string", "lat": 0.0, "lng": 0.0 }] },
+  "tarde": { "atividades": [] },
+  "noite": { "atividades": [] }
+}`
+
+            const { content: dayRaw, tokensUsed: dayTokens } = await callClaude(
+                buildSystemPrompt(dateCtx), dayPrompt, anthropicKey, 3000
+            )
+            const dayJson = extractJson(dayRaw)
+            const day = JSON.parse(dayJson)
+            console.log(`[itinerary] Dia ${dayNum} regenerado — ${dayTokens} tokens`)
+            return new Response(JSON.stringify({ day, tokens_used: dayTokens }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+        }
+
         // 5. Passe 2 — roteiro completo usando curadoria do Passe 1 como contexto
         const systemPrompt = buildSystemPrompt(dateCtx)
-        const userPrompt = buildUserPrompt(destination, duration, travelerLabel, styleList, budgetLabel, snippets, dateCtx, curadoria)
+        const userPrompt = buildUserPrompt(destination, duration, travelerLabel, styleList, budgetLabel, snippets, dateCtx, curadoria, bairro_hospedagem, context_especial)
         const { content: rawContent, tokensUsed: itineraryTokens } = await callClaude(systemPrompt, userPrompt, anthropicKey)
         const tokensUsed = curationTokens + itineraryTokens
         console.log(`[itinerary] Passe 2 concluído — ${itineraryTokens} tokens | total: ${tokensUsed}`)

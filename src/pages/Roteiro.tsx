@@ -412,7 +412,12 @@ export default function Roteiro() {
     const [travelerType, setTravelerType] = useState<TravelerType>('casal')
     const [travelStyle, setTravelStyle] = useState<TravelStyle[]>(['Cultural'])
     const [budget, setBudget] = useState<1 | 2 | 3 | 4>(2)
+    const [bairroHospedagem, setBairroHospedagem] = useState('')
+    const [contextEspecial, setContextEspecial] = useState('')
     const [error, setError] = useState('')
+
+    // Regenerate single day
+    const [regeneratingDay, setRegeneratingDay] = useState<number | null>(null)
 
     // Result state
     const [step, setStep] = useState<Step>('form')
@@ -531,7 +536,11 @@ export default function Roteiro() {
                     'Authorization': `Bearer ${accessToken}`,
                     'apikey': anonKey,
                 },
-                body: JSON.stringify({ itinerary_id: row.id }),
+                body: JSON.stringify({
+                    itinerary_id: row.id,
+                    bairro_hospedagem: bairroHospedagem.trim() || undefined,
+                    context_especial: contextEspecial.trim() || undefined,
+                }),
             })
 
             if (!fnResponse.ok) {
@@ -592,6 +601,8 @@ export default function Roteiro() {
         setDuration(5)
         setTravelerType('casal')
         setTravelStyle(['Cultural'])
+        setBairroHospedagem('')
+        setContextEspecial('')
         setError('')
         setCurrentRowId(null)
         setIsSaved(false)
@@ -599,6 +610,7 @@ export default function Roteiro() {
         setEditableItinerary(null)
         setSaveStatus('idle')
         setCollapsedDays([])
+        setRegeneratingDay(null)
         setStep('form')
     }
 
@@ -765,6 +777,56 @@ export default function Roteiro() {
         setEditableItinerary(null)
         setSaveStatus('saved')
         setTimeout(() => setSaveStatus('idle'), 2500)
+    }
+
+    const handleRegenerateDay = async (dayIdx: number) => {
+        if (!itinerary || !currentRowId || regeneratingDay !== null) return
+        setRegeneratingDay(dayIdx)
+        setError('')
+        try {
+            let accessToken: string | null = session?.access_token ?? null
+            if (!accessToken) {
+                const { data: refreshData } = await supabase.auth.refreshSession()
+                accessToken = refreshData.session?.access_token ?? null
+            }
+            if (!accessToken) throw new Error('Sessão expirada.')
+
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+
+            const fnResponse = await fetch(`${supabaseUrl}/functions/v1/itinerary`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`,
+                    'apikey': anonKey,
+                },
+                body: JSON.stringify({
+                    itinerary_id: currentRowId,
+                    day_to_regenerate: dayIdx + 1,
+                    bairro_hospedagem: bairroHospedagem.trim() || undefined,
+                    context_especial: contextEspecial.trim() || undefined,
+                }),
+            })
+
+            const data = await fnResponse.json()
+            if (data?.error) throw new Error(data.error)
+
+            // Substitui apenas o dia regenerado
+            const newDay: ItineraryDay = data.day
+            setItinerary(prev => {
+                if (!prev) return prev
+                const dias = [...prev.dias]
+                dias[dayIdx] = { ...newDay, dia: dayIdx + 1 }
+                return { ...prev, dias }
+            })
+            // Expande o dia regenerado
+            setCollapsedDays(prev => prev.map((c, i) => i === dayIdx ? false : c))
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao refazer o dia.')
+        } finally {
+            setRegeneratingDay(null)
+        }
     }
 
     const displayItinerary = isEditing ? editableItinerary : itinerary
@@ -1069,6 +1131,57 @@ export default function Roteiro() {
                                         </div>
                                     </div>
 
+                                    {/* Bairro de hospedagem + Contexto especial */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '4px', borderTop: '1px solid var(--border-light)' }}>
+                                        <div>
+                                            <label style={labelStyle}>
+                                                Bairro de hospedagem <span style={{ fontWeight: 400, color: 'var(--text-faint)' }}>(opcional)</span>
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                                <MapPin size={14} color="var(--text-faint)" style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)' }} />
+                                                <input
+                                                    type="text"
+                                                    value={bairroHospedagem}
+                                                    onChange={e => setBairroHospedagem(e.target.value)}
+                                                    placeholder="Ex: Le Marais, Montmartre, Centro Histórico..."
+                                                    style={{
+                                                        width: '100%', padding: '11px 14px 11px 36px',
+                                                        border: '1px solid var(--border-light)', borderRadius: '12px',
+                                                        fontSize: '14px', color: 'var(--text-dark)',
+                                                        background: '#fff', fontFamily: 'inherit', outline: 'none',
+                                                        boxSizing: 'border-box', transition: 'border-color 0.2s',
+                                                    }}
+                                                    onFocus={e => e.target.style.borderColor = 'var(--blue-medium)'}
+                                                    onBlur={e => e.target.style.borderColor = 'var(--border-light)'}
+                                                />
+                                            </div>
+                                            <p style={{ fontSize: '11px', color: 'var(--text-faint)', margin: '5px 0 0' }}>
+                                                A IA organiza os dias priorizando atrações próximas ao seu hotel.
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <label style={labelStyle}>
+                                                Contexto especial <span style={{ fontWeight: 400, color: 'var(--text-faint)' }}>(opcional)</span>
+                                            </label>
+                                            <textarea
+                                                value={contextEspecial}
+                                                onChange={e => setContextEspecial(e.target.value)}
+                                                placeholder="Ex: sou vegetariano, viajo com bebê de 1 ano, tenho mobilidade reduzida, odeio filas longas, prefiro transporte público..."
+                                                rows={2}
+                                                style={{
+                                                    width: '100%', padding: '11px 14px',
+                                                    border: '1px solid var(--border-light)', borderRadius: '12px',
+                                                    fontSize: '14px', color: 'var(--text-dark)',
+                                                    background: '#fff', fontFamily: 'inherit', outline: 'none',
+                                                    resize: 'vertical', boxSizing: 'border-box', transition: 'border-color 0.2s',
+                                                }}
+                                                onFocus={e => e.target.style.borderColor = 'var(--blue-medium)'}
+                                                onBlur={e => e.target.style.borderColor = 'var(--border-light)'}
+                                            />
+                                        </div>
+                                    </div>
+
                                     {error && (
                                         <p style={{ fontSize: '13px', color: '#f87171', textAlign: 'center', margin: 0 }}>{error}</p>
                                     )}
@@ -1212,20 +1325,45 @@ export default function Roteiro() {
 
                                     {/* Day cards */}
                                     {displayItinerary.dias.map((day, i) => (
-                                        <EditableDayCard
-                                            key={i}
-                                            day={day}
-                                            index={i}
-                                            isEditing={isEditing}
-                                            collapsed={collapsedDays[i] ?? false}
-                                            onToggle={() => toggleDay(i)}
-                                            onExpand={() => expandDay(i)}
-                                            onUpdateTema={v => updateDayTema(i, v)}
-                                            onSetActivity={(p, ai, f, v) => setActivity(i, p, ai, f, v)}
-                                            onAddActivity={p => addActivity(i, p)}
-                                            onRemoveActivity={(p, ai) => removeActivity(i, p, ai)}
-                                            onRemove={() => removeDay(i)}
-                                        />
+                                        <div key={i} style={{ position: 'relative' }}>
+                                            <EditableDayCard
+                                                day={day}
+                                                index={i}
+                                                isEditing={isEditing}
+                                                collapsed={collapsedDays[i] ?? false}
+                                                onToggle={() => toggleDay(i)}
+                                                onExpand={() => expandDay(i)}
+                                                onUpdateTema={v => updateDayTema(i, v)}
+                                                onSetActivity={(p, ai, f, v) => setActivity(i, p, ai, f, v)}
+                                                onAddActivity={p => addActivity(i, p)}
+                                                onRemoveActivity={(p, ai) => removeActivity(i, p, ai)}
+                                                onRemove={() => removeDay(i)}
+                                            />
+                                            {/* Botão refazer dia — só aparece fora do modo edição */}
+                                            {!isEditing && (
+                                                <button
+                                                    onClick={() => handleRegenerateDay(i)}
+                                                    disabled={regeneratingDay !== null}
+                                                    style={{
+                                                        position: 'absolute', bottom: '14px', right: '14px',
+                                                        display: 'flex', alignItems: 'center', gap: '5px',
+                                                        padding: '5px 12px', borderRadius: '999px',
+                                                        border: '1.5px solid var(--border-light)',
+                                                        background: '#fff', cursor: regeneratingDay !== null ? 'wait' : 'pointer',
+                                                        fontSize: '11.5px', fontWeight: 700,
+                                                        color: regeneratingDay === i ? 'var(--blue-medium)' : 'var(--text-muted)',
+                                                        fontFamily: 'inherit', transition: 'all 0.15s',
+                                                        opacity: regeneratingDay !== null && regeneratingDay !== i ? 0.4 : 1,
+                                                    }}
+                                                    title="Gerar uma versão diferente para este dia"
+                                                >
+                                                    {regeneratingDay === i
+                                                        ? <><Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> Refazendo...</>
+                                                        : <><RefreshCw size={11} /> Refazer dia</>
+                                                    }
+                                                </button>
+                                            )}
+                                        </div>
                                     ))}
 
                                     {/* Add day button in edit mode */}
