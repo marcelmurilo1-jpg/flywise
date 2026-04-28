@@ -1,28 +1,30 @@
-name: Watchlist Check — FlyWise
+name: Sync Award Prices (Seats.aero)
 
 on:
   schedule:
-    - cron: '0 7 * * *'   # Todo dia às 7h UTC (4h BRT)
+    # Toda segunda-feira às 04h BRT (07h UTC)
+    - cron: '0 7 * * 1'
   workflow_dispatch:
+    # Permite disparar manualmente pelo GitHub Actions UI
 
 jobs:
-  check:
-    name: Check watchlist price alerts
+  sync:
+    name: Sync award prices cache
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     steps:
-      - name: Trigger watchlist check on Railway
+      - name: Trigger sync on Railway backend
         env:
           RAILWAY_API_URL: ${{ secrets.RAILWAY_API_URL }}
           SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
         run: |
-          echo "Disparando verificação de watchlist..."
-          RESPONSE=$(curl -s -L -o /tmp/response.json -w "%{http_code}" \
-            -X POST "${RAILWAY_API_URL}/api/watchlist/check" \
+          echo "Disparando sync de preços de milhas (Seats.aero)..."
+          RESPONSE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X POST "${RAILWAY_API_URL}/api/award-prices/sync" \
             -H "x-sync-secret: ${SYNC_SECRET}" \
             -H "Content-Type: application/json" \
-            --max-time 120)
+            --max-time 30)
 
           echo "HTTP Status: $RESPONSE"
           echo "Response:"

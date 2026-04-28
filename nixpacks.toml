@@ -10,8 +10,9 @@ aptPkgs = [
   "chromium", "chromium-driver"
 ]
 
-[phases.build]
-cmds = ["PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers npx playwright install chromium"]
+# Playwright install removido — o chromium do apt (acima) já é usado como fallback
+# via resolveChromiumPath() em server.js (/usr/bin/chromium).
+# Isso reduz o tamanho da imagem e o tempo de build.
 
 [start]
 cmd = "node server.js"
