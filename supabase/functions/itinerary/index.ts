@@ -98,7 +98,14 @@ function buildDateContext(): DateContext {
 
 // ─── Prompt builders ─────────────────────────────────────────────────────────
 
-function buildResearchContext(destination: string, snippets: ResearchSnippets | null, dateCtx: DateContext): string {
+function buildResearchContext(destination: string, curadoria: string, snippets: ResearchSnippets | null, dateCtx: DateContext): string {
+    // Curadoria do Passe 1 tem prioridade máxima
+    if (curadoria) {
+        return `[CURADORIA ESPECIALIZADA — ${destination} para este perfil em ${dateCtx.dataCompleta}]
+${curadoria}`
+    }
+
+    // Fallback: snippets do cache antigo ou instrução genérica
     if (snippets && Object.keys(snippets).length > 0) {
         const lines: string[] = [`[CONTEXTO DE PESQUISA — dados curados para ${destination}]`]
         if (snippets.tripadvisor_top) lines.push(`Destaques em ${destination}:\n${snippets.tripadvisor_top}`)
@@ -108,16 +115,9 @@ function buildResearchContext(destination: string, snippets: ResearchSnippets | 
         return lines.join('\n\n')
     }
 
-    return `[CONTEXTO DO DESTINO — usando conhecimento de treinamento]
-Período da viagem: ${dateCtx.dataCompleta} | Estação no Brasil: ${dateCtx.estacaoBrasil}
+    return `[CONTEXTO DO DESTINO — ${dateCtx.dataCompleta}]
 ${dateCtx.dicaEpoca}
-
-Para ${destination} em ${dateCtx.mes} de ${dateCtx.ano}, considere:
-- Clima e condições típicas para este mês no destino
-- Alta ou baixa temporada (impacto em preços, filas, disponibilidade)
-- Eventos, festivais ou épocas especiais que normalmente ocorrem neste período
-- O que está em alta entre viajantes experientes EM ${dateCtx.ano} (não apenas clássicos genéricos)
-- Estabelecimentos ou experiências com buzz atual entre quem realmente conhece o destino`
+Use seu conhecimento profundo sobre ${destination} para recomendar lugares genuinamente excelentes para este perfil.`
 }
 
 function buildSystemPrompt(dateCtx: DateContext): string {
@@ -152,8 +152,9 @@ function buildUserPrompt(
     budgetLabel: string,
     snippets: ResearchSnippets | null,
     dateCtx: DateContext,
+    curadoria: string,
 ): string {
-    const researchContext = buildResearchContext(destination, snippets, dateCtx)
+    const researchContext = buildResearchContext(destination, curadoria, snippets, dateCtx)
 
     // For trips > 3 days use a compact schema to stay within Haiku's 8192 output token limit.
     // Full schema for 2 days uses ~7000 output tokens; scaling linearly 7 days would need ~20000.
@@ -240,10 +241,13 @@ ${extrasRule}`
 
 // ─── Anthropic API call ───────────────────────────────────────────────────────
 
+const MODEL = 'claude-sonnet-4-6'
+
 async function callClaude(
     systemPrompt: string,
     userPrompt: string,
     apiKey: string,
+    maxTokens = 8192,
 ): Promise<{ content: string; tokensUsed: number }> {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -253,8 +257,8 @@ async function callClaude(
             'content-type': 'application/json',
         },
         body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 8192,
+            model: MODEL,
+            max_tokens: maxTokens,
             system: systemPrompt,
             messages: [{ role: 'user', content: userPrompt }],
         }),
@@ -270,6 +274,92 @@ async function callClaude(
     const content: string = data.content?.[0]?.text ?? '{}'
     const tokensUsed: number = (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0)
     return { content, tokensUsed }
+}
+
+// ─── Passe 1: curadoria de lugares ────────────────────────────────────────────
+
+function buildCurationPrompt(
+    destination: string,
+    styleList: string,
+    travelerLabel: string,
+    budgetLabel: string,
+    dateCtx: DateContext,
+): string {
+    return `Você é um especialista em viagens que conhece ${destination} profundamente — bairros, estabelecimentos reais, o que mudou recentemente, o que locais frequentam vs o que é armadilha turística.
+
+Contexto temporal: ${dateCtx.dataCompleta} | ${dateCtx.dicaEpoca}
+
+Faça uma curadoria honesta para:
+- Perfil: ${travelerLabel}
+- Estilo: ${styleList}
+- Orçamento: ${budgetLabel}
+
+Responda em texto corrido, organizado nestas seções:
+
+TOP LUGARES (8-10): os lugares que alguém com este perfil REALMENTE vai adorar em ${destination}. Seja específico — nome do lugar, bairro, por que é especial para este perfil. Não inclua o óbvio genérico a menos que seja genuinamente imperdível.
+
+GASTRONOMIA REAL (5-6): onde comer de verdade para este perfil e orçamento — do melhor street food ao restaurante que vale. O que locais frequentam. Evite clichês turísticos.
+
+EXPERIÊNCIAS ÚNICAS (3-4): o que diferencia ${destination} — coisas que só existem aqui ou são muito especiais. Específico para o estilo ${styleList}.
+
+OVERRATED/EVITAR (3): o que tem muito hype mas não vale para este perfil específico, e por quê.
+
+TIMING EM ${dateCtx.mes.toUpperCase()}: o que está especialmente bom ou ruim neste mês — eventos, clima, movimento, o que abriu ou fechou recentemente.
+
+Seja específico, honesto e direto. Nada genérico.`
+}
+
+async function runCurationPass(
+    destination: string,
+    styleList: string,
+    travelerLabel: string,
+    budgetLabel: string,
+    dateCtx: DateContext,
+    apiKey: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sb: any,
+): Promise<{ curadoria: string; tokensUsed: number }> {
+    // Cache key: destino + estilos normalizados (ex: "paris|gastronômico,cultural")
+    const styleKey = styleList.toLowerCase().replace(/\s/g, '')
+    const cacheKey = `${destination.toLowerCase()}|${styleKey}`
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+    // Verificar cache
+    try {
+        const { data } = await sb
+            .from('itinerary_research')
+            .select('snippets, created_at')
+            .eq('destination', cacheKey)
+            .gt('created_at', sevenDaysAgo)
+            .single()
+        if (data?.snippets?.curadoria) {
+            console.log(`[itinerary] Curation cache HIT — ${cacheKey}`)
+            return { curadoria: data.snippets.curadoria, tokensUsed: 0 }
+        }
+    } catch { /* cache miss */ }
+
+    console.log(`[itinerary] Curation cache MISS — rodando Passe 1 para ${cacheKey}`)
+
+    const curationPrompt = buildCurationPrompt(destination, styleList, travelerLabel, budgetLabel, dateCtx)
+    const { content: curadoria, tokensUsed } = await callClaude(
+        'Você é um especialista em curadoria de viagens. Responda de forma direta, específica e honesta.',
+        curationPrompt,
+        apiKey,
+        2000,
+    )
+
+    // Salvar no cache
+    try {
+        await sb.from('itinerary_research').upsert({
+            destination: cacheKey,
+            snippets: { curadoria },
+            created_at: new Date().toISOString(),
+        })
+    } catch (e) {
+        console.warn('[itinerary] Failed to save curation cache:', e)
+    }
+
+    return { curadoria, tokensUsed }
 }
 
 // ─── JSON extraction ─────────────────────────────────────────────────────────
@@ -370,18 +460,25 @@ Deno.serve(async (req: Request) => {
         }
         const travelerLabel = travelerMap[traveler_type] ?? traveler_type
 
-        // 2. Check research cache (itinerary_research, TTL 7 days)
+        // 2. Check legacy research cache (itinerary_research, TTL 7 days)
         const snippets = await fetchResearchCache(destination, supabase)
-        console.log(`[itinerary] Research cache: ${snippets ? 'HIT' : 'MISS'} — ${destination}`)
 
-        // 3. Build prompts
+        // 3. Build date context
         const dateCtx = buildDateContext()
         console.log(`[itinerary] Date context: ${dateCtx.dataCompleta} | ${dateCtx.estacaoBrasil}`)
-        const systemPrompt = buildSystemPrompt(dateCtx)
-        const userPrompt = buildUserPrompt(destination, duration, travelerLabel, styleList, budgetLabel, snippets, dateCtx)
 
-        // 4. Call Claude
-        const { content: rawContent, tokensUsed } = await callClaude(systemPrompt, userPrompt, anthropicKey)
+        // 4. Passe 1 — curadoria de lugares (Sonnet, ~2000 tokens, com cache por destino+estilo)
+        const { curadoria, tokensUsed: curationTokens } = await runCurationPass(
+            destination, styleList, travelerLabel, budgetLabel, dateCtx, anthropicKey, supabase
+        )
+        console.log(`[itinerary] Passe 1 concluído — ${curationTokens} tokens`)
+
+        // 5. Passe 2 — roteiro completo usando curadoria do Passe 1 como contexto
+        const systemPrompt = buildSystemPrompt(dateCtx)
+        const userPrompt = buildUserPrompt(destination, duration, travelerLabel, styleList, budgetLabel, snippets, dateCtx, curadoria)
+        const { content: rawContent, tokensUsed: itineraryTokens } = await callClaude(systemPrompt, userPrompt, anthropicKey)
+        const tokensUsed = curationTokens + itineraryTokens
+        console.log(`[itinerary] Passe 2 concluído — ${itineraryTokens} tokens | total: ${tokensUsed}`)
 
         // 5. Parse JSON
         const jsonStr = extractJson(rawContent)
