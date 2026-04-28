@@ -51,43 +51,97 @@ async function fetchResearchCache(
     }
 }
 
+// ─── Date context ────────────────────────────────────────────────────────────
+
+interface DateContext {
+    ano: number
+    mes: string
+    dataCompleta: string
+    estacaoBrasil: string   // estação no Brasil (para calibrar hemisférios)
+    dicaEpoca: string       // dica contextual para o mês
+}
+
+function buildDateContext(): DateContext {
+    const now = new Date()
+    const ano = now.getUTCFullYear()
+    const mesNum = now.getUTCMonth() + 1 // 1-12
+
+    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+    const mes = meses[mesNum - 1]
+
+    // Estação no Brasil (hemisfério sul)
+    let estacaoBrasil: string
+    let dicaEpoca: string
+    if (mesNum >= 12 || mesNum <= 2) {
+        estacaoBrasil = 'Verão'
+        dicaEpoca = 'Calor intenso no Brasil; destinos no hemisfério norte em inverno (menos turistas, preços menores); Europa e América do Norte com neve e festivais de Natal/Ano Novo.'
+    } else if (mesNum <= 5) {
+        estacaoBrasil = 'Outono'
+        dicaEpoca = 'Clima ameno no Brasil; primavera no hemisfério norte (flores, turismo crescente); Páscoa pode estar próxima.'
+    } else if (mesNum <= 8) {
+        estacaoBrasil = 'Inverno'
+        dicaEpoca = 'Alta temporada no hemisfério norte (verão europeu, americano); destinos tropicais com clima mais seco; alta demanda e preços mais altos na Europa.'
+    } else {
+        estacaoBrasil = 'Primavera'
+        dicaEpoca = 'Primavera no Brasil; outono no hemisfério norte (folhas coloridas na Europa e América do Norte); clima agradável na maioria dos destinos.'
+    }
+
+    return {
+        ano,
+        mes,
+        dataCompleta: `${mes} de ${ano}`,
+        estacaoBrasil,
+        dicaEpoca,
+    }
+}
+
 // ─── Prompt builders ─────────────────────────────────────────────────────────
 
-function buildResearchContext(destination: string, snippets: ResearchSnippets | null): string {
+function buildResearchContext(destination: string, snippets: ResearchSnippets | null, dateCtx: DateContext): string {
     if (snippets && Object.keys(snippets).length > 0) {
-        const lines: string[] = ['[CONTEXTO DE PESQUISA — dados reais coletados]']
-        if (snippets.tripadvisor_top) lines.push(`TripAdvisor Top ${destination}:\n${snippets.tripadvisor_top}`)
+        const lines: string[] = [`[CONTEXTO DE PESQUISA — dados curados para ${destination}]`]
+        if (snippets.tripadvisor_top) lines.push(`Destaques em ${destination}:\n${snippets.tripadvisor_top}`)
         if (snippets.locals_recommend) lines.push(`Recomendado por locais:\n${snippets.locals_recommend}`)
         if (snippets.restaurantes) lines.push(`Restaurantes em alta:\n${snippets.restaurantes}`)
-        if (snippets.tendencias) lines.push(`Tendências e novidades:\n${snippets.tendencias}`)
+        if (snippets.tendencias) lines.push(`Tendências em ${dateCtx.ano}:\n${snippets.tendencias}`)
         return lines.join('\n\n')
     }
 
-    // Sem dados externos: instrui o modelo a usar seu próprio conhecimento curado
-    return `[CONTEXTO DE PESQUISA — sem dados externos disponíveis]
-Use seu conhecimento atualizado sobre ${destination} para responder as seguintes questões antes de montar o roteiro:
-- Quais são os 10 pontos mais bem avaliados no TripAdvisor e Google Maps?
-- O que moradores locais e viajantes experientes MAIS recomendam?
-- Quais restaurantes e experiências gastronômicas estão em alta?
-- Quais são os "hidden gems" menos conhecidos pelos turistas convencionais?
-- O que está em tendência para viajantes em 2025?
-Priorize SEMPRE essas informações ao selecionar atividades.`
+    return `[CONTEXTO DO DESTINO — usando conhecimento de treinamento]
+Período da viagem: ${dateCtx.dataCompleta} | Estação no Brasil: ${dateCtx.estacaoBrasil}
+${dateCtx.dicaEpoca}
+
+Para ${destination} em ${dateCtx.mes} de ${dateCtx.ano}, considere:
+- Clima e condições típicas para este mês no destino
+- Alta ou baixa temporada (impacto em preços, filas, disponibilidade)
+- Eventos, festivais ou épocas especiais que normalmente ocorrem neste período
+- O que está em alta entre viajantes experientes EM ${dateCtx.ano} (não apenas clássicos genéricos)
+- Estabelecimentos ou experiências com buzz atual entre quem realmente conhece o destino`
 }
 
-function buildSystemPrompt(): string {
-    return `Você é um curador de viagens de elite com acesso a avaliações reais do TripAdvisor, Google Maps, Lonely Planet, Timeout e guias locais. Seu diferencial: você só recomenda o que tem comprovação de qualidade — seja pelo volume de avaliações, pela consistência das notas ou pela recomendação de viajantes experientes.
+function buildSystemPrompt(dateCtx: DateContext): string {
+    return `Você é um especialista em viagens com conhecimento profundo sobre destinos ao redor do mundo — bairros, atrações, restaurantes, experiências culturais e dicas práticas. Seu conhecimento vem de extenso treinamento em guias especializados, blogs de viagem de alto nível, publicações como Lonely Planet, Timeout, Condé Nast Traveler e relatos de viajantes experientes.
+
+CONTEXTO TEMPORAL — CRÍTICO:
+- Mês e ano atual: ${dateCtx.dataCompleta}
+- Estação atual no Brasil: ${dateCtx.estacaoBrasil}
+- ${dateCtx.dicaEpoca}
+- ADAPTE o roteiro ao que é relevante em ${dateCtx.mes} de ${dateCtx.ano}: clima, movimento turístico, eventos sazonais, horários de funcionamento típicos deste período.
 
 REGRAS ABSOLUTAS:
-1. QUALIDADE COMPROVADA: Cada atividade deve ter uma fonte real ou reconhecível (TripAdvisor, Google, Lonely Planet, guia local, etc.) e um score de popularidade honesto de 1-5.
-2. DETALHES PRÁTICOS: Para cada atividade informe o melhor momento para visitar (melhor_epoca) e o que evitar (filas, horários ruins, armadilhas turísticas).
-3. DURAÇÃO REALISTA + TRÂNSITO: Calcule horários somando duração + deslocamento:
+1. LUGARES REAIS E ESPECÍFICOS: Recomende apenas lugares que genuinamente existem e são reconhecidos por quem entende de viagens — não o óbvio turístico de segunda linha. Prefira o que é autêntico e bem avaliado por quem realmente conhece o destino.
+2. ANTI-GENÉRICO: Nunca recomende algo apenas por ser "famoso". Se um lugar tem uma versão melhor ou mais autêntica, recomende essa. Quem usa o FlyWise quer o que os melhores roteiristas locais indicariam.
+3. SAZONALIDADE REAL: Mencione se algo é especialmente bom ou ruim no mês atual. Ex: "Evite este museu em ${dateCtx.mes} — filas de até 2h". Seja honesto sobre o período.
+4. DETALHES PRÁTICOS: Para cada atividade informe o melhor momento para visitar (melhor_epoca) e o que evitar (filas, horários ruins, armadilhas turísticas).
+5. DURAÇÃO REALISTA + TRÂNSITO: Calcule horários somando duração + deslocamento:
    - Café/lanche: 30-45min | Almoço/jantar: 1h-1h30 | Monumento/catedral: 45min-1h30 | Museu pequeno: 1h-2h | Museu grande: 2h-3h | Bairro: 1h30-2h
    - Deslocamento a pé: 10-20min | Metro/ônibus: 20-30min
-4. PERÍODO COMPLETO: manhã=4h(08h-12h), tarde=5h(13h-18h), noite=3h30(19h-22h30). Gere 2 a 4 atividades por período.
-5. COORDENADAS PRECISAS: lat e lng do local ESPECÍFICO, nunca do centro da cidade.
-6. ORÇAMENTO: Respeite 100% o nível de orçamento definido.
-7. Responda APENAS em JSON válido, sem texto fora do JSON.
-8. CONCISÃO OBRIGATÓRIA: cada campo de texto deve ter no máximo 12 palavras. Seja direto — sem frases longas ou ornamentadas.`
+6. PERÍODO COMPLETO: manhã=4h(08h-12h), tarde=5h(13h-18h), noite=3h30(19h-22h30). Gere 2 a 4 atividades por período.
+7. COORDENADAS PRECISAS: lat e lng do local ESPECÍFICO, nunca do centro da cidade.
+8. ORÇAMENTO: Respeite 100% o nível de orçamento definido.
+9. Responda APENAS em JSON válido, sem texto fora do JSON.
+10. CONCISÃO OBRIGATÓRIA: cada campo de texto deve ter no máximo 12 palavras. Seja direto.`
 }
 
 function buildUserPrompt(
@@ -97,8 +151,9 @@ function buildUserPrompt(
     styleList: string,
     budgetLabel: string,
     snippets: ResearchSnippets | null,
+    dateCtx: DateContext,
 ): string {
-    const researchContext = buildResearchContext(destination, snippets)
+    const researchContext = buildResearchContext(destination, snippets, dateCtx)
 
     // For trips > 3 days use a compact schema to stay within Haiku's 8192 output token limit.
     // Full schema for 2 days uses ~7000 output tokens; scaling linearly 7 days would need ~20000.
@@ -320,8 +375,10 @@ Deno.serve(async (req: Request) => {
         console.log(`[itinerary] Research cache: ${snippets ? 'HIT' : 'MISS'} — ${destination}`)
 
         // 3. Build prompts
-        const systemPrompt = buildSystemPrompt()
-        const userPrompt = buildUserPrompt(destination, duration, travelerLabel, styleList, budgetLabel, snippets)
+        const dateCtx = buildDateContext()
+        console.log(`[itinerary] Date context: ${dateCtx.dataCompleta} | ${dateCtx.estacaoBrasil}`)
+        const systemPrompt = buildSystemPrompt(dateCtx)
+        const userPrompt = buildUserPrompt(destination, duration, travelerLabel, styleList, budgetLabel, snippets, dateCtx)
 
         // 4. Call Claude
         const { content: rawContent, tokensUsed } = await callClaude(systemPrompt, userPrompt, anthropicKey)
