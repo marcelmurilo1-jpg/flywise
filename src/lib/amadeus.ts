@@ -96,9 +96,21 @@ export interface SearchFlightsParams {
     nonStop?: boolean
 }
 
+export interface PriceGraphBar {
+    date: string      // 'YYYY-MM-DD'
+    price: number     // BRL
+    quality: 'low' | 'typical' | 'high'
+}
+
+export interface PriceGraph {
+    bars: PriceGraphBar[]
+    pageQuality: 'low' | 'typical' | 'high' | null
+}
+
 export interface FlightSearchResult {
     flights: FlightOffer[]
     inboundFlights: FlightOffer[]
+    priceGraph: PriceGraph | null
 }
 
 /** Busca voos via proxy do servidor com timeout de 12s */
@@ -143,10 +155,11 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
     const offers: any[] = data.data ?? []
 
     // Se o backend já retornou dados mapeados (Google Flights scraper), devolve direto
-    if (data.meta?.source === 'google-flights-scraper') {
+    if (data.meta?.source === 'google-flights-scraper' || data.meta?.source === 'cache' || data.meta?.source === 'dedup') {
         return {
             flights: offers as FlightOffer[],
             inboundFlights: (data.inbound ?? []) as FlightOffer[],
+            priceGraph: (data.priceGraph ?? null) as PriceGraph | null,
         }
     }
 
@@ -214,5 +227,5 @@ export async function searchFlights(params: SearchFlightsParams): Promise<Flight
             ...returnFields,
         }
     })
-    return { flights: mappedFlights, inboundFlights: [] }
+    return { flights: mappedFlights, inboundFlights: [], priceGraph: null }
 }

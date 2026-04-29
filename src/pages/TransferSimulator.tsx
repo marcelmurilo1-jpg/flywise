@@ -88,11 +88,6 @@ export default function TransferSimulator({ activeClubs, activeClubTiers, active
         setSelectedClubTier(activeClubs.includes(promo.clubRequired) ? savedTier : null)
     }, [selectedProgram, promo?.clubRequired]) // eslint-disable-line react-hooks/exhaustive-deps
 
-    // For Livelo hub: compute Livelo miles then show airline sub-step
-    const liveloMiles = isLivelo && partner && pointsNum > 0
-        ? computeMiles(pointsNum, partner.tiers[0].ratio, partner.tiers[0].bonusPercent)
-        : 0
-
     function getBestTier(p: TransferPartner) {
         const tierResult = p.tiers.find(t => t.clubId === null || activeClubs.includes(t.clubId))
             ?? p.tiers[p.tiers.length - 1]
@@ -108,6 +103,11 @@ export default function TransferSimulator({ activeClubs, activeClubTiers, active
     }
 
     const activeTier = partner ? getBestTier(partner) : null
+
+    // For Livelo hub: compute card→Livelo miles using the best available tier
+    const liveloMiles = isLivelo && activeTier && pointsNum > 0
+        ? computeMiles(pointsNum, activeTier.ratio, activeTier.bonusPercent)
+        : 0
     const effectiveBonus = getEffectiveBonus()
     const milesResult = activeTier && pointsNum > 0 && !isLivelo
         ? computeMiles(pointsNum, activeTier.ratio, effectiveBonus)
@@ -325,7 +325,7 @@ export default function TransferSimulator({ activeClubs, activeClubTiers, active
                                                     </div>
                                                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                                                         {p.program === 'Livelo'
-                                                            ? `${tier.ratio}:1 → depois transfira para Smiles, LATAM ou Azul`
+                                                            ? `${tier.ratio}:1 → hub para 10 programas (Smiles, LATAM, Flying Blue, BA...)`
                                                             : `Taxa ${tier.ratio.toLocaleString('pt-BR')}:1${displayBonus > 0 ? ` +${displayBonus}% bônus` : ''}`
                                                         }
                                                     </div>
@@ -441,7 +441,7 @@ export default function TransferSimulator({ activeClubs, activeClubTiers, active
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                                 <ArrowRightLeft size={16} color="#7C3AED" />
                                 <div style={{ fontSize: 13, fontWeight: 700, color: '#5B21B6' }}>
-                                    Livelo como HUB: você terá <b>{fmt(liveloMiles)} pts Livelo</b> — escolha para qual aérea transferir (1:1, mín. 15.000 pts):
+                                    Livelo como HUB: você terá <b>{fmt(liveloMiles)} pts Livelo</b> — escolha o programa de destino:
                                 </div>
                             </div>
                             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

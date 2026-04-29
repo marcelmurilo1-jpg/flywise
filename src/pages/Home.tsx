@@ -263,13 +263,17 @@ export default function Home() {
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
                                         <div>
-                                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>Dinheiro</p>
-                                            <p style={{ fontWeight: 700, color: 'var(--text-dark)' }}>R$ —</p>
+                                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>A partir de</p>
+                                            <p style={{ fontWeight: 700, color: 'var(--text-dark)' }}>
+                                                {busca.preco_minimo_brl != null
+                                                    ? `R$ ${Math.round(busca.preco_minimo_brl).toLocaleString('pt-BR')}`
+                                                    : 'R$ —'}
+                                            </p>
                                         </div>
                                         <div style={{ width: '1px', height: '24px', background: 'var(--border-light)' }} />
                                         <div>
-                                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>Milhas + Taxas</p>
-                                            <p style={{ fontWeight: 700, color: 'var(--blue-medium)' }}>— pts + R$ —</p>
+                                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>Ver em Milhas</p>
+                                            <p style={{ fontWeight: 700, color: 'var(--blue-medium)' }}>→ abrir análise</p>
                                         </div>
                                     </div>
                                 </motion.div>

@@ -2,7 +2,7 @@
 // Deploy: supabase functions deploy chat-busca --no-verify-jwt
 //
 // Env vars required:
-//   OPENAI_API_KEY      — your OpenAI key
+//   ANTHROPIC_API_KEY   — Anthropic (Claude) key
 //   SEATS_AERO_API_KEY  — Seats.aero Partner API key
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -39,26 +39,26 @@ interface Message {
 
 // ─── Airport code extraction ──────────────────────────────────────────────────
 
-// Common airport lookups (city/region → IATA codes)
 const AIRPORT_MAP: Record<string, string[]> = {
     // Brazil
-    'sao paulo': ['GRU'], 'são paulo': ['GRU'], 'guarulhos': ['GRU'], 'gru': ['GRU'],
-    'congonhas': ['CGH'], 'cgh': ['CGH'],
-    'rio de janeiro': ['GIG', 'SDU'], 'galeao': ['GIG'], 'gig': ['GIG'],
+    'sao paulo': ['GRU', 'CGH'], 'são paulo': ['GRU', 'CGH'], 'guarulhos': ['GRU'], 'gru': ['GRU'],
+    'congonhas': ['CGH'], 'cgh': ['CGH'], 'campinas': ['VCP'], 'viracopos': ['VCP'], 'vcp': ['VCP'],
+    'rio de janeiro': ['GIG', 'SDU'], 'galeao': ['GIG'], 'gig': ['GIG'], 'santos dumont': ['SDU'], 'sdu': ['SDU'],
     'brasilia': ['BSB'], 'brasília': ['BSB'],
     'belo horizonte': ['CNF'], 'confins': ['CNF'],
     'salvador': ['SSA'], 'recife': ['REC'], 'fortaleza': ['FOR'],
     'manaus': ['MAO'], 'porto alegre': ['POA'], 'curitiba': ['CWB'],
-    'florianopolis': ['FLN'], 'florianópolis': ['FLN'],
+    'florianopolis': ['FLN'], 'florianópolis': ['FLN'], 'floripa': ['FLN'],
     'natal': ['NAT'], 'maceio': ['MCZ'], 'maceió': ['MCZ'],
+    'belem': ['BEL'], 'belém': ['BEL'], 'goiania': ['GYN'], 'goiânia': ['GYN'],
     // USA
     'miami': ['MIA'], 'mia': ['MIA'],
     'orlando': ['MCO'], 'mco': ['MCO'],
-    'nova york': ['JFK', 'EWR'], 'new york': ['JFK', 'EWR'], 'nova iorque': ['JFK', 'EWR'],
+    'nova york': ['JFK', 'EWR', 'LGA'], 'new york': ['JFK', 'EWR', 'LGA'], 'nova iorque': ['JFK', 'EWR'],
     'jfk': ['JFK'], 'ewr': ['EWR'],
     'los angeles': ['LAX'], 'lax': ['LAX'],
     'san francisco': ['SFO'], 'sfo': ['SFO'],
-    'chicago': ['ORD'], 'ord': ['ORD'],
+    'chicago': ['ORD', 'MDW'], 'ord': ['ORD'],
     'boston': ['BOS'], 'dallas': ['DFW'], 'dfw': ['DFW'],
     'houston': ['IAH'], 'washington': ['IAD', 'DCA'],
     'atlanta': ['ATL'], 'seattle': ['SEA'], 'las vegas': ['LAS'],
@@ -66,17 +66,16 @@ const AIRPORT_MAP: Record<string, string[]> = {
     'estados unidos': ['MIA', 'JFK', 'LAX', 'ORD', 'DFW'],
     'eua': ['MIA', 'JFK', 'LAX', 'ORD'],
     'usa': ['MIA', 'JFK', 'LAX', 'ORD'],
-    'america do norte': ['MIA', 'JFK', 'LAX'],
     // Europe
-    'paris': ['CDG'], 'cdg': ['CDG'],
-    'london': ['LHR'], 'londres': ['LHR'], 'lhr': ['LHR'],
+    'paris': ['CDG', 'ORY'], 'cdg': ['CDG'],
+    'london': ['LHR', 'LGW'], 'londres': ['LHR', 'LGW'], 'lhr': ['LHR'],
     'frankfurt': ['FRA'], 'fra': ['FRA'],
     'amsterdam': ['AMS'], 'ams': ['AMS'],
     'madrid': ['MAD'], 'mad': ['MAD'],
     'barcelona': ['BCN'], 'bcn': ['BCN'],
     'lisbon': ['LIS'], 'lisboa': ['LIS'], 'lis': ['LIS'],
     'rome': ['FCO'], 'roma': ['FCO'], 'fco': ['FCO'],
-    'milan': ['MXP'], 'milao': ['MXP'], 'milão': ['MXP'], 'mxp': ['MXP'],
+    'milan': ['MXP', 'LIN'], 'milao': ['MXP'], 'milão': ['MXP'], 'mxp': ['MXP'],
     'zurich': ['ZRH'], 'zurique': ['ZRH'], 'zrh': ['ZRH'],
     'vienna': ['VIE'], 'viena': ['VIE'], 'vie': ['VIE'],
     'munich': ['MUC'], 'munique': ['MUC'], 'muc': ['MUC'],
@@ -88,9 +87,11 @@ const AIRPORT_MAP: Record<string, string[]> = {
     'athens': ['ATH'], 'atenas': ['ATH'],
     'istanbul': ['IST'], 'istambul': ['IST'],
     'dubai': ['DXB'], 'abu dhabi': ['AUH'],
+    'doha': ['DOH'], 'qatar': ['DOH'],
     'europa': ['LIS', 'MAD', 'CDG', 'LHR', 'FRA', 'ZRH', 'VIE'],
     // Asia & Oceania
     'tokyo': ['NRT', 'HND'], 'toquio': ['NRT', 'HND'], 'tóquio': ['NRT', 'HND'],
+    'nrt': ['NRT'], 'hnd': ['HND'],
     'osaka': ['KIX'], 'seoul': ['ICN'], 'seul': ['ICN'],
     'beijing': ['PEK'], 'pequim': ['PEK'],
     'shanghai': ['PVG'], 'shangai': ['PVG'],
@@ -110,29 +111,24 @@ const AIRPORT_MAP: Record<string, string[]> = {
     // Africa
     'johannesburg': ['JNB'], 'joanesburgo': ['JNB'],
     'cape town': ['CPT'], 'cairo': ['CAI'],
-    'africa do sul': ['JNB'],
 }
 
 function extractIATACodes(text: string): string[] {
     if (!text?.trim()) return []
 
-    // 1. Direct 3-letter uppercase codes in parentheses: "Guarulhos (GRU)"
     const parenMatch = text.match(/\(([A-Z]{3})\)/g)
     if (parenMatch) return parenMatch.map(m => m.replace(/[()]/g, ''))
 
-    // 2. Standalone 3-letter uppercase codes: "GRU" or "MIA"
     const upperMatch = text.match(/\b([A-Z]{3})\b/g)
     if (upperMatch?.length) return upperMatch.slice(0, 3)
 
-    // 3. Normalize and look up in map
     const normalized = text.toLowerCase()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
         .replace(/[^a-z\s]/g, ' ').trim()
 
-    // Try longest matching key first
     const sortedKeys = Object.keys(AIRPORT_MAP).sort((a, b) => b.length - a.length)
     for (const key of sortedKeys) {
-        const normKey = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        const normKey = key.normalize('NFD').replace(/[̀-ͯ]/g, '')
         if (normalized.includes(normKey)) {
             return AIRPORT_MAP[key]
         }
@@ -148,27 +144,23 @@ function getDateRange(dateGo: string): { startDate: string; endDate: string } {
     today.setUTCHours(0, 0, 0, 0)
 
     if (!dateGo) {
-        // No date: search next 90 days
         const end = new Date(today)
         end.setDate(end.getDate() + 90)
         return { startDate: toISO(today), endDate: toISO(end) }
     }
 
     if (/^\d{4}-\d{2}$/.test(dateGo)) {
-        // Month format: search whole month
         const [year, month] = dateGo.split('-').map(Number)
         const start = new Date(year, month - 1, 1)
-        const end = new Date(year, month, 0) // last day of month
+        const end = new Date(year, month, 0)
         return { startDate: toISO(start), endDate: toISO(end) }
     }
 
-    // Specific date: search ±5 days around it
     const center = new Date(dateGo + 'T00:00:00Z')
     const start = new Date(center)
     const end = new Date(center)
     start.setDate(start.getDate() - 5)
     end.setDate(end.getDate() + 5)
-    // Don't go before today
     const startFinal = start < today ? today : start
     return { startDate: toISO(startFinal), endDate: toISO(end) }
 }
@@ -181,7 +173,7 @@ function toISO(d: Date): string {
 
 interface SeatsAeroResult {
     date: string
-    source: string // program name (e.g., "united", "lifemiles")
+    source: string
     origin: string
     destination: string
     economy: number | null
@@ -190,6 +182,10 @@ interface SeatsAeroResult {
     first: number | null
     economyDirect: boolean
     businessDirect: boolean
+    economyTaxes: number | null
+    businessTaxes: number | null
+    economyStops: number | null
+    businessStops: number | null
     airlines: string
 }
 
@@ -202,7 +198,6 @@ const SOURCE_LABELS: Record<string, string> = {
     'american': 'American AAdvantage',
     'alaska': 'Alaska Mileage Plan',
     'jetblue': 'JetBlue TrueBlue',
-    'southwest': 'Southwest Rapid Rewards',
     'flyingblue': 'Air France/KLM Flying Blue',
     'miles_and_more': 'Lufthansa Miles & More',
     'turkish': 'Turkish Miles&Smiles',
@@ -211,7 +206,6 @@ const SOURCE_LABELS: Record<string, string> = {
     'cathay': 'Cathay Asia Miles',
     'avianca': 'Avianca LifeMiles',
     'iberia': 'Iberia Plus',
-    'vueling': 'Vueling Club',
     'velocity': 'Virgin Australia Velocity',
     'virgin_atlantic': 'Virgin Atlantic Flying Club',
     'emirates': 'Emirates Skywards',
@@ -225,6 +219,12 @@ function parseNum(v: unknown): number | null {
     if (!v || v === '' || v === '0') return null
     const n = parseInt(String(v).replace(/,/g, ''), 10)
     return isNaN(n) || n === 0 ? null : n
+}
+
+function parseFloat2(v: unknown): number | null {
+    if (!v || v === '' || v === '0') return null
+    const n = parseFloat(String(v))
+    return isNaN(n) || n === 0 ? null : Math.round(n * 100) / 100
 }
 
 async function searchSeatsAero(
@@ -268,6 +268,10 @@ async function searchSeatsAero(
         first: item.FAvailable ? parseNum(item.FMileageCost) : null,
         economyDirect: !!(item.YDirect),
         businessDirect: !!(item.JDirect || item.WDirect || item.FDirect),
+        economyTaxes: parseFloat2(item.YTax),
+        businessTaxes: parseFloat2(item.JTax ?? item.WTax ?? item.FTax),
+        economyStops: item.YStops != null ? Number(item.YStops) : null,
+        businessStops: item.JStops != null ? Number(item.JStops) : null,
         airlines: [item.YAirlines, item.WAirlines, item.JAirlines, item.FAirlines]
             .filter(Boolean).join(',').split(',').map((s: string) => s.trim())
             .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i).join(', '),
@@ -290,20 +294,16 @@ const CABIN_PT: Record<string, string> = {
     first: 'Primeira Classe',
 }
 
-function formatResults(results: SeatsAeroResult[], cabinClass: string, dateGo: string): string {
-    if (results.length === 0) return 'Nenhuma disponibilidade encontrada na API Seats.aero para este trecho e período.'
+function formatResults(results: SeatsAeroResult[], cabinClass: string): string {
+    if (results.length === 0) return 'Nenhuma disponibilidade encontrada para este trecho e período.'
 
     const cabinField = CABIN_FIELD[cabinClass] ?? 'economy'
-
-    // Filter to results with the requested cabin available
     const withCabin = results.filter(r => (r[cabinField] as number | null) !== null)
     const anyClass = results.filter(r => r.economy || r.premiumEconomy || r.business || r.first)
-
     const pool = withCabin.length > 0 ? withCabin : anyClass
 
-    if (pool.length === 0) return `Nenhuma disponibilidade em ${CABIN_PT[cabinClass] ?? cabinClass} encontrada. API retornou ${results.length} resultados em outras cabines.`
+    if (pool.length === 0) return `Nenhuma disponibilidade. API retornou ${results.length} resultados em outras cabines.`
 
-    // Sort by miles in the requested cabin (or best available)
     pool.sort((a, b) => {
         const aM = (a[cabinField] as number | null) ?? a.economy ?? a.premiumEconomy ?? a.business ?? a.first ?? 999999
         const bM = (b[cabinField] as number | null) ?? b.economy ?? b.premiumEconomy ?? b.business ?? b.first ?? 999999
@@ -311,24 +311,52 @@ function formatResults(results: SeatsAeroResult[], cabinClass: string, dateGo: s
         return a.date.localeCompare(b.date)
     })
 
-    // Take top 25 results
-    const top = pool.slice(0, 25)
+    const top = pool.slice(0, 30)
 
     const lines = top.map(r => {
         const miles = (r[cabinField] as number | null) ?? r.economy ?? r.premiumEconomy ?? r.business ?? r.first
-        const cabinActual = r[cabinField] ? cabinClass : (r.economy ? 'economy' : r.premiumEconomy ? 'premium_economy' : r.business ? 'business' : 'first')
-        const direct = (cabinActual === 'economy' ? r.economyDirect : r.businessDirect) ? '✓ DIRETO' : 'escala'
+        const cabinActual = r[cabinField] ? cabinClass
+            : (r.economy ? 'economy' : r.premiumEconomy ? 'premium_economy' : r.business ? 'business' : 'first')
+        const isDirect = cabinActual === 'economy' ? r.economyDirect : r.businessDirect
+        const stops = cabinActual === 'economy' ? r.economyStops : r.businessStops
+        const taxes = cabinActual === 'economy' ? r.economyTaxes : r.businessTaxes
+        const directLabel = isDirect ? 'DIRETO' : (stops != null ? `${stops} escala(s)` : 'escala')
+        const taxLabel = taxes ? ` +$${taxes} taxas` : ''
         const program = SOURCE_LABELS[r.source] ?? r.source
-        const airlines = r.airlines ? ` (${r.airlines})` : ''
-        return `  ${r.date} | ${r.origin}→${r.destination} | ${program} | ${(miles ?? 0).toLocaleString()} milhas | ${CABIN_PT[cabinActual] ?? cabinActual} | ${direct}${airlines}`
+        const airlines = r.airlines ? ` [${r.airlines}]` : ''
+        return `  ${r.date} | ${r.origin}→${r.destination} | ${program} | ${(miles ?? 0).toLocaleString()} mi | ${CABIN_PT[cabinActual] ?? cabinActual} | ${directLabel}${taxLabel}${airlines}`
     })
 
-    const hasNoDate = !dateGo
-    const summary = hasNoDate
-        ? `Período pesquisado: próximos 90 dias. Total: ${results.length} disponibilidades, ${pool.length} em ${CABIN_PT[cabinClass] ?? cabinClass}.`
-        : `Total: ${results.length} disponibilidades, ${pool.length} em ${CABIN_PT[cabinClass] ?? cabinClass}.`
+    const summary = `Total: ${results.length} disponibilidades, ${pool.length} na classe solicitada.`
+    return `${summary}\n\nTop resultados (ordenados por milhas):\n${lines.join('\n')}`
+}
 
-    return `${summary}\n\nTop resultados (menor milhas):\n${lines.join('\n')}`
+// ─── Tool definition ──────────────────────────────────────────────────────────
+
+const SEARCH_TOOL = {
+    name: 'search_awards',
+    description: `Busca disponibilidade real de assentos award (milhas) para uma rota via API Seats.aero.
+Chame esta ferramenta para cada rota que quiser verificar. Você pode e deve chamar múltiplas vezes para:
+- Múltiplos aeroportos de destino (ex: Tokyo tem NRT e HND — busque ambos)
+- Modo hacker: rotas via hubs intermediários (DXB, DOH, IST, FRA, AMS, ICN)
+- Direção de volta em voos ida e volta
+- Origens alternativas quando flexibleOrigin=true
+Seja estratégico: 2-5 buscas focadas são melhores do que buscas desnecessárias.`,
+    input_schema: {
+        type: 'object' as const,
+        properties: {
+            origin: { type: 'string', description: 'Código IATA da origem (ex: GRU)' },
+            destination: { type: 'string', description: 'Código IATA do destino (ex: NRT)' },
+            start_date: { type: 'string', description: 'Início do período YYYY-MM-DD' },
+            end_date: { type: 'string', description: 'Fim do período YYYY-MM-DD' },
+            cabin: {
+                type: 'string',
+                enum: ['economy', 'premium_economy', 'business', 'first'],
+                description: 'Classe do serviço',
+            },
+        },
+        required: ['origin', 'destination', 'start_date', 'end_date'],
+    },
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -336,153 +364,237 @@ function formatResults(results: SeatsAeroResult[], cabinClass: string, dateGo: s
 serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-    try {
-        const { messages, wizard_data }: { messages: Message[]; wizard_data: WizardData } = await req.json()
+    const { messages, wizard_data }: { messages: Message[]; wizard_data: WizardData } = await req.json()
 
-        const openaiKey = Deno.env.get('OPENAI_API_KEY')
-        if (!openaiKey) throw new Error('OPENAI_API_KEY not set')
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
+    if (!anthropicKey) {
+        return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY não configurada' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+    }
 
-        const seatsKey = Deno.env.get('SEATS_AERO_API_KEY')
+    const seatsKey = Deno.env.get('SEATS_AERO_API_KEY')
 
-        // 1. Extract airport codes
-        const originCodes = extractIATACodes(wizard_data.origin)
-        const destCodes = extractIATACodes(wizard_data.destination).slice(0, 4)
+    // ─── SSE stream setup ─────────────────────────────────────────────────────
+    const { readable, writable } = new TransformStream()
+    const writer = writable.getWriter()
+    const encoder = new TextEncoder()
 
-        // 2. Get date range
-        const { startDate, endDate } = getDateRange(wizard_data.dateGo)
+    const send = (event: object) => {
+        writer.write(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+    }
 
-        // 3. Search Seats.aero
-        let flightContext = ''
-        if (seatsKey && originCodes.length > 0 && destCodes.length > 0) {
-            const originCode = originCodes[0]
-            try {
-                // Search in parallel for each destination code (max 3)
-                const searches = destCodes.slice(0, 3).map(dest =>
-                    searchSeatsAero(seatsKey, originCode, dest, startDate, endDate)
-                        .catch(() => [] as SeatsAeroResult[])
-                )
-                const allResults = (await Promise.all(searches)).flat()
-
-                flightContext = formatResults(allResults, wizard_data.cabinClass, wizard_data.dateGo)
-
-                // If round trip, also search return direction
-                if (wizard_data.tripType === 'round-trip' && wizard_data.dateReturn) {
-                    const { startDate: retStart, endDate: retEnd } = getDateRange(wizard_data.dateReturn)
-                    const retSearches = destCodes.slice(0, 3).map(dest =>
-                        searchSeatsAero(seatsKey, dest, originCode, retStart, retEnd)
-                            .catch(() => [] as SeatsAeroResult[])
-                    )
-                    const retResults = (await Promise.all(retSearches)).flat()
-                    const retContext = formatResults(retResults, wizard_data.cabinClass, wizard_data.dateReturn)
-                    flightContext += `\n\nVOO DE VOLTA:\n${retContext}`
-                }
-            } catch (e) {
-                flightContext = `Erro ao consultar Seats.aero: ${(e as Error).message}`
-            }
-        } else if (!seatsKey) {
-            flightContext = 'SEATS_AERO_API_KEY não configurada — buscando sem dados em tempo real.'
-        } else if (originCodes.length === 0 || destCodes.length === 0) {
-            flightContext = `Não foi possível identificar códigos IATA para: origem="${wizard_data.origin}", destino="${wizard_data.destination}". Responda com base em conhecimento geral.`
-        }
-
-        // 4a. Busca promos de passagens ativas para o destino (não bloqueia se falhar)
-        let passagensContext = ''
+    // ─── Agentic loop (runs in background) ───────────────────────────────────
+    ;(async () => {
         try {
-            const keyword = wizard_data.destination?.replace(/\b[A-Z]{3}\b/g, '').trim() || wizard_data.destination
-            if (keyword && keyword.length >= 3) {
-                const { data: passPromos } = await sbAdmin
-                    .from('vw_promocoes_ativas')
-                    .select('titulo, valid_until')
-                    .eq('categoria', 'passagens')
-                    .ilike('titulo', `%${keyword}%`)
-                    .order('valid_until', { ascending: true, nullsFirst: false })
-                    .limit(3)
-                if (passPromos && passPromos.length > 0) {
-                    const lines = passPromos.map((p: Record<string, unknown>, i: number) => {
-                        const expiry = p.valid_until
-                            ? ` (expira ${new Date(p.valid_until as string).toLocaleDateString('pt-BR')})`
-                            : ''
-                        return `${i + 1}. ${p.titulo}${expiry}`
-                    })
-                    passagensContext = '\n\nPROMOÇÕES DE PASSAGENS ATIVAS PARA ESTE DESTINO:\n' +
-                        lines.join('\n') +
-                        '\n→ Se o usuário não tem data fixa, mencione essas promoções e sugira buscar nessas datas.'
+            const { startDate, endDate } = getDateRange(wizard_data.dateGo)
+            const cabinPt = CABIN_PT[wizard_data.cabinClass] ?? wizard_data.cabinClass
+            const datePeriod = wizard_data.dateGo
+                ? (wizard_data.tripType === 'round-trip' && wizard_data.dateReturn
+                    ? `${wizard_data.dateGo} a ${wizard_data.dateReturn}`
+                    : wizard_data.dateGo)
+                : 'datas flexíveis (próximos 90 dias)'
+
+            // Fetch active promos (non-blocking)
+            let passagensContext = ''
+            try {
+                const keyword = wizard_data.destination?.replace(/\b[A-Z]{3}\b/g, '').trim() || wizard_data.destination
+                if (keyword && keyword.length >= 3) {
+                    const { data: passPromos } = await sbAdmin
+                        .from('vw_promocoes_ativas')
+                        .select('titulo, valid_until')
+                        .eq('categoria', 'passagens')
+                        .ilike('titulo', `%${keyword}%`)
+                        .order('valid_until', { ascending: true, nullsFirst: false })
+                        .limit(3)
+                    if (passPromos && passPromos.length > 0) {
+                        const lines = passPromos.map((p: Record<string, unknown>, i: number) => {
+                            const expiry = p.valid_until
+                                ? ` (expira ${new Date(p.valid_until as string).toLocaleDateString('pt-BR')})`
+                                : ''
+                            return `${i + 1}. ${p.titulo}${expiry}`
+                        })
+                        passagensContext = '\n\nPROMOÇÕES DE PASSAGENS ATIVAS:\n' + lines.join('\n')
+                    }
                 }
-            }
-        } catch { /* silencioso — não bloqueia o chat */ }
+            } catch { /* silencioso */ }
 
-        // 4. Build system prompt
-        const cabinPt = CABIN_PT[wizard_data.cabinClass] ?? wizard_data.cabinClass
-        const datePeriod = wizard_data.dateGo
-            ? (wizard_data.tripType === 'round-trip' && wizard_data.dateReturn
-                ? `${wizard_data.dateGo} a ${wizard_data.dateReturn}`
-                : wizard_data.dateGo)
-            : 'datas flexíveis (próximos 90 dias)'
+            const systemPrompt = `Você é o FlyWise AI, especialista em milhas aéreas e viagens para brasileiros.
 
-        const systemPrompt = `Você é o FlyWise AI, especialista em milhas aéreas e viagens para brasileiros.
-
-DADOS DA BUSCA DO USUÁRIO:
+DADOS DA BUSCA:
 - Rota: ${wizard_data.origin} → ${wizard_data.destination}
 - Tipo: ${wizard_data.tripType === 'round-trip' ? 'Ida e Volta' : 'Só Ida'}
 - Período: ${datePeriod}
 - Passageiros: ${wizard_data.passengers}
 - Classe desejada: ${cabinPt}
-- Estratégia: ${wizard_data.hackerMode === 'comfort' ? 'Conforto (priorizando direto)' : wizard_data.hackerMode === 'hacker' ? 'Avançada (2 reservas separadas)' : 'Melhor Custo-Benefício'}
+- Estratégia: ${wizard_data.hackerMode === 'comfort' ? 'Conforto (prioriza direto)' : wizard_data.hackerMode === 'hacker' ? 'Avançada — Modo Hacker (2 reservas separadas, hubs, qualquer programa)' : 'Melhor Custo-Benefício'}
+- Origem flexível: ${wizard_data.flexibleOrigin ? 'Sim' : 'Não'}
 ${wizard_data.observations ? `- Observações: ${wizard_data.observations}` : ''}
+${passagensContext}
 
-DADOS EM TEMPO REAL DO SEATS.AERO (disponibilidade de voos com milhas):
-${flightContext}
+Você tem acesso à ferramenta search_awards com dados reais do Seats.aero.
 
-INSTRUÇÕES:
-Você tem acesso a dados reais de disponibilidade de assentos award da API Seats.aero acima.
+ESTRATÉGIA DE BUSCA:
+- Sempre busque a rota principal primeiro
+- São Paulo: origem pode ser GRU ou CGH — use o mais relevante (GRU para voos internacionais)
+- Destinos com múltiplos aeroportos: busque todos (Tokyo: NRT + HND; London: LHR + LGW)
+- Modo Hacker: inclua buscas via hubs intermediários (DXB, DOH, IST, FRA, AMS) onde faz sentido
+- Ida e volta: busque as duas direções separadamente
+- Origem flexível: busque dos aeroportos alternativos mais próximos
 
-Na PRIMEIRA mensagem (sem histórico), faça uma análise completa e específica:
-1. **Melhores opções encontradas** — liste as 3-5 melhores combinações de programa + data + milhas dos dados acima. Seja específico: programa, quantidade de milhas, data, companhia operadora, se é direto.
-2. **Estratégia de acúmulo** — de quais cartões/bancos brasileiros transferir para esses programas (Amex, C6, Nubank, Itaú, Bradesco, Livelo, Smiles, etc.) e ratio de transferência.
-3. **Alerta de disponibilidade** — se os dados mostram boa ou escassa disponibilidade, e quando reservar.
-4. **Próximo passo** — instrução clara e prática sobre o que o usuário deve fazer agora.
+FORMATO DA ANÁLISE FINAL:
+1. **Melhores opções encontradas** — tabela com: programa | milhas | data | cia operadora | direto/escalas | taxas
+2. **Transferências de pontos** — quais cartões brasileiros transferem para esses programas e em qual ratio (Amex Membership Rewards, C6 Bank, Nubank Ultravioleta, Itaú, Bradesco, Livelo, Smiles, Azul Fidelidade, LATAM Pass)
+3. **Disponibilidade** — avalie se está escassa, moderada ou abundante e quando reservar
+4. **Próximo passo** — instrução clara e prática para o usuário agir agora
 
-Seja ESPECÍFICO e use os números reais dos dados acima. Não invente valores. Se os dados mostram 25.000 milhas no Miles & More, diga isso.
-Formate com markdown. Use tabelas quando listar múltiplas opções.
-Ao final convide para perguntas de follow-up.
+Use markdown com tabelas quando listar opções. Seja ESPECÍFICO: use os números reais dos dados.
+Para FOLLOW-UPS: responda usando os dados já buscados, sem refazer buscas desnecessárias.`
 
-Para MENSAGENS SEGUINTES: responda às perguntas mantendo o contexto dos dados acima. Se perguntarem sobre outras datas/rotas que não estão nos dados, deixe claro que está respondendo com conhecimento histórico, não dados em tempo real.${passagensContext}`
+            // Build conversation
+            const loopMessages: any[] = messages.map((m: Message) => ({
+                role: m.role,
+                content: m.content,
+            }))
 
-        // 5. Call OpenAI
-        const openaiMessages = [
-            { role: 'system', content: systemPrompt },
-            ...messages.map((m: Message) => ({ role: m.role, content: m.content })),
-        ]
+            if (messages.length === 0) {
+                loopMessages.push({
+                    role: 'user',
+                    content: [
+                        `Analise a disponibilidade de voos com milhas para ${wizard_data.origin} → ${wizard_data.destination}`,
+                        `em ${cabinPt}`,
+                        wizard_data.dateGo ? `para ${datePeriod}` : 'com datas flexíveis (próximos 90 dias)',
+                        wizard_data.observations ? `Observações: ${wizard_data.observations}` : null,
+                        `Faça as buscas necessárias e apresente as melhores opções.`,
+                    ].filter(Boolean).join('. '),
+                })
+            }
 
-        const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${openaiKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: openaiMessages,
-                temperature: 0.5,
-                max_tokens: 1800,
-            }),
-        })
+            // ── Phase 1: Haiku decides what to search (non-streaming, fast) ──────
+            if (seatsKey) {
+                const planRes = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'x-api-key': anthropicKey,
+                        'anthropic-version': '2023-06-01',
+                        'content-type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-haiku-4-5-20251001',
+                        max_tokens: 1024,
+                        system: systemPrompt,
+                        tools: [SEARCH_TOOL],
+                        tool_choice: { type: 'auto' },
+                        messages: loopMessages,
+                    }),
+                })
 
-        if (!aiRes.ok) {
-            const err = await aiRes.text()
-            throw new Error(`OpenAI error: ${err}`)
+                if (planRes.ok) {
+                    const planJson = await planRes.json()
+                    const toolUseBlocks: any[] = planJson.content?.filter((b: any) => b.type === 'tool_use') ?? []
+
+                    if (toolUseBlocks.length > 0) {
+                        // Send searching events to client before executing
+                        for (const tool of toolUseBlocks) {
+                            send({
+                                type: 'searching',
+                                origin: tool.input.origin,
+                                destination: tool.input.destination,
+                                label: `${tool.input.origin} → ${tool.input.destination}`,
+                            })
+                        }
+
+                        // Execute all searches in parallel
+                        const toolResults = await Promise.all(
+                            toolUseBlocks.map(async (tool: any) => {
+                                const args = tool.input
+                                const { startDate: sd, endDate: ed } = (args.start_date && args.end_date)
+                                    ? { startDate: args.start_date, endDate: args.end_date }
+                                    : getDateRange(wizard_data.dateGo)
+
+                                try {
+                                    const results = await searchSeatsAero(seatsKey, args.origin, args.destination, sd, ed)
+                                    const formatted = formatResults(results, args.cabin ?? wizard_data.cabinClass)
+                                    return { type: 'tool_result', tool_use_id: tool.id, content: formatted }
+                                } catch (e) {
+                                    return {
+                                        type: 'tool_result',
+                                        tool_use_id: tool.id,
+                                        content: `Erro ao buscar ${args.origin}→${args.destination}: ${(e as Error).message}`,
+                                    }
+                                }
+                            })
+                        )
+
+                        // Add assistant tool-use + results to conversation
+                        loopMessages.push({ role: 'assistant', content: planJson.content })
+                        loopMessages.push({ role: 'user', content: toolResults })
+                    }
+                }
+            }
+
+            // ── Phase 2: Sonnet streams the final analysis ────────────────────
+            const streamRes = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'x-api-key': anthropicKey,
+                    'anthropic-version': '2023-06-01',
+                    'content-type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-6',
+                    max_tokens: 2048,
+                    stream: true,
+                    system: systemPrompt,
+                    messages: loopMessages,
+                }),
+            })
+
+            if (!streamRes.ok) {
+                const err = await streamRes.text()
+                throw new Error(`Claude error: ${err}`)
+            }
+
+            const reader = streamRes.body!.getReader()
+            const decoder = new TextDecoder()
+            let buf = ''
+
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+
+                buf += decoder.decode(value, { stream: true })
+                const lines = buf.split('\n')
+                buf = lines.pop() ?? ''
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue
+                    const data = line.slice(6).trim()
+                    if (!data || data === '[DONE]') continue
+                    try {
+                        const event = JSON.parse(data)
+                        if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+                            send({ type: 'text', delta: event.delta.text })
+                        }
+                    } catch { /* malformed chunk */ }
+                }
+            }
+
+            send({ type: 'done' })
+        } catch (err) {
+            send({ type: 'error', message: String(err) })
+        } finally {
+            writer.close()
         }
+    })()
 
-        const result = await aiRes.json()
-        const reply = result.choices?.[0]?.message?.content ?? 'Não consegui gerar uma resposta. Tente novamente.'
-
-        return new Response(JSON.stringify({ reply }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-    } catch (err) {
-        return new Response(JSON.stringify({ error: String(err) }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-    }
+    return new Response(readable, {
+        headers: {
+            ...corsHeaders,
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+        },
+    })
 })

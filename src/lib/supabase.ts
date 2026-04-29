@@ -31,6 +31,7 @@ export interface Busca {
     bagagem: string
     banco?: string
     user_miles: Record<string, number>
+    preco_minimo_brl?: number
     created_at: string
 }
 

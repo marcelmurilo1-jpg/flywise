@@ -537,7 +537,7 @@ async function fetchPromosParaPrograma(program) {
     } catch { return [] }
 }
 
-async function sendWatchlistEmail({ toEmail, toName, item, triggeredValue, promosAtivas = [] }) {
+async function sendWatchlistEmail({ toEmail, toName, item, triggeredValue, promosAtivas = [], notifyCount = 1, maxNotify = 3, reachedLimit = false }) {
     if (!resend) { console.warn('[Watchlist] Resend não configurado.'); return; }
 
     const isCash = item.type === 'cash';
@@ -635,7 +635,10 @@ async function sendWatchlistEmail({ toEmail, toName, item, triggeredValue, promo
   </div>` : ''}
   <div class="cta"><a href="${ctaUrl}" class="btn">${ctaText}</a></div>
   <div class="ftr">
-    Você receberá outro aviso em 7 dias se o preço continuar baixo.<br>
+    ${reachedLimit
+        ? `Este alerta foi <strong>desativado automaticamente</strong> após ${maxNotify} notificações enviadas.<br>Reative em configurações se quiser continuar monitorando.`
+        : `Aviso ${notifyCount} de ${maxNotify} · você receberá novo aviso apenas se o preço cair ainda mais.`
+    }<br>
     <a href="${appUrl}/configuracoes">Gerenciar alertas</a> · <a href="${appUrl}/configuracoes">Cancelar este alerta</a>
   </div>
 </div>
@@ -659,14 +662,24 @@ async function sendWatchlistEmail({ toEmail, toName, item, triggeredValue, promo
 app.post('/api/watchlist/check', requireSyncSecret, async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
 
-    const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+    const MAX_NOTIFY    = 3;   // auto-deactivate after 3 triggers
+    const MAX_AGE_DAYS  = 60; // auto-deactivate after 60 days
     const now = new Date();
+    const expiryDate = new Date(now.getTime() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-    // Load all active items
+    // Load all active items created within the last MAX_AGE_DAYS days
     const { data: items, error: loadErr } = await supabase
         .from('watchlist_items')
         .select('*')
-        .eq('active', true);
+        .eq('active', true)
+        .gt('created_at', expiryDate);
+
+    // Auto-deactivate items older than MAX_AGE_DAYS (in background)
+    supabase.from('watchlist_items')
+        .update({ active: false })
+        .eq('active', true)
+        .lte('created_at', expiryDate)
+        .then();
 
     if (loadErr) return res.status(500).json({ error: loadErr.message });
     if (!items || items.length === 0) return res.json({ checked: 0, triggered: 0 });
@@ -701,13 +714,36 @@ app.post('/api/watchlist/check', requireSyncSecret, async (req, res) => {
                     d.setDate(15);
                     return d.toISOString().slice(0, 10);
                 })();
-                const { outbound } = await doScrape(item.origin, item.destination, date, null);
-                const candidates = (outbound ?? []).filter(f =>
-                    f.preco_brl > 0 && (!item.airline || f.companhia === item.airline)
-                );
+                const token = await getAmadeusToken();
+                const qp = new URLSearchParams({
+                    originLocationCode: item.origin,
+                    destinationLocationCode: item.destination,
+                    departureDate: date,
+                    adults: '1',
+                    currencyCode: 'BRL',
+                    max: '10',
+                });
+                const amRes = await fetch(`${AMADEUS_BASE}/v2/shopping/flight-offers?${qp}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!amRes.ok) return;
+                const amData = await amRes.json();
+                const offers = amData.data ?? [];
+                const candidates = offers
+                    .filter(o => !item.airline || o.itineraries?.[0]?.segments?.[0]?.carrierCode === item.airline)
+                    .map(o => parseFloat(o.price?.grandTotal ?? o.price?.total ?? '0'))
+                    .filter(p => p > 0);
                 if (candidates.length === 0) return;
-                const best = Math.min(...candidates.map(f => f.preco_brl));
-                if (best < item.threshold_brl) triggeredValue = best;
+                const best = Math.min(...candidates);
+
+                // Always update the last known price
+                await supabase.from('watchlist_items')
+                    .update({ last_checked_at: now.toISOString(), last_price_brl: best })
+                    .eq('id', item.id);
+
+                // Notify only if below threshold AND actually dropped since last check
+                const lastPrice = item.last_price_brl ?? Infinity;
+                if (best < item.threshold_brl && best < lastPrice) triggeredValue = best;
 
             } else {
                 // miles
@@ -727,26 +763,24 @@ app.post('/api/watchlist/check', requireSyncSecret, async (req, res) => {
                 });
                 if (candidates.length === 0) return;
                 const best = Math.min(...candidates.map(r => r[cabin]));
-                if (best < item.threshold_miles) triggeredValue = best;
-            }
 
-            // Update last_checked_at regardless
-            await supabase.from('watchlist_items')
-                .update({ last_checked_at: now.toISOString() })
-                .eq('id', item.id);
+                // Always update the last known price
+                await supabase.from('watchlist_items')
+                    .update({ last_checked_at: now.toISOString(), last_price_miles: best })
+                    .eq('id', item.id);
+
+                // Notify only if below threshold AND actually dropped since last check
+                const lastPrice = item.last_price_miles ?? Infinity;
+                if (best < item.threshold_miles && best < lastPrice) triggeredValue = best;
+            }
 
             if (triggeredValue === null) return;
-
-            // Check cooldown
-            const lastNotified = item.last_notified_at ? new Date(item.last_notified_at) : null;
-            if (lastNotified && (now - lastNotified) < COOLDOWN_MS) {
-                console.log(`[Watchlist] Cooldown ativo para item ${item.id}`);
-                return;
-            }
 
             // Send email
             const toEmail = emailMap[item.user_id];
             if (toEmail) {
+                const newCount = (item.notify_count ?? 0) + 1;
+                const reachedLimit = newCount >= MAX_NOTIFY;
                 const promosAtivas = item.program ? await fetchPromosParaPrograma(item.program) : []
                 await sendWatchlistEmail({
                     toEmail,
@@ -754,9 +788,16 @@ app.post('/api/watchlist/check', requireSyncSecret, async (req, res) => {
                     item,
                     triggeredValue,
                     promosAtivas,
+                    notifyCount: newCount,
+                    maxNotify: MAX_NOTIFY,
+                    reachedLimit,
                 });
                 await supabase.from('watchlist_items')
-                    .update({ last_notified_at: now.toISOString() })
+                    .update({
+                        last_notified_at: now.toISOString(),
+                        notify_count: newCount,
+                        ...(reachedLimit ? { active: false } : {}),
+                    })
                     .eq('id', item.id);
                 triggered++;
             }
@@ -1427,8 +1468,15 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 );
             }
 
+            // Extrai o gráfico de preços do Google Flights (preços por data + qualidade)
+            const priceGraph = await scrapePriceGraph(page, origin, destination).catch(e => {
+                console.log('[GFlights] priceGraph erro:', e.message?.slice(0, 80));
+                return null;
+            });
+            if (priceGraph) console.log(`[GFlights] priceGraph: ${priceGraph.bars?.length ?? 0} barras, qualidade=${priceGraph.searchDateQuality}`);
+
             await context.close();
-            return flights;
+            return { flights, priceGraph };
         } catch (err) {
             if (context) { try { await context.close(); } catch (_) {} }
             const isBrowserDead = /closed|disconnected|Target page|crashed/i.test(err.message ?? '');
@@ -1438,10 +1486,10 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 continue;
             }
             console.error(`[GFlights] ${origin}→${destination} erro:`, err.message);
-            return [];
+            return { flights: [], priceGraph: null };
         }
         } // end for
-        return [];
+        return { flights: [], priceGraph: null };
     });
 }
 
@@ -1737,14 +1785,95 @@ function gfCacheKey(origin, dest, date, returnDate) {
     return `${origin}|${dest}|${date}|${returnDate ?? ''}`;
 }
 
+// ─── Extração do gráfico de preços do Google Flights ─────────────────────────
+async function scrapePriceGraph(page, origin, destination) {
+    // Scroll para revelar o gráfico de preços (aparece abaixo dos cards de voo)
+    await page.evaluate(() => window.scrollBy(0, 800)).catch(() => {});
+    await new Promise(r => setTimeout(r, 1200));
+
+    const graph = await page.evaluate(() => {
+        const PT_MONTHS = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+
+        function parsePtDate(label) {
+            for (let m = 0; m < PT_MONTHS.length; m++) {
+                const re = new RegExp(`(\\d{1,2})\\s+de\\s+${PT_MONTHS[m]}(?:\\s+de\\s+(\\d{4}))?`, 'i');
+                const match = label.match(re);
+                if (match) {
+                    const day = parseInt(match[1], 10);
+                    const year = match[2] ? parseInt(match[2], 10) : new Date().getFullYear();
+                    return `${year}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                }
+            }
+            return null;
+        }
+
+        function parsePrice(label) {
+            // "R$1.234" / "R$ 1.234" / "1.234 Reais brasileiros"
+            const m1 = label.match(/R\$\s*([\d.]+)/);
+            if (m1) return parseInt(m1[1].replace(/\./g, ''), 10);
+            const m2 = label.match(/([\d.]+)\s*Reais/i);
+            if (m2) return parseInt(m2[1].replace(/\./g, ''), 10);
+            return 0;
+        }
+
+        function parseQuality(label) {
+            if (/mais barato|cheaper|low price|baixo/i.test(label)) return 'low';
+            if (/mais caro|higher|expensive|caro/i.test(label)) return 'high';
+            return 'typical';
+        }
+
+        // Tenta múltiplos seletores: barras SVG, buttons, e qualquer elemento com preço+data
+        const candidates = [
+            ...document.querySelectorAll('g[aria-label]'),
+            ...document.querySelectorAll('button[aria-label]'),
+            ...document.querySelectorAll('[role="button"][aria-label]'),
+        ];
+
+        const bars = [];
+        const seenDates = new Set();
+        for (const el of candidates) {
+            const label = el.getAttribute('aria-label') ?? '';
+            if (!label) continue;
+            // Precisa ter preço E data em português
+            if (!/R\$|Reais/i.test(label)) continue;
+            if (!/\d{1,2}\s+de\s+/i.test(label)) continue;
+
+            const date = parsePtDate(label);
+            const price = parsePrice(label);
+            if (!date || !price || seenDates.has(date)) continue;
+
+            seenDates.add(date);
+            bars.push({ date, price, quality: parseQuality(label) });
+        }
+
+        bars.sort((a, b) => a.date.localeCompare(b.date));
+
+        // Extrai também o badge de qualidade geral da página (aparece no topo)
+        // Ex: "Preços típicos" / "Preços baixos" / "Preços altos"
+        let pageQuality = null;
+        for (const el of document.querySelectorAll('[aria-label], [role="status"], [data-flt-ve]')) {
+            const t = (el.textContent ?? '') + (el.getAttribute('aria-label') ?? '');
+            if (/preço(s)?\s+(mais\s+)?baixo|price(s)?\s+low|mais barato que o habitual/i.test(t)) { pageQuality = 'low'; break; }
+            if (/preço(s)?\s+(mais\s+)?alto|price(s)?\s+high|mais caro que o habitual/i.test(t)) { pageQuality = 'high'; break; }
+            if (/preço(s)?\s+típico|typical\s+price/i.test(t)) { pageQuality = 'typical'; break; }
+        }
+
+        return { bars, pageQuality };
+    });
+
+    if (!graph || graph.bars.length === 0) return null;
+    return graph;
+}
+
 async function doScrape(origin, destination, date, returnDate) {
     // Outbound: round-trip URL quando há returnDate → preços reais ida+volta do Google
     // Inbound: busca one-way separada para mostrar opções de volta
     const rawOut = await scrapeOneway(origin, destination, date, returnDate ?? null);
-    const rawIn  = returnDate ? await scrapeOneway(destination, origin, returnDate) : [];
-    const outbound = rawOut.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
-    const inbound  = rawIn.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
-    return { outbound, inbound };
+    const rawIn  = returnDate ? await scrapeOneway(destination, origin, returnDate) : { flights: [], priceGraph: null };
+    const outbound = rawOut.flights.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
+    const inbound  = rawIn.flights.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
+    // priceGraph vem do outbound (página do trecho de ida)
+    return { outbound, inbound, priceGraph: rawOut.priceGraph ?? null };
 }
 
 // Expande até MAX_EXPAND voos com conexão para extrair segmentos (limitado para não atrasar a resposta)
@@ -2010,15 +2139,15 @@ app.get('/api/amadeus/flights', async (req, res) => {
     const cached = _gfCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
         console.log(`[GFlights] Cache hit (${origin}→${destination} ${date}) — ${cached.data.length} voos`);
-        return res.json({ data: cached.data, inbound: cached.inbound, meta: { count: cached.data.length, source: 'cache' } });
+        return res.json({ data: cached.data, inbound: cached.inbound, priceGraph: cached.priceGraph ?? null, meta: { count: cached.data.length, source: 'cache' } });
     }
 
     // 2. Deduplicação: se já há um scrape em andamento para esta chave, aguarda ele
     if (_gfInflight.has(cacheKey)) {
         console.log(`[GFlights] Dedup hit (${origin}→${destination} ${date}) — aguardando scrape em andamento`);
         try {
-            const { outbound, inbound } = await _gfInflight.get(cacheKey);
-            return res.json({ data: outbound, inbound, meta: { count: outbound.length, source: 'dedup' } });
+            const { outbound, inbound, priceGraph } = await _gfInflight.get(cacheKey);
+            return res.json({ data: outbound, inbound, priceGraph, meta: { count: outbound.length, source: 'dedup' } });
         } catch (err) {
             return res.status(500).json({ errors: [{ detail: err.message }] });
         }
@@ -2031,7 +2160,7 @@ app.get('/api/amadeus/flights', async (req, res) => {
         .then(result => {
             const { outbound } = result;
             if (outbound.length > 0) {
-                gfCacheSet(cacheKey, { data: outbound, inbound: result.inbound, expiresAt: Date.now() + GF_CACHE_TTL_MS });
+                gfCacheSet(cacheKey, { data: outbound, inbound: result.inbound, priceGraph: result.priceGraph, expiresAt: Date.now() + GF_CACHE_TTL_MS });
             }
             console.log(`[GFlights] Ida: ${outbound.length} | Volta: ${result.inbound.length}`);
             return result;
@@ -2041,8 +2170,8 @@ app.get('/api/amadeus/flights', async (req, res) => {
     _gfInflight.set(cacheKey, promise);
 
     try {
-        const { outbound, inbound } = await promise;
-        res.json({ data: outbound, inbound, meta: { count: outbound.length, source: 'google-flights-scraper' } });
+        const { outbound, inbound, priceGraph } = await promise;
+        res.json({ data: outbound, inbound, priceGraph, meta: { count: outbound.length, source: 'google-flights-scraper' } });
     } catch (err) {
         console.error('[GFlights] Erro:', err.message);
         res.status(500).json({ errors: [{ detail: err.message }] });

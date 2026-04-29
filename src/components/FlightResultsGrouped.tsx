@@ -54,8 +54,8 @@ function extractIata(companhia?: string | null): string {
 }
 
 // ── Google Flights tfs protobuf builder ───────────────────────────────────────
-// O formato #flt= foi depreciado; Google Flights agora usa ?tfs= (protobuf binário).
-// Itinerários de ida e volta são AMBOS codificados como field 3 repetido.
+// Google Flights usa ?tfs= com protobuf binário em base64url.
+// Ida e volta são field 3 repetido no proto raiz.
 
 function _gfVarint(buf: number[], val: number) {
     while (val > 0x7F) { buf.push((val & 0x7F) | 0x80); val >>>= 7 }
@@ -81,14 +81,14 @@ interface _GfSeg { from: string; to: string; date: string; carrier?: string; fli
 function _buildGfSegProto(seg: _GfSeg): number[] {
     const b: number[] = []
     _gfStr(b, 1, seg.from); _gfStr(b, 2, seg.date); _gfStr(b, 3, seg.to)
-    if (seg.carrier) _gfStr(b, 5, seg.carrier)
-    if (seg.flightNum) _gfStr(b, 6, seg.flightNum)
+    // Não incluímos carrier/flightNum: com eles o Google tenta reserva direta
+    // e retorna "itinerário não disponível". Sem eles abre a busca pré-preenchida.
     return b
 }
 
 function _buildGfEntity(iata: string): number[] {
     const b: number[] = []
-    _gfInt(b, 1, 1) // type = 1 (airport code)
+    _gfInt(b, 1, 1)
     _gfStr(b, 2, iata)
     return b
 }
@@ -97,9 +97,8 @@ function _buildGfItinProto(segs: _GfSeg[]): number[] {
     const b: number[] = []
     if (segs[0]) _gfStr(b, 2, segs[0].date)
     for (const seg of segs) _gfMsg(b, 4, _buildGfSegProto(seg))
-    // fields 13/14: origin and final-destination airport entities
     if (segs[0]?.from) _gfMsg(b, 13, _buildGfEntity(segs[0].from))
-    if (segs.length > 0 && segs[segs.length - 1]?.to) _gfMsg(b, 14, _buildGfEntity(segs[segs.length - 1].to))
+    if (segs.at(-1)?.to) _gfMsg(b, 14, _buildGfEntity(segs.at(-1)!.to))
     return b
 }
 
@@ -107,35 +106,43 @@ function _segsFromOffer(rawSegs: any[], flightNums: string[], from: string, to: 
     if (rawSegs.length > 0) {
         return rawSegs.map((s: any, i: number) => {
             const num = s.numero || flightNums[i] || ''
+            // FIX: segmentos intermediários usam o destino do segmento anterior como origem
+            const fallbackFrom = i === 0 ? from : (rawSegs[i - 1]?.destino || '').toUpperCase()
+            // FIX: usa a data de partida do próprio segmento para lidar com conexões overnight
+            const segDate = s.partida?.split('T')[0] || date
             return {
-                from: (s.origem || (i === 0 ? from : '')).toUpperCase(),
+                from: (s.origem || fallbackFrom).toUpperCase(),
                 to: (s.destino || (i === rawSegs.length - 1 ? to : '')).toUpperCase(),
-                date,
+                date: segDate,
                 carrier: num.match(/^([A-Z]{2})/)?.[1],
                 flightNum: num.match(/([0-9]+)$/)?.[1],
             }
         }).filter((s: _GfSeg) => s.from && s.to)
     }
-    // Sem segmentos detalhados: busca simples origem→destino
     const num = flightNums[0] || ''
     return [{ from, to, date, carrier: num.match(/^([A-Z]{2})/)?.[1], flightNum: num.match(/([0-9]+)$/)?.[1] }]
 }
 
 function _buildTfsUrl(outSegs: _GfSeg[], retSegs?: _GfSeg[], adults = 1): string {
     const buf: number[] = []
-    _gfInt(buf, 1, 28) // field 1 = 28
-    _gfInt(buf, 2, 2)  // field 2 = 2
+    _gfInt(buf, 1, 28)
+    _gfInt(buf, 2, 2)
     _gfMsg(buf, 3, _buildGfItinProto(outSegs))
-    // Volta: field 3 repetido (não field 4) — padrão do protobuf do Google Flights
     if (retSegs?.length) _gfMsg(buf, 3, _buildGfItinProto(retSegs))
-    _gfInt(buf, 8, adults) // número de adultos
-    _gfInt(buf, 9, 1)   // required by Google Flights (observed in real URLs)
-    _gfInt(buf, 14, 1)  // required by Google Flights (observed in real URLs)
-    // Converter para base64url sem spread (evita limite de argumentos)
+    _gfInt(buf, 8, adults)
+    _gfInt(buf, 9, 1)
+    _gfInt(buf, 14, 1)
     let str = ''
     for (let i = 0; i < buf.length; i++) str += String.fromCharCode(buf[i])
     const b64 = btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
     return `https://www.google.com/travel/flights?tfs=${b64}&hl=pt-BR&gl=BR&curr=BRL`
+}
+
+// Fallback: URL simples que sempre funciona, sem depender do protobuf
+function _buildSimpleGoogleFlightsUrl(o: string, d: string, date: string, retDate?: string): string {
+    let q = `Flights from ${o} to ${d} on ${date}`
+    if (retDate) q += ` returning ${retDate}`
+    return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}&hl=pt-BR&gl=BR&curr=BRL`
 }
 
 function buildGoogleFlightsUrl(
@@ -151,20 +158,22 @@ function buildGoogleFlightsUrl(
     const det = (outbound.detalhes as any) ?? {}
     const segsOut = (outbound.segmentos as any[]) ?? []
     const numVoos: string[] = (det.numeroVoos as string[]) ?? []
-
     const outSegs = _segsFromOffer(segsOut, numVoos, o, d, date)
 
-    // Voo de volta: inbound explícito OU oferta combinada Amadeus
     const returnDate = inbound?.partida?.split('T')[0] ?? det.returnPartida?.split('T')[0]
     let retSegs: _GfSeg[] | undefined
     if (returnDate) {
-        const ro = (inbound?.origem ?? det.returnOrigem ?? d as string).toUpperCase()
-        const rd = (inbound?.destino ?? det.returnDestino ?? o as string).toUpperCase()
+        const ro = (inbound?.origem ?? det.returnOrigem ?? d).toUpperCase()
+        const rd = (inbound?.destino ?? det.returnDestino ?? o).toUpperCase()
         const retRaw = (inbound?.segmentos as any[]) ?? (det.returnSegmentos as any[]) ?? []
         retSegs = _segsFromOffer(retRaw, [], ro, rd, returnDate)
     }
 
-    return _buildTfsUrl(outSegs, retSegs, passageiros)
+    try {
+        return _buildTfsUrl(outSegs, retSegs, passageiros)
+    } catch {
+        return _buildSimpleGoogleFlightsUrl(o, d, date, returnDate)
+    }
 }
 
 // ── Individual flight leg ──────────────────────────────────────────────────────
