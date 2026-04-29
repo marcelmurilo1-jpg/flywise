@@ -1787,9 +1787,9 @@ function gfCacheKey(origin, dest, date, returnDate) {
 
 // ─── Extração do gráfico de preços do Google Flights ─────────────────────────
 async function scrapePriceGraph(page, origin, destination) {
-    // Scroll para revelar o gráfico de preços (aparece abaixo dos cards de voo)
+    // Scroll rápido para revelar o gráfico (sem delay longo — não bloqueia o resultado principal)
     await page.evaluate(() => window.scrollBy(0, 800)).catch(() => {});
-    await new Promise(r => setTimeout(r, 1200));
+    await new Promise(r => setTimeout(r, 350));
 
     const graph = await page.evaluate(() => {
         const PT_MONTHS = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
