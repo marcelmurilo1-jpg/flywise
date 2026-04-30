@@ -1455,11 +1455,7 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 return results;
             });
 
-            // Sinaliza que os preços são totais de ida+volta (busca round-trip no Google)
-            if (returnDate) {
-                flights.forEach(f => { f.is_roundtrip_total = true; });
-                console.log(`[GFlights] ${origin}→${destination}: round-trip mode — ${flights.length} voos com preço total ida+volta`);
-            }
+            console.log(`[GFlights] ${origin}→${destination}: ${flights.length} voos encontrados`);
 
             // Expande voos com conexão para extrair segmentos detalhados
             if (flights.length > 0 && flights.some(f => (f.paradas ?? 0) > 0)) {
@@ -1866,10 +1862,10 @@ async function scrapePriceGraph(page, origin, destination) {
 }
 
 async function doScrape(origin, destination, date, returnDate) {
-    // Outbound: round-trip URL quando há returnDate → preços reais ida+volta do Google
-    // Inbound: busca one-way separada para mostrar opções de volta
-    const rawOut = await scrapeOneway(origin, destination, date, returnDate ?? null);
-    const rawIn  = returnDate ? await scrapeOneway(destination, origin, returnDate) : { flights: [], priceGraph: null };
+    // Ambos os trechos usam URL one-way — a URL round-trip do Google carrega UI em duas etapas
+    // onde os cards não têm aria-label padrão com preço, resultando em 0 voos no outbound.
+    const rawOut = await scrapeOneway(origin, destination, date, null);
+    const rawIn  = returnDate ? await scrapeOneway(destination, origin, returnDate, null) : { flights: [], priceGraph: null };
     const outbound = rawOut.flights.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
     const inbound  = rawIn.flights.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
     // priceGraph vem do outbound (página do trecho de ida)
