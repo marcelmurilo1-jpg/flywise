@@ -844,7 +844,16 @@ async function getAmadeusToken() {
     return _amadeusToken;
 }
 
+// Cache de aeroportos: evita repetir chamadas à Amadeus (rate limit 429)
+const _airportCache = new Map(); // keyword → { data, expiresAt }
+const AIRPORT_CACHE_TTL_MS = 15 * 60 * 1000; // 15 min
+
 app.get('/api/amadeus/airports', async (req, res) => {
+    const keyword = (req.query.keyword ?? '').trim().toLowerCase();
+    const cached = _airportCache.get(keyword);
+    if (cached && cached.expiresAt > Date.now()) {
+        return res.json(cached.data);
+    }
     try {
         const token = await getAmadeusToken();
         const params = new URLSearchParams({
@@ -858,8 +867,13 @@ app.get('/api/amadeus/airports', async (req, res) => {
             headers: { Authorization: `Bearer ${token}` },
         });
         const data = await r.json();
-        if (!r.ok) console.error('[Amadeus] airports API error:', r.status, JSON.stringify(data).slice(0, 300));
-        res.status(r.status).json(data);
+        if (r.ok) {
+            if (_airportCache.size >= 500) _airportCache.delete(_airportCache.keys().next().value);
+            _airportCache.set(keyword, { data, expiresAt: Date.now() + AIRPORT_CACHE_TTL_MS });
+        } else {
+            console.error('[Amadeus] airports API error:', r.status, JSON.stringify(data).slice(0, 300));
+        }
+        res.status(r.ok ? 200 : r.status).json(data);
     } catch (err) {
         console.error('[Amadeus] airports error:', err.message);
         res.status(500).json({ errors: [{ detail: err.message }] });
@@ -868,7 +882,9 @@ app.get('/api/amadeus/airports', async (req, res) => {
 
 // ─── Google Flights Scraper ───────────────────────────────────────────────────
 // Navegador compartilhado: criado uma vez, reutilizado em todas as requisições.
-const scrapeLimit = pLimit(1); // Railway: 1 aba por vez (limite de processos do container)
+// pLimit(2): permite ida+volta em paralelo num round-trip (cada um abre seu próprio context).
+// Isso corta o tempo de ~100s (sequencial) para ~50s (paralelo) e evita Railway timeout (502).
+const scrapeLimit = pLimit(2);
 let _browser = null;
 
 // ── Pool de User-Agents reais do Chrome 129-132 (atualizados para 2026) ───────
@@ -1862,10 +1878,12 @@ async function scrapePriceGraph(page, origin, destination) {
 }
 
 async function doScrape(origin, destination, date, returnDate) {
-    // Ambos os trechos usam URL one-way — a URL round-trip do Google carrega UI em duas etapas
-    // onde os cards não têm aria-label padrão com preço, resultando em 0 voos no outbound.
-    const rawOut = await scrapeOneway(origin, destination, date, null);
-    const rawIn  = returnDate ? await scrapeOneway(destination, origin, returnDate, null) : { flights: [], priceGraph: null };
+    // Ambos os trechos usam URL one-way e rodam em paralelo (pLimit(2)) para cortar
+    // o tempo total de ~100s (sequencial) para ~50s, evitando o timeout 502 do Railway.
+    const [rawOut, rawIn] = await Promise.all([
+        scrapeOneway(origin, destination, date, null),
+        returnDate ? scrapeOneway(destination, origin, returnDate, null) : Promise.resolve({ flights: [], priceGraph: null }),
+    ]);
     const outbound = rawOut.flights.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
     const inbound  = rawIn.flights.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
     // priceGraph vem do outbound (página do trecho de ida)
