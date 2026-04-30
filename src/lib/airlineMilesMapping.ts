@@ -35,8 +35,8 @@ export type MilesProgram = typeof PROGRAMS[number]
  */
 export const AIRLINE_MILES_MAP: Record<string, MilesProgram[]> = {
     // ── Brazil ──────────────────────────────────────────────────────────────
-    'LA': ['LATAM Pass', 'Smiles', 'Livelo'],          // LATAM Brasil
-    'JJ': ['LATAM Pass', 'Smiles', 'Livelo'],          // LATAM Brasil (legacy)
+    'LA': ['LATAM Pass', 'Livelo'],                     // LATAM Brasil (não aceita Smiles)
+    'JJ': ['LATAM Pass', 'Livelo'],                     // LATAM Brasil legacy (não aceita Smiles)
     'G3': ['Smiles', 'Livelo'],                         // GOL
     'AD': ['TudoAzul', 'Livelo'],                       // Azul
     // ── North America ────────────────────────────────────────────────────────

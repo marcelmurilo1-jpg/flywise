@@ -1088,7 +1088,7 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
             });
             console.log(`[GFlights] ${origin}→${destination}: div[data-id]=${diagInfo.count}, primeiros aria-labels:`, JSON.stringify(diagInfo.labels));
 
-            const flights = await page.evaluate(() => {
+            const flights = await page.evaluate(({ _origin, _destination }) => {
                 // Parser bilíngue PT + EN baseado em aria-label do Google Flights
                 function to24h(time, ampm) {
                     let [h, m] = time.split(':').map(Number);
@@ -1416,7 +1416,8 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                     // ── Fallback 5 (último recurso): extrai da 1ª linha de texto que pareça
                     //    nome de companhia — captura qualquer companhia, mesmo desconhecida ──────
                     if (!parsed.companhia && visText) {
-                        const skipLine = /^(\d{1,2}:\d{2}|R\$|BRL|\d+\s*h(?:\s*\d+\s*min)?|\d+\s*(parada|conexão|escala|stop|min)|sem\s+escala|nonstop|direto|selec|ver\s+det|\d+\s*de\s*\d+|\d+[.,]\d)/i;
+                        // skipLine: rejeita linhas genéricas, numéricas ou rótulos de acessibilidade do Google
+                        const skipLine = /^(\d{1,2}:\d{2}|R\$|BRL|\d+\s*h(?:\s*\d+\s*min)?|\d+\s*(parada|conexão|escala|stop|min)|sem\s+escala|nonstop|direto|selec|ver\s+det|\d+\s*de\s*\d+|\d+[.,]\d|companhia\s+a[eé]rea|multiple\s+airlines|múltiplas\s+companhias|airline[s]?|more\s+details|mais\s+detalhes)/i;
                         const lines = visText.split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length >= 3 && l.length <= 55);
                         for (const line of lines) {
                             if (skipLine.test(line)) continue;
@@ -1428,9 +1429,10 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                     }
 
                     // ── Fallback 4: cidade de conexão pelo texto visível ─────────────────────
+                    // Usa _origin/_destination (passados via evaluate args) para excluir origem/destino
                     if (!parsed.layoverCity && parsed.paradas > 0 && visText) {
-                        const orig = parsed.origem || '';
-                        const dest = parsed.destino || '';
+                        const orig = _origin;
+                        const dest = _destination;
                         // 4a. Bullet or dot separator: "GRU · BOG · MIA" → BOG
                         const bulletM = visText.match(/[·•–\|]\s*([A-Z]{3})\b/g);
                         if (bulletM) {
@@ -1442,8 +1444,8 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                             const viaM = visText.match(/\bvia\s+([A-Z]{3})\b/i);
                             if (viaM && viaM[1] !== orig && viaM[1] !== dest) parsed.layoverCity = viaM[1];
                         }
-                        // 4c. Row of IATAs: "GRU BOG MIA" — any uppercase 3-letter word between origin and dest
-                        if (!parsed.layoverCity && orig && dest) {
+                        // 4c. Row of IATAs — now correctly excludes origin and destination
+                        if (!parsed.layoverCity) {
                             const allIataVis = [...visText.matchAll(/\b([A-Z]{3})\b/g)].map(m => m[1]);
                             const mid = allIataVis.filter(c => c !== orig && c !== dest && /^[A-Z]{3}$/.test(c));
                             if (mid.length > 0) parsed.layoverCity = [...new Set(mid)].slice(0, 2).join(' · ');
@@ -1451,14 +1453,11 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                     }
                     // ── Fallback 5: inner aria-labels de outros elementos do card ────────────
                     if (!parsed.layoverCity && parsed.paradas > 0) {
-                        const orig = parsed.origem || '';
-                        const dest = parsed.destino || '';
                         for (const l of links) {
                             if (l === flightLink) continue;
                             const oa = l.getAttribute('aria-label') ?? '';
-                            // "Voo de Avianca de GRU para BOG" — a leg aria-label naming an intermediate airport
                             const legIatas = [...oa.matchAll(/\b([A-Z]{3})\b/g)].map(m => m[1]);
-                            const mid = legIatas.filter(c => c !== orig && c !== dest);
+                            const mid = legIatas.filter(c => c !== _origin && c !== _destination);
                             if (mid.length > 0) { parsed.layoverCity = [...new Set(mid)].slice(0, 2).join(' · '); break; }
                         }
                     }
@@ -1469,7 +1468,7 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 }
 
                 return results;
-            });
+            }, { _origin: origin.toUpperCase(), _destination: destination.toUpperCase() });
 
             console.log(`[GFlights] ${origin}→${destination}: ${flights.length} voos encontrados`);
 
@@ -1799,7 +1798,17 @@ function gfCacheKey(origin, dest, date, returnDate) {
 
 // ─── Extração do gráfico de preços do Google Flights ─────────────────────────
 async function scrapePriceGraph(page, origin, destination) {
-    // Scroll rápido para revelar o gráfico (sem delay longo — não bloqueia o resultado principal)
+    // Clica no botão "Ver histórico de preços" (o gráfico fica oculto por padrão)
+    await page.evaluate(() => {
+        const trigger = [...document.querySelectorAll('button, [role="button"]')].find(el => {
+            const t = (el.textContent ?? '') + (el.getAttribute('aria-label') ?? '');
+            return /hist[oó]rico|price history|typical price|preço.{0,30}(passado|habitual|typical)/i.test(t);
+        });
+        if (trigger) trigger.click();
+    }).catch(() => {});
+    await new Promise(r => setTimeout(r, 700));
+
+    // Scroll para revelar o gráfico caso não esteja visível
     await page.evaluate(() => window.scrollBy(0, 800)).catch(() => {});
     await new Promise(r => setTimeout(r, 350));
 
