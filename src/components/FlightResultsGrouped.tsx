@@ -659,16 +659,11 @@ export function FlightResultsGrouped({
                     <div style={{ background: '#0E2A55', borderRadius: 12, padding: '12px 18px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                         <div>
                             <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
-                                {cashVoltaSel ? 'Estimativa (ida + volta separados)' : 'Ida selecionada'}
+                                {cashVoltaSel ? 'Ida + Volta' : 'Ida selecionada'}
                             </div>
                             <div style={{ fontSize: 20, fontWeight: 900, color: '#fff' }}>
                                 R$ {cashTotal?.toLocaleString('pt-BR')}
                             </div>
-                            {cashVoltaSel && (
-                                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
-                                    Confirme o preço real no Google Flights
-                                </div>
-                            )}
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
                             <a

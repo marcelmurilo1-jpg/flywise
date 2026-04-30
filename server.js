@@ -992,6 +992,65 @@ function addDaysToDate(dateStr, days) {
     return d.toISOString().slice(0, 10);
 }
 
+// ── Protobuf helpers (portados de FlightResultsGrouped.tsx) ───────────────────
+function _gfVarint(buf, val) {
+    while (val > 0x7F) { buf.push((val & 0x7F) | 0x80); val >>>= 7; }
+    buf.push(val & 0x7F);
+}
+function _gfInt(buf, field, val) {
+    _gfVarint(buf, (field << 3) | 0);
+    _gfVarint(buf, val);
+}
+function _gfStr(buf, field, str) {
+    _gfVarint(buf, (field << 3) | 2);
+    _gfVarint(buf, str.length);
+    for (let i = 0; i < str.length; i++) buf.push(str.charCodeAt(i));
+}
+function _gfMsg(buf, field, bytes) {
+    _gfVarint(buf, (field << 3) | 2);
+    _gfVarint(buf, bytes.length);
+    for (let i = 0; i < bytes.length; i++) buf.push(bytes[i]);
+}
+function _buildGfSegProto(from, date, to) {
+    const b = [];
+    _gfStr(b, 1, from); _gfStr(b, 2, date); _gfStr(b, 3, to);
+    return b;
+}
+function _buildGfEntity(iata) {
+    const b = [];
+    _gfInt(b, 1, 1);
+    _gfStr(b, 2, iata);
+    return b;
+}
+function _buildGfItinProto(from, date, to) {
+    const b = [];
+    _gfStr(b, 2, date);
+    _gfMsg(b, 4, _buildGfSegProto(from, date, to));
+    _gfMsg(b, 13, _buildGfEntity(from));
+    _gfMsg(b, 14, _buildGfEntity(to));
+    return b;
+}
+
+/**
+ * Builds a tfs-format Google Flights URL — same format as the frontend "Ver no Google Flights"
+ * button. Round-trip searches show combined prices (avoids the two-step wizard triggered by ?q=).
+ */
+function buildGfTfsUrl(origin, dest, date, returnDate = null, adults = 1) {
+    const buf = [];
+    _gfInt(buf, 1, 28);
+    _gfInt(buf, 2, returnDate ? 2 : 1); // 2 = round-trip, 1 = one-way
+    _gfMsg(buf, 3, _buildGfItinProto(origin.toUpperCase(), date, dest.toUpperCase()));
+    if (returnDate) {
+        _gfMsg(buf, 3, _buildGfItinProto(dest.toUpperCase(), returnDate, origin.toUpperCase()));
+    }
+    _gfInt(buf, 8, adults);
+    _gfInt(buf, 9, 1);
+    _gfInt(buf, 14, 1);
+    // Node.js: use Buffer instead of btoa(); base64url (no +, /, =)
+    const b64 = Buffer.from(buf).toString('base64url');
+    return `https://www.google.com/travel/flights?tfs=${b64}&hl=pt-BR&gl=BR&curr=BRL`;
+}
+
 async function scrapeOneway(origin, destination, date, returnDate = null) {
     return scrapeLimit(async () => {
         for (let attempt = 1; attempt <= 2; attempt++) {
@@ -1036,12 +1095,9 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
             window.chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
         }, isMac);
 
-            // Round-trip URL → Google shows combined prices (outbound + cheapest return)
-            // One-way URL   → Google shows individual one-way prices
-            const query = returnDate
-                ? encodeURIComponent(`Flights from ${origin} to ${destination} on ${date} returning ${returnDate}`)
-                : encodeURIComponent(`Flights from ${origin} to ${destination} on ${date} one way`);
-            const url = `https://www.google.com/travel/flights?q=${query}&curr=BRL&hl=pt-BR`;
+            // tfs URL = same format as "Ver no Google Flights" button on frontend
+            // Round-trip tfs → standard list with combined prices (avoids the two-step wizard that ?q= triggers)
+            const url = buildGfTfsUrl(origin, destination, date, returnDate);
 
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 22000 });
 
@@ -1104,8 +1160,8 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                     // PT: "A partir de 2276 Reais brasileiros"
                     // EN: "From R$1,234" or "From BRL 1,234"
                     let preco_brl = 0;
-                    const pricePT = aria.match(/A partir de (\d[\d\s]*) Reais/i);
-                    if (pricePT) preco_brl = parseInt(pricePT[1].replace(/\s/g, ''), 10);
+                    const pricePT = aria.match(/(?:A partir de )?(\d[\d\s.]+)\s+Reais\s+brasileiros/i);
+                    if (pricePT) preco_brl = parseInt(pricePT[1].replace(/[\s.]/g, ''), 10);
                     if (!preco_brl) {
                         const priceEN = aria.match(/(?:From\s+)?(?:R\$|BRL\s*)(\d[\d,]*)/i);
                         if (priceEN) preco_brl = parseInt(priceEN[1].replace(/,/g, ''), 10);
@@ -1470,6 +1526,9 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 return results;
             }, { _origin: origin.toUpperCase(), _destination: destination.toUpperCase() });
 
+            if (returnDate) {
+                flights.forEach(f => { f.is_roundtrip_total = true; });
+            }
             console.log(`[GFlights] ${origin}→${destination}: ${flights.length} voos encontrados`);
 
             // Expande voos com conexão para extrair segmentos detalhados
@@ -1799,18 +1858,29 @@ function gfCacheKey(origin, dest, date, returnDate) {
 // ─── Extração do gráfico de preços do Google Flights ─────────────────────────
 async function scrapePriceGraph(page, origin, destination) {
     // Clica no botão "Ver histórico de preços" (o gráfico fica oculto por padrão)
-    await page.evaluate(() => {
-        const trigger = [...document.querySelectorAll('button, [role="button"]')].find(el => {
-            const t = (el.textContent ?? '') + (el.getAttribute('aria-label') ?? '');
-            return /hist[oó]rico|price history|typical price|preço.{0,30}(passado|habitual|typical)/i.test(t);
+    const clicked = await page.evaluate(() => {
+        // Strategy 1: button/role=button with price history text
+        const byText = [...document.querySelectorAll('button, [role="button"], a')].find(el => {
+            const t = (el.textContent ?? '') + ' ' + (el.getAttribute('aria-label') ?? '');
+            return /hist[oó]rico|price history|preço.{0,30}habitual|típico|typical|trend/i.test(t);
         });
-        if (trigger) trigger.click();
-    }).catch(() => {});
-    await new Promise(r => setTimeout(r, 700));
+        if (byText) { byText.click(); return true; }
+
+        // Strategy 2: expandable sections / disclosure buttons
+        const byExpanded = [...document.querySelectorAll('[aria-expanded="false"]')].find(el => {
+            const t = (el.textContent ?? '') + ' ' + (el.getAttribute('aria-label') ?? '');
+            return /hist[oó]rico|preço|price|típico|typical/i.test(t);
+        });
+        if (byExpanded) { byExpanded.click(); return true; }
+
+        return false;
+    }).catch(() => false);
+
+    await new Promise(r => setTimeout(r, clicked ? 900 : 500));
 
     // Scroll para revelar o gráfico caso não esteja visível
     await page.evaluate(() => window.scrollBy(0, 800)).catch(() => {});
-    await new Promise(r => setTimeout(r, 350));
+    await new Promise(r => setTimeout(r, 400));
 
     const graph = await page.evaluate(() => {
         const PT_MONTHS = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
@@ -1887,10 +1957,11 @@ async function scrapePriceGraph(page, origin, destination) {
 }
 
 async function doScrape(origin, destination, date, returnDate) {
-    // Ambos os trechos usam URL one-way e rodam em paralelo (pLimit(2)) para cortar
-    // o tempo total de ~100s (sequencial) para ~50s, evitando o timeout 502 do Railway.
+    // Outbound: tfs round-trip URL quando há returnDate → preço combinado correto do Google.
+    // Inbound: sempre one-way (para mostrar opções de volta individualmente).
+    // Paralelo (pLimit=2) para cortar ~100s→~50s e evitar timeout 502 do Railway.
     const [rawOut, rawIn] = await Promise.all([
-        scrapeOneway(origin, destination, date, null),
+        scrapeOneway(origin, destination, date, returnDate ?? null),
         returnDate ? scrapeOneway(destination, origin, returnDate, null) : Promise.resolve({ flights: [], priceGraph: null }),
     ]);
     const outbound = rawOut.flights.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
