@@ -1531,9 +1531,6 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 return results;
             }, { _origin: origin.toUpperCase(), _destination: destination.toUpperCase() });
 
-            if (returnDate) {
-                flights.forEach(f => { f.is_roundtrip_total = true; });
-            }
             console.log(`[GFlights] ${origin}→${destination}: ${flights.length} voos encontrados`);
             if (flights.length > 0) {
                 flights.forEach((f, i) => console.log(
@@ -1969,14 +1966,21 @@ async function scrapePriceGraph(page, origin, destination) {
 
         bars.sort((a, b) => a.date.localeCompare(b.date));
 
-        // Extrai também o badge de qualidade geral da página (aparece no topo)
-        // Ex: "Preços típicos" / "Preços baixos" / "Preços altos"
+        // Extrai badge de qualidade geral da página (visível sem clicar em botão nenhum)
+        // Ex: "Preços típicos para esta rota" / "Preço baixo" / "Currently low prices"
         let pageQuality = null;
-        for (const el of document.querySelectorAll('[aria-label], [role="status"], [data-flt-ve]')) {
-            const t = (el.textContent ?? '') + (el.getAttribute('aria-label') ?? '');
-            if (/preço(s)?\s+(mais\s+)?baixo|price(s)?\s+low|mais barato que o habitual/i.test(t)) { pageQuality = 'low'; break; }
-            if (/preço(s)?\s+(mais\s+)?alto|price(s)?\s+high|mais caro que o habitual/i.test(t)) { pageQuality = 'high'; break; }
-            if (/preço(s)?\s+típico|typical\s+price/i.test(t)) { pageQuality = 'typical'; break; }
+        const qualitySelectors = [
+            ...document.querySelectorAll('[aria-label]'),
+            ...document.querySelectorAll('[role="status"]'),
+            ...document.querySelectorAll('[data-flt-ve]'),
+            ...document.querySelectorAll('span, div, p'),
+        ];
+        for (const el of qualitySelectors) {
+            const t = ((el.textContent ?? '') + ' ' + (el.getAttribute('aria-label') ?? '')).trim();
+            if (t.length < 4 || t.length > 300) continue;
+            if (/mais barato|price(s)?\s+low|currently low|preço(s)?\s+(mais\s+)?baixo|low price|cheap/i.test(t)) { pageQuality = 'low'; break; }
+            if (/mais caro|price(s)?\s+high|currently high|preço(s)?\s+(mais\s+)?alto|high price|expensive/i.test(t)) { pageQuality = 'high'; break; }
+            if (/preço(s)?\s+típico|typical\s+price|preço(s)?\s+normal|preço(s)?\s+usual/i.test(t)) { pageQuality = 'typical'; break; }
         }
 
         return { bars, pageQuality };
@@ -1990,16 +1994,25 @@ async function scrapePriceGraph(page, origin, destination) {
 }
 
 async function doScrape(origin, destination, date, returnDate) {
-    // Outbound: tfs round-trip URL quando há returnDate → preço combinado correto do Google.
-    // Inbound: sempre one-way (para mostrar opções de volta individualmente).
-    // Paralelo (pLimit=2) para cortar ~100s→~50s e evitar timeout 502 do Railway.
-    const [rawOut, rawIn] = await Promise.all([
-        scrapeOneway(origin, destination, date, returnDate ?? null),
-        returnDate ? scrapeOneway(destination, origin, returnDate, null) : Promise.resolve({ flights: [], priceGraph: null }),
-    ]);
+    // Outbound: sempre one-way → preços individuais por trecho, funciona com o fluxo de seleção.
+    // Inbound: sequencial (após outbound + 3s delay) para evitar detecção de bot no Railway.
+    const rawOut = await scrapeOneway(origin, destination, date, null);
     const outbound = rawOut.flights.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
-    const inbound  = rawIn.flights.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
-    // priceGraph vem do outbound (página do trecho de ida)
+
+    let inbound = [];
+    if (returnDate) {
+        // Aguarda 3s antes de abrir segundo contexto — reduz detecção de bot em IP compartilhado
+        await new Promise(r => setTimeout(r, 3000));
+        const rawIn = await scrapeOneway(destination, origin, returnDate, null);
+        inbound = rawIn.flights.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
+        if (inbound.length === 0) {
+            console.log('[GFlights] Inbound vazio na primeira tentativa — aguardando 8s e retentando...');
+            await new Promise(r => setTimeout(r, 8000));
+            const rawIn2 = await scrapeOneway(destination, origin, returnDate, null);
+            inbound = rawIn2.flights.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
+        }
+    }
+
     return { outbound, inbound, priceGraph: rawOut.priceGraph ?? null };
 }
 

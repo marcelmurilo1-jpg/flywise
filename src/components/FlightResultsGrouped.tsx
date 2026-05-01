@@ -413,13 +413,13 @@ function FlightCard({
                 <div className="fly-card-right" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: 10, fontWeight: 700, color: '#0E2A55', textTransform: 'uppercase', marginBottom: 2 }}>
-                            {det.isRoundtripTotal ? 'Ida + Volta' : 'Preço'}
+                            {det.returnPartida ? 'Ida + Volta' : 'Preço'}
                         </div>
                         <div style={{ fontSize: 18, fontWeight: 800, color: '#0E2A55', letterSpacing: '-0.01em' }}>
                             {(flight.preco_brl ?? 0) > 0 ? `R$ ${flight.preco_brl?.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}` : '—'}
                         </div>
                         <div style={{ fontSize: 9, color: '#94A3B8' }}>
-                            {det.isRoundtripTotal ? 'total ida+volta' : ((flight.preco_brl ?? 0) > 0 ? 'preço final' : 'incl. na ida')}
+                            {det.returnPartida ? 'total ida+volta' : ((flight.preco_brl ?? 0) > 0 ? 'preço final' : 'incl. na ida')}
                         </div>
                     </div>
                     {canSelect && !isPinned && (flight.preco_brl ?? 0) > 0 && (
@@ -598,7 +598,8 @@ export function FlightResultsGrouped({
     const cashTotal = (() => {
         if (!cashIdaSel) return null
         const det = (cashIdaSel.detalhes as any) ?? {}
-        if (det.returnPartida || det.isRoundtripTotal) return cashIdaSel.preco_brl ?? 0
+        // Amadeus combined offer: single record covers both legs (returnPartida present)
+        if (det.returnPartida) return cashIdaSel.preco_brl ?? 0
         return (cashIdaSel.preco_brl ?? 0) + (cashVoltaSel ? (cashVoltaSel.preco_brl ?? 0) : 0)
     })()
 

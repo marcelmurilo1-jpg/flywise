@@ -133,6 +133,11 @@ export default function Resultados() {
                 if (cacheErr) throw cacheErr
 
                 if (cached && cached.length > 0) {
+                    // Restore priceGraph from sessionStorage (not persisted in Supabase)
+                    try {
+                        const storedPg = sessionStorage.getItem(`priceGraph_${buscaId}`)
+                        if (storedPg) setPriceGraph(JSON.parse(storedPg))
+                    } catch { /* ignore */ }
                     const outbound = cached.filter(f => !(f.detalhes as any)?.isReturn)
                     const inbound  = cached.filter(f =>  !!(f.detalhes as any)?.isReturn)
                     await new Promise<void>(r => setTimeout(r, MIN_ANIM_MS))
@@ -154,7 +159,10 @@ export default function Resultados() {
                 ])
 
                 const { flights: offers, inboundFlights: inboundOffers, priceGraph: pg } = searchResult
-                if (pg) setPriceGraph(pg)
+                if (pg) {
+                    setPriceGraph(pg)
+                    try { sessionStorage.setItem(`priceGraph_${buscaId}`, JSON.stringify(pg)) } catch { /* quota */ }
+                }
 
                 if (offers.length === 0) throw new Error('Nenhum voo encontrado para esta rota. Tente novamente em alguns instantes.')
 
