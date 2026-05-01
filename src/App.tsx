@@ -36,10 +36,7 @@ import Checkout from '@/pages/Checkout'
 import Onboarding from '@/pages/Onboarding'
 import ChatBuscaAvancada from '@/pages/ChatBuscaAvancada'
 import Mapa from '@/pages/Mapa'
-import ExploreDestinos from '@/pages/c1/ExploreDestinos'
-import MeuIntercambio from '@/pages/c1/MeuIntercambio'
 import Admin from '@/pages/Admin'
-import { C1Provider } from '@/contexts/C1Context'
 import { BottomNav } from '@/components/BottomNav'
 import { useAdmin } from '@/hooks/useAdmin'
 
@@ -71,7 +68,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 // Pages that should show BottomNav (authenticated app pages)
-const APP_ROUTES = ['/home', '/resultados', '/promotions', '/wallet', '/saved-strategies', '/roteiro', '/configuracoes', '/busca-avancada', '/chat', '/mapa', '/c1']
+const APP_ROUTES = ['/home', '/resultados', '/promotions', '/wallet', '/saved-strategies', '/roteiro', '/configuracoes', '/busca-avancada', '/chat', '/mapa']
 
 function AppRoutesInner() {
   const { user } = useAuth()
@@ -118,8 +115,6 @@ function AppRoutes() {
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
         <Route path="/chat/:id" element={<ProtectedRoute><ChatBuscaAvancada /></ProtectedRoute>} />
         <Route path="/mapa" element={<ProtectedRoute><Mapa /></ProtectedRoute>} />
-        <Route path="/c1" element={<ProtectedRoute><ExploreDestinos /></ProtectedRoute>} />
-        <Route path="/c1/intercambio" element={<ProtectedRoute><MeuIntercambio /></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -133,11 +128,9 @@ export default function App() {
     <ThemeProvider>
       <BrowserRouter>
         <AuthProvider>
-          <C1Provider>
             <ErrorBoundary>
               <AppRoutes />
             </ErrorBoundary>
-          </C1Provider>
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>

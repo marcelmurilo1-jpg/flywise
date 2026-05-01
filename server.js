@@ -1163,8 +1163,9 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                     const pricePT = aria.match(/(?:A partir de )?(\d[\d\s.]+)\s+Reais\s+brasileiros/i);
                     if (pricePT) preco_brl = parseInt(pricePT[1].replace(/[\s.]/g, ''), 10);
                     if (!preco_brl) {
-                        const priceEN = aria.match(/(?:From\s+)?(?:R\$|BRL\s*)(\d[\d,]*)/i);
-                        if (priceEN) preco_brl = parseInt(priceEN[1].replace(/,/g, ''), 10);
+                        // Handles: "From R$1,234" / "R$ 3.145" (dot=thousands) / "R$ 2 276" (space=thousands)
+                        const priceEN = aria.match(/(?:From\s+)?(?:R\$|BRL\s*)([\d][\d,. ]*)/i);
+                        if (priceEN) preco_brl = parseInt(priceEN[1].replace(/[,. ]/g, ''), 10) || 0;
                     }
                     if (!preco_brl) return null;
 
@@ -1182,11 +1183,13 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                     const airlinePT = aria.match(/Voo d(?:a|o|as|os|e) ([^,.\n]+?)(?:\s+com\s+|\.|,|\n|[Oo]perado|\s*$)/i);
                     if (airlinePT) companhia = airlinePT[1].trim();
                     if (!companhia) {
-                        // EN: "American Airlines flight" — sem âncora ^
+                        // EN: "American Airlines flight" / "Select LATAM Airlines flight"
                         const airlineEN = aria.match(/\b([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]{2,40}?)\s+flight\b/i);
                         if (airlineEN) {
-                            const candidate = airlineEN[1].trim();
-                            if (!/^(nonstop|direct|total|from|your|this|the|a|an)$/i.test(candidate))
+                            let candidate = airlineEN[1].trim();
+                            // Strip leading action verbs (e.g. "Select LATAM Airlines" → "LATAM Airlines")
+                            candidate = candidate.replace(/^(?:Select|Book|Choose|Departing|Outbound|Return|Returning)\s+/i, '').trim();
+                            if (candidate && !/^(nonstop|direct|total|from|your|this|the|a|an|select|book|choose)$/i.test(candidate))
                                 companhia = candidate;
                         }
                     }
@@ -1419,7 +1422,9 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                     const links = [...el.querySelectorAll('[aria-label]')];
                     const flightLink = links.find(l => {
                         const a = l.getAttribute('aria-label') ?? '';
-                        return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d/i.test(a)
+                        // Matches PT ("Voo da X", "Selecionar voo") and EN ("From R$", "flight" + price)
+                        // Also matches bare "R$ 3.145" (round-trip tfs format without "From" prefix)
+                        return /Reais brasileiros|Voo da |Selecionar voo|R\$\s*\d|From R\$|From BRL|BRL\s*\d/i.test(a)
                             || (/\bflight\b/i.test(a) && /R\$|\d+:\d+/i.test(a));
                     });
                     if (!flightLink) continue;
@@ -1438,8 +1443,8 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                             if (ptM) { parsed.companhia = ptM[1].trim(); break; }
                             const enM = oa.match(/\b([A-Za-z\u00C0-\u024F][A-Za-z\u00C0-\u024F\s]{2,40}?)\s+flight\b/i);
                             if (enM) {
-                                const c = enM[1].trim();
-                                if (!/^(nonstop|direct|total|from|your|the|a|an)$/i.test(c)) { parsed.companhia = c; break; }
+                                let c = enM[1].trim().replace(/^(?:Select|Book|Choose|Departing|Outbound|Return|Returning)\s+/i, '').trim();
+                                if (c && !/^(nonstop|direct|total|from|your|the|a|an|select|book)$/i.test(c)) { parsed.companhia = c; break; }
                             }
                         }
                     }
@@ -1530,6 +1535,11 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 flights.forEach(f => { f.is_roundtrip_total = true; });
             }
             console.log(`[GFlights] ${origin}→${destination}: ${flights.length} voos encontrados`);
+            if (flights.length > 0) {
+                flights.forEach((f, i) => console.log(
+                    `  [${i}] ${f.companhia || '(sem companhia)'} | R$${f.preco_brl} | ${f.partida}→${f.chegada} | paradas=${f.paradas} | conexao=${f.layoverCity || '-'}`
+                ));
+            }
 
             // Expande voos com conexão para extrair segmentos detalhados
             if (flights.length > 0 && flights.some(f => (f.paradas ?? 0) > 0)) {
@@ -1543,7 +1553,8 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 console.log('[GFlights] priceGraph erro:', e.message?.slice(0, 80));
                 return null;
             });
-            if (priceGraph) console.log(`[GFlights] priceGraph: ${priceGraph.bars?.length ?? 0} barras, qualidade=${priceGraph.searchDateQuality}`);
+            if (priceGraph) console.log(`[GFlights] priceGraph: ${priceGraph.bars?.length ?? 0} barras, pageQuality=${priceGraph.pageQuality}`);
+            else console.log('[GFlights] priceGraph: não encontrado (botão não clicou ou sem dados)');
 
             await context.close();
             return { flights, priceGraph };
@@ -1876,6 +1887,7 @@ async function scrapePriceGraph(page, origin, destination) {
         return false;
     }).catch(() => false);
 
+    console.log(`[priceGraph] botão clicado=${clicked}`);
     await new Promise(r => setTimeout(r, clicked ? 900 : 500));
 
     // Scroll para revelar o gráfico caso não esteja visível
@@ -1884,10 +1896,22 @@ async function scrapePriceGraph(page, origin, destination) {
 
     const graph = await page.evaluate(() => {
         const PT_MONTHS = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+        const PT_MONTHS_ABBREV = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 
         function parsePtDate(label) {
+            // Full month: "15 de março" / "15 de março de 2026"
             for (let m = 0; m < PT_MONTHS.length; m++) {
                 const re = new RegExp(`(\\d{1,2})\\s+de\\s+${PT_MONTHS[m]}(?:\\s+de\\s+(\\d{4}))?`, 'i');
+                const match = label.match(re);
+                if (match) {
+                    const day = parseInt(match[1], 10);
+                    const year = match[2] ? parseInt(match[2], 10) : new Date().getFullYear();
+                    return `${year}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                }
+            }
+            // Abbreviated: "15 mai" / "1 jan" / "15 mai 2026"
+            for (let m = 0; m < PT_MONTHS_ABBREV.length; m++) {
+                const re = new RegExp(`(\\d{1,2})\\s+${PT_MONTHS_ABBREV[m]}(?:\\s+(\\d{4}))?(?=[^a-z]|$)`, 'i');
                 const match = label.match(re);
                 if (match) {
                     const day = parseInt(match[1], 10);
@@ -1899,11 +1923,12 @@ async function scrapePriceGraph(page, origin, destination) {
         }
 
         function parsePrice(label) {
-            // "R$1.234" / "R$ 1.234" / "1.234 Reais brasileiros"
-            const m1 = label.match(/R\$\s*([\d.]+)/);
-            if (m1) return parseInt(m1[1].replace(/\./g, ''), 10);
-            const m2 = label.match(/([\d.]+)\s*Reais/i);
-            if (m2) return parseInt(m2[1].replace(/\./g, ''), 10);
+            // Handles: "R$ 2.276", "R$ 2 276", "R$2276", "2.276 Reais", "2 276 Reais"
+            // Both dot and space are used as thousands separators in PT-BR
+            const m1 = label.match(/R\$\s*([\d][\d\s.]*)/);
+            if (m1) return parseInt(m1[1].replace(/[\s.]/g, ''), 10) || 0;
+            const m2 = label.match(/([\d][\d\s.]*)\s*Reais/i);
+            if (m2) return parseInt(m2[1].replace(/[\s.]/g, ''), 10) || 0;
             return 0;
         }
 
@@ -1916,8 +1941,11 @@ async function scrapePriceGraph(page, origin, destination) {
         // Tenta múltiplos seletores: barras SVG, buttons, e qualquer elemento com preço+data
         const candidates = [
             ...document.querySelectorAll('g[aria-label]'),
+            ...document.querySelectorAll('rect[aria-label]'),
             ...document.querySelectorAll('button[aria-label]'),
             ...document.querySelectorAll('[role="button"][aria-label]'),
+            ...document.querySelectorAll('li[aria-label]'),
+            ...document.querySelectorAll('td[aria-label]'),
         ];
 
         const bars = [];
@@ -1925,9 +1953,9 @@ async function scrapePriceGraph(page, origin, destination) {
         for (const el of candidates) {
             const label = el.getAttribute('aria-label') ?? '';
             if (!label) continue;
-            // Precisa ter preço E data em português
+            // Precisa ter preço E data em português (full: "15 de março" ou abreviado: "15 mai")
             if (!/R\$|Reais/i.test(label)) continue;
-            if (!/\d{1,2}\s+de\s+/i.test(label)) continue;
+            if (!/\d{1,2}\s+(?:de\s+|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/i.test(label)) continue;
 
             const date = parsePtDate(label);
             const price = parsePrice(label);
@@ -1952,7 +1980,10 @@ async function scrapePriceGraph(page, origin, destination) {
         return { bars, pageQuality };
     });
 
-    if (!graph || graph.bars.length === 0) return null;
+    console.log(`[priceGraph] candidatos escaneados → bars=${graph?.bars?.length ?? 0}, pageQuality=${graph?.pageQuality ?? 'null'}`);
+    if (!graph) return null;
+    // Return even with 0 bars if we have a pageQuality badge (shows price trend indicator)
+    if (graph.bars.length === 0 && !graph.pageQuality) return null;
     return graph;
 }
 
