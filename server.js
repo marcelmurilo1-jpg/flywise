@@ -1541,20 +1541,22 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 ));
             }
 
-            // Expande voos com conexão para extrair segmentos detalhados
-            if (flights.length > 0 && flights.some(f => (f.paradas ?? 0) > 0)) {
-                await expandFlightDetails(page, flights).catch(e =>
-                    console.log('[GFlights] expandFlightDetails error:', e.message?.slice(0, 80))
-                );
-            }
-
-            // Extrai o gráfico de preços do Google Flights (preços por data + qualidade)
+            // Extrai o gráfico de preços ANTES de expandir cards (página em estado inicial)
+            await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+            await new Promise(r => setTimeout(r, 300));
             const priceGraph = await scrapePriceGraph(page, origin, destination).catch(e => {
                 console.log('[GFlights] priceGraph erro:', e.message?.slice(0, 80));
                 return null;
             });
             if (priceGraph) console.log(`[GFlights] priceGraph: ${priceGraph.bars?.length ?? 0} barras, pageQuality=${priceGraph.pageQuality}`);
             else console.log('[GFlights] priceGraph: não encontrado (botão não clicou ou sem dados)');
+
+            // Expande voos com conexão para extrair segmentos detalhados
+            if (flights.length > 0 && flights.some(f => (f.paradas ?? 0) > 0)) {
+                await expandFlightDetails(page, flights).catch(e =>
+                    console.log('[GFlights] expandFlightDetails error:', e.message?.slice(0, 80))
+                );
+            }
 
             await context.close();
             return { flights, priceGraph };

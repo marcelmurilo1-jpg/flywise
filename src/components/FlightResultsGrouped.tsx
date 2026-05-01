@@ -54,9 +54,6 @@ function extractIata(companhia?: string | null): string {
 }
 
 // ── Google Flights tfs protobuf builder ───────────────────────────────────────
-// Google Flights usa ?tfs= com protobuf binário em base64url.
-// Ida e volta são field 3 repetido no proto raiz.
-
 function _gfVarint(buf: number[], val: number) {
     while (val > 0x7F) { buf.push((val & 0x7F) | 0x80); val >>>= 7 }
     buf.push(val & 0x7F)
@@ -81,8 +78,6 @@ interface _GfSeg { from: string; to: string; date: string; carrier?: string; fli
 function _buildGfSegProto(seg: _GfSeg): number[] {
     const b: number[] = []
     _gfStr(b, 1, seg.from); _gfStr(b, 2, seg.date); _gfStr(b, 3, seg.to)
-    // Não incluímos carrier/flightNum: com eles o Google tenta reserva direta
-    // e retorna "itinerário não disponível". Sem eles abre a busca pré-preenchida.
     return b
 }
 
@@ -106,9 +101,7 @@ function _segsFromOffer(rawSegs: any[], flightNums: string[], from: string, to: 
     if (rawSegs.length > 0) {
         return rawSegs.map((s: any, i: number) => {
             const num = s.numero || flightNums[i] || ''
-            // FIX: segmentos intermediários usam o destino do segmento anterior como origem
             const fallbackFrom = i === 0 ? from : (rawSegs[i - 1]?.destino || '').toUpperCase()
-            // FIX: usa a data de partida do próprio segmento para lidar com conexões overnight
             const segDate = s.partida?.split('T')[0] || date
             return {
                 from: (s.origem || fallbackFrom).toUpperCase(),
@@ -138,7 +131,6 @@ function _buildTfsUrl(outSegs: _GfSeg[], retSegs?: _GfSeg[], adults = 1): string
     return `https://www.google.com/travel/flights?tfs=${b64}&hl=pt-BR&gl=BR&curr=BRL`
 }
 
-// Fallback: URL simples que sempre funciona, sem depender do protobuf
 function _buildSimpleGoogleFlightsUrl(o: string, d: string, date: string, retDate?: string): string {
     let q = `Flights from ${o} to ${d} on ${date}`
     if (retDate) q += ` returning ${retDate}`
@@ -214,7 +206,6 @@ function FlightLeg({
 function FlightDetails({ flight, det, segsOut, layoverCity }: {
     flight: ResultadoVoo; det: any; segsOut: any[]; layoverCity: string
 }) {
-    // Amadeus: full per-segment data
     if (segsOut.length > 0) {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -266,21 +257,17 @@ function FlightDetails({ flight, det, segsOut, layoverCity }: {
         )
     }
 
-    // Google Flights: build timeline from available data
+    // Google Flights: build timeline from layover data
     const dep = formatTime(flight.partida)
     const arr = formatTime(flight.chegada)
     const paradas = det.paradas ?? 0
     const layoverDurs: number[] = det.layoverDurations ?? []
     const flightNums: string[] = det.numeroVoos ?? []
     const aircrafts: string[] = det.aeronaves ?? []
-
-    // Build virtual "points" for the timeline
-    // Each layoverCity may be "BOG" or "BOG · MIA" (multi-stop)
     const stopCities = layoverCity ? layoverCity.split(' · ') : Array(paradas).fill('')
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {/* Departure */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0' }}>
                 <div style={{ minWidth: 40, textAlign: 'right' }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: '#0E2A55' }}>{dep}</div>
@@ -301,7 +288,6 @@ function FlightDetails({ flight, det, segsOut, layoverCity }: {
                 </div>
             </div>
 
-            {/* Layover banners */}
             {stopCities.map((city, si) => (
                 <div key={si}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0 5px 58px', borderTop: '1px dashed #E2EAF5', borderBottom: '1px dashed #E2EAF5', margin: '2px 0' }}>
@@ -309,7 +295,6 @@ function FlightDetails({ flight, det, segsOut, layoverCity }: {
                             {city ? `Conexão em ${city}` : `Conexão ${si + 1}`}{layoverDurs[si] ? ` · ${formatDur(layoverDurs[si])}` : ''}
                         </span>
                     </div>
-                    {/* Next leg info between stops */}
                     {si < stopCities.length - 1 && flightNums[si + 1] && (
                         <div style={{ padding: '4px 0 4px 58px', fontSize: 10, color: '#94A3B8' }}>
                             {[flightNums[si + 1], aircrafts[si + 1]].filter(Boolean).join(' · ')}
@@ -318,7 +303,6 @@ function FlightDetails({ flight, det, segsOut, layoverCity }: {
                 </div>
             ))}
 
-            {/* Arrival */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0' }}>
                 <div style={{ minWidth: 40, textAlign: 'right' }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: '#0E2A55' }}>{arr}</div>
@@ -339,7 +323,7 @@ function FlightDetails({ flight, det, segsOut, layoverCity }: {
     )
 }
 
-// ── FlightCard — module-level component (prevents re-mount flash) ──────────────
+// ── FlightCard ─────────────────────────────────────────────────────────────────
 interface FlightCardProps {
     flight: ResultadoVoo
     idx: number
@@ -354,13 +338,14 @@ interface FlightCardProps {
     hasInboundFlights: boolean
     sortBy?: string
     onMonitorar?: (flight: ResultadoVoo) => void
+    gfUrl?: string  // compact "Ver no Google Flights" link in footer (undefined = hidden)
 }
 
 function FlightCard({
     flight, idx, isReturn = false, isPinned = false,
     isExpanded, onToggleExpand,
     canSelect, isSelected, onSelect, onClear,
-    hasInboundFlights, sortBy, onMonitorar,
+    hasInboundFlights, sortBy, onMonitorar, gfUrl,
 }: FlightCardProps) {
     const det = (flight.detalhes as any) ?? {}
     const segsOut = (flight.segmentos as any[]) ?? []
@@ -368,7 +353,8 @@ function FlightCard({
     const iata = det.carrierCode || extractIata(flight.companhia)
     const showReturn = hasReturn && !hasInboundFlights
     const layoverCity = det.layoverCity || ''
-    const connectionStr = layoverCity || stopCodes(segsOut)
+    // Prefer segment-derived connection codes over scraper layoverCity for accuracy
+    const connectionStr = stopCodes(segsOut) || layoverCity
 
     const airlineName = flight.companhia && !flight.companhia.startsWith('Companhia')
         ? flight.companhia
@@ -515,35 +501,34 @@ function FlightCard({
                 )}
             </AnimatePresence>
 
-            {/* Expand toggle */}
-            <button
-                onClick={onToggleExpand}
-                style={{
-                    width: '100%', background: 'none', border: 'none', borderTop: '1px solid #F1F5F9',
-                    padding: '7px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                    cursor: 'pointer', color: '#64748B', fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
-                }}
-            >
-                {isExpanded ? <><ChevronUp size={13} /> Ocultar detalhes</> : <><ChevronDown size={13} /> Ver detalhes do voo</>}
-            </button>
-
-            {/* Botão Google Flights — apenas busca só-ida (sem volta disponível) */}
-            {!hasInboundFlights && (
-                <a
-                    href={buildGoogleFlightsUrl(flight)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+            {/* Footer: expand toggle + compact Google Flights link */}
+            <div style={{ display: 'flex', alignItems: 'center', borderTop: '1px solid #F1F5F9' }}>
+                <button
+                    onClick={onToggleExpand}
                     style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        padding: '11px 20px', background: '#1A56DB',
-                        fontSize: 12, fontWeight: 700, color: '#fff', textDecoration: 'none',
-                        borderTop: '1px solid #1449C4',
-                        transition: 'background 0.15s',
+                        flex: 1, background: 'none', border: 'none',
+                        padding: '7px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                        cursor: 'pointer', color: '#64748B', fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
                     }}
                 >
-                    <ExternalLink size={13} /> Buscar no Google Flights
-                </a>
-            )}
+                    {isExpanded ? <><ChevronUp size={13} /> Ocultar detalhes</> : <><ChevronDown size={13} /> Ver detalhes</>}
+                </button>
+                {gfUrl && (
+                    <a
+                        href={gfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: 4,
+                            padding: '7px 14px', borderLeft: '1px solid #F1F5F9',
+                            fontSize: 11, fontWeight: 600, color: '#1A56DB', textDecoration: 'none',
+                            whiteSpace: 'nowrap' as const,
+                        }}
+                    >
+                        <ExternalLink size={11} /> Ver no Google Flights
+                    </a>
+                )}
+            </div>
         </motion.div>
     )
 }
@@ -551,8 +536,9 @@ function FlightCard({
 // ── Main export ────────────────────────────────────────────────────────────────
 export function FlightResultsGrouped({
     flights, inboundFlights = [], searchInfo, onNewSearch, sidebarFilters,
+    returnDate,
     cashIdaSel, onSelectCashIda, cashVoltaSel, onSelectCashVolta, onMonitorar,
-}: Omit<FlightResultsGroupedProps, 'buscaId' | 'returnDate'> & { buscaId?: number; returnDate?: string }) {
+}: Omit<FlightResultsGroupedProps, 'buscaId'> & { buscaId?: number }) {
     const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({})
 
     function toggleExpand(id: string) {
@@ -601,9 +587,9 @@ export function FlightResultsGrouped({
     )
 
     const hasInbound = inboundFlights.length > 0
+    const isRoundTrip = !!(returnDate)
     const canSelect = !!(onSelectCashIda || onSelectCashVolta)
 
-    // Phase logic (only when selection is enabled)
     const cashPhase = !canSelect ? 'display'
         : !cashIdaSel ? 'ida'
         : (hasInbound && !cashVoltaSel) ? 'volta'
@@ -612,11 +598,11 @@ export function FlightResultsGrouped({
     const cashTotal = (() => {
         if (!cashIdaSel) return null
         const det = (cashIdaSel.detalhes as any) ?? {}
-        // Combined Amadeus offer or Google round-trip total → price already covers both legs
         if (det.returnPartida || det.isRoundtripTotal) return cashIdaSel.preco_brl ?? 0
         return (cashIdaSel.preco_brl ?? 0) + (cashVoltaSel ? (cashVoltaSel.preco_brl ?? 0) : 0)
     })()
 
+    const passageiros = searchInfo?.passageiros ?? 1
     const labelMap: Record<string, string> = { best: 'melhor custo-benefício', price: 'menor preço', duration: 'menor duração' }
 
     return (
@@ -656,37 +642,36 @@ export function FlightResultsGrouped({
             {/* ── Summary phase ─────────────────────────────────────────────── */}
             {cashPhase === 'summary' && cashIdaSel && (
                 <>
+                    {/* Total price bar */}
                     <div style={{ background: '#0E2A55', borderRadius: 12, padding: '12px 18px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                         <div>
                             <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
-                                {cashVoltaSel ? 'Ida + Volta' : 'Ida selecionada'}
+                                {cashVoltaSel ? 'Ida + Volta selecionadas' : 'Ida selecionada'}
                             </div>
                             <div style={{ fontSize: 20, fontWeight: 900, color: '#fff' }}>
                                 R$ {cashTotal?.toLocaleString('pt-BR')}
                             </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
-                            <a
-                                href={buildGoogleFlightsUrl(cashIdaSel, cashVoltaSel, searchInfo?.passageiros ?? 1)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                                    background: '#1D6AE5', border: 'none', borderRadius: 8,
-                                    padding: '6px 12px', fontSize: 11, fontWeight: 700,
-                                    color: '#fff', cursor: 'pointer', textDecoration: 'none',
-                                }}
-                            >
-                                <ExternalLink size={11} /> Ver no Google Flights
-                            </a>
-                            <button
-                                onClick={() => { onSelectCashIda?.(null); onSelectCashVolta?.(null) }}
-                                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontFamily: 'inherit' }}
-                            >
-                                ← Escolher novamente
-                            </button>
-                        </div>
+                        <button
+                            onClick={() => { onSelectCashIda?.(null); onSelectCashVolta?.(null) }}
+                            style={{ background: 'none', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontFamily: 'inherit' }}
+                        >
+                            ← Escolher novamente
+                        </button>
                     </div>
+
+                    {/* Warning: round-trip with no return flights found */}
+                    {isRoundTrip && !hasInbound && !cashVoltaSel && (
+                        <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '10px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ fontSize: 13 }}>⚠️</span>
+                            <div style={{ flex: 1 }}>
+                                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#92400E' }}>Voos de volta não encontrados</p>
+                                <p style={{ margin: 0, fontSize: 11, color: '#B45309' }}>Busque a volta diretamente no Google Flights.</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Pinned outbound — with GF link in footer */}
                     <FlightCard
                         flight={cashIdaSel} idx={0} isReturn={false} isPinned
                         isExpanded={!!expandedCards[cashIdaSel.flight_key ?? 'sel-ida']}
@@ -694,6 +679,7 @@ export function FlightResultsGrouped({
                         canSelect={false} isSelected onSelect={() => {}}
                         onClear={() => { onSelectCashIda?.(null); onSelectCashVolta?.(null) }}
                         hasInboundFlights={hasInbound}
+                        gfUrl={buildGoogleFlightsUrl(cashIdaSel, cashVoltaSel, passageiros)}
                     />
                     {cashVoltaSel && (
                         <FlightCard
@@ -756,6 +742,9 @@ export function FlightResultsGrouped({
                             hasInboundFlights={hasInbound}
                             sortBy={sidebarFilters?.sortBy}
                             onMonitorar={onMonitorar}
+                            // One-way searches: compact GF link on each card
+                            // Round-trip: no GF link until both are selected (shown in summary)
+                            gfUrl={!isRoundTrip ? buildGoogleFlightsUrl(flight, undefined, passageiros) : undefined}
                         />
                     ))}
                 </AnimatePresence>
