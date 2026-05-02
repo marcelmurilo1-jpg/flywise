@@ -42,20 +42,10 @@ export interface Airport {
     label: string
 }
 
-/** Busca aeroportos via proxy do servidor (sem expor credenciais no frontend) */
+import { searchAirportsLocal } from './airports'
+
 export async function searchAirports(keyword: string): Promise<Airport[]> {
-    if (!keyword || keyword.trim().length < 2) return []
-    const url = `${API_BASE}/api/amadeus/airports?` + new URLSearchParams({ keyword: keyword.trim() })
-    const res = await fetch(url).catch(() => null)
-    if (!res || !res.ok) return []
-    const data = await res.json()
-    return (data.data ?? []).map((loc: any): Airport => ({
-        iataCode: loc.iataCode,
-        name: loc.name,
-        cityName: loc.address?.cityName ?? '',
-        countryCode: loc.address?.countryCode ?? '',
-        label: `${loc.address?.cityName ?? loc.name} (${loc.iataCode}) — ${loc.address?.countryCode ?? ''}`,
-    }))
+    return searchAirportsLocal(keyword)
 }
 
 // ─── Flight search ────────────────────────────────────────────────────────────

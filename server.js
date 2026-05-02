@@ -844,41 +844,6 @@ async function getAmadeusToken() {
     return _amadeusToken;
 }
 
-// Cache de aeroportos: evita repetir chamadas à Amadeus (rate limit 429)
-const _airportCache = new Map(); // keyword → { data, expiresAt }
-const AIRPORT_CACHE_TTL_MS = 15 * 60 * 1000; // 15 min
-
-app.get('/api/amadeus/airports', async (req, res) => {
-    const keyword = (req.query.keyword ?? '').trim().toLowerCase();
-    const cached = _airportCache.get(keyword);
-    if (cached && cached.expiresAt > Date.now()) {
-        return res.json(cached.data);
-    }
-    try {
-        const token = await getAmadeusToken();
-        const params = new URLSearchParams({
-            keyword: req.query.keyword ?? '',
-            subType: 'AIRPORT',
-            'page[limit]': '6',
-            sort: 'analytics.travelers.score',
-            view: 'LIGHT',
-        });
-        const r = await fetch(`${AMADEUS_BASE}/v1/reference-data/locations?${params}`, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await r.json();
-        if (r.ok) {
-            if (_airportCache.size >= 500) _airportCache.delete(_airportCache.keys().next().value);
-            _airportCache.set(keyword, { data, expiresAt: Date.now() + AIRPORT_CACHE_TTL_MS });
-        } else {
-            console.error('[Amadeus] airports API error:', r.status, JSON.stringify(data).slice(0, 300));
-        }
-        res.status(r.ok ? 200 : r.status).json(data);
-    } catch (err) {
-        console.error('[Amadeus] airports error:', err.message);
-        res.status(500).json({ errors: [{ detail: err.message }] });
-    }
-});
 
 // ─── Google Flights Scraper ───────────────────────────────────────────────────
 // Navegador compartilhado: criado uma vez, reutilizado em todas as requisições.
@@ -4100,7 +4065,6 @@ if (process.env.VERCEL !== '1') {
         console.log(`\n======================================================`);
         console.log(`Servidor FlyWise Backend rodando na porta ${PORT}`);
         console.log(`POST http://localhost:${PORT}/api/search-flights   (Seats.aero)`);
-        console.log(`GET  http://localhost:${PORT}/api/amadeus/airports  (Amadeus)`);
         console.log(`GET  http://localhost:${PORT}/api/amadeus/flights   (Google Flights scraper)`);
         console.log(`======================================================\n`);
         // Inicia instalação do Chromium em background (não bloqueia o servidor)
