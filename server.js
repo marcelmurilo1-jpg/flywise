@@ -2854,19 +2854,17 @@ async function checkAndExpirePromotions(promotions) {
 }
 
 const TRANSFER_SOURCES = [
-    // Programas aéreos — páginas de transferência de pontos
-    { id: 'smiles_transfer', url: 'https://www.smiles.com.br/acumule-milhas/transferencia-de-pontos', label: 'Smiles — Transferência de Pontos' },
-    { id: 'smiles_clube', url: 'https://www.smiles.com.br/clube-smiles', label: 'Clube Smiles — Planos e preços' },
-    { id: 'tudoazul_transfer', url: 'https://tudoazul.voeazul.com.br/acumule/transferencia-de-pontos', label: 'TudoAzul — Transferência de Pontos' },
-    { id: 'clube_azul', url: 'https://www.voeazul.com.br/clube-azul-fidelidade', label: 'Clube Azul Fidelidade — Planos' },
-    { id: 'latam_transfer', url: 'https://latampass.latam.com/pt_br/junte-milhas/transfira-pontos', label: 'LATAM Pass — Transferência de Pontos' },
-    { id: 'livelo_transfer', url: 'https://www.livelo.com.br/transferencia-de-pontos', label: 'Livelo — Transferência de Pontos' },
-    // Bancos/cartões — páginas de parcerias
-    { id: 'inter_loop', url: 'https://inter.co/inter-loop', label: 'Inter Loop — Transferências e bônus' },
-    { id: 'nubank_rewards', url: 'https://nubank.com.br/rewards', label: 'Nubank Rewards — Parceiros' },
-    // RSS blogs de referência (atualizados em horas após novas campanhas)
+    // RSS blogs especializados — fonte mais confiável (atualizados em horas após novas campanhas)
     { id: 'rss_pprimeira', url: 'https://www.passageirodeprimeira.com.br/feed', label: 'RSS Passageiro de Primeira' },
+    { id: 'rss_pprimeira_milhas', url: 'https://www.passageirodeprimeira.com.br/category/milhas/feed', label: 'RSS PdP — Milhas' },
+    { id: 'rss_pprimeira_bonus', url: 'https://www.passageirodeprimeira.com.br/category/bonus-de-transferencia/feed', label: 'RSS PdP — Bônus de Transferência' },
     { id: 'rss_melhores', url: 'https://www.melhores-destinos.com.br/feed', label: 'RSS Melhores Destinos' },
+    { id: 'rss_voando', url: 'https://www.voandonasnuvens.com.br/feed', label: 'RSS Voando nas Nuvens' },
+    // Páginas de programas (best-effort com Playwright — podem requerer login ou ter bot-detect)
+    { id: 'smiles_transfer', url: 'https://www.smiles.com.br/acumule-milhas/transferencia-de-pontos', label: 'Smiles — Transferência de Pontos' },
+    { id: 'tudoazul_transfer', url: 'https://tudoazul.voeazul.com.br/acumule/transferencia-de-pontos', label: 'TudoAzul — Transferência de Pontos' },
+    { id: 'latam_transfer', url: 'https://latampass.latam.com/pt_br/junte-milhas/transfira-pontos', label: 'LATAM Pass — Transferência de Pontos' },
+    { id: 'inter_loop', url: 'https://inter.co/inter-loop', label: 'Inter Loop — Transferências e bônus' },
 ];
 
 async function scrapeTransferSource(source) {
@@ -2874,25 +2872,34 @@ async function scrapeTransferSource(source) {
         // RSS e páginas simples: fetch direto (sem JS)
         if (source.id.startsWith('rss_') || source.url.includes('feed')) {
             const res = await fetch(source.url, {
-                headers: { 'User-Agent': 'FlyWise-Bot/1.0' },
+                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FlyWise-Bot/1.0)' },
                 signal: AbortSignal.timeout(15000),
             });
             if (!res.ok) return null;
             const text = await res.text();
 
+            // Extrai títulos dos artigos (contêm "XX% de bônus" diretamente)
+            const titles = [];
+            const titleRe = /<title>([\s\S]*?)<\/title>/gi;
+            let tm;
+            while ((tm = titleRe.exec(text)) !== null) titles.push(tm[1]);
+
             // Desencapsula CDATA, decodifica entidades e remove tags XML
             const stripped = text
                 .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
                 .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-                .replace(/&quot;/g, '"').replace(/&#\d+;/g, '')
+                .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#\d+;/g, '')
                 .replace(/<[^>]+>/g, ' ')
                 .replace(/\s+/g, ' ');
 
-            // Filtra sentenças com palavras-chave relevantes
-            const keywords = ['bônus', 'bonus', 'transferência', 'transfer', 'smiles', 'tudoazul', 'latam', 'livelo', 'inter', 'clube', 'promo'];
-            const sentences = stripped.split(/(?<=[.!?])\s+/);
+            // Filtra sentenças com palavras-chave de promoções de transferência
+            const keywords = ['bônus', 'bonus', '%', 'transferên', 'transfer', 'smiles', 'tudoazul', 'latam', 'livelo', 'inter', 'clube', 'promo', 'nubank', 'iupp', 'esfera', 'itaú', 'btg', 'caixa'];
+            const sentences = stripped.split(/[.!?]\s+/);
             const relevant = sentences.filter(s => keywords.some(k => s.toLowerCase().includes(k)));
-            return { id: source.id, label: source.label, content: relevant.slice(0, 60).join(' ') };
+
+            const titlesText = titles.slice(1, 30).join('\n'); // skip feed title (index 0)
+            const bodyText = relevant.slice(0, 200).join('. ');
+            return { id: source.id, label: source.label, content: `TÍTULOS:\n${titlesText}\n\nCONTEÚDO:\n${bodyText}` };
         }
 
         // Páginas com JS (programas/bancos): reutiliza browser compartilhado via contexto isolado
@@ -2969,7 +2976,7 @@ Analise cuidadosamente e retorne um JSON com as promoções de transferência at
 5. rules — array de strings com regras importantes (inclua datas de encerramento quando explícitas)
 6. description — descrição resumida
 7. isPeriodic — true se é campanha periódica, false se é permanente
-8. lastConfirmed — "Mar/2026" (mês atual)
+8. lastConfirmed — "${new Date().toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace(/\./g, '').replace(/^(.)/, c => c.toUpperCase())}" (mês atual da sincronização)
 
 REGRAS IMPORTANTES:
 - Se uma informação não foi encontrada nas páginas, mantenha o valor atual do banco
@@ -4041,10 +4048,14 @@ app.post('/api/admin/generate-post', requireAdminJWT, async (req, res) => {
 // Localmente: inicia o servidor Express normalmente.
 // Na Vercel: o arquivo é importado como módulo serverless — app.listen não é chamado.
 if (process.env.VERCEL !== '1') {
-    // ── Crons removidos do servidor — agora disparados via GitHub Actions ────────
-    // syncAwardPrices  → .github/workflows/sync-award-prices.yml  (toda segunda, 07h UTC)
-    // syncTransferData → .github/workflows/sync-transfer-data.yml (diário, 14h UTC)
-    // Isso permite ativar Railway Sleep on Idle sem perder nenhuma execução agendada.
+    // ── syncAwardPrices  → .github/workflows/sync-award-prices.yml (toda segunda, 07h UTC)
+    // ── syncTransferData → cron interno abaixo + GitHub Actions como fallback
+
+    // Sync diário de promoções de transferência — 11h BRT (14h UTC)
+    cron.schedule('0 14 * * *', () => {
+        console.log('[TransferSync] Cron diário disparado (14h UTC)');
+        syncTransferData().catch(err => console.error('[TransferSync] Cron error:', err.message));
+    }, { timezone: 'UTC' });
 
     // A cada 5 minutos: fecha browser Playwright ocioso para liberar memória
     setInterval(async () => {
@@ -4069,8 +4080,24 @@ if (process.env.VERCEL !== '1') {
         console.log(`======================================================\n`);
         // Inicia instalação do Chromium em background (não bloqueia o servidor)
         if (!_chromiumReady) ensureChromium();
-        // Seed automático de promoções de transferência (se tabela vazia)
+        // Carrega cache de promoções e verifica se precisa de sync
         refreshPromotionsCache().catch(console.error);
+        // Sync de transferência se não rodou nas últimas 23h
+        if (supabase) {
+            supabase.from('transfer_sync_log')
+                .select('synced_at').order('synced_at', { ascending: false }).limit(1)
+                .then(({ data }) => {
+                    const lastAt = data?.[0]?.synced_at;
+                    const hoursAgo = lastAt ? (Date.now() - new Date(lastAt).getTime()) / 3600000 : Infinity;
+                    if (hoursAgo > 23) {
+                        console.log(`[TransferSync] Último sync há ${Math.round(hoursAgo)}h — disparando agora...`);
+                        setTimeout(() => syncTransferData().catch(err => console.error('[TransferSync] Startup sync error:', err.message)), 30000);
+                    } else {
+                        console.log(`[TransferSync] Último sync há ${Math.round(hoursAgo)}h — OK`);
+                    }
+                })
+                .catch(() => {});
+        }
     });
 }
 
