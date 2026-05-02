@@ -2854,17 +2854,12 @@ async function checkAndExpirePromotions(promotions) {
 }
 
 const TRANSFER_SOURCES = [
-    // RSS blogs especializados — fonte mais confiável (atualizados em horas após novas campanhas)
+    // RSS apenas — sem Playwright para não competir com o scraper de voos
     { id: 'rss_pprimeira', url: 'https://www.passageirodeprimeira.com.br/feed', label: 'RSS Passageiro de Primeira' },
     { id: 'rss_pprimeira_milhas', url: 'https://www.passageirodeprimeira.com.br/category/milhas/feed', label: 'RSS PdP — Milhas' },
     { id: 'rss_pprimeira_bonus', url: 'https://www.passageirodeprimeira.com.br/category/bonus-de-transferencia/feed', label: 'RSS PdP — Bônus de Transferência' },
     { id: 'rss_melhores', url: 'https://www.melhores-destinos.com.br/feed', label: 'RSS Melhores Destinos' },
     { id: 'rss_voando', url: 'https://www.voandonasnuvens.com.br/feed', label: 'RSS Voando nas Nuvens' },
-    // Páginas de programas (best-effort com Playwright — podem requerer login ou ter bot-detect)
-    { id: 'smiles_transfer', url: 'https://www.smiles.com.br/acumule-milhas/transferencia-de-pontos', label: 'Smiles — Transferência de Pontos' },
-    { id: 'tudoazul_transfer', url: 'https://tudoazul.voeazul.com.br/acumule/transferencia-de-pontos', label: 'TudoAzul — Transferência de Pontos' },
-    { id: 'latam_transfer', url: 'https://latampass.latam.com/pt_br/junte-milhas/transfira-pontos', label: 'LATAM Pass — Transferência de Pontos' },
-    { id: 'inter_loop', url: 'https://inter.co/inter-loop', label: 'Inter Loop — Transferências e bônus' },
 ];
 
 async function scrapeTransferSource(source) {
@@ -4090,8 +4085,8 @@ if (process.env.VERCEL !== '1') {
                     const lastAt = data?.[0]?.synced_at;
                     const hoursAgo = lastAt ? (Date.now() - new Date(lastAt).getTime()) / 3600000 : Infinity;
                     if (hoursAgo > 23) {
-                        console.log(`[TransferSync] Último sync há ${Math.round(hoursAgo)}h — disparando agora...`);
-                        setTimeout(() => syncTransferData().catch(err => console.error('[TransferSync] Startup sync error:', err.message)), 30000);
+                        console.log(`[TransferSync] Último sync há ${Math.round(hoursAgo)}h — agendando em 5min...`);
+                        setTimeout(() => syncTransferData().catch(err => console.error('[TransferSync] Startup sync error:', err.message)), 5 * 60 * 1000);
                     } else {
                         console.log(`[TransferSync] Último sync há ${Math.round(hoursAgo)}h — OK`);
                     }
