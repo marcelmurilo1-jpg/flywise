@@ -575,7 +575,20 @@ export default function TransferSimulator({ activeClubs, activeClubTiers, active
                                 <Trophy size={16} color="#16A34A" style={{ flexShrink: 0, marginTop: 2 }} />
                                 <div style={{ fontSize: 12, color: '#14532D', lineHeight: 1.6 }}>
                                     <b style={{ color: '#16A34A' }}>Campanha periódica:</b>{' '}{promo.description}<br />
-                                    <span style={{ color: '#16803D', fontWeight: 600 }}>Última confirmação: {promo.lastConfirmed}</span>
+                                    {(() => {
+                                        const months = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez']
+                                        const [mon, yr] = (promo.lastConfirmed ?? '').toLowerCase().split('/')
+                                        const mi = months.findIndex(m => mon?.startsWith(m))
+                                        const confirmedDate = mi >= 0 && yr ? new Date(parseInt('20' + yr.trim()), mi, 1) : null
+                                        const stale = !confirmedDate || (Date.now() - confirmedDate.getTime()) > 45 * 24 * 60 * 60 * 1000
+                                        return stale ? (
+                                            <span style={{ color: '#D97706', fontWeight: 600 }}>
+                                                ⚠ Dados de {promo.lastConfirmed ?? '?'} — confirme bônus atual em {promo.registrationUrl ? <a href={promo.registrationUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#D97706' }}>site oficial</a> : 'site oficial'}
+                                            </span>
+                                        ) : (
+                                            <span style={{ color: '#16803D', fontWeight: 600 }}>Última confirmação: {promo.lastConfirmed}</span>
+                                        )
+                                    })()}
                                     {' · '}
                                     <span style={{ color: '#15803D' }}>{promo.validUntil}</span>
                                     {livePromos && (

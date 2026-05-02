@@ -52,6 +52,7 @@ interface AdminUser {
 
 interface TransferPromo {
     id: number; card_id: string; program: string; bonus_percent: number
+    club_bonus_percent: number; club_tier_bonuses: Record<string, number>
     valid_until: string; active: boolean; last_confirmed: string | null; is_periodic: boolean
 }
 
@@ -832,18 +833,111 @@ function AddCostModal({ token, defaultMonth, onClose, onSaved }: {
 
 // ─── Promoções ────────────────────────────────────────────────────────────────
 
+function EditPromoModal({ promo, token, onClose, onSaved }: {
+    promo: TransferPromo; token: string
+    onClose: () => void; onSaved: (updated: TransferPromo) => void
+}) {
+    const [bonusPercent, setBonusPercent] = useState(String(promo.bonus_percent))
+    const [clubBonusPercent, setClubBonusPercent] = useState(String(promo.club_bonus_percent ?? 0))
+    const [tierJson, setTierJson] = useState(JSON.stringify(promo.club_tier_bonuses ?? {}, null, 2))
+    const [lastConfirmed, setLastConfirmed] = useState(promo.last_confirmed ?? '')
+    const [validUntil, setValidUntil] = useState(promo.valid_until ?? '')
+    const [saving, setSaving] = useState(false)
+    const [err, setErr] = useState<string | null>(null)
+
+    async function save() {
+        setSaving(true); setErr(null)
+        try {
+            let tierBonuses: Record<string, number>
+            try { tierBonuses = JSON.parse(tierJson) }
+            catch { throw new Error('JSON dos planos inválido') }
+
+            const updates = {
+                bonus_percent: parseInt(bonusPercent) || 0,
+                club_bonus_percent: parseInt(clubBonusPercent) || 0,
+                club_tier_bonuses: tierBonuses,
+                last_confirmed: lastConfirmed,
+                valid_until: validUntil,
+                updated_at: new Date().toISOString(),
+            }
+            const { error: supaErr } = await supabase.from('transfer_promotions').update(updates).eq('id', promo.id)
+            if (supaErr) throw new Error(supaErr.message)
+            // Invalida cache no servidor
+            await adminFetch('/api/transfer-promotions/update', token, { method: 'POST' }).catch(() => null)
+            onSaved({ ...promo, ...updates })
+        } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Erro') }
+        finally { setSaving(false) }
+    }
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+            onClick={e => e.target === e.currentTarget && onClose()}>
+            <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 16, padding: 24, width: '100%', maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <p style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 15, margin: 0 }}>{promo.card_id}</p>
+                        <p style={{ color: '#475569', fontSize: 12, margin: 0 }}>{promo.program}</p>
+                    </div>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <label style={S.label}>
+                        Bônus base (%)
+                        <input type="number" value={bonusPercent} onChange={e => setBonusPercent(e.target.value)} style={inputSt()} />
+                    </label>
+                    <label style={S.label}>
+                        Bônus clube (%)
+                        <input type="number" value={clubBonusPercent} onChange={e => setClubBonusPercent(e.target.value)} style={inputSt()} />
+                    </label>
+                    <label style={S.label}>
+                        Última confirmação
+                        <input type="text" value={lastConfirmed} onChange={e => setLastConfirmed(e.target.value)} placeholder="Mai/2026" style={inputSt()} />
+                    </label>
+                    <label style={S.label}>
+                        Válido até
+                        <input type="text" value={validUntil} onChange={e => setValidUntil(e.target.value)} style={inputSt()} />
+                    </label>
+                </div>
+
+                <label style={S.label}>
+                    Bônus por plano (JSON)
+                    <textarea
+                        value={tierJson}
+                        onChange={e => setTierJson(e.target.value)}
+                        rows={6}
+                        style={inputSt({ fontFamily: 'monospace', fontSize: 11, resize: 'vertical' })}
+                    />
+                </label>
+
+                {err && <p style={{ color: '#f87171', fontSize: 12, margin: 0 }}>{err}</p>}
+
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button onClick={onClose} style={S.btnSm}>Cancelar</button>
+                    <button onClick={save} disabled={saving} style={S.btnPrimary}>
+                        {saving ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+                        Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 function Promocoes({ token }: { token: string }) {
     const [promos, setPromos] = useState<TransferPromo[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [syncing, setSyncing] = useState(false)
+    const [syncingAI, setSyncingAI] = useState(false)
     const [syncMsg, setSyncMsg] = useState<string | null>(null)
+    const [editing, setEditing] = useState<TransferPromo | null>(null)
 
     const load = useCallback(async () => {
         setLoading(true); setError(null)
         try {
             const { data, error: err } = await supabase.from('transfer_promotions')
-                .select('id, card_id, program, bonus_percent, valid_until, active, last_confirmed, is_periodic').order('card_id')
+                .select('id, card_id, program, bonus_percent, club_bonus_percent, club_tier_bonuses, valid_until, active, last_confirmed, is_periodic').order('card_id')
             if (err) throw err
             setPromos(data ?? [])
         } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Erro') }
@@ -852,14 +946,23 @@ function Promocoes({ token }: { token: string }) {
 
     useEffect(() => { load() }, [load])
 
-    async function syncPromos() {
+    async function syncCache() {
         setSyncing(true); setSyncMsg(null)
         try {
             await adminFetch('/api/transfer-promotions/update', token, { method: 'POST' })
-            setSyncMsg('Sync disparado. Recarregue em alguns segundos.')
+            setSyncMsg('Cache invalidado.')
             await load()
-        } catch (e: unknown) { setSyncMsg(e instanceof Error ? e.message : 'Erro no sync') }
+        } catch (e: unknown) { setSyncMsg(e instanceof Error ? e.message : 'Erro') }
         finally { setSyncing(false) }
+    }
+
+    async function syncAI() {
+        setSyncingAI(true); setSyncMsg(null)
+        try {
+            await adminFetch('/api/admin/sync-transfer-data', token, { method: 'POST' })
+            setSyncMsg('Sync AI disparado em background (~90s). Verifique os logs após completar.')
+        } catch (e: unknown) { setSyncMsg(e instanceof Error ? e.message : 'Erro no sync AI') }
+        finally { setSyncingAI(false) }
     }
 
     async function toggleActive(id: number, current: boolean) {
@@ -870,53 +973,100 @@ function Promocoes({ token }: { token: string }) {
     if (loading) return <Spinner />
     if (error) return <ErrBox msg={error} onRetry={load} />
 
-    const active = promos.filter(p => p.active).length
+    const activeCount = promos.filter(p => p.active).length
+
+    // Detect stale: any promo with last_confirmed older than 45 days
+    const today = new Date()
+    const staleMonths = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+    const isStale = promos.some(p => {
+        if (!p.last_confirmed) return true
+        const [mon, yr] = p.last_confirmed.toLowerCase().split('/')
+        const mi = staleMonths.findIndex(m => mon.startsWith(m))
+        if (mi < 0 || !yr) return true
+        const confirmed = new Date(parseInt('20' + yr.trim()), mi, 1)
+        return (today.getTime() - confirmed.getTime()) > 45 * 24 * 60 * 60 * 1000
+    })
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {editing && (
+                <EditPromoModal
+                    promo={editing} token={token}
+                    onClose={() => setEditing(null)}
+                    onSaved={updated => {
+                        setPromos(p => p.map(x => x.id === updated.id ? updated : x))
+                        setEditing(null)
+                    }}
+                />
+            )}
+
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                <BlockTitle icon={Tag} title="Promoções de transferência" subtitle="Bônus exibidos no simulador. Ative/desative sem precisar do Supabase." />
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <BlockTitle icon={Tag} title="Promoções de transferência" subtitle="Bônus exibidos no simulador. Edite diretamente ou dispare o sync com IA." />
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     {syncMsg && <span style={{ fontSize: 12, color: '#94a3b8' }}>{syncMsg}</span>}
-                    <button onClick={syncPromos} disabled={syncing} style={S.btnSm}>
+                    <button onClick={syncCache} disabled={syncing} style={S.btnSm}>
                         {syncing ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={13} />}
-                        Sincronizar
+                        Cache
+                    </button>
+                    <button onClick={syncAI} disabled={syncingAI} style={{ ...S.btnSm, borderColor: '#1e3a5f', color: '#60a5fa' }}>
+                        {syncingAI ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={13} />}
+                        Sync AI
                     </button>
                 </div>
             </div>
 
+            {isStale && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#451a03', border: '1px solid #92400e', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#fbbf24' }}>
+                    <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                    Dados com mais de 45 dias sem confirmação. Edite as promoções ou use "Sync AI" para atualizar automaticamente.
+                </div>
+            )}
+
             <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
-                <span style={{ color: '#22c55e' }}>{active} ativas</span>
+                <span style={{ color: '#22c55e' }}>{activeCount} ativas</span>
                 <span style={{ color: '#334155' }}>·</span>
-                <span style={{ color: '#475569' }}>{promos.length - active} inativas</span>
+                <span style={{ color: '#475569' }}>{promos.length - activeCount} inativas</span>
             </div>
 
             <div style={{ borderRadius: 12, border: '1px solid #1e293b', overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                         <tr style={{ background: '#0f172a' }}>
-                            {['Cartão', 'Programa', 'Bônus', 'Última conf.', 'Periódico', 'Ativo'].map(h => (
+                            {['Cartão', 'Programa', 'Base', 'Clube', 'Última conf.', 'Per.', 'Ativo', ''].map(h => (
                                 <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#475569', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody>
-                        {promos.map((p, i) => (
-                            <tr key={p.id} style={{ borderTop: '1px solid #0f172a', background: i % 2 === 0 ? '#111827' : '#0d1520', opacity: p.active ? 1 : 0.4 }}>
-                                <td style={{ padding: '11px 14px', color: '#f1f5f9', fontWeight: 600 }}>{p.card_id}</td>
-                                <td style={{ padding: '11px 14px', color: '#94a3b8' }}>{p.program}</td>
-                                <td style={{ padding: '11px 14px', color: '#22c55e', fontWeight: 700 }}>+{p.bonus_percent}%</td>
-                                <td style={{ padding: '11px 14px', color: '#64748b', fontSize: 11 }}>{p.last_confirmed ?? '—'}</td>
-                                <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                                    {p.is_periodic ? <CheckCircle size={13} style={{ color: '#22c55e' }} /> : <XCircle size={13} style={{ color: '#334155' }} />}
-                                </td>
-                                <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                                    <button onClick={() => toggleActive(p.id, p.active)} title={p.active ? 'Desativar' : 'Ativar'} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                                        {p.active ? <CheckCircle size={15} style={{ color: '#22c55e' }} /> : <XCircle size={15} style={{ color: '#334155' }} />}
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
+                        {promos.map((p, i) => {
+                            const [mon, yr] = (p.last_confirmed ?? '').toLowerCase().split('/')
+                            const mi = staleMonths.findIndex(m => mon?.startsWith(m))
+                            const confirmedDate = mi >= 0 && yr ? new Date(parseInt('20' + yr.trim()), mi, 1) : null
+                            const rowStale = !confirmedDate || (today.getTime() - confirmedDate.getTime()) > 45 * 24 * 60 * 60 * 1000
+                            return (
+                                <tr key={p.id} style={{ borderTop: '1px solid #0f172a', background: i % 2 === 0 ? '#111827' : '#0d1520', opacity: p.active ? 1 : 0.4 }}>
+                                    <td style={{ padding: '11px 14px', color: '#f1f5f9', fontWeight: 600, whiteSpace: 'nowrap' }}>{p.card_id}</td>
+                                    <td style={{ padding: '11px 14px', color: '#94a3b8' }}>{p.program}</td>
+                                    <td style={{ padding: '11px 14px', color: '#22c55e', fontWeight: 700 }}>+{p.bonus_percent}%</td>
+                                    <td style={{ padding: '11px 14px', color: '#60a5fa', fontWeight: 600 }}>+{p.club_bonus_percent ?? 0}%</td>
+                                    <td style={{ padding: '11px 14px', color: rowStale ? '#fbbf24' : '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>
+                                        {rowStale && <AlertTriangle size={10} style={{ marginRight: 4, verticalAlign: 'middle' }} />}
+                                        {p.last_confirmed ?? '—'}
+                                    </td>
+                                    <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                                        {p.is_periodic ? <CheckCircle size={13} style={{ color: '#22c55e' }} /> : <XCircle size={13} style={{ color: '#334155' }} />}
+                                    </td>
+                                    <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                                        <button onClick={() => toggleActive(p.id, p.active)} title={p.active ? 'Desativar' : 'Ativar'} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                            {p.active ? <CheckCircle size={15} style={{ color: '#22c55e' }} /> : <XCircle size={15} style={{ color: '#334155' }} />}
+                                        </button>
+                                    </td>
+                                    <td style={{ padding: '8px 14px' }}>
+                                        <button onClick={() => setEditing(p)} style={S.btnXs}>Editar</button>
+                                    </td>
+                                </tr>
+                            )
+                        })}
                     </tbody>
                 </table>
             </div>
