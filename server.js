@@ -1066,17 +1066,47 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
 
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 22000 });
 
-            // Log diagnóstico: título e URL após navegação
-            const pageTitle = await page.title();
-            const pageUrl = page.url();
-            console.log(`[GFlights] ${origin}→${destination}: title="${pageTitle}" url=${pageUrl}`);
+            // ── Consent / block page detection ───────────────────────────────────
+            let curUrl = page.url();
+            let curTitle = await page.title();
+            console.log(`[GFlights] ${origin}→${destination}: title="${curTitle}" url=${curUrl}`);
 
-            // Aceita consentimento de cookies do Google (aparece em IPs de servidor)
-            const cookieClicked = await page.locator('button:has-text("Accept all"), button:has-text("Aceitar tudo"), button[aria-label*="Accept"], button:has-text("Agree")')
-                .first().click({ timeout: 5000 }).then(() => true).catch(() => false);
-            if (cookieClicked) {
-                console.log(`[GFlights] ${origin}→${destination}: cookie consent clicado, aguardando...`);
-                await new Promise(r => setTimeout(r, randInt(800, 1400)));
+            const isConsentPage = curUrl.includes('consent.google.com') ||
+                curTitle.includes('Before you continue') || curTitle.includes('Antes de continuar') ||
+                curTitle.includes('Before you') || curTitle.includes('Privacy');
+            const isCaptcha = curUrl.includes('/sorry/') || curUrl.includes('recaptcha') ||
+                curTitle.toLowerCase().includes('unusual traffic') || curTitle.toLowerCase().includes('captcha');
+
+            if (isCaptcha) {
+                console.warn(`[GFlights] ${origin}→${destination}: CAPTCHA/rate-limit detectado — abortando`);
+                throw new Error('BLOCKED');
+            }
+
+            if (isConsentPage) {
+                console.log(`[GFlights] ${origin}→${destination}: consent page — tentando aceitar...`);
+                const accepted = await page.locator([
+                    '#L2AGLb', 'button:has-text("Accept all")', 'button:has-text("Aceitar tudo")',
+                    'button:has-text("I agree")', 'button:has-text("Aceito")',
+                    'button:has-text("Agree")', 'form button[type="submit"]:first-of-type',
+                ].join(', ')).first().click({ timeout: 6000 }).then(() => true).catch(() => false);
+
+                if (accepted) {
+                    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+                    await new Promise(r => setTimeout(r, randInt(800, 1400)));
+                    curUrl = page.url();
+                    console.log(`[GFlights] ${origin}→${destination}: após consent → ${curUrl}`);
+                }
+
+                // Se ainda não chegou na página de voos, navega diretamente
+                if (!curUrl.includes('/travel/flights')) {
+                    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 22000 });
+                    await new Promise(r => setTimeout(r, randInt(1000, 1800)));
+                }
+            } else {
+                // Página normal — tenta aceitar cookies genéricos se existirem
+                const cookieClicked = await page.locator('button:has-text("Accept all"), button:has-text("Aceitar tudo"), button[aria-label*="Accept"]')
+                    .first().click({ timeout: 3000 }).then(() => true).catch(() => false);
+                if (cookieClicked) await new Promise(r => setTimeout(r, randInt(600, 1000)));
             }
 
             // Aguarda os cards de voo aparecerem (div[data-id] com aria-label de voo)
@@ -2279,6 +2309,9 @@ app.get('/api/amadeus/flights', async (req, res) => {
         res.json({ data: outbound, inbound, priceGraph, meta: { count: outbound.length, source: 'google-flights-scraper' } });
     } catch (err) {
         console.error('[GFlights] Erro:', err.message);
+        if (err.message === 'BLOCKED') {
+            return res.status(503).json({ errors: [{ detail: 'Google Flights bloqueou temporariamente o servidor. Tente novamente em alguns minutos.' }] });
+        }
         res.status(500).json({ errors: [{ detail: err.message }] });
     }
 });
