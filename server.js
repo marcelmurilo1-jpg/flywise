@@ -3356,7 +3356,7 @@ app.get('/api/admin/gf-diag', async (req, res) => {
                 };
             } catch (e) { return { error: e.message }; }
         });
-        Object.assign(info, { clickedSearch, hasFlightsBeforeClick: pageInfoBefore?.hasFlights ?? null, allButtonsBefore: allButtons });
+        Object.assign(info, { clickedSearch, hasFlightsBeforeClick: pageInfoBefore?.hasFlights ?? null, buttonsBefore: pageInfoBefore?.buttons ?? [] });
 
         await context.close();
         res.json({ origin, destination, date, navigatedTo: url, ...info });
