@@ -3249,6 +3249,47 @@ app.get('/api/admin/transfer-sync-diag', async (_req, res) => {
     res.json(diag);
 });
 
+// GET /api/admin/gf-diag?origin=GRU&destination=GIG&date=2026-05-10
+// Navega ao Google Flights e retorna o que a página mostra (sem extração de voos)
+app.get('/api/admin/gf-diag', async (req, res) => {
+    const { origin = 'GRU', destination = 'GIG', date = '2026-05-20' } = req.query;
+    try {
+        await ensureChromium();
+        const browser = await getBrowser();
+        const context = await browser.newContext({
+            viewport: { width: 1280, height: 900 },
+            locale: 'pt-BR',
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            extraHTTPHeaders: { 'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8' },
+        });
+        const page = await context.newPage();
+        const url = buildGfTfsUrl(origin.toUpperCase(), destination.toUpperCase(), date);
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 22000 });
+        await new Promise(r => setTimeout(r, 3000));
+
+        const info = await page.evaluate(() => {
+            const divs = [...document.querySelectorAll('div[data-id]')];
+            const ariaLabels = divs.slice(0, 5).map(el => {
+                const a = el.querySelector('[aria-label]');
+                return (a?.getAttribute('aria-label') ?? '').slice(0, 200);
+            });
+            const bodyText = (document.body.innerText ?? '').slice(0, 800);
+            return {
+                title: document.title,
+                url: location.href,
+                dataDivCount: divs.length,
+                ariaLabels,
+                bodyText,
+            };
+        });
+
+        await context.close();
+        res.json({ origin, destination, date, navigatedTo: url, ...info });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/admin/transfer-sync-log — últimas execuções do sync
 app.get('/api/admin/transfer-sync-log', requireSyncSecret, async (req, res) => {
     if (!supabase) return res.json({ logs: [] });
