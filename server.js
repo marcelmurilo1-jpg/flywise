@@ -1111,20 +1111,35 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
 
             // ── Detect search-form page vs results page ───────────────────────
             // The tfs URL pre-fills the form but may no longer auto-navigate to results.
-            // If we land on the form (Pesquisar button visible, no flight cards), click it.
-            const onForm = await page.evaluate(() => {
-                const hasFlights = [...document.querySelectorAll('div[data-id]')].some(el => {
+            // If we land on the form (no flight cards), submit the search.
+            const hasFlightsAlready = await page.evaluate(() =>
+                [...document.querySelectorAll('div[data-id]')].some(el => {
                     const a = el.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
                     return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(a);
-                });
-                const searchBtn = document.querySelector('[aria-label="Pesquisar"], [aria-label="Search"]');
-                return !hasFlights && !!searchBtn;
-            });
+                })
+            );
 
-            if (onForm) {
-                console.log(`[GFlights] ${origin}→${destination}: formulário detectado — clicando Pesquisar`);
-                await page.locator('[aria-label="Pesquisar"], [aria-label="Search"]').first().click({ timeout: 5000 }).catch(() => null);
-                await new Promise(r => setTimeout(r, randInt(1500, 2500)));
+            if (!hasFlightsAlready) {
+                console.log(`[GFlights] ${origin}→${destination}: sem cards de voo — tentando submeter formulário`);
+                // Try clicking the search button using multiple strategies
+                const clicked = await page.locator([
+                    'button:has-text("Pesquisar")',
+                    'button:has-text("Search")',
+                    '[aria-label="Pesquisar"]',
+                    '[aria-label="Search"]',
+                    'input[type="submit"]',
+                    'form button[type="submit"]',
+                    'form button',
+                ].join(', ')).first().click({ timeout: 5000 }).then(() => true).catch(() => false);
+
+                if (clicked) {
+                    console.log(`[GFlights] ${origin}→${destination}: botão de busca clicado`);
+                } else {
+                    // Fallback: press Enter on the page
+                    await page.keyboard.press('Enter').catch(() => null);
+                    console.log(`[GFlights] ${origin}→${destination}: Enter pressionado como fallback`);
+                }
+                await new Promise(r => setTimeout(r, randInt(2000, 3000)));
             }
 
             // Aguarda os cards de voo aparecerem (div[data-id] com aria-label de voo)
@@ -3286,29 +3301,31 @@ app.get('/api/admin/gf-diag', async (req, res) => {
         await new Promise(r => setTimeout(r, 2000));
 
         // Captura info detalhada antes de qualquer clique
-        const beforeClick = await page.evaluate(() => {
-            const hasFlights = [...document.querySelectorAll('div[data-id]')].some(el => {
+        const hasFlightsAlreadyDiag = await page.evaluate(() =>
+            [...document.querySelectorAll('div[data-id]')].some(el => {
                 const a = el.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
                 return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(a);
-            });
-            const allButtons = [...document.querySelectorAll('button, [role="button"]')].slice(0, 20).map(b => ({
-                ariaLabel: b.getAttribute('aria-label') ?? '',
-                text: (b.innerText ?? b.textContent ?? '').trim().slice(0, 60),
-            }));
-            const searchBtn = document.querySelector('[aria-label="Pesquisar"], [aria-label="Search"]');
-            return {
-                hasFlights,
-                searchBtnFound: !!searchBtn,
-                searchBtnAriaLabel: searchBtn?.getAttribute('aria-label') ?? null,
-                allButtons,
-                dataDivCount: [...document.querySelectorAll('div[data-id]')].length,
-            };
-        });
+            })
+        );
+        const allButtons = await page.evaluate(() =>
+            [...document.querySelectorAll('button, [role="button"]')].slice(0, 20).map(b => ({
+                ariaLabel: String(b.getAttribute('aria-label') ?? ''),
+                text: String((b.innerText || b.textContent || '')).trim().slice(0, 60),
+                type: String(b.getAttribute('type') ?? ''),
+            }))
+        );
 
         let clickedSearch = false;
-        if (!beforeClick.hasFlights && beforeClick.searchBtnFound) {
-            await page.locator('[aria-label="Pesquisar"], [aria-label="Search"]').first().click({ timeout: 5000 }).catch(() => null);
-            clickedSearch = true;
+        if (!hasFlightsAlreadyDiag) {
+            const clicked = await page.locator([
+                'button:has-text("Pesquisar")',
+                'button:has-text("Search")',
+                '[aria-label="Pesquisar"]',
+                '[aria-label="Search"]',
+                'form button',
+            ].join(', ')).first().click({ timeout: 5000 }).then(() => true).catch(() => false);
+            clickedSearch = clicked;
+            if (!clicked) await page.keyboard.press('Enter').catch(() => null);
             await new Promise(r => setTimeout(r, 5000));
         }
 
@@ -3327,7 +3344,7 @@ app.get('/api/admin/gf-diag', async (req, res) => {
                 bodyText,
             };
         });
-        Object.assign(info, { clickedSearch, beforeClick });
+        Object.assign(info, { clickedSearch, hasFlightsBeforeClick: hasFlightsAlreadyDiag, allButtonsBefore: allButtons });
 
         await context.close();
         res.json({ origin, destination, date, navigatedTo: url, ...info });
