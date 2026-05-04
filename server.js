@@ -3297,54 +3297,64 @@ app.get('/api/admin/gf-diag', async (req, res) => {
         });
         const page = await context.newPage();
         const url = buildGfTfsUrl(origin.toUpperCase(), destination.toUpperCase(), date);
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 22000 });
-        await new Promise(r => setTimeout(r, 2000));
+        await page.goto(url, { waitUntil: 'networkidle', timeout: 25000 }).catch(() =>
+            page.goto(url, { waitUntil: 'domcontentloaded', timeout: 22000 })
+        );
 
-        // Captura info detalhada antes de qualquer clique
-        const hasFlightsAlreadyDiag = await page.evaluate(() =>
-            [...document.querySelectorAll('div[data-id]')].some(el => {
-                const a = el.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
-                return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(a);
-            })
-        );
-        const allButtons = await page.evaluate(() =>
-            [...document.querySelectorAll('button, [role="button"]')].slice(0, 20).map(b => ({
-                ariaLabel: String(b.getAttribute('aria-label') ?? ''),
-                text: String((b.innerText || b.textContent || '')).trim().slice(0, 60),
-                type: String(b.getAttribute('type') ?? ''),
-            }))
-        );
+        // Screenshot antes de qualquer interação
+        const screenshotBefore = (await page.screenshot({ type: 'png' })).toString('base64');
+
+        // Coleta info da página
+        const pageInfoBefore = await page.evaluate(() => {
+            try {
+                const divs = [...document.querySelectorAll('div[data-id]')];
+                const hasFlights = divs.some(el => {
+                    const a = el.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
+                    return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(a);
+                });
+                const buttons = [...document.querySelectorAll('button, [role="button"]')].slice(0, 15).map(b => ({
+                    tag: b.tagName,
+                    ariaLabel: b.getAttribute('aria-label') ?? '',
+                    text: (b.innerText || b.textContent || '').trim().slice(0, 80),
+                    type: b.getAttribute('type') ?? '',
+                }));
+                return { hasFlights, dataDivCount: divs.length, buttons, title: document.title, url: location.href, bodySlice: (document.body.innerText || '').slice(0, 600) };
+            } catch (e) { return { error: e.message }; }
+        });
 
         let clickedSearch = false;
-        if (!hasFlightsAlreadyDiag) {
-            const clicked = await page.locator([
-                'button:has-text("Pesquisar")',
-                'button:has-text("Search")',
-                '[aria-label="Pesquisar"]',
-                '[aria-label="Search"]',
-                'form button',
-            ].join(', ')).first().click({ timeout: 5000 }).then(() => true).catch(() => false);
+        if (!pageInfoBefore.hasFlights) {
+            // Try getByRole first (most reliable), then text, then Enter
+            const clicked = await page.getByRole('button', { name: /Pesquisar|Search/i }).first().click({ timeout: 5000 }).then(() => true).catch(() => false)
+                || await page.getByText(/^Pesquisar$|^Search$/).first().click({ timeout: 3000 }).then(() => true).catch(() => false);
             clickedSearch = clicked;
-            if (!clicked) await page.keyboard.press('Enter').catch(() => null);
-            await new Promise(r => setTimeout(r, 5000));
+            if (!clicked) {
+                await page.keyboard.press('Enter').catch(() => null);
+                console.log('[gf-diag] Enter pressed as fallback');
+            }
+            await new Promise(r => setTimeout(r, 6000));
         }
 
+        // Screenshot depois de interação
+        const screenshotAfter = (await page.screenshot({ type: 'png' })).toString('base64');
+
         const info = await page.evaluate(() => {
-            const divs = [...document.querySelectorAll('div[data-id]')];
-            const ariaLabels = divs.slice(0, 5).map(el => {
-                const a = el.querySelector('[aria-label]');
-                return (a?.getAttribute('aria-label') ?? '').slice(0, 200);
-            });
-            const bodyText = (document.body.innerText ?? '').slice(0, 1200);
-            return {
-                title: document.title,
-                url: location.href,
-                dataDivCount: divs.length,
-                ariaLabels,
-                bodyText,
-            };
+            try {
+                const divs = [...document.querySelectorAll('div[data-id]')];
+                const ariaLabels = divs.slice(0, 5).map(el => {
+                    const a = el.querySelector('[aria-label]');
+                    return (a?.getAttribute('aria-label') ?? '').slice(0, 200);
+                });
+                return {
+                    title: document.title,
+                    url: location.href,
+                    dataDivCount: divs.length,
+                    ariaLabels,
+                    bodyText: (document.body.innerText ?? '').slice(0, 800),
+                };
+            } catch (e) { return { error: e.message }; }
         });
-        Object.assign(info, { clickedSearch, hasFlightsBeforeClick: hasFlightsAlreadyDiag, allButtonsBefore: allButtons });
+        Object.assign(info, { clickedSearch, pageInfoBefore, screenshotBefore, screenshotAfter });
 
         await context.close();
         res.json({ origin, destination, date, navigatedTo: url, ...info });
