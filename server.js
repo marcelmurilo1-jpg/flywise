@@ -3301,9 +3301,6 @@ app.get('/api/admin/gf-diag', async (req, res) => {
             page.goto(url, { waitUntil: 'domcontentloaded', timeout: 22000 })
         );
 
-        // Screenshot antes de qualquer interação
-        const screenshotBefore = (await page.screenshot({ type: 'png' })).toString('base64');
-
         // Coleta info da página
         const pageInfoBefore = await page.evaluate(() => {
             try {
@@ -3335,26 +3332,31 @@ app.get('/api/admin/gf-diag', async (req, res) => {
             await new Promise(r => setTimeout(r, 6000));
         }
 
-        // Screenshot depois de interação
-        const screenshotAfter = (await page.screenshot({ type: 'png' })).toString('base64');
-
         const info = await page.evaluate(() => {
             try {
                 const divs = [...document.querySelectorAll('div[data-id]')];
-                const ariaLabels = divs.slice(0, 5).map(el => {
-                    const a = el.querySelector('[aria-label]');
-                    return (a?.getAttribute('aria-label') ?? '').slice(0, 200);
+                const cardDetails = divs.slice(0, 8).map(el => {
+                    // aria-label on the div[data-id] itself
+                    const selfAria = el.getAttribute('aria-label') ?? '';
+                    // all child aria-labels
+                    const childArias = [...el.querySelectorAll('[aria-label]')].slice(0, 5).map(c => ({
+                        tag: c.tagName,
+                        aria: (c.getAttribute('aria-label') ?? '').slice(0, 200),
+                    }));
+                    // inner text of the card
+                    const text = (el.innerText || el.textContent || '').trim().slice(0, 200);
+                    return { selfAria: selfAria.slice(0, 200), childArias, text };
                 });
                 return {
                     title: document.title,
                     url: location.href,
                     dataDivCount: divs.length,
-                    ariaLabels,
-                    bodyText: (document.body.innerText ?? '').slice(0, 800),
+                    cardDetails,
+                    bodyText: (document.body.innerText ?? '').slice(200, 1200),
                 };
             } catch (e) { return { error: e.message }; }
         });
-        Object.assign(info, { clickedSearch, pageInfoBefore, screenshotBefore, screenshotAfter });
+        Object.assign(info, { clickedSearch, hasFlightsBeforeClick: pageInfoBefore?.hasFlights ?? null, allButtonsBefore: allButtons });
 
         await context.close();
         res.json({ origin, destination, date, navigatedTo: url, ...info });
