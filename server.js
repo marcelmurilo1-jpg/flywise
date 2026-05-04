@@ -1842,6 +1842,62 @@ function normalizeAirline(raw) {
     return raw.trim();
 }
 
+// IATA → nome de cidade para exibição de conexões
+const IATA_CITY_NAMES = {
+    // América do Norte
+    ATL: 'Atlanta', LAX: 'Los Angeles', ORD: 'Chicago', DFW: 'Dallas',
+    JFK: 'Nova York', EWR: 'Newark', LGA: 'Nova York', MIA: 'Miami',
+    SFO: 'São Francisco', SEA: 'Seattle', BOS: 'Boston', DEN: 'Denver',
+    IAD: 'Washington D.C.', DCA: 'Washington D.C.', CLT: 'Charlotte',
+    PHX: 'Phoenix', MSP: 'Minneapolis', DTW: 'Detroit', PHL: 'Filadélfia',
+    LAS: 'Las Vegas', MCO: 'Orlando', IAH: 'Houston', HOU: 'Houston',
+    MDW: 'Chicago', FLL: 'Fort Lauderdale', TPA: 'Tampa', SAN: 'San Diego',
+    YYZ: 'Toronto', YUL: 'Montreal', YVR: 'Vancouver', YYC: 'Calgary',
+    MEX: 'Cidade do México', GDL: 'Guadalajara', MTY: 'Monterrey',
+    CUN: 'Cancún', SJO: 'San José', GUA: 'Guatemala',
+    // América Central / Caribe
+    PTY: 'Cidade do Panamá', BOG: 'Bogotá', MDE: 'Medellín', CLO: 'Cali',
+    CTG: 'Cartagena', LIM: 'Lima', SCL: 'Santiago', EZE: 'Buenos Aires',
+    AEP: 'Buenos Aires', UIO: 'Quito', GYE: 'Guayaquil', CCS: 'Caracas',
+    MVD: 'Montevidéu', ASU: 'Assunção', LPB: 'La Paz', CBB: 'Cochabamba',
+    // Brasil
+    GRU: 'São Paulo', CGH: 'São Paulo', VCP: 'Campinas',
+    GIG: 'Rio de Janeiro', SDU: 'Rio de Janeiro',
+    BSB: 'Brasília', CNF: 'Belo Horizonte', SSA: 'Salvador',
+    REC: 'Recife', FOR: 'Fortaleza', BEL: 'Belém', MAO: 'Manaus',
+    CWB: 'Curitiba', POA: 'Porto Alegre', FLN: 'Florianópolis',
+    NAT: 'Natal', MCZ: 'Maceió', AJU: 'Aracaju', THE: 'Teresina',
+    SLZ: 'São Luís', CGB: 'Cuiabá', CGR: 'Campo Grande', PMW: 'Palmas',
+    PVH: 'Porto Velho', RBR: 'Rio Branco', MCP: 'Macapá',
+    // Europa
+    LHR: 'Londres', LGW: 'Londres', STN: 'Londres', LTN: 'Londres',
+    CDG: 'Paris', ORY: 'Paris', AMS: 'Amsterdã', FRA: 'Frankfurt',
+    MUC: 'Munique', MAD: 'Madri', BCN: 'Barcelona', FCO: 'Roma',
+    MXP: 'Milão', LIN: 'Milão', ZRH: 'Zurique', GVA: 'Genebra',
+    VIE: 'Viena', BRU: 'Bruxelas', LIS: 'Lisboa', OPO: 'Porto',
+    DUB: 'Dublin', CPH: 'Copenhague', ARN: 'Estocolmo', OSL: 'Oslo',
+    HEL: 'Helsinki', WAW: 'Varsóvia', PRG: 'Praga', BUD: 'Budapeste',
+    ATH: 'Atenas', IST: 'Istambul', SAW: 'Istambul',
+    // África / Oriente Médio
+    DXB: 'Dubai', DOH: 'Doha', AUH: 'Abu Dhabi', RUH: 'Riade',
+    AMM: 'Amã', CAI: 'Cairo', JNB: 'Joanesburgo', CPT: 'Cidade do Cabo',
+    NBO: 'Nairóbi', ADD: 'Adis Abeba', LOS: 'Lagos', ACC: 'Acra',
+    // Ásia / Oceania
+    SIN: 'Singapura', KUL: 'Kuala Lumpur', BKK: 'Bangkok',
+    HKG: 'Hong Kong', PEK: 'Pequim', PVG: 'Xangai', CAN: 'Guangzhou',
+    ICN: 'Seul', NRT: 'Tóquio', HND: 'Tóquio', SYD: 'Sydney',
+    MEL: 'Melbourne', AKL: 'Auckland', DEL: 'Nova Délhi', BOM: 'Mumbai',
+};
+
+function iataToCity(code) {
+    if (!code) return code;
+    // Handles "BOG · PTY" or "BOG" — translate each part
+    return code.split(/\s*·\s*/).map(c => {
+        const up = c.trim().toUpperCase();
+        return IATA_CITY_NAMES[up] || c.trim();
+    }).join(' · ');
+}
+
 // Converte resultado do scraper para o formato FlightOffer usado no frontend
 function normalizeTime(t) {
     if (!t) return '12:00';
@@ -1888,7 +1944,7 @@ function mapToFlightOffer(item, origin, destination, date, idx) {
         cabin_class: item.cabin ?? 'economy',
         voo_numero: '',
         segmentos: item.segmentos || [],
-        layoverCity: item.layoverCity || '',
+        layoverCity: iataToCity(item.layoverCity || ''),
         layoverDurations: item.layoverDurations || [],
         numeroVoos: item.numeroVoos || [],
         aeronaves: item.aeronaves || [],
@@ -2230,6 +2286,7 @@ async function expandFlightDetails(page, flights) {
                 }
             }
 
+            if (flights[i].layoverCity) flights[i].layoverCity = iataToCity(flights[i].layoverCity);
             console.log(`[GFlights] expand[${i}] domIdx=${domIdx} textLen=${dialogText.length} segs=${flights[i].segmentos?.length ?? 0} layover=${flights[i].layoverCity || '(empty)'}`);
             if (isDialog) await page.keyboard.press('Escape').catch(() => null);
             await new Promise(r => setTimeout(r, randInt(150, 300)));
