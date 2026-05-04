@@ -3285,19 +3285,31 @@ app.get('/api/admin/gf-diag', async (req, res) => {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 22000 });
         await new Promise(r => setTimeout(r, 2000));
 
-        // Se caiu no formulário, clica Pesquisar
-        const onForm = await page.evaluate(() => {
+        // Captura info detalhada antes de qualquer clique
+        const beforeClick = await page.evaluate(() => {
             const hasFlights = [...document.querySelectorAll('div[data-id]')].some(el => {
                 const a = el.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
                 return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(a);
             });
-            return !hasFlights && !!document.querySelector('[aria-label="Pesquisar"], [aria-label="Search"]');
+            const allButtons = [...document.querySelectorAll('button, [role="button"]')].slice(0, 20).map(b => ({
+                ariaLabel: b.getAttribute('aria-label') ?? '',
+                text: (b.innerText ?? b.textContent ?? '').trim().slice(0, 60),
+            }));
+            const searchBtn = document.querySelector('[aria-label="Pesquisar"], [aria-label="Search"]');
+            return {
+                hasFlights,
+                searchBtnFound: !!searchBtn,
+                searchBtnAriaLabel: searchBtn?.getAttribute('aria-label') ?? null,
+                allButtons,
+                dataDivCount: [...document.querySelectorAll('div[data-id]')].length,
+            };
         });
+
         let clickedSearch = false;
-        if (onForm) {
+        if (!beforeClick.hasFlights && beforeClick.searchBtnFound) {
             await page.locator('[aria-label="Pesquisar"], [aria-label="Search"]').first().click({ timeout: 5000 }).catch(() => null);
             clickedSearch = true;
-            await new Promise(r => setTimeout(r, 4000));
+            await new Promise(r => setTimeout(r, 5000));
         }
 
         const info = await page.evaluate(() => {
@@ -3315,7 +3327,7 @@ app.get('/api/admin/gf-diag', async (req, res) => {
                 bodyText,
             };
         });
-        Object.assign(info, { clickedSearch });
+        Object.assign(info, { clickedSearch, beforeClick });
 
         await context.close();
         res.json({ origin, destination, date, navigatedTo: url, ...info });
