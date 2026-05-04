@@ -1338,38 +1338,41 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                     }
 
                     // ── Cidade de conexão ─────────────────────────────────────────────────────
-                    // Estratégia 1: IATA em parênteses após Parada/Layover (permite pontos no meio)
-                    // Ex: "Parada de 1h 43min. em Miami (MIA)" → "MIA"
-                    // Ex: "Parada (1 de 2) de 5h em Brasília (BSB)" → "BSB"
+                    // Prioridade: nome da cidade visível, fallback para código IATA
                     let layoverCity = '';
                     {
-                        // [^;\n] — permite "." no meio (Google coloca ponto antes da cidade)
-                        const iataScanner = /(?:Parada|Escala|Layover)[^;\n]*?\(([A-Z]{3})\)/gi;
+                        // Estratégia 1: "em CityName (IATA)" — usa o nome da cidade
+                        const cityIataRe = /(?:Parada|Escala|Layover)[^;\n]*?em\s+([A-ZÀ-Ÿ][A-Za-zÀ-ÿ\s\-'\.]{1,40}?)\s*\(([A-Z]{3})\)/gi;
+                        const foundCities = [];
+                        let sm;
+                        while ((sm = cityIataRe.exec(aria)) !== null) {
+                            const city = sm[1].trim().replace(/\s+/g, ' ');
+                            if (city.length >= 2) foundCities.push(city);
+                            else foundCities.push(sm[2]);
+                        }
+                        if (foundCities.length > 0) layoverCity = [...new Set(foundCities)].join(' · ');
+                    }
+                    // Fallback 1: só o IATA entre parênteses após Parada/Escala/Layover
+                    if (!layoverCity) {
+                        const iataRe = /(?:Parada|Escala|Layover)[^;\n]*?\(([A-Z]{3})\)/gi;
                         const found = [];
                         let sm;
-                        while ((sm = iataScanner.exec(aria)) !== null) found.push(sm[1]);
+                        while ((sm = iataRe.exec(aria)) !== null) found.push(sm[1]);
                         if (found.length > 0) layoverCity = [...new Set(found)].join(' · ');
                     }
-
-                    // Estratégia 2 (fallback): captura nome de cidade após "em" / "in"
-                    let lm;
+                    // Fallback 2: "em CityName" sem parênteses
                     if (!layoverCity) {
-                        // PT: "Parada ... em Cidade" — para no abre-paren, vírgula, ponto, newline ou palavra-chave
-                        lm = aria.match(/(?:Parada|Escala)[^;\n]*?\bem\s+([A-ZÀ-Ÿa-zà-ÿ][^.,()\n;]{2,35}?)(?=\s*(?:\(|[.;,\n]|$))/i);
-                        if (lm) layoverCity = lm[1].trim();
+                        const lm2 = aria.match(/(?:Parada|Escala)[^;\n]*?\bem\s+([A-ZÀ-Ÿa-zà-ÿ][^.,()\n;]{2,35}?)(?=\s*(?:\(|[.;,\n]|$))/i);
+                        if (lm2) layoverCity = lm2[1].trim();
                     }
                     if (!layoverCity) {
-                        // EN: "Layover ... in City"
-                        lm = aria.match(/Layover[^;\n]*?\bin\s+([A-Z][^.,()\n;]{2,35}?)(?=\s*(?:\(|[.;,\n]|$))/i);
-                        if (lm) layoverCity = lm[1].trim();
+                        const lm3 = aria.match(/Layover[^;\n]*?\bin\s+([A-Z][^.,()\n;]{2,35}?)(?=\s*(?:\(|[.;,\n]|$))/i);
+                        if (lm3) layoverCity = lm3[1].trim();
                     }
-
-                    // Estratégia 3 (last resort): todos os IATAs no aria-label; exclui o de
-                    // partida/chegada (1º e último) — o(s) restante(s) são conexões
+                    // Fallback 3: IATAs intermediários em parênteses
                     if (!layoverCity) {
                         const allIata = [...aria.matchAll(/\(([A-Z]{3})\)/g)].map(m => m[1]);
                         if (allIata.length >= 3) {
-                            // 1º = origem, último = destino, do meio = conexões
                             const middle = allIata.slice(1, -1);
                             if (middle.length > 0) layoverCity = [...new Set(middle)].join(' · ');
                         }
@@ -1947,6 +1950,22 @@ async function scrapePriceGraph(page, origin, destination) {
     await page.evaluate(() => window.scrollBy(0, 800)).catch(() => {});
     await new Promise(r => setTimeout(r, 400));
 
+    // Estratégia extra: clica no campo de data para abrir o calendário de preços
+    if (!clicked) {
+        const dateClicked = await page.locator([
+            '[aria-label*="Data de partida"]',
+            '[aria-label*="Departure date"]',
+            '[aria-label*="Ida"]',
+            'input[placeholder*="Ida"]',
+            '[data-field="departureDate"]',
+        ].join(', ')).first().click({ timeout: 4000 }).then(() => true).catch(() => false);
+
+        if (dateClicked) {
+            console.log('[priceGraph] calendário de datas aberto');
+            await new Promise(r => setTimeout(r, 2000));
+        }
+    }
+
     const graph = await page.evaluate(() => {
         const PT_MONTHS = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
         const PT_MONTHS_ABBREV = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -2076,24 +2095,16 @@ async function scrapePriceGraph(page, origin, destination) {
 }
 
 async function doScrape(origin, destination, date, returnDate) {
-    // Outbound: sempre one-way → preços individuais por trecho, funciona com o fluxo de seleção.
-    // Inbound: sequencial (após outbound + 3s delay) para evitar detecção de bot no Railway.
-    const rawOut = await scrapeOneway(origin, destination, date, null);
-    const outbound = rawOut.flights.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
+    // Roda ida e volta em paralelo (scrapeLimit=2 permite 2 contextos simultâneos)
+    const [rawOut, rawIn] = await Promise.all([
+        scrapeOneway(origin, destination, date, null),
+        returnDate
+            ? scrapeOneway(destination, origin, returnDate, null)
+            : Promise.resolve({ flights: [], priceGraph: null }),
+    ]);
 
-    let inbound = [];
-    if (returnDate) {
-        // Aguarda 3s antes de abrir segundo contexto — reduz detecção de bot em IP compartilhado
-        await new Promise(r => setTimeout(r, 3000));
-        const rawIn = await scrapeOneway(destination, origin, returnDate, null);
-        inbound = rawIn.flights.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
-        if (inbound.length === 0) {
-            console.log('[GFlights] Inbound vazio na primeira tentativa — aguardando 8s e retentando...');
-            await new Promise(r => setTimeout(r, 8000));
-            const rawIn2 = await scrapeOneway(destination, origin, returnDate, null);
-            inbound = rawIn2.flights.map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate, idx));
-        }
-    }
+    const outbound = rawOut.flights.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
+    const inbound = (rawIn.flights ?? []).filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate || date, idx));
 
     return { outbound, inbound, priceGraph: rawOut.priceGraph ?? null };
 }
