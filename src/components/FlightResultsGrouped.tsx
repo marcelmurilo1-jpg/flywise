@@ -41,9 +41,44 @@ function stopLabel(n?: number | null, codes?: string) {
     if (n && n > 1) return codes ? `${n} conexões · ${codes}` : `${n} conexões`
     return ''
 }
+const IATA_CITY: Record<string, string> = {
+    ATL:'Atlanta',LAX:'Los Angeles',ORD:'Chicago',DFW:'Dallas',
+    JFK:'Nova York',EWR:'Newark',LGA:'Nova York',MIA:'Miami',
+    SFO:'São Francisco',SEA:'Seattle',BOS:'Boston',DEN:'Denver',
+    IAD:'Washington D.C.',DCA:'Washington D.C.',CLT:'Charlotte',
+    PHX:'Phoenix',MSP:'Minneapolis',DTW:'Detroit',PHL:'Filadélfia',
+    LAS:'Las Vegas',MCO:'Orlando',IAH:'Houston',HOU:'Houston',
+    MDW:'Chicago',FLL:'Fort Lauderdale',TPA:'Tampa',SAN:'San Diego',
+    YYZ:'Toronto',YUL:'Montreal',YVR:'Vancouver',YYC:'Calgary',
+    MEX:'Cidade do México',CUN:'Cancún',SJO:'San José',GUA:'Guatemala',
+    PTY:'Cidade do Panamá',BOG:'Bogotá',MDE:'Medellín',CLO:'Cali',
+    CTG:'Cartagena',LIM:'Lima',SCL:'Santiago',EZE:'Buenos Aires',
+    AEP:'Buenos Aires',UIO:'Quito',GYE:'Guayaquil',CCS:'Caracas',
+    MVD:'Montevidéu',ASU:'Assunção',LPB:'La Paz',
+    GRU:'São Paulo',CGH:'São Paulo',VCP:'Campinas',
+    GIG:'Rio de Janeiro',SDU:'Rio de Janeiro',BSB:'Brasília',
+    CNF:'Belo Horizonte',SSA:'Salvador',REC:'Recife',FOR:'Fortaleza',
+    BEL:'Belém',MAO:'Manaus',CWB:'Curitiba',POA:'Porto Alegre',
+    FLN:'Florianópolis',NAT:'Natal',MCZ:'Maceió',
+    LHR:'Londres',LGW:'Londres',STN:'Londres',CDG:'Paris',ORY:'Paris',
+    AMS:'Amsterdã',FRA:'Frankfurt',MUC:'Munique',MAD:'Madri',BCN:'Barcelona',
+    FCO:'Roma',MXP:'Milão',ZRH:'Zurique',GVA:'Genebra',VIE:'Viena',
+    BRU:'Bruxelas',LIS:'Lisboa',OPO:'Porto',DUB:'Dublin',CPH:'Copenhague',
+    ARN:'Estocolmo',OSL:'Oslo',HEL:'Helsinki',WAW:'Varsóvia',PRG:'Praga',
+    BUD:'Budapeste',ATH:'Atenas',IST:'Istambul',SAW:'Istambul',
+    DXB:'Dubai',DOH:'Doha',AUH:'Abu Dhabi',RUH:'Riade',AMM:'Amã',
+    CAI:'Cairo',JNB:'Joanesburgo',CPT:'Cidade do Cabo',NBO:'Nairóbi',
+    ADD:'Adis Abeba',SIN:'Singapura',KUL:'Kuala Lumpur',BKK:'Bangkok',
+    HKG:'Hong Kong',PEK:'Pequim',PVG:'Xangai',ICN:'Seul',
+    NRT:'Tóquio',HND:'Tóquio',SYD:'Sydney',MEL:'Melbourne',AKL:'Auckland',
+}
+function iataToCity(code: string): string {
+    return code.split(/\s*·\s*/).map(c => IATA_CITY[c.trim().toUpperCase()] ?? c.trim()).join(' · ')
+}
 function stopCodes(segs: any[]): string {
     if (!segs || segs.length <= 1) return ''
-    return segs.slice(0, -1).map((s: any) => s.destino ?? '').filter(Boolean).join(' · ')
+    const codes = segs.slice(0, -1).map((s: any) => s.destino ?? '').filter(Boolean).join(' · ')
+    return codes ? iataToCity(codes) : ''
 }
 function extractIata(companhia?: string | null): string {
     if (!companhia) return ''
@@ -353,8 +388,7 @@ function FlightCard({
     const iata = det.carrierCode || extractIata(flight.companhia)
     const showReturn = hasReturn && !hasInboundFlights
     const layoverCity = det.layoverCity || ''
-    // Prefer segment-derived connection codes over scraper layoverCity for accuracy
-    const connectionStr = stopCodes(segsOut) || layoverCity
+    const connectionStr = layoverCity || stopCodes(segsOut)
 
     const airlineName = flight.companhia && !flight.companhia.startsWith('Companhia')
         ? flight.companhia
