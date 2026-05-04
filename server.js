@@ -1273,16 +1273,18 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                     }
 
                     // ── Paradas ──────────────────────────────────────────────────────────────
-                    // PT: "Sem escalas" / "com 1 parada"
+                    // PT: "Sem escalas" / "Direto" / "com 1 parada"
                     // EN: "Nonstop" / "1 stop"
-                    let paradas = 1;
-                    if (/Sem escalas/i.test(aria) || /Nonstop/i.test(aria)) {
+                    let paradas = 0; // default 0: se não há indicação explícita de conexão, é direto
+                    if (/Sem escalas|Nonstop|\bDireto\b/i.test(aria)) {
                         paradas = 0;
                     } else {
-                        const stopsPT = aria.match(/com (\d+) parada/i);
+                        const stopsPT = aria.match(/com\s+(\d+)\s+parada/i) || aria.match(/(\d+)\s+escala/i);
                         const stopsEN = aria.match(/(\d+)\s+stop/i);
                         if (stopsPT) paradas = parseInt(stopsPT[1]);
                         else if (stopsEN) paradas = parseInt(stopsEN[1]);
+                        // Se menciona "parada" ou "escala" sem número → 1
+                        else if (/\bparada\b|\bescala\b|\bstop\b/i.test(aria)) paradas = 1;
                     }
 
                     // ── Horários ─────────────────────────────────────────────────────────────
@@ -1816,7 +1818,25 @@ const IATA_TO_AIRLINE = {
 function normalizeAirline(raw) {
     if (!raw) return '';
     const key = raw.toLowerCase().trim().replace(/\s+/g, ' ');
-    return AIRLINE_NAME_MAP[key] || raw.trim();
+    if (AIRLINE_NAME_MAP[key]) return AIRLINE_NAME_MAP[key];
+
+    // Codeshare: "LATAM e Delta" / "Delta e LATAM" / "DeltaLATAM" / "LATAM Airlines e American" etc.
+    // Pega a primeira companhia mencionada
+    const codeshareMatch = raw.match(/^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]+?)\s+e\s+/i)
+        || raw.match(/^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]+?)\s+(?:and|&)\s+/i);
+    if (codeshareMatch) {
+        const first = normalizeAirline(codeshareMatch[1].trim());
+        if (first && first !== 'Companhia aérea') return first;
+    }
+
+    // CamelCase concatenado: "DeltaLATAM" → "Delta"
+    const camelMatch = raw.match(/^([A-Z][a-z]+)([A-Z])/);
+    if (camelMatch) {
+        const first = normalizeAirline(camelMatch[1]);
+        if (first && first !== 'Companhia aérea') return first;
+    }
+
+    return raw.trim();
 }
 
 // Converte resultado do scraper para o formato FlightOffer usado no frontend
@@ -1895,27 +1915,33 @@ function gfCacheKey(origin, dest, date, returnDate) {
 
 // ─── Extração do gráfico de preços do Google Flights ─────────────────────────
 async function scrapePriceGraph(page, origin, destination) {
-    // Clica no botão "Ver histórico de preços" (o gráfico fica oculto por padrão)
+    // Tenta clicar no botão de histórico de preços (vários seletores)
     const clicked = await page.evaluate(() => {
-        // Strategy 1: button/role=button with price history text
-        const byText = [...document.querySelectorAll('button, [role="button"], a')].find(el => {
-            const t = (el.textContent ?? '') + ' ' + (el.getAttribute('aria-label') ?? '');
-            return /hist[oó]rico|price history|preço.{0,30}habitual|típico|typical|trend/i.test(t);
-        });
-        if (byText) { byText.click(); return true; }
+        const allClickable = [...document.querySelectorAll('button, [role="button"], a, [jsaction]')];
 
-        // Strategy 2: expandable sections / disclosure buttons
+        // Strategy 1: texto sobre histórico / preço habitual
+        const byText = allClickable.find(el => {
+            const t = (el.textContent ?? '') + ' ' + (el.getAttribute('aria-label') ?? '');
+            return /hist[oó]rico|price history|preço.{0,30}habitual|típico|typical|trend|ver preço|price graph|gráfico/i.test(t);
+        });
+        if (byText) { byText.click(); return 'text'; }
+
+        // Strategy 2: botão expandível sobre preços
         const byExpanded = [...document.querySelectorAll('[aria-expanded="false"]')].find(el => {
             const t = (el.textContent ?? '') + ' ' + (el.getAttribute('aria-label') ?? '');
-            return /hist[oó]rico|preço|price|típico|typical/i.test(t);
+            return /hist[oó]rico|preço|price|típico|typical|calendar|calend/i.test(t);
         });
-        if (byExpanded) { byExpanded.click(); return true; }
+        if (byExpanded) { byExpanded.click(); return 'expanded'; }
+
+        // Strategy 3: ícone de calendário / gráfico de barras próximo da área de preço
+        const calBtn = document.querySelector('[data-ved] svg[viewBox], [aria-label*="calend"], [aria-label*="calendar"], [aria-label*="gráfico"], [aria-label*="graph"]');
+        if (calBtn) { const btn = calBtn.closest('button, [role="button"]'); if (btn) { btn.click(); return 'icon'; } }
 
         return false;
     }).catch(() => false);
 
     console.log(`[priceGraph] botão clicado=${clicked}`);
-    await new Promise(r => setTimeout(r, clicked ? 900 : 500));
+    await new Promise(r => setTimeout(r, clicked ? 1200 : 500));
 
     // Scroll para revelar o gráfico caso não esteja visível
     await page.evaluate(() => window.scrollBy(0, 800)).catch(() => {});
@@ -1965,6 +1991,31 @@ async function scrapePriceGraph(page, origin, destination) {
             return 'typical';
         }
 
+        const EN_MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+        const EN_MONTHS_ABBREV = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+
+        function parseEnDate(label) {
+            const low = label.toLowerCase();
+            // "May 15" / "May 15, 2026" / "15 May" / "15 May 2026"
+            for (let m = 0; m < EN_MONTHS.length; m++) {
+                const abbr = EN_MONTHS_ABBREV[m];
+                const full = EN_MONTHS[m];
+                for (const mon of [abbr, full]) {
+                    let match = low.match(new RegExp(`${mon}\\s+(\\d{1,2})(?:[^\\d]|$)`));
+                    if (match) {
+                        const year = new Date().getFullYear();
+                        return `${year}-${String(m+1).padStart(2,'0')}-${String(parseInt(match[1])).padStart(2,'0')}`;
+                    }
+                    match = low.match(new RegExp(`(\\d{1,2})\\s+${mon}(?:\\s+(\\d{4}))?(?:[^a-z]|$)`));
+                    if (match) {
+                        const year = match[2] ? parseInt(match[2]) : new Date().getFullYear();
+                        return `${year}-${String(m+1).padStart(2,'0')}-${String(parseInt(match[1])).padStart(2,'0')}`;
+                    }
+                }
+            }
+            return null;
+        }
+
         // Tenta múltiplos seletores: barras SVG, buttons, e qualquer elemento com preço+data
         const candidates = [
             ...document.querySelectorAll('g[aria-label]'),
@@ -1973,6 +2024,7 @@ async function scrapePriceGraph(page, origin, destination) {
             ...document.querySelectorAll('[role="button"][aria-label]'),
             ...document.querySelectorAll('li[aria-label]'),
             ...document.querySelectorAll('td[aria-label]'),
+            ...document.querySelectorAll('[data-price][aria-label]'),
         ];
 
         const bars = [];
@@ -1980,11 +2032,13 @@ async function scrapePriceGraph(page, origin, destination) {
         for (const el of candidates) {
             const label = el.getAttribute('aria-label') ?? '';
             if (!label) continue;
-            // Precisa ter preço E data em português (full: "15 de março" ou abreviado: "15 mai")
             if (!/R\$|Reais/i.test(label)) continue;
-            if (!/\d{1,2}\s+(?:de\s+|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/i.test(label)) continue;
+            // Aceita datas em PT ou EN
+            const hasPtDate = /\d{1,2}\s+(?:de\s+|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/i.test(label);
+            const hasEnDate = /(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2}|\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(label);
+            if (!hasPtDate && !hasEnDate) continue;
 
-            const date = parsePtDate(label);
+            const date = parsePtDate(label) || parseEnDate(label);
             const price = parsePrice(label);
             if (!date || !price || seenDates.has(date)) continue;
 
