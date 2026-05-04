@@ -358,6 +358,39 @@ function FlightDetails({ flight, det, segsOut, layoverCity }: {
     )
 }
 
+// ── AirlineLogo ────────────────────────────────────────────────────────────────
+function AirlineLogo({ iata, name }: { iata: string; name: string }) {
+    const initial = name?.replace(/^Companhia/i, '').trim()[0]?.toUpperCase() ?? '?'
+    if (!iata) return (
+        <div style={{
+            width: 36, height: 36, borderRadius: 10, background: '#EEF2F8',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 15, fontWeight: 800, color: '#2A60C2', flexShrink: 0,
+        }}>{initial}</div>
+    )
+    return (
+        <img
+            src={`https://www.gstatic.com/flights/airline_logos/70px/${iata}.png`}
+            alt={name}
+            width={36}
+            height={36}
+            style={{ borderRadius: 10, objectFit: 'contain', flexShrink: 0, background: '#F8FAFC', padding: 2 }}
+            onError={e => {
+                const el = e.currentTarget
+                el.style.display = 'none'
+                const fallback = document.createElement('div')
+                fallback.textContent = initial
+                Object.assign(fallback.style, {
+                    width: '36px', height: '36px', borderRadius: '10px', background: '#EEF2F8',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '15px', fontWeight: '800', color: '#2A60C2', flexShrink: '0',
+                })
+                el.parentNode?.insertBefore(fallback, el)
+            }}
+        />
+    )
+}
+
 // ── FlightCard ─────────────────────────────────────────────────────────────────
 interface FlightCardProps {
     flight: ResultadoVoo
@@ -428,8 +461,8 @@ function FlightCard({
                 padding: '16px 20px', borderBottom: '1px solid #F1F5F9',
                 background: !isPinned && idx === 0 && sortBy === 'price' ? '#FAFBFF' : '#fff',
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 4, height: 32, borderRadius: 4, background: '#0E2A55' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <AirlineLogo iata={iata} name={airlineName} />
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span style={{ fontSize: 15, fontWeight: 700, color: '#0E2A55' }}>{airlineName}</span>
