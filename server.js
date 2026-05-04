@@ -1109,6 +1109,24 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 if (cookieClicked) await new Promise(r => setTimeout(r, randInt(600, 1000)));
             }
 
+            // ── Detect search-form page vs results page ───────────────────────
+            // The tfs URL pre-fills the form but may no longer auto-navigate to results.
+            // If we land on the form (Pesquisar button visible, no flight cards), click it.
+            const onForm = await page.evaluate(() => {
+                const hasFlights = [...document.querySelectorAll('div[data-id]')].some(el => {
+                    const a = el.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
+                    return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(a);
+                });
+                const searchBtn = document.querySelector('[aria-label="Pesquisar"], [aria-label="Search"]');
+                return !hasFlights && !!searchBtn;
+            });
+
+            if (onForm) {
+                console.log(`[GFlights] ${origin}→${destination}: formulário detectado — clicando Pesquisar`);
+                await page.locator('[aria-label="Pesquisar"], [aria-label="Search"]').first().click({ timeout: 5000 }).catch(() => null);
+                await new Promise(r => setTimeout(r, randInt(1500, 2500)));
+            }
+
             // Aguarda os cards de voo aparecerem (div[data-id] com aria-label de voo)
             // Detecta tanto PT ("Reais brasileiros", "Voo da") quanto EN ("From R$", "flight")
             await page.waitForFunction(
@@ -1117,7 +1135,7 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                     const a = link?.getAttribute('aria-label') ?? '';
                     return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(a);
                 }),
-                { timeout: 12000 }
+                { timeout: 18000 }
             ).catch(() => console.log(`[GFlights] ${origin}→${destination}: timeout aguardando cards de voo`));
 
             // ── Comportamento humano: movimento de mouse + scroll aleatório ────
@@ -3265,7 +3283,22 @@ app.get('/api/admin/gf-diag', async (req, res) => {
         const page = await context.newPage();
         const url = buildGfTfsUrl(origin.toUpperCase(), destination.toUpperCase(), date);
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 22000 });
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, 2000));
+
+        // Se caiu no formulário, clica Pesquisar
+        const onForm = await page.evaluate(() => {
+            const hasFlights = [...document.querySelectorAll('div[data-id]')].some(el => {
+                const a = el.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
+                return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(a);
+            });
+            return !hasFlights && !!document.querySelector('[aria-label="Pesquisar"], [aria-label="Search"]');
+        });
+        let clickedSearch = false;
+        if (onForm) {
+            await page.locator('[aria-label="Pesquisar"], [aria-label="Search"]').first().click({ timeout: 5000 }).catch(() => null);
+            clickedSearch = true;
+            await new Promise(r => setTimeout(r, 4000));
+        }
 
         const info = await page.evaluate(() => {
             const divs = [...document.querySelectorAll('div[data-id]')];
@@ -3273,7 +3306,7 @@ app.get('/api/admin/gf-diag', async (req, res) => {
                 const a = el.querySelector('[aria-label]');
                 return (a?.getAttribute('aria-label') ?? '').slice(0, 200);
             });
-            const bodyText = (document.body.innerText ?? '').slice(0, 800);
+            const bodyText = (document.body.innerText ?? '').slice(0, 1200);
             return {
                 title: document.title,
                 url: location.href,
@@ -3282,6 +3315,7 @@ app.get('/api/admin/gf-diag', async (req, res) => {
                 bodyText,
             };
         });
+        Object.assign(info, { clickedSearch });
 
         await context.close();
         res.json({ origin, destination, date, navigatedTo: url, ...info });
