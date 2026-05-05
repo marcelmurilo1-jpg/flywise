@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Tag, AlertCircle, Clock, Calendar, Flame, Search, X } from 'lucide-react'
+import { Tag, AlertCircle, Calendar, Flame, Search, X } from 'lucide-react'
 import { supabase, type Promocao } from '@/lib/supabase'
 import { motion } from 'framer-motion'
 import { format, isToday, isYesterday, parseISO } from 'date-fns'
