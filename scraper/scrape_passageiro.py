@@ -581,33 +581,49 @@ def extrair_conteudo(url, feed_title=None, published_dt: Optional[datetime] = No
     author_tag = soup.find(attrs={"rel": "author"}) or soup.find(class_="author") or soup.find(class_="byline")
     author = safe_get_text(author_tag)
 
-    # conteúdo
+    # conteúdo — seletores ordenados do mais preciso ao mais genérico.
+    # 'div.box-content' é o corpo do post no tema atual do site. Os demais ficam como
+    # fallback para sobreviver a mudanças de layout. NÃO usar 'article' como seletor
+    # genérico: o tema atual envolve cards de "notícia relacionada" em <article>, que
+    # dão match falso e fazem o scraper extrair só ~100 chars.
     content_selectors = [
+        "div.box-content",
+        "div.left-content",
         "div.td-post-content",
         "div.entry-content",
         "div.post-content",
-        "article .entry-content",
-        "article",
+        "article.post",
+        "article[itemprop='articleBody']",
+        "[itemprop='articleBody']",
         "main",
-        "div.content",
-        "section",
     ]
     content_soup = None
     for sel in content_selectors:
         el = soup.select_one(sel)
         if el:
-            content_soup = el
-            break
+            text_len = len(el.get_text(strip=True))
+            # exige conteúdo mínimo (300 chars) — evita capturar widgets / cards vazios
+            if text_len >= 300:
+                content_soup = el
+                break
     if not content_soup:
-        content_soup = soup.find("article") or soup.find("main") or soup.body or soup
-    for bad in content_soup.find_all(["script", "style", "iframe", "ins", "noscript", "svg"]):
+        content_soup = soup.find("main") or soup.body or soup
+    for bad in content_soup.find_all(["script", "style", "iframe", "ins", "noscript", "svg", "form"]):
         bad.decompose()
+    # remove cards de "notícia relacionada" que vazam dentro do corpo
+    for related in content_soup.select("article.card-noticia-relacionada, .card-noticia-relacionada"):
+        related.decompose()
 
-    # ---- NOVO BLOCO: corta em frases que marcam o fim do conteúdo útil
+    # ---- corta em frases que marcam o fim do conteúdo útil
     raw_html = str(content_soup)
     STOP_PHRASES = [
         "central de cupons",
         "quer ficar por dentro de todas as novidades",
+        "ver mais publicações",
+        "publicações relacionadas",
+        "posts relacionados",
+        "leia também",
+        "reportar erro em",
     ]
     low_html = raw_html.lower()
     for stop_phrase in STOP_PHRASES:

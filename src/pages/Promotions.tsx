@@ -19,16 +19,16 @@ export default function Promotions() {
                             <Tag size={20} color="#2A60C2" />
                         </div>
                         <h1 style={{ fontSize: '28px', fontWeight: 800, letterSpacing: '-0.02em', color: '#0E2A55' }}>
-                            Promoções de Milhas
+                            Promoções &amp; Notícias
                         </h1>
                     </div>
-                    <p style={{ color: '#64748B', fontSize: '14px', maxWidth: '500px' }}>
-                        Promoções de milhas aéreas agregadas automaticamente, atualizadas a cada hora.
-                        Clique em qualquer card para ver a promoção completa com todos os detalhes e imagens.
+                    <p style={{ color: '#64748B', fontSize: '14px', maxWidth: '560px' }}>
+                        Tudo que está rolando em milhas, passagens e viagens — selecionado e organizado pelo FlyWise.
+                        Use a busca e os filtros para chegar rápido no que importa.
                     </p>
                 </div>
 
-                <PromotionsSection limit={48} />
+                <PromotionsSection limit={1000} />
             </div>
         </div>
     )

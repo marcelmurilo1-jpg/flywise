@@ -26,6 +26,7 @@ import Auth from '@/pages/Auth'
 import Home from '@/pages/Home'
 import Resultados from '@/pages/Resultados'
 import Promotions from '@/pages/Promotions'
+import PromotionDetail from '@/pages/PromotionDetail'
 import Wallet from '@/pages/Wallet'
 import SavedStrategies from '@/pages/SavedStrategies'
 import SearchWizard from '@/pages/SearchWizard'
@@ -105,6 +106,7 @@ function AppRoutes() {
         <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
         <Route path="/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
         <Route path="/promotions" element={<ProtectedRoute><Promotions /></ProtectedRoute>} />
+        <Route path="/promotions/:id" element={<ProtectedRoute><PromotionDetail /></ProtectedRoute>} />
         <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
         <Route path="/saved-strategies" element={<ProtectedRoute><SavedStrategies /></ProtectedRoute>} />
         <Route path="/busca-avancada" element={<ProtectedRoute><SearchWizard /></ProtectedRoute>} />

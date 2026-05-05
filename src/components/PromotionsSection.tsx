@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react'
-import { Tag, AlertCircle, X, Clock, Calendar, Flame } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Tag, AlertCircle, Clock, Calendar, Flame, Search, X } from 'lucide-react'
 import { supabase, type Promocao } from '@/lib/supabase'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { format, isToday, isYesterday, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Link } from 'react-router-dom'
+import { sanitizePromoSummary } from '@/lib/sanitizePromoHtml'
 
 interface PromotionsSectionProps {
     limit?: number
@@ -12,155 +13,13 @@ interface PromotionsSectionProps {
     landingMode?: boolean
 }
 
-// ─── Promotion Modal ──────────────────────────────────────────────────────────
-function PromoModal({ promo, onClose }: { promo: Promocao; onClose: () => void }) {
-    const expiresText = promo.valid_until
-        ? isToday(parseISO(promo.valid_until))
-            ? `⏰ Termina hoje às ${format(parseISO(promo.valid_until), 'HH:mm')}`
-            : `📅 Válido até ${format(parseISO(promo.valid_until), "dd 'de' MMMM", { locale: ptBR })}`
-        : null
-
-    const expiresIsToday = promo.valid_until ? isToday(parseISO(promo.valid_until)) : false
-
-    return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            style={{
-                position: 'fixed', inset: 0, zIndex: 9999,
-                background: 'rgba(8,10,16,0.75)', backdropFilter: 'blur(6px)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
-            }}
-        >
-            <motion.div
-                initial={{ opacity: 0, scale: 0.94, y: 24 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.94, y: 24 }}
-                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                onClick={e => e.stopPropagation()}
-                style={{
-                    background: '#fff', borderRadius: '24px', width: '100%',
-                    maxWidth: '720px', maxHeight: '88vh', overflowY: 'auto',
-                    boxShadow: '0 32px 80px rgba(14,42,85,0.25)',
-                    fontFamily: 'Inter, system-ui, sans-serif',
-                }}
-            >
-                {/* Modal Header */}
-                <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '22px 24px 16px', borderBottom: '1px solid #E2EAF5',
-                    position: 'sticky', top: 0, background: '#fff', zIndex: 2,
-                    borderRadius: '24px 24px 0 0',
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: '#EEF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Tag size={16} color="#2A60C2" />
-                        </div>
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#2A60C2', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                            Promoção de Milhas
-                        </span>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#F1F5F9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#E2E8F0'}
-                        onMouseLeave={e => e.currentTarget.style.background = '#F1F5F9'}
-                    >
-                        <X size={15} color="#64748B" />
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div style={{ padding: '24px' }}>
-                    <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#0E2A55', lineHeight: 1.3, letterSpacing: '-0.02em', marginBottom: '12px' }}>
-                        {promo.titulo ?? 'Promoção'}
-                    </h2>
-
-                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
-                        {promo.created_at && (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#64748B', fontWeight: 500 }}>
-                                <Calendar size={13} />
-                                {format(parseISO(promo.created_at), "dd 'de' MMMM", { locale: ptBR })}
-                            </span>
-                        )}
-                        {expiresText && (
-                            <span style={{
-                                display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 600,
-                                color: expiresIsToday ? '#DC2626' : '#059669',
-                                background: expiresIsToday ? '#FEF2F2' : '#ECFDF5',
-                                padding: '3px 10px', borderRadius: '999px',
-                            }}>
-                                <Clock size={12} />{expiresText}
-                            </span>
-                        )}
-                        {promo.preco_clube && (
-                            <span style={{
-                                display: 'flex', alignItems: 'center', gap: '5px',
-                                fontSize: '12px', fontWeight: 600, color: '#B45309',
-                                background: '#FEF3C7', padding: '3px 10px', borderRadius: '999px',
-                            }}>
-                                Clube · R$ {promo.preco_clube.toFixed(2)}/mês
-                                {promo.bonus_pct ? ` · ${promo.bonus_pct}% OFF compra` : ''}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Scoped CSS for the HTML article body */}
-                    <style>{`
-                        .promo-html-body { color: #334155; font-size: 15px; line-height: 1.85; }
-                        .promo-html-body p { margin: 0 0 16px; }
-                        .promo-html-body h1, .promo-html-body h2, .promo-html-body h3,
-                        .promo-html-body h4, .promo-html-body h5 {
-                            color: #0E2A55; font-weight: 800; line-height: 1.3;
-                            letter-spacing: -0.02em; margin: 24px 0 10px;
-                        }
-                        .promo-html-body h2 { font-size: 20px; }
-                        .promo-html-body h3 { font-size: 17px; }
-                        .promo-html-body strong, .promo-html-body b { font-weight: 700; color: #0E2A55; }
-                        .promo-html-body ul, .promo-html-body ol { padding-left: 20px; margin: 0 0 16px; }
-                        .promo-html-body li { margin-bottom: 6px; }
-                        .promo-html-body img {
-                            width: 100%; max-width: 100%; height: auto;
-                            border-radius: 12px; margin: 16px 0;
-                            display: block;
-                        }
-                        .promo-html-body a { color: #2A60C2; text-decoration: underline; }
-                        .promo-html-body blockquote {
-                            border-left: 3px solid #2A60C2; margin: 16px 0;
-                            padding: 8px 16px; background: #EEF2F8; border-radius: 0 8px 8px 0;
-                            color: #334155;
-                        }
-                        .promo-html-body table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-                        .promo-html-body th, .promo-html-body td {
-                            padding: 10px 14px; border: 1px solid #E2EAF5; font-size: 14px;
-                        }
-                        .promo-html-body th { background: #EEF2F8; font-weight: 700; color: #0E2A55; }
-                        .promo-html-body hr { border: none; border-top: 1px solid #E2EAF5; margin: 20px 0; }
-                    `}</style>
-
-                    {promo.conteudo ? (
-                        <div
-                            className="promo-html-body"
-                            dangerouslySetInnerHTML={{ __html: promo.conteudo }}
-                        />
-                    ) : (
-                        <p style={{ color: '#94A3B8', fontStyle: 'italic' }}>Sem conteúdo disponível.</p>
-                    )}
-                </div>
-            </motion.div>
-        </motion.div>
-    )
-}
+type Categoria = 'all' | 'milhas' | 'passagens' | 'compras' | 'noticias'
+type Subcategoria = 'all' | 'transferencia' | 'clube' | 'acumulo'
 
 // ─── Promo Card ───────────────────────────────────────────────────────────────
-function PromoCard({ promo, idx, onClick, dark = false }: {
-    promo: Promocao; idx: number; onClick: () => void; dark?: boolean
-}) {
+function PromoCard({ promo, idx, dark = false }: { promo: Promocao; idx: number; dark?: boolean }) {
     const expiringToday = promo.valid_until ? isToday(parseISO(promo.valid_until)) : false
 
-    // Card styles differ for dark (dashboard) vs light (landing) mode
     const cardStyle: React.CSSProperties = dark ? {
         padding: '20px',
         display: 'flex', flexDirection: 'column', gap: '10px',
@@ -170,6 +29,7 @@ function PromoCard({ promo, idx, onClick, dark = false }: {
         borderRadius: '14px',
         transition: 'border-color 0.2s, background 0.2s',
         position: 'relative',
+        height: '100%',
     } : {
         padding: '22px',
         display: 'flex', flexDirection: 'column', gap: '10px',
@@ -180,15 +40,17 @@ function PromoCard({ promo, idx, onClick, dark = false }: {
         boxShadow: '0 2px 12px rgba(14,42,85,0.06)',
         transition: 'box-shadow 0.2s, transform 0.2s',
         position: 'relative',
+        height: '100%',
     }
+
+    const summary = useMemo(() => sanitizePromoSummary(promo.conteudo, 140), [promo.conteudo])
 
     return (
         <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.04 }}
+            transition={{ delay: Math.min(idx * 0.03, 0.3) }}
             whileHover={{ y: -2 }}
-            onClick={onClick}
             style={cardStyle}
             onMouseEnter={e => {
                 const el = e.currentTarget as HTMLElement
@@ -201,7 +63,6 @@ function PromoCard({ promo, idx, onClick, dark = false }: {
                 else el.style.boxShadow = '0 2px 12px rgba(14,42,85,0.06)'
             }}
         >
-            {/* "Acaba hoje" badge — only when truly expiring today */}
             {expiringToday && (
                 <div style={{
                     position: 'absolute', top: '12px', right: '12px',
@@ -227,8 +88,17 @@ function PromoCard({ promo, idx, onClick, dark = false }: {
                 {promo.subcategoria === 'transferencia' && (
                     <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', background: '#EDE9FE', color: '#6D28D9' }}>Transferência</span>
                 )}
+                {promo.subcategoria === 'acumulo' && (
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', background: '#DCFCE7', color: '#15803D' }}>Acúmulo</span>
+                )}
                 {promo.categoria === 'passagens' && (
                     <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', background: '#E0F2FE', color: '#0369A1' }}>Passagem</span>
+                )}
+                {promo.categoria === 'compras' && (
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', background: '#FEF3C7', color: '#B45309' }}>Compras</span>
+                )}
+                {promo.categoria === 'noticias' && (
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px', background: '#F1F5F9', color: '#475569' }}>Notícia</span>
                 )}
                 {(promo.programas_tags ?? []).slice(0, 2).map(tag => (
                     <span key={tag} style={{
@@ -248,14 +118,14 @@ function PromoCard({ promo, idx, onClick, dark = false }: {
                 {promo.titulo ?? 'Promoção'}
             </h3>
 
-            {promo.conteudo && (
+            {summary && (
                 <p style={{
                     fontSize: '12.5px',
                     color: dark ? '#64748b' : '#6B7A99',
                     lineHeight: 1.6,
                     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                 }}>
-                    {promo.conteudo.replace(/<[^>]*>/g, '').slice(0, 130)}
+                    {summary}
                 </p>
             )}
 
@@ -307,19 +177,35 @@ function DateLabel({ label, dark }: { label: string; dark: boolean }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+const CATEGORY_OPTIONS: { key: Categoria; label: string }[] = [
+    { key: 'all',       label: 'Todas' },
+    { key: 'milhas',    label: '✦ Milhas' },
+    { key: 'passagens', label: '✈ Passagens' },
+    { key: 'compras',   label: '🛍 Compras' },
+    { key: 'noticias',  label: '📰 Notícias' },
+]
+
+const SUBCATEGORY_OPTIONS: { key: Subcategoria; label: string }[] = [
+    { key: 'all',           label: 'Todas' },
+    { key: 'transferencia', label: 'Transferência' },
+    { key: 'clube',         label: 'Clube' },
+    { key: 'acumulo',       label: 'Acúmulo' },
+]
+
 export function PromotionsSection({ limit = 6, landingMode = false }: PromotionsSectionProps) {
     const [promos, setPromos] = useState<Promocao[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
     const [activeTab, setActiveTab] = useState<'all' | 'today'>('all')
-    const [activeCategory, setActiveCategory] = useState<'all' | 'milhas' | 'passagens'>('all')
+    const [activeCategory, setActiveCategory] = useState<Categoria>('all')
+    const [activeSubcategory, setActiveSubcategory] = useState<Subcategoria>('all')
     const [activeProgram, setActiveProgram] = useState<string | null>(null)
-    const [selectedPromo, setSelectedPromo] = useState<Promocao | null>(null)
+    const [searchTerm, setSearchTerm] = useState('')
 
     useEffect(() => {
         const load = async () => {
             try {
-                const fetchLimit = landingMode ? limit : 100
+                const fetchLimit = landingMode ? limit : 1000
                 const { data, error } = await supabase
                     .from('vw_promocoes_ativas').select('*')
                     .order('created_at', { ascending: false }).limit(fetchLimit)
@@ -331,25 +217,44 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
         load()
     }, [limit, landingMode])
 
-    const dark = false  // dashboard is now light background — use light cards everywhere
+    const dark = false
     const todayPromos = promos.filter(p => p.valid_until && isToday(parseISO(p.valid_until)))
 
-    // Programas únicos para chips de filtro
-    const availablePrograms = Array.from(
-        new Set(promos.flatMap(p => p.programas_tags ?? []))
-    ).sort()
+    // Programas únicos para chips de filtro (filtrados pela categoria atual)
+    const availablePrograms = useMemo(() => {
+        const pool = activeCategory === 'all'
+            ? promos
+            : promos.filter(p => p.categoria === activeCategory)
+        return Array.from(new Set(pool.flatMap(p => p.programas_tags ?? []))).sort()
+    }, [promos, activeCategory])
 
-    // Filtro combinado: tab prazo + categoria + programa
-    const filteredPromos = promos.filter(p => {
-        if (activeTab === 'today' && !(p.valid_until && isToday(parseISO(p.valid_until)))) return false
-        if (activeCategory === 'milhas' && p.categoria !== 'milhas') return false
-        if (activeCategory === 'passagens' && p.categoria !== 'passagens') return false
-        if (activeProgram && !(p.programas_tags ?? []).includes(activeProgram)) return false
-        return true
-    })
+    // Counts por categoria — para mostrar números nos botões
+    const categoryCounts = useMemo(() => {
+        const counts: Record<Categoria, number> = { all: promos.length, milhas: 0, passagens: 0, compras: 0, noticias: 0 }
+        for (const p of promos) {
+            if (p.categoria && p.categoria in counts) counts[p.categoria as Categoria]++
+        }
+        return counts
+    }, [promos])
 
-    // Group promos by date for dashboard mode
-    const groupedPromos: { label: string; items: Promocao[] }[] = (() => {
+    // Filtro combinado
+    const filteredPromos = useMemo(() => {
+        const q = searchTerm.trim().toLowerCase()
+        return promos.filter(p => {
+            if (activeTab === 'today' && !(p.valid_until && isToday(parseISO(p.valid_until)))) return false
+            if (activeCategory !== 'all' && p.categoria !== activeCategory) return false
+            if (activeCategory === 'milhas' && activeSubcategory !== 'all' && p.subcategoria !== activeSubcategory) return false
+            if (activeProgram && !(p.programas_tags ?? []).includes(activeProgram)) return false
+            if (q) {
+                const hay = `${p.titulo ?? ''} ${p.conteudo ?? ''}`.toLowerCase()
+                if (!hay.includes(q)) return false
+            }
+            return true
+        })
+    }, [promos, activeTab, activeCategory, activeSubcategory, activeProgram, searchTerm])
+
+    // Agrupamento por data — só no dashboard mode
+    const groupedPromos: { label: string; items: Promocao[] }[] = useMemo(() => {
         if (landingMode || filteredPromos.length === 0) return []
         const today: Promocao[] = []
         const yesterday: Promocao[] = []
@@ -366,7 +271,7 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
         if (yesterday.length) groups.push({ label: 'Ontem', items: yesterday })
         if (older.length) groups.push({ label: 'Anteriores', items: older })
         return groups
-    })()
+    }, [landingMode, filteredPromos])
 
     const gridStyle: React.CSSProperties = {
         display: 'grid',
@@ -374,19 +279,29 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
         gap: '14px',
     }
 
+    const clearFilters = () => {
+        setActiveTab('all')
+        setActiveCategory('all')
+        setActiveSubcategory('all')
+        setActiveProgram(null)
+        setSearchTerm('')
+    }
+
+    const hasActiveFilters = activeTab !== 'all' || activeCategory !== 'all'
+        || activeSubcategory !== 'all' || activeProgram !== null || searchTerm.trim() !== ''
 
     if (loading) return (
         <div style={gridStyle}>
             {Array.from({ length: limit > 3 ? 6 : 3 }).map((_, i) => (
                 <div key={i} style={{
                     padding: '22px', display: 'flex', flexDirection: 'column', gap: '10px',
-                    background: dark ? '#0f1623' : '#fff',
-                    border: dark ? '1px solid rgba(255,255,255,0.07)' : '1px solid #E2EAF5',
+                    background: '#fff',
+                    border: '1px solid #E2EAF5',
                     borderRadius: '14px',
                 }}>
-                    <div className="skeleton" style={{ height: '18px', width: '75%', background: dark ? 'rgba(255,255,255,0.06)' : undefined }} />
-                    <div className="skeleton" style={{ height: '13px', width: '50%', background: dark ? 'rgba(255,255,255,0.04)' : undefined }} />
-                    <div className="skeleton" style={{ height: '13px', width: '100%', background: dark ? 'rgba(255,255,255,0.04)' : undefined }} />
+                    <div className="skeleton" style={{ height: '18px', width: '75%' }} />
+                    <div className="skeleton" style={{ height: '13px', width: '50%' }} />
+                    <div className="skeleton" style={{ height: '13px', width: '100%' }} />
                 </div>
             ))}
         </div>
@@ -399,10 +314,10 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
     )
 
     if (promos.length === 0) return (
-        <div style={{ textAlign: 'center', padding: '48px', color: dark ? '#475569' : '#64748B' }}>
+        <div style={{ textAlign: 'center', padding: '48px', color: '#64748B' }}>
             <Tag size={28} style={{ marginBottom: '10px', opacity: 0.4 }} />
             <p>Nenhuma promoção ativa no momento.</p>
-            <p style={{ fontSize: '12px', marginTop: '4px', opacity: 0.7 }}>O scraper atualiza a cada hora.</p>
+            <p style={{ fontSize: '12px', marginTop: '4px', opacity: 0.7 }}>O scraper atualiza a cada algumas horas.</p>
         </div>
     )
 
@@ -410,9 +325,43 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
         <>
             {/* Filtros — dashboard mode only */}
             {!landingMode && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+                    {/* Busca */}
+                    <div style={{ position: 'relative', maxWidth: '420px' }}>
+                        <Search size={15} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', pointerEvents: 'none' }} />
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            placeholder="Buscar por título ou conteúdo…"
+                            style={{
+                                width: '100%', padding: '10px 36px 10px 38px',
+                                borderRadius: '10px',
+                                border: '1px solid #E2EAF5', background: '#fff',
+                                fontFamily: 'inherit', fontSize: '13.5px', color: '#0E2A55',
+                                outline: 'none', transition: 'border-color 0.15s',
+                            }}
+                            onFocus={e => e.currentTarget.style.borderColor = '#2A60C2'}
+                            onBlur={e => e.currentTarget.style.borderColor = '#E2EAF5'}
+                        />
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                style={{
+                                    position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)',
+                                    background: 'transparent', border: 'none', cursor: 'pointer',
+                                    width: '24px', height: '24px', borderRadius: '50%',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    color: '#94A3B8',
+                                }}
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+
                     {/* Linha 1: tabs de prazo */}
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         {[
                             { key: 'all', label: `Todas (${promos.length})`, icon: <Tag size={13} /> },
                             { key: 'today', label: `Acaba hoje${todayPromos.length > 0 ? ` (${todayPromos.length})` : ''}`, icon: <Flame size={13} /> },
@@ -437,17 +386,41 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
                                 </button>
                             )
                         })}
+                        {hasActiveFilters && (
+                            <button onClick={clearFilters}
+                                style={{
+                                    marginLeft: 'auto',
+                                    padding: '6px 12px', borderRadius: '8px', cursor: 'pointer',
+                                    fontFamily: 'inherit', fontSize: '12px', fontWeight: 600,
+                                    background: 'transparent', color: '#64748B',
+                                    border: '1px dashed #CBD5E1',
+                                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                }}
+                            >
+                                <X size={12} /> Limpar filtros
+                            </button>
+                        )}
                     </div>
 
                     {/* Linha 2: categoria */}
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                        {(['all', 'milhas', 'passagens'] as const).map(cat => {
-                            const label = cat === 'all' ? 'Todas' : cat === 'milhas' ? '✦ Milhas' : '✈ Passagens'
-                            const isActive = activeCategory === cat
+                        {CATEGORY_OPTIONS.map(opt => {
+                            const isActive = activeCategory === opt.key
+                            const count = categoryCounts[opt.key]
+                            const disabled = opt.key !== 'all' && count === 0
                             return (
-                                <button key={cat} onClick={() => { setActiveCategory(cat); setActiveProgram(null) }}
+                                <button key={opt.key}
+                                    onClick={() => {
+                                        if (disabled) return
+                                        setActiveCategory(opt.key)
+                                        setActiveSubcategory('all')
+                                        setActiveProgram(null)
+                                    }}
+                                    disabled={disabled}
                                     style={{
-                                        padding: '5px 14px', borderRadius: '999px', cursor: 'pointer',
+                                        padding: '5px 14px', borderRadius: '999px',
+                                        cursor: disabled ? 'not-allowed' : 'pointer',
+                                        opacity: disabled ? 0.4 : 1,
                                         fontFamily: 'inherit', fontSize: '12px', fontWeight: 600,
                                         background: isActive ? '#0E2A55' : 'transparent',
                                         color: isActive ? '#fff' : '#64748B',
@@ -455,14 +428,37 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
                                         transition: 'all 0.15s',
                                     }}
                                 >
-                                    {label}
+                                    {opt.label} {opt.key !== 'all' && <span style={{ opacity: 0.6, fontWeight: 500 }}>({count})</span>}
                                 </button>
                             )
                         })}
                     </div>
 
-                    {/* Linha 3: chips de programa (só quando milhas) */}
-                    {activeCategory === 'milhas' && availablePrograms.length > 0 && (
+                    {/* Linha 3: subcategoria — apenas quando milhas */}
+                    {activeCategory === 'milhas' && (
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {SUBCATEGORY_OPTIONS.map(opt => {
+                                const isActive = activeSubcategory === opt.key
+                                return (
+                                    <button key={opt.key} onClick={() => setActiveSubcategory(opt.key)}
+                                        style={{
+                                            padding: '4px 12px', borderRadius: '999px', cursor: 'pointer',
+                                            fontFamily: 'inherit', fontSize: '11.5px', fontWeight: 600,
+                                            background: isActive ? '#6D28D9' : 'transparent',
+                                            color: isActive ? '#fff' : '#64748B',
+                                            border: isActive ? '1.5px solid #6D28D9' : '1.5px solid #E2EAF5',
+                                            transition: 'all 0.15s',
+                                        }}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    )}
+
+                    {/* Linha 4: chips de programa */}
+                    {availablePrograms.length > 0 && (
                         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                             {[null, ...availablePrograms].map(prog => (
                                 <button key={prog ?? '__all'} onClick={() => setActiveProgram(prog)}
@@ -475,19 +471,40 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
                                         transition: 'all 0.15s',
                                     }}
                                 >
-                                    {prog ?? 'Todos'}
+                                    {prog ?? 'Todos os programas'}
                                 </button>
                             ))}
                         </div>
                     )}
+
+                    {/* Resumo de resultados */}
+                    <p style={{ fontSize: '12px', color: '#94A3B8', margin: 0 }}>
+                        {filteredPromos.length} {filteredPromos.length === 1 ? 'resultado' : 'resultados'}
+                        {hasActiveFilters ? ' com os filtros aplicados' : ''}
+                    </p>
                 </div>
             )}
 
-            {/* "Acaba hoje" empty state */}
-            {activeTab === 'today' && filteredPromos.length === 0 && (
+            {/* Empty state com filtros */}
+            {!landingMode && filteredPromos.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '48px', color: '#475569' }}>
-                    <Flame size={28} style={{ marginBottom: '10px', opacity: 0.4 }} />
-                    <p>Nenhuma promoção expira hoje.</p>
+                    <Calendar size={28} style={{ marginBottom: '10px', opacity: 0.4 }} />
+                    <p style={{ fontSize: '14px', fontWeight: 600, color: '#0E2A55', marginBottom: '4px' }}>
+                        Nenhuma promoção encontrada
+                    </p>
+                    <p style={{ fontSize: '12.5px' }}>Tente ajustar os filtros ou limpar a busca.</p>
+                    {hasActiveFilters && (
+                        <button onClick={clearFilters}
+                            style={{
+                                marginTop: '14px',
+                                padding: '8px 16px', borderRadius: '10px', cursor: 'pointer',
+                                background: '#2A60C2', color: '#fff', border: 'none',
+                                fontFamily: 'inherit', fontSize: '12.5px', fontWeight: 600,
+                            }}
+                        >
+                            Limpar filtros
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -496,7 +513,7 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
                 <>
                     <style>{`
                         .promo-landing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
-                        .promo-landing-grid .promo-card-link { display: block; text-decoration: none; }
+                        .promo-landing-grid .promo-card-link { display: block; text-decoration: none; color: inherit; }
                         @media (max-width: 768px) {
                             .promo-landing-grid {
                                 display: flex !important;
@@ -519,39 +536,33 @@ export function PromotionsSection({ limit = 6, landingMode = false }: Promotions
                     <div className="promo-landing-grid">
                         {promos.slice(0, limit).map((promo, idx) => (
                             <Link key={promo.id} to="/auth" className="promo-card-link">
-                                <PromoCard promo={promo} idx={idx} onClick={() => {}} dark={false} />
+                                <PromoCard promo={promo} idx={idx} dark={false} />
                             </Link>
                         ))}
                     </div>
                 </>
             )}
 
-            {/* Dashboard mode — grouped by date */}
+            {/* Dashboard mode — grouped by date, cada card é um Link */}
             {!landingMode && filteredPromos.length > 0 && (
-                <div style={gridStyle}>
-                    {groupedPromos.map(group => (
-                        <React.Fragment key={group.label}>
-                            <DateLabel label={group.label} dark={dark} />
-                            {group.items.map((promo, idx) => (
-                                <PromoCard
-                                    key={promo.id}
-                                    promo={promo}
-                                    idx={idx}
-                                    dark={dark}
-                                    onClick={() => setSelectedPromo(promo)}
-                                />
-                            ))}
-                        </React.Fragment>
-                    ))}
-                </div>
+                <>
+                    <style>{`
+                        .promo-dashboard-card-link { display: block; text-decoration: none; color: inherit; height: 100%; }
+                    `}</style>
+                    <div style={gridStyle}>
+                        {groupedPromos.map(group => (
+                            <React.Fragment key={group.label}>
+                                <DateLabel label={group.label} dark={dark} />
+                                {group.items.map((promo, idx) => (
+                                    <Link key={promo.id} to={`/promotions/${promo.id}`} className="promo-dashboard-card-link">
+                                        <PromoCard promo={promo} idx={idx} dark={dark} />
+                                    </Link>
+                                ))}
+                            </React.Fragment>
+                        ))}
+                    </div>
+                </>
             )}
-
-            {/* Modal */}
-            <AnimatePresence>
-                {selectedPromo && (
-                    <PromoModal promo={selectedPromo} onClose={() => setSelectedPromo(null)} />
-                )}
-            </AnimatePresence>
         </>
     )
 }

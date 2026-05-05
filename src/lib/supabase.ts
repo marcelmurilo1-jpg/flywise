@@ -68,8 +68,8 @@ export interface Promocao {
     imagens?: unknown
     created_at?: string
     // Campos do scraper
-    categoria?: 'milhas' | 'passagens' | null
-    subcategoria?: 'transferencia' | 'clube' | null
+    categoria?: 'milhas' | 'passagens' | 'compras' | 'noticias' | null
+    subcategoria?: 'transferencia' | 'clube' | 'acumulo' | null
     programas_tags?: string[] | null
     bonus_pct?: number | null
     preco_clube?: number | null
