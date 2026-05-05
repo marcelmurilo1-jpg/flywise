@@ -21,9 +21,11 @@ export default function SavedStrategies() {
             .select('*')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false })
-            .then(({ data }) => { if (data) setStrategies(data) })
-            .catch(err => console.error('[SavedStrategies]', err))
-            .finally(() => setLoading(false))
+            .then(({ data, error }) => {
+                if (data) setStrategies(data)
+                if (error) console.error('[SavedStrategies]', error)
+                setLoading(false)
+            })
     }, [user])
 
     const handleDelete = async (id: number) => {

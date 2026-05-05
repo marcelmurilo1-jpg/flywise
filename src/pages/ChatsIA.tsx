@@ -30,8 +30,8 @@ export default function ChatsIA() {
             .order('updated_at', { ascending: false })
             .then(({ data }) => {
                 if (data) setConversations(data as ChatConversation[])
+                setLoading(false)
             })
-            .finally(() => setLoading(false))
     }, [user])
 
     const handleDelete = async (id: string) => {
@@ -160,12 +160,12 @@ export default function ChatsIA() {
                                                             Para Onde Posso Voar
                                                         </span>
                                                     )}
-                                                    {!isParaOnde && w?.cabinClass && (
+                                                    {!isParaOnde && typeof w?.cabinClass === 'string' && (
                                                         <span style={{ fontSize: '11px', fontWeight: 600, color: '#2A60C2', background: '#EEF4FF', padding: '2px 8px', borderRadius: '6px' }}>
-                                                            {CABIN_LABELS[w.cabinClass as string] ?? String(w.cabinClass)}
+                                                            {CABIN_LABELS[w.cabinClass] ?? w.cabinClass}
                                                         </span>
                                                     )}
-                                                    {!isParaOnde && w?.passengers && (
+                                                    {!isParaOnde && w?.passengers != null && (
                                                         <span style={{ fontSize: '11px', color: '#64748b' }}>{String(w.passengers)} pax</span>
                                                     )}
                                                     <span style={{ fontSize: '11px', color: '#94a3b8' }}>
