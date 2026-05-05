@@ -59,6 +59,31 @@ function formatValidUntil(s: string | null | undefined): string | null {
     return `até ${date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
 }
 
+function getClubDisplayName(clubId: string | null): string | null {
+    if (!clubId) return null
+    return MILES_CLUBS.find(c => c.id === clubId)?.name ?? null
+}
+
+type BonusGroup = {
+    program: string
+    promos: BonusPromo[]
+    representative: BonusPromo
+    effectiveBonus: number
+}
+
+function groupByProgram(bonuses: BonusPromo[], clubTiers: Record<string, string>): BonusGroup[] {
+    const map = new Map<string, BonusPromo[]>()
+    for (const b of bonuses) {
+        if (!map.has(b.program)) map.set(b.program, [])
+        map.get(b.program)!.push(b)
+    }
+    return [...map.entries()].map(([program, promos]) => {
+        const best = Math.max(...promos.map(p => getEffectiveBonus(p, clubTiers)))
+        const rep = promos.find(p => getEffectiveBonus(p, clubTiers) === best) ?? promos[0]
+        return { program, promos, representative: rep, effectiveBonus: best }
+    })
+}
+
 // Cores por programa
 const PROGRAM_COLORS: Record<string, string> = {
     'Smiles': '#FF6B00',
@@ -222,9 +247,12 @@ export default function Wallet() {
     const totalMiles = Object.values(miles).reduce((a, b) => a + b, 0)
     const programs = Object.keys(miles)
     const availableToAdd = PROGRAMS.filter(p => !programs.includes(p))
-    const bonusList = bonusSubTab === 'meus'
-        ? allBonuses.filter(b => programs.includes(b.program) || activeCards.includes(b.card_id))
-        : allBonuses
+    const myBonusGroups = groupByProgram(
+        allBonuses.filter(b => programs.includes(b.program) && activeCards.includes(b.card_id)),
+        activeClubTiers
+    )
+    const allBonusGroups = groupByProgram(allBonuses, activeClubTiers)
+    const bonusGroups = bonusSubTab === 'meus' ? myBonusGroups : allBonusGroups
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--snow)', fontFamily: 'Manrope, system-ui, sans-serif', paddingBottom: '80px' }}>
@@ -678,68 +706,48 @@ export default function Wallet() {
                                     <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Nenhum bônus ativo no momento</p>
                                     <p style={{ fontSize: 13, margin: 0 }}>O sync diário verifica novas promoções às 14h UTC.</p>
                                 </div>
-                            ) : bonusList.length === 0 ? (
+                            ) : bonusGroups.length === 0 ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 20px', color: 'var(--text-muted)', gap: 12 }}>
                                     <TrendingUp size={40} color="var(--border-light)" />
                                     <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Nenhum bônus ativo para seus programas</p>
-                                    <p style={{ fontSize: 13, margin: 0 }}>Adicione programas à carteira ou ative seus cartões para ver bônus relevantes.</p>
+                                    <p style={{ fontSize: 13, margin: 0 }}>Adicione programas à carteira e ative os cartões que você usa para ver bônus relevantes.</p>
                                 </div>
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                    {bonusList.map((b, i) => {
-                                        const effectiveBonus = getEffectiveBonus(b, activeClubTiers)
-                                        const validLabel = formatValidUntil(b.valid_until)
+                                    {bonusGroups.map((group, i) => {
+                                        const { program, promos, representative, effectiveBonus } = group
+                                        const progColor = PROGRAM_COLORS[program] ?? '#0E2A55'
+                                        const validLabel = formatValidUntil(representative.valid_until)
                                         const urgent = validLabel?.startsWith('vence')
-                                        const hasCard = activeCards.includes(b.card_id)
-                                        const hasProgram = programs.includes(b.program)
-                                        const cardObj = CREDIT_CARDS.find(c => c.id === b.card_id)
-                                        const cardName = cardObj?.name ?? b.card_id
-                                        const progColor = PROGRAM_COLORS[b.program] ?? '#0E2A55'
+                                        const clubName = getClubDisplayName(representative.club_required)
+                                        const clubObj = MILES_CLUBS.find(c => c.id === representative.club_required)
+                                        const userClubTier = clubObj ? activeClubTiers[clubObj.id] : null
+                                        const hasTiers = Object.keys(representative.club_tier_bonuses ?? {}).length > 0
+                                        const isMeus = bonusSubTab === 'meus'
+
                                         return (
                                             <motion.div
-                                                key={`${b.card_id}-${b.program}`}
+                                                key={program}
                                                 initial={{ opacity: 0, y: 8 }}
                                                 animate={{ opacity: 1, y: 0 }}
                                                 transition={{ delay: i * 0.04 }}
                                                 style={{
                                                     background: 'var(--bg-white)',
-                                                    border: `1.5px solid ${hasCard || hasProgram ? 'rgba(34,197,94,0.35)' : 'var(--border-light)'}`,
+                                                    border: '1.5px solid rgba(34,197,94,0.3)',
                                                     borderRadius: 16,
                                                     padding: '18px 20px',
-                                                    boxShadow: hasCard || hasProgram ? '0 2px 12px rgba(34,197,94,0.08)' : '0 2px 8px rgba(14,42,85,0.04)',
+                                                    boxShadow: '0 2px 12px rgba(34,197,94,0.06)',
                                                 }}
                                             >
+                                                {/* Header: ícone + programa + bônus */}
                                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                                                     <div style={{ width: 44, height: 44, borderRadius: 12, background: progColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                        <span style={{ fontSize: 11, fontWeight: 900, color: '#fff' }}>{programInitials(b.program)}</span>
+                                                        <span style={{ fontSize: 11, fontWeight: 900, color: '#fff' }}>{programInitials(program)}</span>
                                                     </div>
                                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-dark)', marginBottom: 4 }}>{b.program}</div>
-                                                        {/* Atribuição: para quem é a promoção */}
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
-                                                            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>Para clientes do</span>
-                                                            <span style={{
-                                                                fontSize: 11, fontWeight: 800,
-                                                                color: cardObj?.color ?? 'var(--text-dark)',
-                                                                background: cardObj ? `${cardObj.color}18` : 'var(--snow)',
-                                                                border: `1px solid ${cardObj?.color ?? 'var(--border-light)'}40`,
-                                                                borderRadius: 5, padding: '2px 7px',
-                                                            }}>
-                                                                {cardName}
-                                                            </span>
-                                                            {(hasCard || hasProgram) && (
-                                                                <span style={{ fontSize: 10, fontWeight: 800, background: 'rgba(34,197,94,0.12)', color: '#16A34A', borderRadius: 5, padding: '2px 6px' }}>
-                                                                    {hasCard ? '✓ Seu cartão' : '✓ Seu programa'}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        {b.club_required && (
-                                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', marginBottom: 3 }}>
-                                                                Requer {b.club_required}
-                                                            </div>
-                                                        )}
+                                                        <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-dark)' }}>{program}</div>
                                                         {validLabel && (
-                                                            <div style={{ fontSize: 11, fontWeight: 700, color: urgent ? '#DC2626' : '#16A34A' }}>
+                                                            <div style={{ fontSize: 11, fontWeight: 700, color: urgent ? '#DC2626' : '#16A34A', marginTop: 2 }}>
                                                                 {validLabel}
                                                             </div>
                                                         )}
@@ -751,6 +759,73 @@ export default function Wallet() {
                                                         <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, marginTop: 2 }}>bônus</div>
                                                     </div>
                                                 </div>
+
+                                                {/* Cartões */}
+                                                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
+                                                        {isMeus ? 'Via:' : 'Para clientes do:'}
+                                                    </span>
+                                                    {promos.map(p => {
+                                                        const cardObj = CREDIT_CARDS.find(c => c.id === p.card_id)
+                                                        const isUserCard = activeCards.includes(p.card_id)
+                                                        return (
+                                                            <span
+                                                                key={p.card_id}
+                                                                style={{
+                                                                    fontSize: 11, fontWeight: 800,
+                                                                    color: cardObj?.color ?? 'var(--text-dark)',
+                                                                    background: cardObj ? `${cardObj.color}18` : 'var(--snow)',
+                                                                    border: `1px solid ${cardObj?.color ?? 'var(--border-light)'}40`,
+                                                                    borderRadius: 5, padding: '2px 7px',
+                                                                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                                                                }}
+                                                            >
+                                                                {!isMeus && isUserCard && <span style={{ color: '#16A34A', fontSize: 10 }}>✓</span>}
+                                                                {cardObj?.name ?? p.card_id}
+                                                            </span>
+                                                        )
+                                                    })}
+                                                </div>
+
+                                                {/* Tabela de tiers do clube */}
+                                                {representative.club_required && hasTiers && (
+                                                    <div style={{ marginTop: 12, borderTop: '1px solid var(--border-light)', paddingTop: 12 }}>
+                                                        <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+                                                            Bônus por plano{clubName ? ` — ${clubName}` : ''}
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
+                                                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sem clube</span>
+                                                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dark)' }}>+{representative.bonus_percent}%</span>
+                                                        </div>
+                                                        {Object.entries(representative.club_tier_bonuses).map(([tierName, tierBonus]) => {
+                                                            const isUserTier = !!userClubTier && userClubTier === tierName
+                                                            return (
+                                                                <div
+                                                                    key={tierName}
+                                                                    style={{
+                                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                                        padding: '3px 6px', borderRadius: 6, margin: '1px -6px',
+                                                                        background: isUserTier ? 'rgba(34,197,94,0.08)' : 'transparent',
+                                                                    }}
+                                                                >
+                                                                    <span style={{ fontSize: 12, color: isUserTier ? '#16A34A' : 'var(--text-muted)', fontWeight: isUserTier ? 700 : 400 }}>
+                                                                        {tierName}{isUserTier ? ' — você' : ''}
+                                                                    </span>
+                                                                    <span style={{ fontSize: 12, fontWeight: 800, color: isUserTier ? '#16A34A' : 'var(--text-dark)' }}>
+                                                                        +{tierBonus}%
+                                                                    </span>
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                {/* Clube sem tiers detalhados */}
+                                                {representative.club_required && !hasTiers && (
+                                                    <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: '#7C3AED' }}>
+                                                        Requer {clubName ?? representative.club_required}
+                                                    </div>
+                                                )}
                                             </motion.div>
                                         )
                                     })}
