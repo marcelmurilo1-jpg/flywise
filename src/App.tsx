@@ -69,7 +69,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 // Pages that should show BottomNav (authenticated app pages)
-const APP_ROUTES = ['/home', '/resultados', '/promotions', '/wallet', '/saved-strategies', '/roteiro', '/configuracoes', '/busca-avancada', '/chat', '/mapa']
+const APP_ROUTES = ['/home', '/resultados', '/promotions', '/wallet', '/saved-strategies', '/chats', '/roteiro', '/configuracoes', '/busca-avancada', '/chat', '/mapa']
 
 function AppRoutesInner() {
   const { user } = useAuth()
@@ -109,6 +109,7 @@ function AppRoutes() {
         <Route path="/promotions/:id" element={<ProtectedRoute><PromotionDetail /></ProtectedRoute>} />
         <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
         <Route path="/saved-strategies" element={<ProtectedRoute><SavedStrategies /></ProtectedRoute>} />
+        <Route path="/chats" element={<ProtectedRoute><SavedStrategies /></ProtectedRoute>} />
         <Route path="/busca-avancada" element={<ProtectedRoute><SearchWizard /></ProtectedRoute>} />
         <Route path="/roteiro" element={<ProtectedRoute><Roteiro /></ProtectedRoute>} />
         <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />

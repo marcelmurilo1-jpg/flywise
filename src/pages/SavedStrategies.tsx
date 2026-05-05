@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Plane, Search, Zap, TrendingDown, TrendingUp, Trash2, Tag, Loader2, Plus, ChevronRight, AlertTriangle, CheckCircle, Bot } from 'lucide-react'
 import { Header } from '@/components/Header'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -16,13 +16,19 @@ const CABIN_LABELS: Record<string, string> = {
 
 export default function SavedStrategies() {
     const navigate = useNavigate()
+    const location = useLocation()
     const { user } = useAuth()
     const [strategies, setStrategies] = useState<Strategy[]>([])
     const [conversations, setConversations] = useState<ChatConversation[]>([])
     const [loading, setLoading] = useState(true)
     const [deleting, setDeleting] = useState<number | null>(null)
     const [deletingConv, setDeletingConv] = useState<string | null>(null)
-    const [activeTab, setActiveTab] = useState<'estrategias' | 'chats'>('estrategias')
+
+    const defaultTab = useMemo<'estrategias' | 'chats'>(
+        () => location.pathname === '/chats' ? 'chats' : 'estrategias',
+        [location.pathname]
+    )
+    const [activeTab, setActiveTab] = useState<'estrategias' | 'chats'>(defaultTab)
 
     useEffect(() => {
         if (!user) return

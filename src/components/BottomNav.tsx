@@ -1,11 +1,12 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Search, Tag, Wallet, Plane, Map, Globe2 } from 'lucide-react'
+import { Search, Tag, Wallet, Plane, Map, Globe2, Bot } from 'lucide-react'
 
 const NAV_ITEMS = [
     { to: '/home', icon: Search, label: 'Buscar' },
     { to: '/promotions', icon: Tag, label: 'Promoções' },
     { to: '/wallet', icon: Wallet, label: 'Carteira' },
     { to: '/saved-strategies', icon: Plane, label: 'Estratégias' },
+    { to: '/chats', icon: Bot, label: 'Chats IA' },
     { to: '/roteiro', icon: Map, label: 'Roteiro' },
     { to: '/mapa', icon: Globe2, label: 'Mapa' },
 ]

@@ -245,36 +245,7 @@ export default function ParaOndeVoo({ milesMap, cardPoints, activeCards, activeC
         setAiLoading(true)
         setError('')
 
-        let routes = rawRoutes
-        if (routes.length === 0) {
-            // Rodar busca primeiro se não tiver resultados
-            const destinations = getDestinationsByRegions(selectedRegions)
-                .map(d => d.iata)
-                .filter(iata => iata !== originIata)
-            if (destinations.length === 0) { setAiLoading(false); setError('Selecione uma região.'); return }
-            if (selectedMonths.length === 0) { setAiLoading(false); setError('Selecione pelo menos um mês.'); return }
-            setLoading(true)
-            try {
-                const res = await fetch(`${apiBase}/api/discover-routes`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ origin: originIata, destinations, months: selectedMonths, cabin }),
-                })
-                if (!res.ok) throw new Error(`Erro ${res.status}`)
-                const data = await res.json()
-                routes = data.routes ?? []
-                setRawRoutes(routes)
-            } catch (e: unknown) {
-                setError((e as Error).message ?? 'Erro ao buscar destinos.')
-                setAiLoading(false)
-                setLoading(false)
-                return
-            } finally {
-                setLoading(false)
-            }
-        }
-
-        const monthLabels = selectedMonths.join(', ')
+        const monthLabels = selectedMonths.length > 0 ? selectedMonths.join(', ') : 'datas flexíveis'
         const title = `Para onde posso voar? ${originIata} · ${cabin === 'economy' ? 'Economy' : 'Business'} · ${monthLabels}`
 
         const wizardData = {
@@ -287,13 +258,12 @@ export default function ParaOndeVoo({ milesMap, cardPoints, activeCards, activeC
             passengers: 1,
             hackerMode: 'value',
             observations: '',
-            // Dados personalizados da carteira
             milesMap,
             cardPoints,
             activeCards,
             activeClubs,
             activeClubTiers,
-            discoverResults: routes,
+            discoverResults: rawRoutes,
         }
 
         try {
