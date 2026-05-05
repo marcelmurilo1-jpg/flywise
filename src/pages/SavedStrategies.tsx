@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plane, Search, Zap, TrendingDown, TrendingUp, Trash2, Tag, Loader2, MessageSquare, Plus, ChevronRight, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Plane, Search, Zap, TrendingDown, TrendingUp, Trash2, Tag, Loader2, MessageSquare, Plus, ChevronRight, AlertTriangle, CheckCircle, Bot } from 'lucide-react'
 import { Header } from '@/components/Header'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -22,6 +22,7 @@ export default function SavedStrategies() {
     const [loading, setLoading] = useState(true)
     const [deleting, setDeleting] = useState<number | null>(null)
     const [deletingConv, setDeletingConv] = useState<string | null>(null)
+    const [activeTab, setActiveTab] = useState<'estrategias' | 'chats'>('estrategias')
 
     useEffect(() => {
         if (!user) return
@@ -77,12 +78,50 @@ export default function SavedStrategies() {
 
             <main style={{ maxWidth: '840px', margin: '40px auto 0', padding: '0 24px' }}>
 
-                {/* ── Estratégias Salvas ── */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-                    <div>
-                        <h1 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-dark)', letterSpacing: '-0.02em', marginBottom: '6px' }}>Estratégias Salvas</h1>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Histórico das suas melhores rotas e análises personalizadas.</p>
-                    </div>
+                {/* ── Header ── */}
+                <div style={{ marginBottom: '24px' }}>
+                    <h1 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-dark)', letterSpacing: '-0.02em', marginBottom: '6px' }}>
+                        {activeTab === 'estrategias' ? 'Estratégias Salvas' : 'Chats IA'}
+                    </h1>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+                        {activeTab === 'estrategias'
+                            ? 'Histórico das suas melhores rotas e análises personalizadas.'
+                            : 'Suas conversas com a IA salvas automaticamente.'}
+                    </p>
+                </div>
+
+                {/* ── Tabs ── */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 28, background: 'var(--bg-white)', border: '1px solid var(--border-light)', borderRadius: 14, padding: 6, width: 'fit-content' }}>
+                    {([
+                        { id: 'estrategias', label: 'Estratégias', Icon: Plane },
+                        { id: 'chats', label: 'Chats IA', Icon: Bot },
+                    ] as const).map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 6,
+                                padding: '8px 18px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                                fontFamily: 'inherit', fontSize: 13, fontWeight: 700,
+                                background: activeTab === tab.id ? 'var(--blue-medium)' : 'none',
+                                color: activeTab === tab.id ? '#fff' : 'var(--text-muted)',
+                                transition: 'all 0.15s',
+                            }}
+                        >
+                            <tab.Icon size={14} />
+                            {tab.label}
+                            <span style={{
+                                fontSize: 11, fontWeight: 700, minWidth: 18, height: 18,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                borderRadius: 9,
+                                background: activeTab === tab.id ? 'rgba(255,255,255,0.25)' : '#EEF2F8',
+                                color: activeTab === tab.id ? '#fff' : '#64748B',
+                                padding: '0 5px',
+                            }}>
+                                {tab.id === 'estrategias' ? strategies.length : conversations.length}
+                            </span>
+                        </button>
+                    ))}
                 </div>
 
                 {loading ? (
@@ -91,7 +130,8 @@ export default function SavedStrategies() {
                     </div>
                 ) : (
                     <>
-                        {strategies.length === 0 ? (
+                        {/* ── Tab: Estratégias ── */}
+                        {activeTab === 'estrategias' && (strategies.length === 0 ? (
                             <div className="card" style={{ padding: '0', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 16px rgba(14,42,85,0.04)', border: '1px solid var(--border-light)', background: 'var(--bg-white)', marginBottom: '40px' }}>
                                 <div style={{ padding: '40px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
                                     <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--snow)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -266,17 +306,11 @@ export default function SavedStrategies() {
                                     })}
                                 </AnimatePresence>
                             </div>
-                        )}
+                        ))}
 
-                        {/* ── Histórico Busca Avançada ── */}
-                        <div style={{ marginTop: '8px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                                <div>
-                                    <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-dark)', letterSpacing: '-0.01em', marginBottom: '4px' }}>
-                                        Histórico Busca Avançada IA
-                                    </h2>
-                                    <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Suas conversas com a IA salvas automaticamente.</p>
-                                </div>
+                        {/* ── Tab: Chats IA ── */}
+                        {activeTab === 'chats' && (<div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
                                 <button
                                     onClick={() => navigate('/busca-avancada')}
                                     style={{
@@ -298,7 +332,7 @@ export default function SavedStrategies() {
                             {conversations.length === 0 ? (
                                 <div style={{ background: 'var(--bg-white)', border: '1px solid var(--border-light)', borderRadius: '16px', padding: '32px', textAlign: 'center', boxShadow: '0 4px 16px rgba(14,42,85,0.04)' }}>
                                     <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'linear-gradient(135deg, #EEF4FF, #E8F0FF)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                                        <MessageSquare size={22} color="#2A60C2" />
+                                        <Bot size={22} color="#2A60C2" />
                                     </div>
                                     <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-dark)', marginBottom: '8px' }}>Nenhuma conversa ainda</h3>
                                     <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.6, maxWidth: '280px', margin: '0 auto 16px' }}>
@@ -350,7 +384,7 @@ export default function SavedStrategies() {
                                                             background: 'linear-gradient(135deg, #EEF4FF, #dbeafe)',
                                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                         }}>
-                                                            <MessageSquare size={18} color="#2A60C2" />
+                                                            <Bot size={18} color="#2A60C2" />
                                                         </div>
 
                                                         {/* Content */}
@@ -403,7 +437,7 @@ export default function SavedStrategies() {
                                     </AnimatePresence>
                                 </div>
                             )}
-                        </div>
+                        </div>)}
                     </>
                 )}
             </main>

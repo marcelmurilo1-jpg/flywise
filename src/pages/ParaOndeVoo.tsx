@@ -1,9 +1,10 @@
 // src/pages/ParaOndeVoo.tsx
 import { useState, useEffect, useMemo } from 'react'
-import { Loader2, MapPin, AlertCircle, Lock } from 'lucide-react'
+import { Loader2, MapPin, AlertCircle, Lock, Bot } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
+import { supabase } from '@/lib/supabase'
 import {
     DESTINATIONS, REGION_LABELS, getDestinationsByRegions,
     type Region, type Destination,
@@ -163,6 +164,7 @@ export default function ParaOndeVoo({ milesMap, cardPoints, activeCards, activeC
     const [cabin, setCabin] = useState<'economy' | 'business'>('economy')
 
     const [loading, setLoading] = useState(false)
+    const [aiLoading, setAiLoading] = useState(false)
     const [error, setError] = useState('')
     const [rawRoutes, setRawRoutes] = useState<RouteResult[]>([])
 
@@ -235,6 +237,83 @@ export default function ParaOndeVoo({ milesMap, cardPoints, activeCards, activeC
             setError((e as Error).message ?? 'Erro ao buscar destinos.')
         } finally {
             setLoading(false)
+        }
+    }
+
+    async function analyzeWithAI() {
+        if (!user) return
+        setAiLoading(true)
+        setError('')
+
+        let routes = rawRoutes
+        if (routes.length === 0) {
+            // Rodar busca primeiro se não tiver resultados
+            const destinations = getDestinationsByRegions(selectedRegions)
+                .map(d => d.iata)
+                .filter(iata => iata !== originIata)
+            if (destinations.length === 0) { setAiLoading(false); setError('Selecione uma região.'); return }
+            if (selectedMonths.length === 0) { setAiLoading(false); setError('Selecione pelo menos um mês.'); return }
+            setLoading(true)
+            try {
+                const res = await fetch(`${apiBase}/api/discover-routes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ origin: originIata, destinations, months: selectedMonths, cabin }),
+                })
+                if (!res.ok) throw new Error(`Erro ${res.status}`)
+                const data = await res.json()
+                routes = data.routes ?? []
+                setRawRoutes(routes)
+            } catch (e: unknown) {
+                setError((e as Error).message ?? 'Erro ao buscar destinos.')
+                setAiLoading(false)
+                setLoading(false)
+                return
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        const monthLabels = selectedMonths.join(', ')
+        const title = `Para onde posso voar? ${originIata} · ${cabin === 'economy' ? 'Economy' : 'Business'} · ${monthLabels}`
+
+        const wizardData = {
+            mode: 'para_onde',
+            origin: originIata,
+            destination: 'múltiplos destinos',
+            tripType: 'one-way',
+            cabin,
+            months: selectedMonths,
+            passengers: 1,
+            hackerMode: 'value',
+            observations: '',
+            // Dados personalizados da carteira
+            milesMap,
+            cardPoints,
+            activeCards,
+            activeClubs,
+            activeClubTiers,
+            discoverResults: routes,
+        }
+
+        try {
+            const { data: conv, error: insertErr } = await supabase
+                .from('chat_conversations')
+                .insert([{
+                    user_id: user.id,
+                    title,
+                    wizard_data: wizardData,
+                    messages: [],
+                }])
+                .select()
+                .single()
+
+            if (insertErr || !conv) throw new Error(insertErr?.message ?? 'Erro ao criar conversa')
+            navigate(`/chat/${conv.id}`)
+        } catch (e: unknown) {
+            setError((e as Error).message ?? 'Erro ao iniciar análise.')
+        } finally {
+            setAiLoading(false)
         }
     }
 
@@ -318,20 +397,36 @@ export default function ParaOndeVoo({ milesMap, cardPoints, activeCards, activeC
                     ))}
                 </div>
 
-                <button
-                    onClick={search}
-                    disabled={loading}
-                    style={{
-                        background: '#2A60C2', color: '#fff', border: 'none', borderRadius: 12,
-                        padding: '12px 0', fontWeight: 700, fontSize: 15, cursor: loading ? 'not-allowed' : 'pointer',
-                        opacity: loading ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    }}
-                >
-                    {loading
-                        ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Buscando...</>
-                        : '🔍 Buscar destinos'
-                    }
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                        onClick={search}
+                        disabled={loading || aiLoading}
+                        style={{
+                            flex: 1, background: '#2A60C2', color: '#fff', border: 'none', borderRadius: 12,
+                            padding: '12px 0', fontWeight: 700, fontSize: 14, cursor: (loading || aiLoading) ? 'not-allowed' : 'pointer',
+                            opacity: (loading || aiLoading) ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        }}
+                    >
+                        {loading
+                            ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Buscando...</>
+                            : '🔍 Buscar'
+                        }
+                    </button>
+                    <button
+                        onClick={analyzeWithAI}
+                        disabled={loading || aiLoading}
+                        style={{
+                            flex: 1, background: 'linear-gradient(135deg, #7C3AED, #5B21B6)', color: '#fff', border: 'none', borderRadius: 12,
+                            padding: '12px 0', fontWeight: 700, fontSize: 14, cursor: (loading || aiLoading) ? 'not-allowed' : 'pointer',
+                            opacity: (loading || aiLoading) ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        }}
+                    >
+                        {aiLoading
+                            ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Abrindo...</>
+                            : <><Bot size={15} /> Analisar com IA</>
+                        }
+                    </button>
+                </div>
             </div>
 
             {error && (

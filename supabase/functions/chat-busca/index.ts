@@ -446,7 +446,100 @@ serve(async (req) => {
                 })(),
             ])
 
-            const systemPrompt = `Você é o FlyWise AI, especialista em milhas aéreas e viagens para brasileiros.
+            const isParaOndeMode = wizard_data.mode === 'para_onde'
+
+            // ── Build personalized wallet context for para_onde mode ──────────
+            let walletContext = ''
+            if (isParaOndeMode) {
+                const milesMap = wizard_data.milesMap as Record<string, number> | undefined
+                const cardPoints = wizard_data.cardPoints as Record<string, number> | undefined
+                const activeCards = wizard_data.activeCards as string[] | undefined
+                const activeClubs = wizard_data.activeClubs as string[] | undefined
+                const activeClubTiers = wizard_data.activeClubTiers as Record<string, string> | undefined
+                const discoverResults = wizard_data.discoverResults as any[] | undefined
+
+                const milesLines = milesMap && Object.keys(milesMap).length > 0
+                    ? Object.entries(milesMap)
+                        .filter(([, v]) => v > 0)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([prog, v]) => `  • ${prog}: ${v.toLocaleString('pt-BR')} milhas`)
+                        .join('\n')
+                    : '  (nenhum saldo informado)'
+
+                const cardLines = activeCards && activeCards.length > 0
+                    ? activeCards.map(id => {
+                        const pts = cardPoints?.[id] ?? 0
+                        return `  • ${id}: ${pts.toLocaleString('pt-BR')} pts`
+                    }).join('\n')
+                    : '  (nenhum cartão ativo)'
+
+                const clubLines = activeClubs && activeClubs.length > 0
+                    ? activeClubs.map(id => {
+                        const tier = activeClubTiers?.[id]
+                        return `  • ${id}${tier ? ` — ${tier}` : ''}`
+                    }).join('\n')
+                    : '  (nenhum clube ativo)'
+
+                const reachableLines = discoverResults && discoverResults.length > 0
+                    ? discoverResults.slice(0, 30).map((r: any) => {
+                        const progs = (r.results_by_program ?? [])
+                            .map((p: any) => {
+                                const m = wizard_data.cabin === 'business' ? p.business_miles : p.economy_miles
+                                return m ? `${p.programName}:${m.toLocaleString('pt-BR')}mi` : null
+                            })
+                            .filter(Boolean)
+                            .join(', ')
+                        return progs ? `  • ${r.destination} → ${progs}` : null
+                    }).filter(Boolean).join('\n')
+                    : '  (busca ainda não realizada)'
+
+                walletContext = `
+CARTEIRA DO USUÁRIO (dados reais):
+Milhas por programa:
+${milesLines}
+
+Pontos em cartões de crédito:
+${cardLines}
+
+Clubes de assinatura ativos:
+${clubLines}
+
+DISPONIBILIDADE ENCONTRADA (Seats.aero):
+Destino → programas com milhas disponíveis:
+${reachableLines}`
+            }
+
+            const systemPrompt = isParaOndeMode
+                ? `Você é o FlyWise AI, especialista em milhas aéreas para brasileiros.
+
+CONTEXTO — Para Onde Posso Voar?
+O usuário quer saber para onde pode viajar usando as milhas e pontos que já possui.
+Sua análise deve ser 100% baseada no saldo real do usuário — não faça suposições.
+${walletContext}
+${transferBonusContext}
+
+Configuração da busca:
+- Origem: ${wizard_data.origin}
+- Classe: ${cabinPt}
+- Meses: ${(wizard_data.months as string[] | undefined)?.join(', ') ?? datePeriod}
+
+Você tem acesso à ferramenta search_awards para buscar detalhes de disponibilidade em rotas específicas.
+
+COMO ANALISAR:
+1. Use os dados da carteira para identificar quais destinos são ALCANÇÁVEIS agora (milhas diretas ou via transferência de pontos)
+2. Para os melhores destinos, use search_awards para verificar disponibilidade real e datas
+3. Foque nos programas que o usuário JÁ tem milhas ou pontos transferíveis
+4. Leve em conta os clubes ativos para bônus de transferência
+
+FORMATO DA ANÁLISE:
+1. **Você pode voar agora** — destinos alcançáveis com saldo atual, quanto precisa vs quanto tem, melhor programa
+2. **Quase lá** — destinos que faltam poucos pontos, quanto falta e de qual cartão transferir
+3. **Estratégia recomendada** — o melhor uso específico do saldo do usuário (seja concreto: "transfira X pts do cartão Y para Smiles e reserve voo para Z")
+4. **Quando reservar** — disponibilidade encontrada e urgência
+
+Use markdown com tabelas. Seja ESPECÍFICO com os números reais da carteira do usuário.
+Para FOLLOW-UPS: use os dados já buscados.`
+                : `Você é o FlyWise AI, especialista em milhas aéreas e viagens para brasileiros.
 
 DADOS DA BUSCA:
 - Rota: ${wizard_data.origin} → ${wizard_data.destination}
@@ -485,79 +578,108 @@ Para FOLLOW-UPS: responda usando os dados já buscados, sem refazer buscas desne
             }))
 
             if (messages.length === 0) {
-                loopMessages.push({
-                    role: 'user',
-                    content: [
-                        `Analise a disponibilidade de voos com milhas para ${wizard_data.origin} → ${wizard_data.destination}`,
-                        `em ${cabinPt}`,
-                        wizard_data.dateGo ? `para ${datePeriod}` : 'com datas flexíveis (próximos 90 dias)',
-                        wizard_data.observations ? `Observações: ${wizard_data.observations}` : null,
-                        `Faça as buscas necessárias e apresente as melhores opções.`,
-                    ].filter(Boolean).join('. '),
-                })
+                if (isParaOndeMode) {
+                    const months = (wizard_data.months as string[] | undefined)?.join(', ') ?? 'próximos meses'
+                    loopMessages.push({
+                        role: 'user',
+                        content: `Analise minha carteira de milhas e pontos e me diga para onde posso voar de ${wizard_data.origin} em classe ${cabinPt} nos meses ${months}. Use os dados reais da minha carteira e busque disponibilidade nos destinos mais promissores. Quero saber o que posso fazer com o que já tenho.`,
+                    })
+                } else {
+                    loopMessages.push({
+                        role: 'user',
+                        content: [
+                            `Analise a disponibilidade de voos com milhas para ${wizard_data.origin} → ${wizard_data.destination}`,
+                            `em ${cabinPt}`,
+                            wizard_data.dateGo ? `para ${datePeriod}` : 'com datas flexíveis (próximos 90 dias)',
+                            wizard_data.observations ? `Observações: ${wizard_data.observations}` : null,
+                            `Faça as buscas necessárias e apresente as melhores opções.`,
+                        ].filter(Boolean).join('. '),
+                    })
+                }
             }
 
-            // ── Phase 1: Haiku decides what to search (non-streaming, fast) ──────
+            // ── Phase 1: Haiku agentic loop — busca todas as rotas necessárias ────
+            // Roda múltiplas rodadas até o modelo parar de chamar ferramentas
             if (seatsKey) {
-                const planRes = await fetch('https://api.anthropic.com/v1/messages', {
-                    method: 'POST',
-                    headers: {
-                        'x-api-key': anthropicKey,
-                        'anthropic-version': '2023-06-01',
-                        'content-type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        model: 'claude-haiku-4-5-20251001',
-                        max_tokens: 1024,
-                        system: systemPrompt,
-                        tools: [SEARCH_TOOL],
-                        tool_choice: { type: 'auto' },
-                        messages: loopMessages,
-                    }),
-                })
+                const MAX_SEARCH_ROUNDS = 5
+                let round = 0
 
-                if (planRes.ok) {
+                while (round < MAX_SEARCH_ROUNDS) {
+                    round++
+
+                    const planRes = await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: {
+                            'x-api-key': anthropicKey,
+                            'anthropic-version': '2023-06-01',
+                            'content-type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            model: 'claude-haiku-4-5-20251001',
+                            max_tokens: 1024,
+                            system: systemPrompt,
+                            tools: [SEARCH_TOOL],
+                            tool_choice: { type: 'auto' },
+                            messages: loopMessages,
+                        }),
+                    })
+
+                    if (!planRes.ok) break
+
                     const planJson = await planRes.json()
                     const toolUseBlocks: any[] = planJson.content?.filter((b: any) => b.type === 'tool_use') ?? []
 
-                    if (toolUseBlocks.length > 0) {
-                        // Send searching events to client before executing
-                        for (const tool of toolUseBlocks) {
-                            send({
-                                type: 'searching',
-                                origin: tool.input.origin,
-                                destination: tool.input.destination,
-                                label: `${tool.input.origin} → ${tool.input.destination}`,
-                            })
-                        }
-
-                        // Execute all searches in parallel
-                        const toolResults = await Promise.all(
-                            toolUseBlocks.map(async (tool: any) => {
-                                const args = tool.input
-                                const { startDate: sd, endDate: ed } = (args.start_date && args.end_date)
-                                    ? { startDate: args.start_date, endDate: args.end_date }
-                                    : getDateRange(wizard_data.dateGo)
-
-                                try {
-                                    const results = await searchSeatsAero(seatsKey, args.origin, args.destination, sd, ed)
-                                    const formatted = formatResults(results, args.cabin ?? wizard_data.cabinClass)
-                                    return { type: 'tool_result', tool_use_id: tool.id, content: formatted }
-                                } catch (e) {
-                                    return {
-                                        type: 'tool_result',
-                                        tool_use_id: tool.id,
-                                        content: `Erro ao buscar ${args.origin}→${args.destination}: ${(e as Error).message}`,
-                                    }
-                                }
-                            })
-                        )
-
-                        // Add assistant tool-use + results to conversation
+                    // Sem mais tool calls — Haiku terminou as buscas
+                    if (toolUseBlocks.length === 0) {
+                        // Adiciona resposta do Haiku ao histórico (pode ter texto de transição)
                         loopMessages.push({ role: 'assistant', content: planJson.content })
-                        loopMessages.push({ role: 'user', content: toolResults })
+                        break
                     }
+
+                    // Envia eventos de "buscando..." para o cliente
+                    for (const tool of toolUseBlocks) {
+                        send({
+                            type: 'searching',
+                            origin: tool.input.origin,
+                            destination: tool.input.destination,
+                            label: `${tool.input.origin} → ${tool.input.destination}`,
+                        })
+                    }
+
+                    // Executa todas as buscas desta rodada em paralelo
+                    const toolResults = await Promise.all(
+                        toolUseBlocks.map(async (tool: any) => {
+                            const args = tool.input
+                            const { startDate: sd, endDate: ed } = (args.start_date && args.end_date)
+                                ? { startDate: args.start_date, endDate: args.end_date }
+                                : getDateRange(wizard_data.dateGo)
+
+                            try {
+                                const results = await searchSeatsAero(seatsKey, args.origin, args.destination, sd, ed)
+                                const formatted = formatResults(results, args.cabin ?? wizard_data.cabinClass)
+                                return { type: 'tool_result', tool_use_id: tool.id, content: formatted }
+                            } catch (e) {
+                                return {
+                                    type: 'tool_result',
+                                    tool_use_id: tool.id,
+                                    content: `Erro ao buscar ${args.origin}→${args.destination}: ${(e as Error).message}`,
+                                }
+                            }
+                        })
+                    )
+
+                    // Adiciona resultados e continua o loop
+                    loopMessages.push({ role: 'assistant', content: planJson.content })
+                    loopMessages.push({ role: 'user', content: toolResults })
                 }
+
+                // Instrui o Sonnet a escrever a análise final (sem fazer novas buscas)
+                loopMessages.push({
+                    role: 'user',
+                    content: isParaOndeMode
+                        ? 'Todas as buscas foram concluídas. Com base nos dados da carteira do usuário e nos resultados coletados, escreva a análise final personalizada agora. Seja específico com os números reais (milhas que o usuário TEM, quanto falta, qual cartão transferir). Não mencione que vai buscar mais dados.'
+                        : 'Todas as buscas foram concluídas. Com base nos dados coletados acima, escreva a análise final completa agora. Não mencione que vai buscar mais dados — use apenas o que já foi retornado.',
+                })
             }
 
             // ── Phase 2: Sonnet streams the final analysis ────────────────────
