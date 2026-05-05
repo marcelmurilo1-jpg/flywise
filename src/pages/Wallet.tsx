@@ -24,11 +24,22 @@ type BonusPromo = {
     club_required: string | null
 }
 
-function getEffectiveBonus(promo: BonusPromo, activeClubTiers: Record<string, string>): number {
+function normalizeTier(s: string): string {
+    return s.replace(/ mi$/i, '').replace(/ pts?$/i, '').replace(/ \/ Diamante/i, '').trim().toLowerCase()
+}
+
+function getEffectiveBonus(promo: BonusPromo, activeClubTiers: Record<string, string>, activeClubs: string[]): number {
     const club = MILES_CLUBS.find(c => c.program === promo.program)
-    if (club && activeClubTiers[club.id]) {
-        const tierBonus = promo.club_tier_bonuses?.[activeClubTiers[club.id]]
-        if (tierBonus) return tierBonus
+    if (club && activeClubs.includes(club.id) && activeClubTiers[club.id]) {
+        const userTierRaw = activeClubTiers[club.id]
+        // exact match
+        if (promo.club_tier_bonuses?.[userTierRaw]) return promo.club_tier_bonuses[userTierRaw]
+        // fuzzy match (ignora sufixos " mi", " pts", etc.)
+        const fuzzyKey = Object.keys(promo.club_tier_bonuses ?? {}).find(
+            k => normalizeTier(k) === normalizeTier(userTierRaw)
+        )
+        if (fuzzyKey) return promo.club_tier_bonuses![fuzzyKey]
+        // fallback: bônus genérico de clube (qualquer plano)
         if ((promo.club_bonus_percent ?? 0) > (promo.bonus_percent ?? 0)) return promo.club_bonus_percent
     }
     return promo.bonus_percent ?? 0
@@ -71,15 +82,15 @@ type BonusGroup = {
     effectiveBonus: number
 }
 
-function groupByProgram(bonuses: BonusPromo[], clubTiers: Record<string, string>): BonusGroup[] {
+function groupByProgram(bonuses: BonusPromo[], clubTiers: Record<string, string>, clubs: string[]): BonusGroup[] {
     const map = new Map<string, BonusPromo[]>()
     for (const b of bonuses) {
         if (!map.has(b.program)) map.set(b.program, [])
         map.get(b.program)!.push(b)
     }
     return [...map.entries()].map(([program, promos]) => {
-        const best = Math.max(...promos.map(p => getEffectiveBonus(p, clubTiers)))
-        const rep = promos.find(p => getEffectiveBonus(p, clubTiers) === best) ?? promos[0]
+        const best = Math.max(...promos.map(p => getEffectiveBonus(p, clubTiers, clubs)))
+        const rep = promos.find(p => getEffectiveBonus(p, clubTiers, clubs) === best) ?? promos[0]
         return { program, promos, representative: rep, effectiveBonus: best }
     })
 }
@@ -249,9 +260,10 @@ export default function Wallet() {
     const availableToAdd = PROGRAMS.filter(p => !programs.includes(p))
     const myBonusGroups = groupByProgram(
         allBonuses.filter(b => programs.includes(b.program) && activeCards.includes(b.card_id)),
-        activeClubTiers
+        activeClubTiers,
+        activeClubs
     )
-    const allBonusGroups = groupByProgram(allBonuses, activeClubTiers)
+    const allBonusGroups = groupByProgram(allBonuses, activeClubTiers, activeClubs)
     const bonusGroups = bonusSubTab === 'meus' ? myBonusGroups : allBonusGroups
 
     return (
@@ -391,7 +403,7 @@ export default function Wallet() {
                                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                                 <div style={{ fontSize: 12, fontWeight: 700, color: isActive ? club.color : 'var(--text-dark)', lineHeight: 1.2 }}>{club.name}</div>
                                                                 <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                                                                    {selectedTier ? selectedTier : club.monthlyFee}
+                                                                    {isActive && selectedTier ? selectedTier : club.monthlyFee}
                                                                 </div>
                                                             </div>
                                                             <div style={{ width: 18, height: 18, borderRadius: '50%', background: isActive ? club.color : 'var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background .18s' }}>
@@ -551,9 +563,9 @@ export default function Wallet() {
                                                     const isEditing = editingProgram === prog
                                                     const promoForProg = allBonuses.filter(b => b.program === prog)
                                                     const bestBonus = promoForProg.length > 0
-                                                        ? Math.max(...promoForProg.map(b => getEffectiveBonus(b, activeClubTiers)))
+                                                        ? Math.max(...promoForProg.map(b => getEffectiveBonus(b, activeClubTiers, activeClubs)))
                                                         : 0
-                                                    const bestPromo = promoForProg.find(b => getEffectiveBonus(b, activeClubTiers) === bestBonus)
+                                                    const bestPromo = promoForProg.find(b => getEffectiveBonus(b, activeClubTiers, activeClubs) === bestBonus)
                                                     const validUntilLabel = bestPromo ? formatValidUntil(bestPromo.valid_until) : null
 
                                                     return (
@@ -721,7 +733,7 @@ export default function Wallet() {
                                         const urgent = validLabel?.startsWith('vence')
                                         const clubName = getClubDisplayName(representative.club_required)
                                         const clubObj = MILES_CLUBS.find(c => c.id === representative.club_required)
-                                        const userClubTier = clubObj ? activeClubTiers[clubObj.id] : null
+                                        const userClubTier = clubObj && activeClubs.includes(clubObj.id) ? activeClubTiers[clubObj.id] : null
                                         const hasTiers = Object.keys(representative.club_tier_bonuses ?? {}).length > 0
                                         const isMeus = bonusSubTab === 'meus'
 
@@ -798,7 +810,7 @@ export default function Wallet() {
                                                             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dark)' }}>+{representative.bonus_percent}%</span>
                                                         </div>
                                                         {Object.entries(representative.club_tier_bonuses).map(([tierName, tierBonus]) => {
-                                                            const isUserTier = !!userClubTier && userClubTier === tierName
+                                                            const isUserTier = !!userClubTier && (userClubTier === tierName || normalizeTier(userClubTier) === normalizeTier(tierName))
                                                             return (
                                                                 <div
                                                                     key={tierName}
