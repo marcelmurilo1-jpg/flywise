@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plane, Search, Zap, TrendingDown, TrendingUp, Trash2, Tag, Loader2, MessageSquare, Plus, ChevronRight, AlertTriangle, CheckCircle, Bot } from 'lucide-react'
+import { Plane, Search, Zap, TrendingDown, TrendingUp, Trash2, Tag, Loader2, Plus, ChevronRight, AlertTriangle, CheckCircle, Bot } from 'lucide-react'
 import { Header } from '@/components/Header'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
