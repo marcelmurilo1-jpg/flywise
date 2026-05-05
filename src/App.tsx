@@ -36,6 +36,7 @@ import Planos from '@/pages/Planos'
 import Checkout from '@/pages/Checkout'
 import Onboarding from '@/pages/Onboarding'
 import ChatBuscaAvancada from '@/pages/ChatBuscaAvancada'
+import ChatsIA from '@/pages/ChatsIA'
 import Mapa from '@/pages/Mapa'
 import Admin from '@/pages/Admin'
 import { BottomNav } from '@/components/BottomNav'
@@ -109,7 +110,7 @@ function AppRoutes() {
         <Route path="/promotions/:id" element={<ProtectedRoute><PromotionDetail /></ProtectedRoute>} />
         <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
         <Route path="/saved-strategies" element={<ProtectedRoute><SavedStrategies /></ProtectedRoute>} />
-        <Route path="/chats" element={<ProtectedRoute><SavedStrategies /></ProtectedRoute>} />
+        <Route path="/chats" element={<ProtectedRoute><ChatsIA /></ProtectedRoute>} />
         <Route path="/busca-avancada" element={<ProtectedRoute><SearchWizard /></ProtectedRoute>} />
         <Route path="/roteiro" element={<ProtectedRoute><Roteiro /></ProtectedRoute>} />
         <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
