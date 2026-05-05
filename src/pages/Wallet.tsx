@@ -207,11 +207,26 @@ export default function Wallet() {
     }
 
     const toggleClub = async (clubId: string) => {
-        const updated = activeClubs.includes(clubId)
-            ? activeClubs.filter(c => c !== clubId)
-            : [...activeClubs, clubId]
-        setActiveClubs(updated)
-        await saveClubs(updated, activeClubTiers)
+        if (activeClubs.includes(clubId)) {
+            // Desativar: remove clube e limpa o tier salvo
+            const updatedClubs = activeClubs.filter(c => c !== clubId)
+            const updatedTiers = { ...activeClubTiers }
+            delete updatedTiers[clubId]
+            setActiveClubs(updatedClubs)
+            setActiveClubTiers(updatedTiers)
+            await saveClubs(updatedClubs, updatedTiers)
+        } else {
+            // Ativar: auto-seleciona primeiro tier se o clube tiver planos
+            const updatedClubs = [...activeClubs, clubId]
+            const updatedTiers = { ...activeClubTiers }
+            const clubDef = MILES_CLUBS.find(c => c.id === clubId)
+            if (clubDef?.tiers?.length && !updatedTiers[clubId]) {
+                updatedTiers[clubId] = clubDef.tiers[0].name
+            }
+            setActiveClubs(updatedClubs)
+            setActiveClubTiers(updatedTiers)
+            await saveClubs(updatedClubs, updatedTiers)
+        }
     }
 
     const selectClubTier = async (clubId: string, tierName: string) => {
