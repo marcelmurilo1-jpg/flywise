@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Search, Tag, Wallet, Plane, User, Settings, LogOut, Map, Globe2 } from 'lucide-react'
+import { Search, Tag, Wallet, Plane, User, Settings, LogOut, Map, Globe2, Bot } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
     { title: 'Promoções', icon: Tag, to: '/promotions' },
     { title: 'Carteira', icon: Wallet, to: '/wallet' },
     { title: 'Estratégias', icon: Plane, to: '/saved-strategies' },
+    { title: 'Chats IA', icon: Bot, to: '/chats' },
     { title: 'Roteiro', icon: Map, to: '/roteiro' },
     { title: 'Mapa', icon: Globe2, to: '/mapa' },
 ]
