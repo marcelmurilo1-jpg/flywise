@@ -21,6 +21,7 @@ type BonusPromo = {
     club_bonus_percent: number
     club_tier_bonuses: Record<string, number>
     valid_until: string | null
+    club_required: string | null
 }
 
 function getEffectiveBonus(promo: BonusPromo, activeClubTiers: Record<string, string>): number {
@@ -115,7 +116,7 @@ export default function Wallet() {
     useEffect(() => {
         supabase
             .from('transfer_promotions')
-            .select('card_id, program, bonus_percent, club_bonus_percent, club_tier_bonuses, valid_until')
+            .select('card_id, program, bonus_percent, club_bonus_percent, club_tier_bonuses, valid_until, club_required')
             .eq('active', true)
             .then(({ data }) => {
                 if (!data) return
@@ -708,22 +709,37 @@ export default function Wallet() {
                                                     boxShadow: hasCard || hasProgram ? '0 2px 12px rgba(34,197,94,0.08)' : '0 2px 8px rgba(14,42,85,0.04)',
                                                 }}
                                             >
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                                                     <div style={{ width: 44, height: 44, borderRadius: 12, background: progColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                                         <span style={{ fontSize: 11, fontWeight: 900, color: '#fff' }}>{programInitials(b.program)}</span>
                                                     </div>
                                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 1 }}>{cardName}</div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                                            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-dark)' }}>{b.program}</span>
+                                                        <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-dark)', marginBottom: 4 }}>{b.program}</div>
+                                                        {/* Atribuição: para quem é a promoção */}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
+                                                            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>Para clientes do</span>
+                                                            <span style={{
+                                                                fontSize: 11, fontWeight: 800,
+                                                                color: cardObj?.color ?? 'var(--text-dark)',
+                                                                background: cardObj ? `${cardObj.color}18` : 'var(--snow)',
+                                                                border: `1px solid ${cardObj?.color ?? 'var(--border-light)'}40`,
+                                                                borderRadius: 5, padding: '2px 7px',
+                                                            }}>
+                                                                {cardName}
+                                                            </span>
                                                             {(hasCard || hasProgram) && (
                                                                 <span style={{ fontSize: 10, fontWeight: 800, background: 'rgba(34,197,94,0.12)', color: '#16A34A', borderRadius: 5, padding: '2px 6px' }}>
-                                                                    {hasCard ? 'Seu cartão' : 'Seu programa'}
+                                                                    {hasCard ? '✓ Seu cartão' : '✓ Seu programa'}
                                                                 </span>
                                                             )}
                                                         </div>
+                                                        {b.club_required && (
+                                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', marginBottom: 3 }}>
+                                                                Requer {b.club_required}
+                                                            </div>
+                                                        )}
                                                         {validLabel && (
-                                                            <div style={{ fontSize: 11, fontWeight: 700, marginTop: 3, color: urgent ? '#DC2626' : '#16A34A' }}>
+                                                            <div style={{ fontSize: 11, fontWeight: 700, color: urgent ? '#DC2626' : '#16A34A' }}>
                                                                 {validLabel}
                                                             </div>
                                                         )}
