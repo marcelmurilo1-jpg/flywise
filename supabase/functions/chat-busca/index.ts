@@ -396,29 +396,55 @@ serve(async (req) => {
                     : wizard_data.dateGo)
                 : 'datas flexíveis (próximos 90 dias)'
 
-            // Fetch active promos (non-blocking)
+            // Fetch active promos and transfer bonuses (non-blocking, parallel)
             let passagensContext = ''
-            try {
-                const keyword = wizard_data.destination?.replace(/\b[A-Z]{3}\b/g, '').trim() || wizard_data.destination
-                if (keyword && keyword.length >= 3) {
-                    const { data: passPromos } = await sbAdmin
-                        .from('vw_promocoes_ativas')
-                        .select('titulo, valid_until')
-                        .eq('categoria', 'passagens')
-                        .ilike('titulo', `%${keyword}%`)
-                        .order('valid_until', { ascending: true, nullsFirst: false })
-                        .limit(3)
-                    if (passPromos && passPromos.length > 0) {
-                        const lines = passPromos.map((p: Record<string, unknown>, i: number) => {
-                            const expiry = p.valid_until
-                                ? ` (expira ${new Date(p.valid_until as string).toLocaleDateString('pt-BR')})`
-                                : ''
-                            return `${i + 1}. ${p.titulo}${expiry}`
-                        })
-                        passagensContext = '\n\nPROMOÇÕES DE PASSAGENS ATIVAS:\n' + lines.join('\n')
-                    }
-                }
-            } catch { /* silencioso */ }
+            let transferBonusContext = ''
+            await Promise.all([
+                // Promoções de passagens relacionadas ao destino
+                (async () => {
+                    try {
+                        const keyword = wizard_data.destination?.replace(/\b[A-Z]{3}\b/g, '').trim() || wizard_data.destination
+                        if (keyword && keyword.length >= 3) {
+                            const { data: passPromos } = await sbAdmin
+                                .from('vw_promocoes_ativas')
+                                .select('titulo, valid_until')
+                                .eq('categoria', 'passagens')
+                                .ilike('titulo', `%${keyword}%`)
+                                .order('valid_until', { ascending: true, nullsFirst: false })
+                                .limit(3)
+                            if (passPromos && passPromos.length > 0) {
+                                const lines = passPromos.map((p: Record<string, unknown>, i: number) => {
+                                    const expiry = p.valid_until
+                                        ? ` (expira ${new Date(p.valid_until as string).toLocaleDateString('pt-BR')})`
+                                        : ''
+                                    return `${i + 1}. ${p.titulo}${expiry}`
+                                })
+                                passagensContext = '\n\nPROMOÇÕES DE PASSAGENS ATIVAS:\n' + lines.join('\n')
+                            }
+                        }
+                    } catch { /* silencioso */ }
+                })(),
+                // Bônus de transferência ativos — alimentados pelo sync diário com IA
+                (async () => {
+                    try {
+                        const { data: tp } = await sbAdmin
+                            .from('transfer_promotions')
+                            .select('card_id, program, bonus_percent, club_bonus_percent, description')
+                            .eq('active', true)
+                            .gt('bonus_percent', 0)
+                            .order('bonus_percent', { ascending: false })
+                            .limit(20)
+                        if (tp && tp.length > 0) {
+                            const lines = tp.map((p: Record<string, unknown>) => {
+                                const club = (p.club_bonus_percent as number) > 0 ? ` | com clube: +${p.club_bonus_percent}%` : ''
+                                return `• ${p.card_id} → ${p.program}: +${p.bonus_percent}%${club}`
+                            })
+                            transferBonusContext = '\n\nBÔNUS DE TRANSFERÊNCIA ATIVOS AGORA:\n' + lines.join('\n') +
+                                '\n(Use estas informações ao sugerir qual cartão transferir para cada programa)'
+                        }
+                    } catch { /* silencioso */ }
+                })(),
+            ])
 
             const systemPrompt = `Você é o FlyWise AI, especialista em milhas aéreas e viagens para brasileiros.
 
@@ -431,7 +457,7 @@ DADOS DA BUSCA:
 - Estratégia: ${wizard_data.hackerMode === 'comfort' ? 'Conforto (prioriza direto)' : wizard_data.hackerMode === 'hacker' ? 'Avançada — Modo Hacker (2 reservas separadas, hubs, qualquer programa)' : 'Melhor Custo-Benefício'}
 - Origem flexível: ${wizard_data.flexibleOrigin ? 'Sim' : 'Não'}
 ${wizard_data.observations ? `- Observações: ${wizard_data.observations}` : ''}
-${passagensContext}
+${passagensContext}${transferBonusContext}
 
 Você tem acesso à ferramenta search_awards com dados reais do Seats.aero.
 

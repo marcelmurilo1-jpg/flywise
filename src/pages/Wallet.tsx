@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Wallet as WalletIcon, Plus, Pencil, Check, X, Trash2, Loader2, ArrowLeftRight, Crown, ChevronDown, ChevronUp, Lock, Globe } from 'lucide-react'
+import { Wallet as WalletIcon, Plus, Pencil, Check, X, Trash2, Loader2, ArrowLeftRight, Crown, ChevronDown, ChevronUp, Lock, Globe, TrendingUp } from 'lucide-react'
 import { Header } from '@/components/Header'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -12,7 +12,51 @@ import ParaOndeVoo from '@/pages/ParaOndeVoo'
 import { usePlan } from '@/hooks/usePlan'
 
 type MilesMap = Record<string, number>
-type Tab = 'carteira' | 'simulador' | 'para_onde'
+type Tab = 'carteira' | 'simulador' | 'para_onde' | 'bonus'
+
+type BonusPromo = {
+    card_id: string
+    program: string
+    bonus_percent: number
+    club_bonus_percent: number
+    club_tier_bonuses: Record<string, number>
+    valid_until: string | null
+}
+
+function getEffectiveBonus(promo: BonusPromo, activeClubTiers: Record<string, string>): number {
+    const club = MILES_CLUBS.find(c => c.program === promo.program)
+    if (club && activeClubTiers[club.id]) {
+        const tierBonus = promo.club_tier_bonuses?.[activeClubTiers[club.id]]
+        if (tierBonus) return tierBonus
+        if ((promo.club_bonus_percent ?? 0) > (promo.bonus_percent ?? 0)) return promo.club_bonus_percent
+    }
+    return promo.bonus_percent ?? 0
+}
+
+const MONTH_PT: Record<string, number> = {
+    janeiro:0,fevereiro:1,'março':2,abril:3,maio:4,junho:5,
+    julho:6,agosto:7,setembro:8,outubro:9,novembro:10,dezembro:11,
+}
+
+function formatValidUntil(s: string | null | undefined): string | null {
+    if (!s || s.toLowerCase().startsWith('expirado') || ['permanente','indefinido',''].includes(s.toLowerCase())) return null
+    let date: Date | null = null
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        date = new Date(s + 'T12:00:00')
+    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+        const [d, m, y] = s.split('/')
+        date = new Date(`${y}-${m}-${d}T12:00:00`)
+    } else {
+        const mo = s.toLowerCase().match(/^(\w+)\s+(\d{4})$/)
+        if (mo && MONTH_PT[mo[1]] !== undefined) date = new Date(parseInt(mo[2]), MONTH_PT[mo[1]], 28)
+    }
+    if (!date || isNaN(date.getTime())) return null
+    const diff = Math.ceil((date.getTime() - Date.now()) / 86400000)
+    if (diff <= 0) return null
+    if (diff === 1) return 'vence amanhã'
+    if (diff <= 7) return `vence em ${diff} dias`
+    return `até ${date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
+}
 
 // Cores por programa
 const PROGRAM_COLORS: Record<string, string> = {
@@ -64,6 +108,24 @@ export default function Wallet() {
     // Colapsar seções
     const [clubsExpanded, setClubsExpanded] = useState(false)
     const [cardsExpanded, setCardsExpanded] = useState(false)
+
+    const [allBonuses, setAllBonuses] = useState<BonusPromo[]>([])
+    const [bonusSubTab, setBonusSubTab] = useState<'meus' | 'todos'>('meus')
+
+    useEffect(() => {
+        supabase
+            .from('transfer_promotions')
+            .select('card_id, program, bonus_percent, club_bonus_percent, club_tier_bonuses, valid_until')
+            .eq('active', true)
+            .then(({ data }) => {
+                if (!data) return
+                setAllBonuses(data.filter(p =>
+                    (p.bonus_percent ?? 0) > 0 ||
+                    (p.club_bonus_percent ?? 0) > 0 ||
+                    Object.keys(p.club_tier_bonuses ?? {}).length > 0
+                ) as BonusPromo[])
+            })
+    }, [])
 
     useEffect(() => {
         if (!user) return
@@ -159,6 +221,9 @@ export default function Wallet() {
     const totalMiles = Object.values(miles).reduce((a, b) => a + b, 0)
     const programs = Object.keys(miles)
     const availableToAdd = PROGRAMS.filter(p => !programs.includes(p))
+    const bonusList = bonusSubTab === 'meus'
+        ? allBonuses.filter(b => programs.includes(b.program) || activeCards.includes(b.card_id))
+        : allBonuses
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--snow)', fontFamily: 'Manrope, system-ui, sans-serif', paddingBottom: '80px' }}>
@@ -188,6 +253,7 @@ export default function Wallet() {
                         { id: 'carteira', label: 'Meus Saldos', Icon: WalletIcon },
                         { id: 'simulador', label: 'Simulador de Transferência', Icon: ArrowLeftRight },
                         { id: 'para_onde', label: 'Para onde posso voar?', Icon: Globe },
+                        { id: 'bonus', label: 'Bônus de Transferência', Icon: TrendingUp },
                     ] as const).map(tab => (
                         <button
                             key={tab.id}
@@ -454,6 +520,12 @@ export default function Wallet() {
                                                     const color = PROGRAM_COLORS[prog] ?? '#0E2A55'
                                                     const saldo = miles[prog] ?? 0
                                                     const isEditing = editingProgram === prog
+                                                    const promoForProg = allBonuses.filter(b => b.program === prog)
+                                                    const bestBonus = promoForProg.length > 0
+                                                        ? Math.max(...promoForProg.map(b => getEffectiveBonus(b, activeClubTiers)))
+                                                        : 0
+                                                    const bestPromo = promoForProg.find(b => getEffectiveBonus(b, activeClubTiers) === bestBonus)
+                                                    const validUntilLabel = bestPromo ? formatValidUntil(bestPromo.valid_until) : null
 
                                                     return (
                                                         <motion.div
@@ -462,7 +534,7 @@ export default function Wallet() {
                                                             animate={{ opacity: 1, y: 0 }}
                                                             exit={{ opacity: 0, x: -20 }}
                                                             transition={{ delay: i * 0.04 }}
-                                                            style={{ background: 'var(--bg-white)', border: '1px solid var(--border-light)', borderRadius: '16px', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 2px 8px rgba(14,42,85,0.04)' }}
+                                                            style={{ background: 'var(--bg-white)', border: `1px solid ${bestBonus ? 'rgba(34,197,94,0.3)' : 'var(--border-light)'}`, borderRadius: '16px', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: bestBonus ? '0 2px 12px rgba(34,197,94,0.08)' : '0 2px 8px rgba(14,42,85,0.04)' }}
                                                         >
                                                             <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                                                 <span style={{ fontSize: '12px', fontWeight: 900, color: '#fff', letterSpacing: '0.02em' }}>
@@ -470,7 +542,19 @@ export default function Wallet() {
                                                                 </span>
                                                             </div>
                                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                                <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-dark)', marginBottom: '2px' }}>{prog}</div>
+                                                                <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-dark)', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                                    {prog}
+                                                                    {bestBonus > 0 && (
+                                                                        <span title={`Bônus de transferência ativo: +${bestBonus}%${validUntilLabel ? ` · ${validUntilLabel}` : ''}`} style={{ display: 'inline-flex', alignItems: 'center', background: '#16A34A', color: '#fff', borderRadius: 6, fontSize: 10, fontWeight: 800, padding: '2px 7px', letterSpacing: '0.04em', lineHeight: 1 }}>
+                                                                            +{bestBonus}% bônus
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                {bestBonus > 0 && validUntilLabel && (
+                                                                    <div style={{ fontSize: 10, fontWeight: 700, color: validUntilLabel.startsWith('vence') ? '#DC2626' : '#16A34A', marginBottom: 2 }}>
+                                                                        {validUntilLabel}
+                                                                    </div>
+                                                                )}
                                                                 {isEditing ? (
                                                                     <input
                                                                         type="text"
@@ -562,6 +646,100 @@ export default function Wallet() {
                                 activeClubs={activeClubs}
                                 activeClubTiers={activeClubTiers}
                             />
+                        </motion.div>
+                    )}
+
+                    {/* ── Tab: Bônus de Transferência ── */}
+                    {activeTab === 'bonus' && (
+                        <motion.div key="bonus" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}>
+                            {/* Sub-tabs */}
+                            <div style={{ display: 'flex', gap: 4, background: 'var(--bg-white)', border: '1.5px solid var(--border-light)', borderRadius: 12, padding: 4, marginBottom: 20, width: 'fit-content' }}>
+                                {(['meus', 'todos'] as const).map(st => (
+                                    <button
+                                        key={st}
+                                        onClick={() => setBonusSubTab(st)}
+                                        style={{
+                                            padding: '8px 16px', borderRadius: 9,
+                                            background: bonusSubTab === st ? 'var(--blue-medium)' : 'none',
+                                            color: bonusSubTab === st ? '#fff' : 'var(--text-muted)',
+                                            border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                                            fontSize: 13, fontWeight: 700, transition: 'all .15s', whiteSpace: 'nowrap',
+                                        }}
+                                    >
+                                        {st === 'meus' ? 'Meus Programas' : 'Todas as Promoções'}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {allBonuses.length === 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 20px', color: 'var(--text-muted)', gap: 12 }}>
+                                    <TrendingUp size={40} color="var(--border-light)" />
+                                    <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Nenhum bônus ativo no momento</p>
+                                    <p style={{ fontSize: 13, margin: 0 }}>O sync diário verifica novas promoções às 14h UTC.</p>
+                                </div>
+                            ) : bonusList.length === 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 20px', color: 'var(--text-muted)', gap: 12 }}>
+                                    <TrendingUp size={40} color="var(--border-light)" />
+                                    <p style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Nenhum bônus ativo para seus programas</p>
+                                    <p style={{ fontSize: 13, margin: 0 }}>Adicione programas à carteira ou ative seus cartões para ver bônus relevantes.</p>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    {bonusList.map((b, i) => {
+                                        const effectiveBonus = getEffectiveBonus(b, activeClubTiers)
+                                        const validLabel = formatValidUntil(b.valid_until)
+                                        const urgent = validLabel?.startsWith('vence')
+                                        const hasCard = activeCards.includes(b.card_id)
+                                        const hasProgram = programs.includes(b.program)
+                                        const cardObj = CREDIT_CARDS.find(c => c.id === b.card_id)
+                                        const cardName = cardObj?.name ?? b.card_id
+                                        const progColor = PROGRAM_COLORS[b.program] ?? '#0E2A55'
+                                        return (
+                                            <motion.div
+                                                key={`${b.card_id}-${b.program}`}
+                                                initial={{ opacity: 0, y: 8 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: i * 0.04 }}
+                                                style={{
+                                                    background: 'var(--bg-white)',
+                                                    border: `1.5px solid ${hasCard || hasProgram ? 'rgba(34,197,94,0.35)' : 'var(--border-light)'}`,
+                                                    borderRadius: 16,
+                                                    padding: '18px 20px',
+                                                    boxShadow: hasCard || hasProgram ? '0 2px 12px rgba(34,197,94,0.08)' : '0 2px 8px rgba(14,42,85,0.04)',
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                                    <div style={{ width: 44, height: 44, borderRadius: 12, background: progColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                        <span style={{ fontSize: 11, fontWeight: 900, color: '#fff' }}>{programInitials(b.program)}</span>
+                                                    </div>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 1 }}>{cardName}</div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-dark)' }}>{b.program}</span>
+                                                            {(hasCard || hasProgram) && (
+                                                                <span style={{ fontSize: 10, fontWeight: 800, background: 'rgba(34,197,94,0.12)', color: '#16A34A', borderRadius: 5, padding: '2px 6px' }}>
+                                                                    {hasCard ? 'Seu cartão' : 'Seu programa'}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {validLabel && (
+                                                            <div style={{ fontSize: 11, fontWeight: 700, marginTop: 3, color: urgent ? '#DC2626' : '#16A34A' }}>
+                                                                {validLabel}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                        <div style={{ fontSize: 28, fontWeight: 900, color: '#16A34A', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                                                            +{effectiveBonus}%
+                                                        </div>
+                                                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, marginTop: 2 }}>bônus</div>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        )
+                                    })}
+                                </div>
+                            )}
                         </motion.div>
                     )}
 

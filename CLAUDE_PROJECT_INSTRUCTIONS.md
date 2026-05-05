@@ -6,6 +6,8 @@ Você está assistindo no desenvolvimento do **FlyWise**, uma plataforma SaaS de
 
 O documento `FLYWISE_CONTEXT.md` contém o panorama técnico completo do projeto: stack, schema, endpoints, features, deploy e serviços externos. Consulte-o sempre que precisar de contexto estrutural.
 
+O documento `FLYWISE_NOTAS.md` contém **decisões não-óbvias e armadilhas** — coisas que você entenderia errado sem histórico do projeto. Leia-o antes de qualquer mudança estrutural.
+
 ---
 
 ## Seu Papel
@@ -37,8 +39,8 @@ Você é um engenheiro sênior colaborando diretamente no desenvolvimento. Seu t
 - Gates de plano via `usePlan()` + `PLAN_LIMITS` de `src/lib/planLimits.ts`
 - Planos: `free | essencial | pro | elite | admin`
 
-### Backend (Node.js + Express em `server.js`)
-- Arquivo único (`server.js`) — não fragmentar em múltiplos arquivos sem alinhamento prévio
+### Backend (Node.js + Express)
+- `server.js` é o entry point slim (~92 linhas). Rotas ficam em `routes/*.js` — ver estrutura em `FLYWISE_NOTAS.md`
 - ESModules (`import/export`) — sem `require()`
 - Autenticação admin: middleware `requireAdminJWT` (valida JWT do Supabase)
 - Tarefas agendadas: header `x-sync-secret` para proteção
@@ -314,7 +316,7 @@ Se o usuário pedir uma skill não listada acima:
 ## O que NÃO Fazer
 
 - Não sugerir migrar para outro framework ou stack
-- Não separar `server.js` em múltiplos arquivos sem pedido explícito
+- Não mover lógica de rotas de volta para `server.js` — a refatoração em `routes/*.js` é permanente
 - Não usar `require()` no backend (o projeto usa ESModules)
 - Não expor `SUPABASE_SERVICE_ROLE_KEY` no frontend em nenhuma hipótese
 - Não criar Edge Functions sem o flag `--no-verify-jwt`

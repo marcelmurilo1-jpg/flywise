@@ -924,6 +924,15 @@ function EditPromoModal({ promo, token, onClose, onSaved }: {
     )
 }
 
+const SYNC_STEP_LABELS: Record<string, string> = {
+    scraping: 'Scraping fontes RSS...',
+    analyzing: 'Analisando com Claude Sonnet...',
+    updating: 'Atualizando banco...',
+    done: 'Concluído',
+    error: 'Erro no sync',
+    idle: '',
+}
+
 function Promocoes({ token }: { token: string }) {
     const [promos, setPromos] = useState<TransferPromo[]>([])
     const [loading, setLoading] = useState(true)
@@ -931,6 +940,7 @@ function Promocoes({ token }: { token: string }) {
     const [syncing, setSyncing] = useState(false)
     const [syncingAI, setSyncingAI] = useState(false)
     const [syncMsg, setSyncMsg] = useState<string | null>(null)
+    const [syncStep, setSyncStep] = useState<string | null>(null)
     const [editing, setEditing] = useState<TransferPromo | null>(null)
 
     const load = useCallback(async () => {
@@ -957,12 +967,37 @@ function Promocoes({ token }: { token: string }) {
     }
 
     async function syncAI() {
-        setSyncingAI(true); setSyncMsg(null)
+        setSyncingAI(true); setSyncMsg(null); setSyncStep('Disparando...')
         try {
             await adminFetch('/api/admin/sync-transfer-data', token, { method: 'POST' })
-            setSyncMsg('Sync AI disparado em background (~90s). Verifique os logs após completar.')
-        } catch (e: unknown) { setSyncMsg(e instanceof Error ? e.message : 'Erro no sync AI') }
-        finally { setSyncingAI(false) }
+            // Poll status a cada 4s até concluir (max 3 min)
+            for (let i = 0; i < 45; i++) {
+                await new Promise(r => setTimeout(r, 4000))
+                try {
+                    const status = await adminFetch('/api/admin/transfer-sync-status', token)
+                    setSyncStep(SYNC_STEP_LABELS[status.step] ?? status.step)
+                    if (!status.inProgress) {
+                        const res = status.lastResult
+                        if (res?.error) {
+                            setSyncMsg(`Erro: ${res.error}`)
+                        } else if (res?.changesDetected) {
+                            const diffsText = res.diffs?.length
+                                ? ` (${res.diffs.map((d: { card_id: string; program: string }) => `${d.card_id}→${d.program}`).join(', ')})`
+                                : ''
+                            setSyncMsg(`✓ ${res.rowsUpdated} promo(s) atualizada(s)${diffsText}`)
+                        } else {
+                            setSyncMsg('✓ Nenhuma mudança detectada — dados já estão atualizados.')
+                        }
+                        await load()
+                        break
+                    }
+                } catch { break }
+            }
+        } catch (e: unknown) {
+            setSyncMsg(e instanceof Error ? e.message : 'Erro no sync AI')
+        } finally {
+            setSyncingAI(false); setSyncStep(null)
+        }
     }
 
     async function toggleActive(id: number, current: boolean) {
@@ -1003,8 +1038,14 @@ function Promocoes({ token }: { token: string }) {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <BlockTitle icon={Tag} title="Promoções de transferência" subtitle="Bônus exibidos no simulador. Edite diretamente ou dispare o sync com IA." />
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {syncMsg && <span style={{ fontSize: 12, color: '#94a3b8' }}>{syncMsg}</span>}
-                    <button onClick={syncCache} disabled={syncing} style={S.btnSm}>
+                    {syncingAI && syncStep && (
+                        <span style={{ fontSize: 11, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} />
+                            {syncStep}
+                        </span>
+                    )}
+                    {!syncingAI && syncMsg && <span style={{ fontSize: 12, color: syncMsg.startsWith('✓') ? '#22c55e' : syncMsg.startsWith('Erro') ? '#f87171' : '#94a3b8' }}>{syncMsg}</span>}
+                    <button onClick={syncCache} disabled={syncing || syncingAI} style={S.btnSm}>
                         {syncing ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={13} />}
                         Cache
                     </button>
@@ -1100,7 +1141,11 @@ function Logs({ token }: { token: string }) {
                 <button onClick={load} style={{ ...S.btnSm, marginTop: 2 }}><RefreshCw size={13} /></button>
             </div>
             {logs.length === 0 && <p style={{ color: '#475569', textAlign: 'center', padding: 32, fontSize: 13 }}>Nenhum log encontrado.</p>}
-            {logs.map(log => (
+            {logs.map(log => {
+                // Separate Claude summary from field-level diffs stored after \n\nMUDANÇAS:
+                const [summaryPart, diffsPart] = (log.summary ?? '').split('\n\nMUDANÇAS:\n')
+                const diffLines = diffsPart ? diffsPart.split('\n').filter(Boolean) : []
+                return (
                 <div key={log.id} style={{ background: '#111827', border: `1px solid ${log.changes_detected ? '#1e3a5f' : '#1e293b'}`, borderRadius: 10, padding: '13px 16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1113,10 +1158,20 @@ function Logs({ token }: { token: string }) {
                         </div>
                         <span style={{ color: '#475569', fontSize: 11, whiteSpace: 'nowrap' }}>{fmtDateTime(log.synced_at)}</span>
                     </div>
-                    {log.summary && <p style={{ color: '#64748b', fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{log.summary}</p>}
-                    <p style={{ color: '#334155', fontSize: 11, marginTop: 4 }}>{log.sources_scraped} fonte(s) verificada(s)</p>
+                    {summaryPart && <p style={{ color: '#64748b', fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{summaryPart}</p>}
+                    {diffLines.length > 0 && (
+                        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {diffLines.map((line, i) => (
+                                <span key={i} style={{ fontFamily: 'monospace', fontSize: 11, color: line.startsWith('+') ? '#4ade80' : '#fbbf24', background: '#0f172a', borderRadius: 4, padding: '2px 6px' }}>
+                                    {line}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    <p style={{ color: '#334155', fontSize: 11, marginTop: 6 }}>{log.sources_scraped} fonte(s) verificada(s)</p>
                 </div>
-            ))}
+                )
+            })}
         </div>
     )
 }
