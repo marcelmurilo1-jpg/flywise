@@ -9,6 +9,7 @@ import { AirportInput } from '@/components/AirportInput'
 import { DateRangePicker } from '@/components/DateRangePicker'
 import { NotificationSurvey } from '@/components/NotificationSurvey'
 import { useNotificationSurvey } from '@/hooks/useNotificationSurvey'
+import { AircraftReveal } from '@/components/AircraftReveal'
 import type { Busca } from '@/lib/supabase'
 
 export default function Home() {
@@ -119,16 +120,11 @@ export default function Home() {
         }}>
             <style>{`
                 @media (max-width: 768px) {
-                    .fly-hero-banner { height: 300px !important; }
                     .fly-search-card { margin: -52px auto 0 !important; width: calc(100% - 32px) !important; padding: 20px !important; border-radius: 16px !important; }
                     .fly-search-grid { grid-template-columns: 1fr !important; }
                     .fly-search-grid > * { grid-column: 1 !important; }
                     .fly-recent-cards { flex-direction: column !important; }
-                    .fly-hero-title { font-size: 24px !important; }
                     .fly-search-actions { flex-direction: column !important; }
-                }
-                @keyframes overlaySpinRing {
-                    to { transform: rotate(360deg); }
                 }
                 @keyframes overlayPulseDots {
                     0%, 80%, 100% { opacity: 0.25; transform: scale(0.7); }
@@ -152,7 +148,7 @@ export default function Home() {
                         transition: 'top 0.65s cubic-bezier(0.4,0,0.2,1), left 0.65s cubic-bezier(0.4,0,0.2,1), width 0.65s cubic-bezier(0.4,0,0.2,1), height 0.65s cubic-bezier(0.4,0,0.2,1)',
                     }}
                 >
-                    {/* Video */}
+                    {/* Raw video — no overlay */}
                     <video
                         ref={videoRef}
                         src="/flywise-loading.mp4"
@@ -168,93 +164,40 @@ export default function Home() {
                         }}
                     />
 
-                    {/* Dark overlay + content — fades in after expansion starts */}
+                    {/* Loading message at the bottom only */}
                     <div style={{
                         position: 'absolute',
-                        inset: 0,
-                        background: 'rgba(8, 16, 38, 0.72)',
-                        backdropFilter: 'blur(2px)',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        padding: '0 0 40px',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 24,
+                        gap: 12,
                         opacity: overlayExpanded ? 1 : 0,
-                        transition: 'opacity 0.45s ease 0.35s',
+                        transition: 'opacity 0.45s ease 0.4s',
                     }}>
-                        {/* Logo */}
-                        <img
-                            src="/logo.png"
-                            alt="FlyWise"
-                            style={{
-                                height: 52,
-                                filter: 'brightness(0) invert(1)',
-                                opacity: 0.92,
-                                marginBottom: 4,
-                            }}
-                        />
+                        <p style={{
+                            color: '#fff',
+                            fontSize: 17,
+                            fontWeight: 600,
+                            letterSpacing: '0.02em',
+                            margin: 0,
+                            textShadow: '0 2px 16px rgba(0,0,0,0.7)',
+                        }}>
+                            Buscando os melhores voos...
+                        </p>
 
-                        {/* Spinner ring with plane icon */}
-                        <div style={{ position: 'relative', width: 64, height: 64 }}>
-                            <div style={{
-                                position: 'absolute',
-                                inset: 0,
-                                borderRadius: '50%',
-                                border: '3px solid rgba(255,255,255,0.12)',
-                                borderTopColor: '#4A90E2',
-                                borderRightColor: 'rgba(74,144,226,0.4)',
-                                animation: 'overlaySpinRing 1s linear infinite',
-                            }} />
-                            <div style={{
-                                position: 'absolute',
-                                inset: 6,
-                                borderRadius: '50%',
-                                border: '1.5px solid rgba(255,255,255,0.06)',
-                                borderBottomColor: 'rgba(74,144,226,0.3)',
-                                animation: 'overlaySpinRing 1.8s linear infinite reverse',
-                            }} />
-                            <Plane
-                                size={20}
-                                color="#fff"
-                                style={{
-                                    position: 'absolute',
-                                    top: '50%',
-                                    left: '50%',
-                                    transform: 'translate(-50%, -50%)',
-                                    opacity: 0.9,
-                                }}
-                            />
-                        </div>
-
-                        <div style={{ textAlign: 'center' }}>
-                            <p style={{
-                                color: 'rgba(255,255,255,0.9)',
-                                fontSize: 18,
-                                fontWeight: 600,
-                                letterSpacing: '0.01em',
-                                margin: '0 0 6px',
-                            }}>
-                                Buscando os melhores voos
-                            </p>
-                            <p style={{
-                                color: 'rgba(255,255,255,0.45)',
-                                fontSize: 14,
-                                fontWeight: 400,
-                                margin: 0,
-                            }}>
-                                Analisando preços e opções de milhas para você
-                            </p>
-                        </div>
-
-                        {/* Animated dots */}
-                        <div style={{ display: 'flex', gap: 8, marginTop: -8 }}>
+                        {/* Pulsing dots */}
+                        <div style={{ display: 'flex', gap: 8 }}>
                             {[0, 1, 2].map(i => (
                                 <div key={i} style={{
-                                    width: 6,
-                                    height: 6,
+                                    width: 7,
+                                    height: 7,
                                     borderRadius: '50%',
-                                    background: '#4A90E2',
-                                    animation: `overlayPulseDots 1.4s ease-in-out ${i * 0.2}s infinite`,
+                                    background: '#fff',
+                                    animation: `overlayPulseDots 1.4s ease-in-out ${i * 0.22}s infinite`,
                                 }} />
                             ))}
                         </div>
@@ -264,59 +207,8 @@ export default function Home() {
 
             {/* ── HERO BANNER ────────────────────────────────────────────── */}
             <div style={{ position: 'relative' }}>
-                <div
-                    ref={bannerRef}
-                    className="fly-hero-banner"
-                    style={{
-                        width: '100%',
-                        height: 480,
-                        backgroundImage: 'url(/aircraft-exterior.jpg)',
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center 42%',
-                        position: 'relative',
-                        display: 'flex',
-                        alignItems: 'flex-end',
-                    }}
-                >
-                    {/* Gradient overlay — darkens bottom for readability */}
-                    <div style={{
-                        position: 'absolute',
-                        inset: 0,
-                        background: 'linear-gradient(to bottom, rgba(8,18,45,0.08) 0%, rgba(8,18,45,0.38) 50%, rgba(10,24,55,0.88) 100%)',
-                    }} />
-
-                    {/* Hero text */}
-                    <div style={{
-                        position: 'relative',
-                        zIndex: 2,
-                        width: '100%',
-                        textAlign: 'center',
-                        padding: '0 32px 92px',
-                    }}>
-                        <h1
-                            className="fly-hero-title"
-                            style={{
-                                color: '#fff',
-                                fontSize: 'clamp(26px, 3.5vw, 46px)',
-                                fontWeight: 800,
-                                margin: '0 0 10px',
-                                lineHeight: 1.14,
-                                letterSpacing: '-0.02em',
-                                textShadow: '0 2px 24px rgba(0,0,0,0.4)',
-                            }}
-                        >
-                            Voe mais longe com suas milhas
-                        </h1>
-                        <p style={{
-                            color: 'rgba(255,255,255,0.72)',
-                            fontSize: 16,
-                            fontWeight: 400,
-                            margin: 0,
-                            letterSpacing: '0.01em',
-                        }}>
-                            Inteligência artificial que transforma pontos em passagens
-                        </p>
-                    </div>
+                <div ref={bannerRef} className="fly-hero-banner" style={{ width: '100%', display: 'block', position: 'relative' }}>
+                    <AircraftReveal />
                 </div>
 
                 {/* ── SEARCH CARD ─────────────────────────────────────────── */}

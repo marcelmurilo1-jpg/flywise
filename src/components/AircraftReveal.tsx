@@ -159,12 +159,22 @@ export function AircraftReveal() {
                     // Fluid spotlight mask
                     WebkitMaskImage: `radial-gradient(circle at ${mousePos.x}% ${mousePos.y}%, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) ${MASK_SIZE}, rgba(0,0,0,0) calc(${MASK_SIZE} + 10%))`,
                     maskImage: `radial-gradient(circle at ${mousePos.x}% ${mousePos.y}%, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) ${MASK_SIZE}, rgba(0,0,0,0) calc(${MASK_SIZE} + 10%))`,
-                    
+
                     // Smooth fade in/out on hover
                     opacity: hovering ? 1 : 0,
                     transition: 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
                 }}
             />
+
+            {/* Gradient overlay — fades out when hovering to reveal the full image */}
+            <div style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'linear-gradient(to bottom, rgba(8,18,45,0.08) 0%, rgba(8,18,45,0.38) 52%, rgba(10,24,55,0.88) 100%)',
+                pointerEvents: 'none',
+                opacity: hovering ? 0 : 1,
+                transition: 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+            }} />
 
             {/* Hint overlay to encourage interaction (fades permanently after first interaction) */}
             <div style={{
