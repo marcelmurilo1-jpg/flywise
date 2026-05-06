@@ -331,6 +331,37 @@ function formatResults(results: SeatsAeroResult[], cabinClass: string): string {
     return `${summary}\n\nTop resultados (ordenados por milhas):\n${lines.join('\n')}`
 }
 
+// ─── Alliance / partnership lookup (atualizado manualmente quando há mudanças) ─
+
+const PROGRAM_ALLIANCES: Record<string, string> = {
+    united:        'Star Alliance — resgata em: ANA, Lufthansa, Singapore Airlines, TAP, Turkish Airlines, Swiss, Copa, Air Canada',
+    lifemiles:     'Star Alliance — resgata em: United, Lufthansa, ANA, Singapore Airlines, TAP, Turkish Airlines, Copa',
+    aeroplan:      'Star Alliance — resgata em: United, Lufthansa, ANA, Singapore Airlines, TAP, Turkish, Swiss',
+    turkish:       'Star Alliance — resgata em: United, Lufthansa, ANA, Singapore Airlines, TAP',
+    singapore:     'Star Alliance — resgata em: United, Lufthansa, ANA, TAP, Turkish Airlines, Air New Zealand',
+    miles_and_more:'Star Alliance (Lufthansa) — resgata em: Swiss, Austrian, United, ANA, Singapore Airlines, TAP',
+    american:      'oneworld — resgata em: British Airways, Qatar Airways, Cathay Pacific, Japan Airlines, Iberia, LATAM',
+    iberia:        'oneworld — resgata em: American, British Airways, Qatar Airways, Cathay Pacific, Japan Airlines, LATAM',
+    cathay:        'oneworld (Asia Miles) — resgata em: American, British Airways, Qatar Airways, LATAM, Japan Airlines',
+    latam_pass:    'oneworld — resgata em: American, British Airways, Qatar Airways, Cathay Pacific, Japan Airlines, Iberia',
+    alaska:        'oneworld associate — resgata em: American, British Airways, JAL, Cathay Pacific, Qantas, Singapore Airlines, Korean Air',
+    flyingblue:    'SkyTeam (Air France/KLM) — resgata em: Delta, Korean Air, Aeromexico, Air Europa, Alitalia/ITA',
+    delta:         'SkyTeam — resgata em: Air France, KLM, Korean Air, Aeromexico, Flying Blue',
+    aeromexico:    'SkyTeam — resgata em: Delta, Air France, KLM, Korean Air',
+    saudia:        'SkyTeam — resgata em: Air France, KLM, Delta, Korean Air',
+    smiles:        'Programa GOL (não alinhado) — parceiros: Delta, Air France, KLM, Aeromexico, Copa Airlines, Etihad, Emirates',
+    azul:          'Programa Azul (não alinhado) — parceiros: United (codeshare), TAP Air Portugal',
+    emirates:      'Programa independente — voos Emirates + parceria bilateral Qantas',
+    etihad:        'Programa independente — voos Etihad + parceiros bilaterais',
+    virgin_atlantic:'Programa independente — parceiros: Delta, ANA, Singapore Airlines, Air New Zealand',
+    jetblue:       'Programa independente — parceiros: American Airlines, Emirates',
+    velocity:      'Programa independente (Virgin Australia) — parceiros: Etihad, Singapore Airlines, Delta',
+}
+
+const ALLIANCES_CONTEXT = Object.entries(PROGRAM_ALLIANCES)
+    .map(([prog, info]) => `  • ${prog}: ${info}`)
+    .join('\n')
+
 // ─── Tool definition ──────────────────────────────────────────────────────────
 
 const SEARCH_TOOL = {
@@ -399,6 +430,8 @@ serve(async (req) => {
             // Fetch active promos and transfer bonuses (non-blocking, parallel)
             let passagensContext = ''
             let transferBonusContext = ''
+            let milesClubContext = ''
+            let rawTransferPromos: any[] = []
             await Promise.all([
                 // Promoções de passagens relacionadas ao destino
                 (async () => {
@@ -424,23 +457,51 @@ serve(async (req) => {
                         }
                     } catch { /* silencioso */ }
                 })(),
-                // Bônus de transferência ativos — alimentados pelo sync diário com IA
+                // Bônus de transferência ativos — com descrição e validade
                 (async () => {
                     try {
                         const { data: tp } = await sbAdmin
                             .from('transfer_promotions')
-                            .select('card_id, program, bonus_percent, club_bonus_percent, description')
+                            .select('card_id, program, bonus_percent, club_bonus_percent, description, valid_until, base_ratio')
                             .eq('active', true)
                             .gt('bonus_percent', 0)
                             .order('bonus_percent', { ascending: false })
                             .limit(20)
                         if (tp && tp.length > 0) {
+                            rawTransferPromos = tp
                             const lines = tp.map((p: Record<string, unknown>) => {
                                 const club = (p.club_bonus_percent as number) > 0 ? ` | com clube: +${p.club_bonus_percent}%` : ''
-                                return `• ${p.card_id} → ${p.program}: +${p.bonus_percent}%${club}`
+                                const expiry = p.valid_until ? ` (até ${new Date(p.valid_until as string).toLocaleDateString('pt-BR')})` : ''
+                                const desc = p.description ? ` — ${String(p.description).slice(0, 80)}` : ''
+                                const baseRatio = p.base_ratio != null ? ` | ratio base: ${p.base_ratio}:1` : ''
+                                return `• ${p.card_id} → ${p.program}: +${p.bonus_percent}%${baseRatio}${club}${expiry}${desc}`
                             })
-                            transferBonusContext = '\n\nBÔNUS DE TRANSFERÊNCIA ATIVOS AGORA:\n' + lines.join('\n') +
-                                '\n(Use estas informações ao sugerir qual cartão transferir para cada programa)'
+                            transferBonusContext = '\n\nBÔNUS DE TRANSFERÊNCIA ATIVOS:\n' + lines.join('\n') +
+                                '\n⚠️ REGRA: Se search_awards retornar disponibilidade num programa que tem bônus ativo acima, DESTAQUE isso como oportunidade urgente — informe o cartão, o bônus e quanto o usuário conseguiria transferindo.'
+                        }
+                    } catch { /* silencioso */ }
+                })(),
+                // Promoções de compra de milhas, clubes e assinaturas
+                (async () => {
+                    try {
+                        const { data: mp } = await sbAdmin
+                            .from('vw_promocoes_ativas')
+                            .select('titulo, ai_summary, valid_until, subcategoria, programas_tags, bonus_pct')
+                            .eq('categoria', 'milhas')
+                            .order('created_at', { ascending: false })
+                            .limit(12)
+                        if (mp && mp.length > 0) {
+                            const lines = mp.map((p: Record<string, unknown>) => {
+                                const expiry = p.valid_until ? ` (até ${new Date(p.valid_until as string).toLocaleDateString('pt-BR')})` : ''
+                                const tags = Array.isArray(p.programas_tags) && (p.programas_tags as string[]).length > 0
+                                    ? ` [${(p.programas_tags as string[]).join(', ')}]` : ''
+                                const bonus = p.bonus_pct ? ` +${p.bonus_pct}%` : ''
+                                const sub = p.subcategoria ? ` [${p.subcategoria}]` : ''
+                                const label = (p.ai_summary as string | null) ?? (p.titulo as string)
+                                return `• ${label}${bonus}${tags}${expiry}${sub}`
+                            })
+                            milesClubContext = '\n\nOUTRAS PROMOÇÕES ATIVAS (compra de milhas, clubes, assinaturas):\n' + lines.join('\n') +
+                                '\n⚠️ REGRA: Mencione SOMENTE se for diretamente relevante para esta busca (ex: falta de milhas que a compra resolve, clube que gera bônus num programa encontrado). Se não se encaixa, ignore.'
                         }
                     } catch { /* silencioso */ }
                 })(),
@@ -493,6 +554,30 @@ serve(async (req) => {
                     }).filter(Boolean).join('\n')
                     : '  (busca ainda não realizada)'
 
+                // Cross-reference: user's cards × active transfer promos = boosted miles
+                let boostedSection = ''
+                if (rawTransferPromos.length > 0 && activeCards && activeCards.length > 0 && cardPoints) {
+                    const boostedLines: string[] = []
+                    for (const promo of rawTransferPromos) {
+                        const cardId = String(promo.card_id)
+                        if (activeCards.includes(cardId)) {
+                            const pts = cardPoints[cardId] ?? 0
+                            if (pts > 0) {
+                                const bonusPct = Number(promo.bonus_percent) || 0
+                                const clubBonusPct = Number(promo.club_bonus_percent) || 0
+                                const hasClubBonus = clubBonusPct > 0 && activeClubs && activeClubs.length > 0
+                                const effectivePct = hasClubBonus ? clubBonusPct : bonusPct
+                                const boostedMiles = Math.floor(pts * (1 + effectivePct / 100))
+                                const expiry = promo.valid_until ? ` (promoção até ${new Date(promo.valid_until).toLocaleDateString('pt-BR')})` : ''
+                                boostedLines.push(`  • ${cardId} → ${promo.program}: ${pts.toLocaleString('pt-BR')} pts + ${effectivePct}% bônus = ${boostedMiles.toLocaleString('pt-BR')} mi${expiry}`)
+                            }
+                        }
+                    }
+                    if (boostedLines.length > 0) {
+                        boostedSection = `\n\nPOTENCIAL COM BÔNUS DE TRANSFERÊNCIA ATIVOS (já calculado):\n${boostedLines.join('\n')}\nUse estes valores ao analisar se destinos adicionais ficam alcançáveis com as promoções atuais.`
+                    }
+                }
+
                 walletContext = `
 CARTEIRA DO USUÁRIO (dados reais):
 Milhas por programa:
@@ -506,7 +591,7 @@ ${clubLines}
 
 DISPONIBILIDADE ENCONTRADA (Seats.aero):
 Destino → programas com milhas disponíveis:
-${reachableLines}`
+${reachableLines}${boostedSection}`
             }
 
             const systemPrompt = isParaOndeMode
@@ -517,6 +602,7 @@ O usuário quer saber para onde pode viajar usando as milhas e pontos que já po
 Sua análise deve ser 100% baseada no saldo real do usuário — não faça suposições.
 ${walletContext}
 ${transferBonusContext}
+${milesClubContext}
 
 Configuração da busca:
 - Origem: ${wizard_data.origin}
@@ -525,20 +611,33 @@ Configuração da busca:
 
 Você tem acesso à ferramenta search_awards para buscar detalhes de disponibilidade em rotas específicas.
 
+ALIANÇAS E PARCERIAS DOS PROGRAMAS (dados verificados — use APENAS estas informações, não invente parcerias):
+${ALLIANCES_CONTEXT}
+
+REGRA DE OURO: Só afirme que um programa parceiro é utilizável em uma rota se search_awards retornou resultados reais para ele. As alianças acima indicam o potencial — a disponibilidade real vem do Seats.aero.
+
 COMO ANALISAR:
 1. Use os dados da carteira para identificar quais destinos são ALCANÇÁVEIS agora (milhas diretas ou via transferência de pontos)
-2. Para os melhores destinos, use search_awards para verificar disponibilidade real e datas
-3. Foque nos programas que o usuário JÁ tem milhas ou pontos transferíveis
-4. Leve em conta os clubes ativos para bônus de transferência
+2. Use o bloco "POTENCIAL COM BÔNUS" para mostrar destinos que ficam alcançáveis COM as promoções de transferência atuais
+3. Para os melhores destinos, use search_awards para verificar disponibilidade real e datas
+4. Foque nos programas que o usuário JÁ tem milhas ou pontos transferíveis
+5. Leve em conta os clubes ativos para bônus extra de transferência
+
+ANÁLISE DE PROMOÇÕES (compra de milhas, clubes, assinaturas):
+- Mencione APENAS promoções que diretamente desbloqueiam um destino ou reduzem o custo desta busca específica
+- Ex útil: falta 15k milhas para voar para Lisboa, há promoção de compra de milhas Smiles → mencione
+- Ex útil: clube Smiles Diamond com 30% de desconto → mencione se Smiles foi o melhor programa encontrado
+- Se a promoção não se encaixa nesta busca → IGNORE completamente, não liste
 
 FORMATO DA ANÁLISE:
-1. **Você pode voar agora** — destinos alcançáveis com saldo atual, quanto precisa vs quanto tem, melhor programa
-2. **Quase lá** — destinos que faltam poucos pontos, quanto falta e de qual cartão transferir
-3. **Estratégia recomendada** — o melhor uso específico do saldo do usuário (seja concreto: "transfira X pts do cartão Y para Smiles e reserve voo para Z")
-4. **Quando reservar** — disponibilidade encontrada e urgência
+1. **Você pode voar agora** — destinos alcançáveis com saldo atual; programa, milhas necessárias vs disponível
+2. **Com as promoções de transferência** — destinos extras alcançáveis usando os bônus ativos (use os valores calculados)
+3. **Estratégia recomendada** — ação concreta: "transfira X pts do cartão Y para programa Z e reserve voo para W"
+4. **Promoção relevante** — apenas se houver uma que faça diferença real para esta carteira
+5. **Quando reservar** — disponibilidade encontrada e urgência
 
 Use markdown com tabelas. Seja ESPECÍFICO com os números reais da carteira do usuário.
-Para FOLLOW-UPS: use os dados já buscados.`
+Para FOLLOW-UPS: use os dados já buscados, sem refazer buscas.`
                 : `Você é o FlyWise AI, especialista em milhas aéreas e viagens para brasileiros.
 
 DADOS DA BUSCA:
@@ -551,8 +650,14 @@ DADOS DA BUSCA:
 - Origem flexível: ${wizard_data.flexibleOrigin ? 'Sim' : 'Não'}
 ${wizard_data.observations ? `- Observações: ${wizard_data.observations}` : ''}
 ${passagensContext}${transferBonusContext}
+${milesClubContext}
 
 Você tem acesso à ferramenta search_awards com dados reais do Seats.aero.
+
+ALIANÇAS E PARCERIAS DOS PROGRAMAS (dados verificados — use APENAS estas informações, não invente parcerias):
+${ALLIANCES_CONTEXT}
+
+REGRA DE OURO: Só afirme que um programa é utilizável em uma rota se search_awards retornou resultados reais para ele OU se a pergunta é sobre potencial teórico de aliança. Para recomendações concretas, use sempre dados do Seats.aero.
 
 ESTRATÉGIA DE BUSCA:
 - Sempre busque a rota principal primeiro
@@ -563,10 +668,12 @@ ESTRATÉGIA DE BUSCA:
 - Origem flexível: busque dos aeroportos alternativos mais próximos
 
 FORMATO DA ANÁLISE FINAL:
-1. **Melhores opções encontradas** — tabela com: programa | milhas | data | cia operadora | direto/escalas | taxas
-2. **Transferências de pontos** — quais cartões brasileiros transferem para esses programas e em qual ratio (Amex Membership Rewards, C6 Bank, Nubank Ultravioleta, Itaú, Bradesco, Livelo, Smiles, Azul Fidelidade, LATAM Pass)
-3. **Disponibilidade** — avalie se está escassa, moderada ou abundante e quando reservar
-4. **Próximo passo** — instrução clara e prática para o usuário agir agora
+1. **Melhores opções encontradas** — tabela: programa | milhas | data | cia operadora | direto/escalas | taxas
+2. **Transferências de pontos** — quais cartões brasileiros transferem para os melhores programas encontrados e em qual ratio (priorize: Amex Membership Rewards, C6 Bank, Nubank Ultravioleta, Livelo, Itaú, Bradesco, Smiles, LATAM Pass)
+   - Se houver bônus de transferência ativo para um dos programas encontrados → DESTAQUE com urgência e calcule o ganho
+3. **Disponibilidade** — escassa, moderada ou abundante; quando reservar
+4. **Promoção relevante** — mencione SOMENTE se há promoção de compra de milhas ou clube que resolve um problema concreto desta busca (falta de saldo, custo alto). Se não se encaixa → ignore
+5. **Próximo passo** — instrução única e clara: qual site, qual programa, o que fazer agora
 
 Use markdown com tabelas quando listar opções. Seja ESPECÍFICO: use os números reais dos dados.
 Para FOLLOW-UPS: responda usando os dados já buscados, sem refazer buscas desnecessárias.`
@@ -692,7 +799,7 @@ Para FOLLOW-UPS: responda usando os dados já buscados, sem refazer buscas desne
                 },
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-6',
-                    max_tokens: 2048,
+                    max_tokens: 4096,
                     stream: true,
                     system: systemPrompt,
                     messages: loopMessages,

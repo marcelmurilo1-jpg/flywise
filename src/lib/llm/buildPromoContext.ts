@@ -22,7 +22,7 @@ export interface PromoContext {
 
 const MAX_PROMOS = 6
 
-const SELECT = 'titulo, conteudo, programa, tipo, bonus_pct, parceiro, valid_until, fonte, categoria, subcategoria, programas_tags'
+const SELECT = 'titulo, ai_summary, conteudo, programa, tipo, bonus_pct, parceiro, valid_until, fonte, categoria, subcategoria, programas_tags'
 
 // Tags de bancos/cartões — não são o programa de fidelidade em si
 const BANK_TAGS = new Set(['Nubank', 'Itaú', 'Livelo', 'C6', 'Inter', 'Santander', 'Bradesco', 'Amex', 'Caixa', 'BTG', 'XP', 'Diners'])
@@ -35,7 +35,8 @@ const BANK_TAGS = new Set(['Nubank', 'Itaú', 'Livelo', 'C6', 'Inter', 'Santande
 export async function buildPromoContext(programs: string[]): Promise<PromoContext[]> {
     try {
         const now = new Date().toISOString()
-        const validFilter = `valid_until.is.null,valid_until.gt.${now}`
+        const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
+        const validFilter = `valid_until.gt.${now},and(valid_until.is.null,created_at.gt.${tenDaysAgo})`
 
         // Q1: promos manuais com campo `programa` preenchido
         const q1 = programs.length > 0
@@ -87,8 +88,8 @@ function mapPromo(row: Record<string, unknown>): PromoContext {
         try { expires = new Date(row.valid_until as string).toLocaleDateString('pt-BR') } catch { /* ignore */ }
     }
 
-    const rawSummary = String(row.titulo ?? row.conteudo ?? '')
-    const summary = rawSummary.length > 120 ? rawSummary.slice(0, 117) + '...' : rawSummary
+    const rawSummary = String(row.ai_summary ?? row.titulo ?? row.conteudo ?? '')
+    const summary = rawSummary.length > 220 ? rawSummary.slice(0, 217) + '...' : rawSummary
 
     // Programa: usa campo `programa` ou extrai de `programas_tags` (primeiro tag que não é banco)
     const tags = (row.programas_tags as string[] | null) ?? []

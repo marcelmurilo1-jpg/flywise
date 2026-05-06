@@ -271,9 +271,10 @@ Analise cuidadosamente e retorne um JSON com as promoções de transferência at
 3. clubTierBonuses — bônus específico por plano do clube
 4. validUntil — validade. Se encontrar data EXPLÍCITA, coloque em formato ISO no início
 5. rules — array de strings com regras importantes
-6. description — descrição resumida
+6. description — descrição resumida (máx 120 chars)
 7. isPeriodic — true se campanha periódica
 8. lastConfirmed — "${new Date().toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace(/\./g, '').replace(/^(.)/, c => c.toUpperCase())}"
+9. baseRatio — ratio BASE de transferência como número decimal (ex: 1.0 para 1:1, 0.5 para 2:1, 2.5 para 1:2.5). Extraia do conteúdo das fontes. Se não encontrar, omita o campo.
 
 REGRAS: Se não encontrou, mantenha o valor atual. Santander Esfera 20% para Smiles é PERMANENTE. Não invente dados. Não altere card_id, program, club_required.
 
@@ -369,6 +370,7 @@ export async function syncTransferData() {
                         last_confirmed: promo.last_confirmed ?? promo.lastConfirmed ?? new Date().toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
                         rules: promo.rules ?? [],
                         club_required: promo.club_required ?? promo.clubRequired ?? null,
+                        base_ratio: promo.base_ratio ?? promo.baseRatio ?? null,
                         active: true,
                     };
                     const { error: insertErr } = await supabase.from('transfer_promotions').insert(newRow);
@@ -390,6 +392,7 @@ export async function syncTransferData() {
                     is_periodic: promo.is_periodic ?? promo.isPeriodic ?? existing.is_periodic,
                     last_confirmed: promo.last_confirmed ?? promo.lastConfirmed ?? existing.last_confirmed,
                     rules: promo.rules ?? existing.rules,
+                    base_ratio: promo.base_ratio ?? promo.baseRatio ?? existing.base_ratio ?? null,
                     updated_at: new Date().toISOString(),
                 };
 
@@ -435,6 +438,9 @@ export async function syncTransferData() {
         });
         if (logErr) console.error('[TransferSync] Erro ao salvar log:', logErr.message);
 
+        // Processa ai_summary para promoções novas inseridas pelo scraper nesta rodada
+        processPromoSummaries().catch(err => console.warn('[PromoSummary] Erro pós-sync:', err.message));
+
         const result = { sourcesScraped: validScraped.length, changesDetected: analysis.changes_detected, rowsUpdated: updatedCount, summary: analysis.summary, diffs: allDiffs };
         _syncState = { inProgress: false, step: 'done', startedAt, lastResult: result };
         return result;
@@ -451,6 +457,67 @@ export async function syncTransferData() {
         }).catch(() => {});
         throw err;
     }
+}
+
+// ── Processa ai_summary para promoções novas (Haiku, uma vez por promo) ───────
+
+async function processPromoSummaries() {
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey || !supabase) return { processed: 0, errors: 0 };
+
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: promos, error } = await supabase
+        .from('promocoes')
+        .select('id, titulo, conteudo')
+        .is('ai_processed_at', null)
+        .gt('created_at', tenDaysAgo)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+    if (error || !promos || promos.length === 0) return { processed: 0, errors: 0 };
+
+    console.log(`[PromoSummary] Processando ${promos.length} promoções com Haiku...`);
+    let processed = 0;
+    let errors = 0;
+    const limiter = pLimit(3);
+
+    await Promise.all(promos.map(promo => limiter(async () => {
+        try {
+            const text = [promo.titulo, promo.conteudo].filter(Boolean).join('\n').slice(0, 1500);
+            const res = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'x-api-key': anthropicKey,
+                    'anthropic-version': '2023-06-01',
+                    'content-type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: 'claude-haiku-4-5-20251001',
+                    max_tokens: 120,
+                    system: 'Responda SOMENTE com o texto do resumo solicitado. Sem explicações, sem aspas, sem markdown.',
+                    messages: [{
+                        role: 'user',
+                        content: `Extraia um resumo compacto (máximo 200 caracteres) em português desta promoção de milhas com os fatos mais importantes para quem quer usar: ratio de transferência (se mencionado, ex: "1:1"), mínimo de pontos, se precisa de cadastro/ativação, prazo limite e condições especiais. Omita o que não estiver no texto.\n\nTexto: ${text}`,
+                    }],
+                }),
+                signal: AbortSignal.timeout(12000),
+            });
+            if (!res.ok) { errors++; return; }
+            const data = await res.json();
+            const summary = data.content?.[0]?.text?.trim();
+            if (!summary) { errors++; return; }
+            await supabase.from('promocoes').update({
+                ai_summary: summary.slice(0, 220),
+                ai_processed_at: new Date().toISOString(),
+            }).eq('id', promo.id);
+            processed++;
+        } catch {
+            errors++;
+        }
+    })));
+
+    console.log(`[PromoSummary] Concluído: ${processed} processadas, ${errors} erros`);
+    return { processed, errors };
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -473,6 +540,16 @@ router.post('/api/admin/sync-transfer-data-sync', requireSyncSecret, async (req,
         res.json({ ok: true, result });
     } catch (err) {
         res.status(500).json({ ok: false, error: err.message, stack: err.stack?.split('\n').slice(0, 5) });
+
+    }
+});
+
+router.post('/api/admin/process-promo-summaries', requireSyncSecret, async (req, res) => {
+    try {
+        const result = await processPromoSummaries();
+        res.json({ ok: true, ...result });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
     }
 });
 

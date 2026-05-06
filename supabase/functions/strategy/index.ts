@@ -29,6 +29,7 @@ interface FlightRow {
 
 interface PromoRow {
     titulo: string
+    ai_summary: string | null      // resumo estruturado gerado por Haiku (ratio, mínimo, condições)
     programa: string | null
     tipo: string | null
     bonus_pct: number | null       // para clube: desconto na compra (%)
@@ -258,7 +259,8 @@ function formatPromoLine(p: PromoRow, i: number): string {
         const bancoTag = p.programas_tags.find(t => ['Nubank', 'Itaú', 'Livelo', 'C6', 'Inter', 'Santander', 'Bradesco', 'Amex', 'Caixa', 'BTG'].some(b => t.includes(b)))
         if (bancoTag) parts.push(`via ${bancoTag}`)
     }
-    parts.push(`— ${String(p.titulo ?? '').slice(0, 80)}`)
+    const label = p.ai_summary ?? String(p.titulo ?? '').slice(0, 100)
+    parts.push(`— ${label}`)
     if (p.valid_until) parts.push(`(expira ${new Date(p.valid_until).toLocaleDateString('pt-BR')})`)
     return parts.join(' ')
 }
@@ -275,7 +277,7 @@ async function fetchPromos(
         const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
         const searchPrograms = Array.from(new Set([targetProgram, ...relatedPrograms])).filter(Boolean).slice(0, 7)
         const fallbackPrograms = searchPrograms.length > 0 ? searchPrograms : ['Smiles', 'LATAM Pass', 'Livelo']
-        const PROMO_SELECT = 'titulo,programa,tipo,bonus_pct,parceiro,valid_until,subcategoria,programas_tags,categoria,preco_clube'
+        const PROMO_SELECT = 'titulo,ai_summary,programa,tipo,bonus_pct,parceiro,valid_until,subcategoria,programas_tags,categoria,preco_clube'
         const validFilter = `valid_until.gt.${now},and(valid_until.is.null,created_at.gt.${tenDaysAgo})`
 
         // Query 1: promos manuais com campo `programa` preenchido (transferData / seeds)
@@ -297,7 +299,7 @@ async function fetchPromos(
 
         // Query 3: transfer_promotions — tabela autoritativa com promos por cartão/programa
         const q3 = sb.from('transfer_promotions')
-            .select('card_id, program, bonus_percent, club_bonus_percent, club_tier_bonuses, valid_until, description, rules, registration_url, is_periodic')
+            .select('card_id, program, bonus_percent, club_bonus_percent, club_tier_bonuses, valid_until, description, rules, registration_url, is_periodic, base_ratio')
             .eq('active', true)
             .in('program', fallbackPrograms)
 
@@ -313,17 +315,25 @@ async function fetchPromos(
         const [{ data: d1 }, { data: d2 }, { data: d3 }, { data: d4 }] = await Promise.all([q1, q2, q3, q4])
 
         // Converte transfer_promotions → PromoRow format
-        const tpRows: PromoRow[] = (d3 ?? []).map((tp: Record<string, unknown>) => ({
-            titulo: String(tp.description ?? `${tp.card_id} → ${tp.program} +${tp.bonus_percent}%`),
-            programa: String(tp.program ?? ''),
-            tipo: 'bonus_transferencia',
-            bonus_pct: typeof tp.bonus_percent === 'number' ? tp.bonus_percent : null,
-            parceiro: String(tp.card_id ?? ''),  // ex: 'nubank_ultravioleta' — matched via BANK_TAG_TO_TRANSFER_SOURCE
-            valid_until: typeof tp.valid_until === 'string' && tp.valid_until.includes('Campanha') ? null : String(tp.valid_until ?? ''),
-            subcategoria: 'transferencia',
-            programas_tags: null,
-            categoria: 'milhas',
-        }))
+        const tpRows: PromoRow[] = (d3 ?? []).map((tp: Record<string, unknown>) => {
+            const baseRatio = tp.base_ratio != null ? ` | ratio base: ${tp.base_ratio}:1` : ''
+            const desc = String(tp.description ?? `${tp.card_id} → ${tp.program} +${tp.bonus_percent}%`)
+            return {
+                titulo: desc + baseRatio,
+                ai_summary: tp.base_ratio != null
+                    ? `${desc}${baseRatio}`
+                    : null,
+                programa: String(tp.program ?? ''),
+                tipo: 'bonus_transferencia',
+                bonus_pct: typeof tp.bonus_percent === 'number' ? tp.bonus_percent : null,
+                parceiro: String(tp.card_id ?? ''),
+                valid_until: typeof tp.valid_until === 'string' && tp.valid_until.includes('Campanha') ? null : String(tp.valid_until ?? ''),
+                subcategoria: 'transferencia',
+                programas_tags: null,
+                categoria: 'milhas',
+                preco_clube: null,
+            }
+        })
 
         // Mescla e deduplica (programa+cartão para transfer_promotions; título para promocoes)
         const seen = new Set<string>()
@@ -1399,6 +1409,14 @@ serve(async (req) => {
                         role: 'system',
                         content: `Você é FlyWise, especialista em milhas e programas de fidelidade do Brasil.
 Gere uma estratégia HONESTA, PERSONALIZADA e EXECUTÁVEL com base nos dados fornecidos.
+
+ALIANÇAS E PARCERIAS (use APENAS estas informações — não invente parcerias não listadas):
+• united/lifemiles/aeroplan/turkish/singapore/miles_and_more: Star Alliance (ANA, Lufthansa, TAP, Swiss, Turkish, Copa)
+• american/iberia/cathay/latam_pass/alaska: oneworld (British Airways, Qatar Airways, Japan Airlines)
+• flyingblue/delta/aeromexico/saudia: SkyTeam (Air France, KLM, Korean Air)
+• smiles: parceiros Delta, Air France, KLM, Copa, Etihad, Emirates
+• azul: parceiros United (codeshare), TAP Air Portugal
+• emirates/etihad: programas independentes com parceiros bilaterais
 
 REGRAS OBRIGATÓRIAS:
 1. O campo vale_a_pena JÁ FOI DETERMINADO PELO SERVIDOR (custo_total vs preço cash). Use o valor recebido — NÃO recalcule nem altere.
