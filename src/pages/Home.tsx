@@ -45,6 +45,13 @@ export default function Home() {
             .then(({ data }) => { if (data) setRecentSearches(data) })
     }, [user])
 
+    // Start video as soon as the overlay is mounted in the DOM
+    useEffect(() => {
+        if (!overlayMounted || !videoRef.current) return
+        videoRef.current.currentTime = 0
+        videoRef.current.play().catch(console.warn)
+    }, [overlayMounted])
+
     const triggerOverlay = () => {
         const rect = bannerRef.current?.getBoundingClientRect()
         setStartRect({
@@ -54,17 +61,15 @@ export default function Home() {
             height: rect?.height ?? 480,
         })
         setOverlayMounted(true)
-        // Double RAF: first paints the overlay at start position, second triggers transition
+        // Double RAF: first paints the overlay at start position, second triggers CSS transition
         requestAnimationFrame(() => requestAnimationFrame(() => {
             setOverlayExpanded(true)
-            videoRef.current?.play()
         }))
     }
 
     const resetOverlay = () => {
         setOverlayExpanded(false)
         setOverlayMounted(false)
-        videoRef.current?.pause()
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -155,6 +160,7 @@ export default function Home() {
                         loop
                         muted
                         playsInline
+                        preload="auto"
                         style={{
                             position: 'absolute',
                             inset: 0,
