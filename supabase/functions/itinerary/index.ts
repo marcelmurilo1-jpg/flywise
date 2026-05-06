@@ -141,7 +141,8 @@ REGRAS ABSOLUTAS:
 7. COORDENADAS PRECISAS: lat e lng do local ESPECÍFICO, nunca do centro da cidade.
 8. ORÇAMENTO: Respeite 100% o nível de orçamento definido.
 9. Responda APENAS em JSON válido, sem texto fora do JSON.
-10. CONCISÃO OBRIGATÓRIA: cada campo de texto deve ter no máximo 12 palavras. Seja direto.`
+10. CONCISÃO OBRIGATÓRIA: cada campo de texto deve ter no máximo 12 palavras. Seja direto.
+11. COERÊNCIA GEOGRÁFICA POR DIA: cada dia deve cobrir uma ZONA coesa da cidade. Atividades do mesmo dia devem ser próximas entre si e ordenadas para evitar zigue-zague (A leva ao B, B leva ao C). O bairro de hospedagem é ponto de partida/chegada — NÃO uma restrição de área. PROIBIDO: misturar atividades de extremos opostos da cidade no mesmo dia.`
 }
 
 function buildUserPrompt(
@@ -196,7 +197,9 @@ function buildUserPrompt(
         ? `- "extras": 2-3 itens por categoria com coordenadas precisas.`
         : `- "extras": 3-4 itens por categoria com coordenadas precisas, fonte e popularidade.\n- "fonte" deve ser específico e real (ex: "TripAdvisor #3 em ${destination}", "Michelin Guide").\n- "popularidade" de 1 a 5 — seja honesto.\n- "melhor_epoca" e "evitar" são OBRIGATÓRIOS em cada atividade.`
 
-    const hospedagemLine = bairroHospedagem ? `\n- Bairro de hospedagem: ${bairroHospedagem} — organize os dias para minimizar deslocamentos desnecessários` : ''
+    const hospedagemLine = bairroHospedagem
+        ? `\n- Hospedagem: ${bairroHospedagem} — ponto de partida/chegada de cada dia. NÃO restrinja atividades a este bairro.\n- REGRA GEOGRÁFICA: cada dia deve cobrir uma zona coesa. Atividades do dia devem ser próximas entre si, ordenadas para evitar zigue-zague. Nunca misture lugares de extremos opostos da cidade no mesmo dia.`
+        : ''
     const contextoLine = contextEspecial ? `\n- Contexto especial obrigatório: ${contextEspecial} — adapte TODAS as atividades a isso` : ''
 
     return `${researchContext}
@@ -292,7 +295,7 @@ function buildCurationPrompt(
     bairroHospedagem?: string,
     contextEspecial?: string,
 ): string {
-    const hospedagem = bairroHospedagem ? `\n- Hospedagem: ${bairroHospedagem} (priorize atrações nesta área e adjacências)` : ''
+    const hospedagem = bairroHospedagem ? `\n- Hospedagem: ${bairroHospedagem} — ponto de partida e chegada de cada dia, NÃO uma restrição geográfica. Inclua lugares em toda a cidade. Ao listar, agrupe-os por zona/bairro para facilitar a montagem de dias coesos.` : ''
     const contexto = contextEspecial ? `\n- Contexto especial: ${contextEspecial}` : ''
     return `Você é um especialista em viagens que conhece ${destination} profundamente — bairros, estabelecimentos reais, o que mudou recentemente, o que locais frequentam vs o que é armadilha turística.
 
@@ -497,7 +500,7 @@ Deno.serve(async (req: Request) => {
             const dayPrompt = `${curadoria ? `[CURADORIA]\n${curadoria}\n\n` : ''}
 Gere APENAS o Dia ${dayNum} de um roteiro de ${duration} dias para ${destination}.
 Perfil: ${travelerLabel} | Estilo: ${styleList} | Orçamento: ${budgetLabel}
-${bairro_hospedagem ? `Hospedagem: ${bairro_hospedagem}` : ''}
+${bairro_hospedagem ? `Hospedagem: ${bairro_hospedagem} — ponto de partida/chegada. NÃO restrinja atividades a este bairro. REGRA GEOGRÁFICA: atividades do dia devem ser geograficamente coesas, ordenadas para evitar zigue-zague.` : ''}
 ${context_especial ? `Contexto especial: ${context_especial}` : ''}
 ${otherDays ? `Outros dias já existentes no roteiro: ${otherDays}` : ''}
 Gere algo diferente do que normalmente seria sugerido — varie a experiência.
