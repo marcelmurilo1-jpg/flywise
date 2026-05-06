@@ -272,10 +272,11 @@ async function fetchPromos(
 ): Promise<{ promoStr: string; transferPromos: PromoRow[]; purchasePromos: PromoRow[] }> {
     try {
         const now = new Date().toISOString()
+        const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
         const searchPrograms = Array.from(new Set([targetProgram, ...relatedPrograms])).filter(Boolean).slice(0, 7)
         const fallbackPrograms = searchPrograms.length > 0 ? searchPrograms : ['Smiles', 'LATAM Pass', 'Livelo']
         const PROMO_SELECT = 'titulo,programa,tipo,bonus_pct,parceiro,valid_until,subcategoria,programas_tags,categoria,preco_clube'
-        const validFilter = 'valid_until.is.null,valid_until.gt.' + now
+        const validFilter = `valid_until.gt.${now},and(valid_until.is.null,created_at.gt.${tenDaysAgo})`
 
         // Query 1: promos manuais com campo `programa` preenchido (transferData / seeds)
         const q1 = sb.from('promocoes')

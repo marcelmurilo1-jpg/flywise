@@ -749,7 +749,8 @@ export default function Landing() {
             return { prog, deal: (p.titulo as string) ?? 'Promoção disponível', time, badge, badgeColor, badgeBg, categoria: cat }
         }
 
-        const base = 'valid_until.is.null,valid_until.gt.' + new Date().toISOString()
+        const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
+        const base = `valid_until.gt.${new Date().toISOString()},and(valid_until.is.null,created_at.gt.${tenDaysAgo})`
         const sel = 'titulo, programas_tags, subcategoria, categoria, valid_until, created_at'
         Promise.all([
             supabase.from('promocoes').select(sel).eq('categoria', 'passagens').or(base).order('created_at', { ascending: false }).limit(1),
