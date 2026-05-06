@@ -98,14 +98,13 @@ export default function Home() {
             }
             if (tripType === 'round-trip' && dateBack) insertData.data_volta = dateBack
 
-            // Run DB insert and 3s minimum in parallel
-            const [queryResult] = await Promise.all([
-                supabase.from('buscas').insert(insertData).select().single(),
-                new Promise<void>(resolve => setTimeout(resolve, 3000)),
-            ])
+            // Kick off DB insert immediately, enforce 3s minimum display in parallel
+            const dbPromise = supabase.from('buscas').insert(insertData).select().single()
+            await new Promise<void>(resolve => setTimeout(resolve, 3000))
+            const { data: buscaData, error: buscaErr } = await dbPromise
 
-            const { data: buscaData, error: buscaErr } = queryResult
             if (buscaErr) throw buscaErr
+            if (!buscaData) throw new Error('Erro ao criar busca.')
 
             const retParam = tripType === 'round-trip' && dateBack ? `&ret=${dateBack}` : ''
             navigate(`/resultados?buscaId=${buscaData.id}&orig=${originCode}&dest=${destCode}&date=${dateGo}${retParam}&pax=${pax}`)
