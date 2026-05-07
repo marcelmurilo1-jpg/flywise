@@ -382,6 +382,46 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                             {/* ── Strategy result ───────────────────────────────────── */}
                             {strategy && (
                                 <>
+                                    {/* Voo selecionado */}
+                                    {seatsContext && (
+                                        <div style={{ background: '#fff', border: '2px solid #16A34A', borderRadius: 14, overflow: 'hidden' }}>
+                                            <div style={{ background: '#16A34A', padding: '5px 14px' }}>
+                                                <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Voo selecionado</span>
+                                            </div>
+                                            <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                        {seatsContext.airlineCode && (
+                                                            <img src={`https://pics.avs.io/60/30/${seatsContext.airlineCode}.png`} alt="" style={{ height: 20, objectFit: 'contain' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} loading="lazy" />
+                                                        )}
+                                                        <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>
+                                                            {seatsContext.airlineCode ? (seatsContext.airlineName || seatsContext.airlineCode) : seatsContext.program}
+                                                        </span>
+                                                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#0E2A55', color: '#fff' }}>
+                                                            {seatsContext.cabin}
+                                                        </span>
+                                                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#EEF4FF', color: '#2A60C2', border: '1px solid #C7D9F8' }}>
+                                                            {seatsContext.program}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <span style={{ fontSize: 15, fontWeight: 800, color: '#0E2A55' }}>{seatsContext.origem}</span>
+                                                        <span style={{ fontSize: 12, color: '#16A34A' }}>✈</span>
+                                                        <span style={{ fontSize: 15, fontWeight: 800, color: '#0E2A55' }}>{seatsContext.destino}</span>
+                                                        {seatsContext.dataVoo && <span style={{ fontSize: 11, color: '#94A3B8' }}>{seatsContext.dataVoo}</span>}
+                                                    </div>
+                                                </div>
+                                                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                    <div style={{ fontSize: 20, fontWeight: 900, color: '#0E2A55' }}>{seatsContext.totalMilhas.toLocaleString('pt-BR')}</div>
+                                                    <div style={{ fontSize: 10, color: '#64748B', fontWeight: 600 }}>pts{seatsContext.isRoundTrip ? ' ida+volta' : ' ida'}</div>
+                                                    {seatsContext.taxas && seatsContext.taxas !== '0' && (
+                                                        <div style={{ fontSize: 10, color: '#94A3B8' }}>+ {seatsContext.taxas} taxas</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* vale_a_pena: false — dinheiro é melhor */}
                                     {strategy.vale_a_pena === false && (
                                         <div style={{ padding: '14px 16px', background: 'linear-gradient(135deg, #FFF7ED, #FFEDD5)', border: '2px solid #FED7AA', borderRadius: 14 }}>
