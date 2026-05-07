@@ -27,9 +27,10 @@ interface StrategyPanelProps {
     open: boolean; onClose: () => void
     flight?: ResultadoVoo | null; buscaId: number; cashPrice?: number
     seatsContext?: SeatsContext
+    initialStrategy?: StrategyResult
 }
 
-export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice = 0, seatsContext }: StrategyPanelProps) {
+export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice = 0, seatsContext, initialStrategy }: StrategyPanelProps) {
     const { user, session } = useAuth()
     const navigate = useNavigate()
     const { canGenerateStrategy, strategiesUsed, strategyLimit, plan, refresh: refreshPlan } = usePlan()
@@ -42,6 +43,10 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
     const [activePromos, setActivePromos] = useState<Promocao[]>([])
     const [cpmHistorico, setCpmHistorico] = useState<{ avg: number; count: number } | null>(null)
     function toggleStep(i: number) { setOpenSteps(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n }) }
+
+    useEffect(() => {
+        if (open && initialStrategy) setStrategy(initialStrategy)
+    }, [open, initialStrategy])
 
     useEffect(() => {
         if (!open) return
@@ -81,8 +86,8 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
             })
     }, [strategy?.programa_recomendado, user?.id])
 
-    // Must have either a DB flight or seatsContext to render
-    if (!flight && !seatsContext) return null
+    // Must have either a DB flight, seatsContext, or an initialStrategy (view mode)
+    if (!flight && !seatsContext && !initialStrategy) return null
     const price = cashPrice || flight?.preco_brl || 0
 
     // Header display info — prefer seatsContext when no DB flight

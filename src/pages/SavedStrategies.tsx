@@ -6,6 +6,9 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Strategy } from '@/lib/supabase'
+import { StrategyPanel } from '@/components/StrategyPanel'
+import type { StrategyResult } from '@/lib/llm/buildPrompt'
+import type { SeatsContext } from '@/components/StrategyPanel'
 
 export default function SavedStrategies() {
     const navigate = useNavigate()
@@ -13,6 +16,11 @@ export default function SavedStrategies() {
     const [strategies, setStrategies] = useState<Strategy[]>([])
     const [loading, setLoading] = useState(true)
     const [deleting, setDeleting] = useState<number | null>(null)
+    const [panelOpen, setPanelOpen] = useState(false)
+    const [panelStrategy, setPanelStrategy] = useState<StrategyResult | null>(null)
+    const [panelSeatsCtx, setPanelSeatsCtx] = useState<SeatsContext | undefined>(undefined)
+    const [panelBuscaId, setPanelBuscaId] = useState(0)
+    const [panelCashPrice, setPanelCashPrice] = useState(0)
 
     useEffect(() => {
         if (!user) return
@@ -33,6 +41,39 @@ export default function SavedStrategies() {
         await supabase.from('strategies').delete().eq('id', id).eq('user_id', user!.id)
         setStrategies(prev => prev.filter(s => s.id !== id))
         setDeleting(null)
+    }
+
+    const openStrategyPanel = (s: Strategy) => {
+        const result = s.structured_result as StrategyResult | null | undefined
+        if (!result) return
+
+        const allTags: string[] = s.tags ?? []
+        const seatsTag = allTags.find(t => t?.startsWith('seats:'))
+        let ctx: SeatsContext | undefined
+        if (seatsTag) {
+            const parts = seatsTag.replace('seats:', '').split(':')
+            if (parts.length >= 5) {
+                const program = parts[2].replace(/_/g, ' ')
+                ctx = {
+                    airlineCode: '',
+                    airlineName: program,
+                    origem: parts[0],
+                    destino: parts[1],
+                    cabin: parts[3],
+                    program,
+                    idaMilhas: parseInt(parts[4]) || 0,
+                    totalMilhas: parseInt(parts[4]) || 0,
+                    isRoundTrip: false,
+                    dataVoo: parts[5] ?? '',
+                }
+            }
+        }
+
+        setPanelStrategy(result)
+        setPanelSeatsCtx(ctx)
+        setPanelBuscaId(s.busca_id ?? 0)
+        setPanelCashPrice(s.preco_cash ?? 0)
+        setPanelOpen(true)
     }
 
     const formatDate = (iso?: string) => {
@@ -210,16 +251,24 @@ export default function SavedStrategies() {
                                                 </button>
                                             </div>
                                         </div>
-                                        {s.busca_id && (
-                                            <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end' }}>
+                                        <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                                            {s.structured_result && (
+                                                <button
+                                                    onClick={() => openStrategyPanel(s)}
+                                                    style={{ background: 'var(--blue-medium)', color: '#fff', border: 'none', borderRadius: '10px', padding: '8px 18px', fontFamily: 'inherit', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                                                >
+                                                    Ver estratégia →
+                                                </button>
+                                            )}
+                                            {s.busca_id && !s.structured_result && (
                                                 <button
                                                     onClick={() => navigate(`/resultados?buscaId=${s.busca_id}`)}
-                                                    style={{ background: 'var(--blue-medium)', color: '#fff', border: 'none', borderRadius: '10px', padding: '8px 18px', fontFamily: 'inherit', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                                                    style={{ background: 'var(--snow)', color: 'var(--text-dark)', border: '1px solid var(--border-light)', borderRadius: '10px', padding: '8px 18px', fontFamily: 'inherit', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
                                                 >
                                                     Ver resultados →
                                                 </button>
-                                            </div>
-                                        )}
+                                            )}
+                                        </div>
                                     </motion.div>
                                 )
                             })}
@@ -227,6 +276,15 @@ export default function SavedStrategies() {
                     </div>
                 )}
             </main>
+
+            <StrategyPanel
+                open={panelOpen}
+                onClose={() => setPanelOpen(false)}
+                buscaId={panelBuscaId}
+                cashPrice={panelCashPrice}
+                seatsContext={panelSeatsCtx}
+                initialStrategy={panelStrategy ?? undefined}
+            />
         </div>
     )
 }
