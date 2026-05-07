@@ -196,6 +196,19 @@ export function SeatsFlightPanel({
             isRoundTrip: !!voltaSel,
             dataVoo: idaSel.dataVoo ?? '',
             taxas: idaSel.taxas,
+            partida: idaSel.partida,
+            chegada: idaSel.chegada,
+            paradas: idaSel.paradas,
+            escalas: idaSel.escalas,
+            duracaoMin: idaSel.duracaoMin,
+            voltaData: voltaSel?.dataVoo,
+            voltaAirlineCode: voltaSel?.companhiaAerea,
+            voltaAirlineName: voltaSel ? (AIRLINE_FULL[voltaSel.companhiaAerea ?? ''] ?? voltaSel.companhiaAerea ?? '') : undefined,
+            voltaPartida: voltaSel?.partida,
+            voltaChegada: voltaSel?.chegada,
+            voltaParadas: voltaSel?.paradas,
+            voltaEscalas: voltaSel?.escalas,
+            voltaDuracaoMin: voltaSel?.duracaoMin,
         }
         onOpenStrategy(ctx, isFinite(best.value) ? best.value : 0)
     }

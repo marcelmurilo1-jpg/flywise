@@ -29,6 +29,7 @@ import Promotions from '@/pages/Promotions'
 import PromotionDetail from '@/pages/PromotionDetail'
 import Wallet from '@/pages/Wallet'
 import SavedStrategies from '@/pages/SavedStrategies'
+import StrategyDetail from '@/pages/StrategyDetail'
 import SearchWizard from '@/pages/SearchWizard'
 import Roteiro from '@/pages/Roteiro'
 import Configuracoes from '@/pages/Configuracoes'
@@ -110,6 +111,7 @@ function AppRoutes() {
         <Route path="/promotions/:id" element={<ProtectedRoute><PromotionDetail /></ProtectedRoute>} />
         <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
         <Route path="/saved-strategies" element={<ProtectedRoute><SavedStrategies /></ProtectedRoute>} />
+        <Route path="/estrategia/:id" element={<ProtectedRoute><StrategyDetail /></ProtectedRoute>} />
         <Route path="/chats" element={<ProtectedRoute><ChatsIA /></ProtectedRoute>} />
         <Route path="/busca-avancada" element={<ProtectedRoute><SearchWizard /></ProtectedRoute>} />
         <Route path="/roteiro" element={<ProtectedRoute><Roteiro /></ProtectedRoute>} />

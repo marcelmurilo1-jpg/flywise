@@ -1514,7 +1514,7 @@ REGRAS OBRIGATÓRIAS:
                     economia_pct: mergedResult.economia_pct ?? null,
                     preco_cash: flight.preco_brl,
                     preco_estrategia: mergedResult.taxas_estimadas_brl ?? null,
-                    structured_result: mergedResult,
+                    structured_result: { ...mergedResult, _seatsContext: seatsContext ?? null },
                     llm_model: 'gpt-4o-mini',
                     tokens_used: tokensUsed,
                 })
