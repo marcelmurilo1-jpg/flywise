@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Zap, TrendingDown, ArrowRight, AlertTriangle, Tag, ChevronDown, ChevronUp, TrendingUp, Coins } from 'lucide-react'
+import { Zap, TrendingDown, ArrowRight, AlertTriangle, Tag, ChevronDown, ChevronUp, TrendingUp, Coins, ExternalLink, Info } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import type { StrategyResult, ProgramComparison } from '@/lib/llm/buildPrompt'
@@ -23,6 +23,11 @@ const AIRLINE_FULL: Record<string, string> = {
 const CABIN_COLOR: Record<string, string> = {
     Economy: '#2A60C2', 'Premium Economy': '#7C3AED',
     Business: '#0E2A55', First: '#92400E',
+}
+
+function extractUrls(text: string): string[] {
+    const raw = text.match(/https?:\/\/[^\s\)\,\!\?'"]+/g) ?? []
+    return raw.map(u => u.replace(/[.,]+$/, '')).filter(u => u.length > 10)
 }
 
 function fmtDur(min?: number | null): string | null {
@@ -143,6 +148,9 @@ interface StrategyContentProps {
 export function StrategyContent({ strategy, seatsContext, cashPrice = 0, onRegenerate, userId }: StrategyContentProps) {
     const [openSteps, setOpenSteps] = useState<Set<number>>(new Set())
     const [rulesOpen, setRulesOpen] = useState(false)
+    const [promoOpen, setPromoOpen] = useState(false)
+    const [cpmInfoOpen, setCpmInfoOpen] = useState(false)
+    const [taxasInfoOpen, setTaxasInfoOpen] = useState(false)
     const [cpmHistorico, setCpmHistorico] = useState<{ avg: number; count: number } | null>(null)
 
     function toggleStep(i: number) {
@@ -277,7 +285,23 @@ export function StrategyContent({ strategy, seatsContext, cashPrice = 0, onRegen
                                 CPM {strategy.cpm_resgate.toFixed(2)} c/pt — {strategy.cpm_avaliacao}
                             </span>
                         </div>
+                        <button
+                            onClick={() => setCpmInfoOpen(o => !o)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', borderRadius: 6, color: '#94A3B8', fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}
+                        >
+                            <Info size={13} /> O que é CPM?
+                        </button>
                     </div>
+                    <AnimatePresence>
+                        {cpmInfoOpen && (
+                            <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }}
+                                style={{ background: '#F8FAFF', border: '1px solid #C7D9F8', borderRadius: 10, padding: '12px 14px', fontSize: 12, color: '#0E2A55', lineHeight: 1.7 }}>
+                                <strong>CPM (Centavos Por Milha)</strong> mede se o resgate vale a pena.<br />
+                                CPM {strategy.cpm_resgate.toFixed(2)} significa que cada milha usada vale R$ 0,0{Math.round(strategy.cpm_resgate * 10)} para você — ou seja, você economizou aproximadamente <strong>R$ {strategy.cpm_resgate.toFixed(2)} a cada 100 milhas</strong> em vez de pagar o voo em dinheiro.<br />
+                                <span style={{ color: '#16A34A', fontWeight: 700 }}>≥ 2.0 c/pt = bom resgate</span> · <span style={{ color: '#CA8A04', fontWeight: 700 }}>≥ 1.2 c/pt = razoável</span> · <span style={{ color: '#DC2626', fontWeight: 700 }}>{'< 1.2 c/pt = dinheiro é melhor'}</span>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                     {cpmHistorico && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '10.5px', color: '#64748B' }}>
                             {strategy.cpm_resgate > cpmHistorico.avg
@@ -385,6 +409,21 @@ export function StrategyContent({ strategy, seatsContext, cashPrice = 0, onRegen
                 </div>
             </div>
 
+            {/* ── C1: Warning when recommended program ≠ selected flight program ── */}
+            {seatsContext && strategy.programa_recomendado && strategy.programa_recomendado !== seatsContext.program && (
+                <div style={{ display: 'flex', gap: 8, padding: '12px 14px', background: '#FFF7ED', border: '2px solid #FED7AA', borderRadius: 12 }}>
+                    <AlertTriangle size={16} color="#EA580C" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: '#C2410C', marginBottom: 4 }}>
+                            Programa diferente do voo selecionado
+                        </div>
+                        <div style={{ fontSize: 12, color: '#7C2D12', lineHeight: 1.6 }}>
+                            O voo que você escolheu está disponível no <strong>{seatsContext.program}</strong>, mas a estratégia recomenda <strong>{strategy.programa_recomendado}</strong> por ter menor custo total. Confirme disponibilidade separadamente no site do {strategy.programa_recomendado} — cada programa tem estoque próprio de assentos prêmio.
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {strategy.vale_a_pena !== false && (
                 <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>{strategy.motivo}</p>
             )}
@@ -416,16 +455,30 @@ export function StrategyContent({ strategy, seatsContext, cashPrice = 0, onRegen
             )}
 
             {/* ── Miles stats ───────────────────────────────────────────────── */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                {[
-                    { label: 'Milhas necessárias', value: `${milesNeeded.toLocaleString('pt-BR')} pts` },
-                    { label: 'Taxas estimadas', value: `R$ ${taxesBrl.toLocaleString('pt-BR')}` },
-                ].map(d => (
-                    <div key={d.label} style={{ background: 'var(--bg-subtle)', borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>{d.label}</div>
-                        <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>{d.value}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                    <div style={{ background: 'var(--bg-subtle)', borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>Milhas necessárias</div>
+                        <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>{milesNeeded.toLocaleString('pt-BR')} pts</div>
                     </div>
-                ))}
+                    <div style={{ background: 'var(--bg-subtle)', borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: '4px' }}>
+                            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Taxas estimadas</span>
+                            <button onClick={() => setTaxasInfoOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: '#94A3B8', display: 'flex' }}>
+                                <Info size={11} />
+                            </button>
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>R$ {taxesBrl.toLocaleString('pt-BR')}</div>
+                    </div>
+                </div>
+                <AnimatePresence>
+                    {taxasInfoOpen && (
+                        <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }}
+                            style={{ background: '#F8FAFF', border: '1px solid #C7D9F8', borderRadius: 10, padding: '12px 14px', fontSize: 12, color: '#0E2A55', lineHeight: 1.7 }}>
+                            <strong>O que são as taxas?</strong> São cobranças aeroportuárias e de combustível obrigatórias em toda emissão com milhas — mesmo usando milhas para o bilhete, este valor é pago <strong>em dinheiro</strong> no momento da reserva. São diferentes para cada companhia e destino.
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
 
             {/* ── Cobertura ─────────────────────────────────────────────────── */}
@@ -453,11 +506,36 @@ export function StrategyContent({ strategy, seatsContext, cashPrice = 0, onRegen
                 </div>
             )}
 
-            {/* ── Promo badge ───────────────────────────────────────────────── */}
+            {/* ── C2: Expandable promo badge ────────────────────────────────── */}
             {strategy.promocao_ativa && (
-                <div style={{ display: 'flex', gap: '8px', padding: '10px 14px', background: 'var(--amber-bg)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '10px' }}>
-                    <Tag size={14} color="var(--amber)" style={{ flexShrink: 0, marginTop: '1px' }} />
-                    <span style={{ fontSize: '13px', color: '#92400e', fontWeight: 600 }}>{strategy.promocao_ativa}</span>
+                <div style={{ border: '1px solid rgba(245,158,11,0.3)', borderRadius: 10, overflow: 'hidden' }}>
+                    <button
+                        onClick={() => setPromoOpen(o => !o)}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '10px 14px', background: 'var(--amber-bg)', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Tag size={14} color="var(--amber)" style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: 13, color: '#92400e', fontWeight: 600, textAlign: 'left' }}>{strategy.promocao_ativa}</span>
+                        </div>
+                        {(strategy.regras_promocoes ?? []).length > 0 && (
+                            promoOpen ? <ChevronUp size={13} color="#D97706" style={{ flexShrink: 0 }} /> : <ChevronDown size={13} color="#D97706" style={{ flexShrink: 0 }} />
+                        )}
+                    </button>
+                    <AnimatePresence>
+                        {promoOpen && (strategy.regras_promocoes ?? []).length > 0 && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} style={{ overflow: 'hidden' }}>
+                                <div style={{ padding: '10px 14px 12px', background: '#FFFDF0', display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px dashed rgba(245,158,11,0.3)' }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Regras e condições</div>
+                                    {(strategy.regras_promocoes ?? []).map((rule, i) => (
+                                        <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, color: '#78350F', lineHeight: 1.6 }}>
+                                            <span style={{ flexShrink: 0, marginTop: 2 }}>•</span>
+                                            <span>{rule}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             )}
 
@@ -488,6 +566,13 @@ export function StrategyContent({ strategy, seatsContext, cashPrice = 0, onRegen
                                         <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} style={{ overflow: 'hidden' }}>
                                             <div style={{ padding: '0 14px 14px 50px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, borderTop: '1px dashed var(--border-faint)' }}>
                                                 <div style={{ paddingTop: 10 }}>{detail}</div>
+                                                {extractUrls(detail).map(url => (
+                                                    <a key={url} href={url} target="_blank" rel="noopener noreferrer"
+                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, marginRight: 8, padding: '6px 12px', background: '#EEF4FF', border: '1px solid #C7D9F8', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#2A60C2', textDecoration: 'none' }}
+                                                    >
+                                                        <ExternalLink size={11} /> Abrir no site →
+                                                    </a>
+                                                ))}
                                             </div>
                                         </motion.div>
                                     )}

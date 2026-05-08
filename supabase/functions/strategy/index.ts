@@ -243,23 +243,34 @@ function effectiveBonus(p: PromoRow): number {
 
 function formatPromoLine(p: PromoRow, i: number): string {
     const tipo = resolvePromoType(p)
-    const tipoLabel = tipo === 'bonus_transferencia' ? '[transferência]'
-        : tipo === 'clube' ? '[clube]'
-        : tipo === 'boas_vindas' ? '[boas-vindas]'
-        : tipo === 'milhas_compra' ? '[compra-milhas]'
-        : '[promoção]'
+    const tipoLabel = tipo === 'bonus_transferencia' ? '[TRANSFERÊNCIA BÔNUS]'
+        : tipo === 'clube' ? '[CLUBE/DESCONTO]'
+        : tipo === 'boas_vindas' ? '[BOAS-VINDAS]'
+        : tipo === 'milhas_compra' ? '[COMPRA DE MILHAS]'
+        : '[PROMOÇÃO]'
     const bonus = effectiveBonus(p)
-    // Programa: usa campo programa ou primeiro tag do scraper
     const programaLabel = p.programa ?? (p.programas_tags ?? []).filter(t => !['Nubank', 'Itaú', 'Livelo', 'C6', 'Inter', 'Santander', 'Bradesco'].includes(t))[0] ?? 'Geral'
-    const parts = [`${i + 1}. ${tipoLabel} ${programaLabel}`]
-    if (bonus > 0) parts.push(`+${bonus}% bônus`)
-    if (p.parceiro) parts.push(`via ${p.parceiro}`)
+
+    let bancoLabel = ''
+    if (p.parceiro) bancoLabel = p.parceiro
     else if (p.programas_tags && p.programas_tags.length > 1) {
-        // Para promos do scraper, o parceiro (banco) é o segundo tag
-        const bancoTag = p.programas_tags.find(t => ['Nubank', 'Itaú', 'Livelo', 'C6', 'Inter', 'Santander', 'Bradesco', 'Amex', 'Caixa', 'BTG'].some(b => t.includes(b)))
-        if (bancoTag) parts.push(`via ${bancoTag}`)
+        const found = p.programas_tags.find(t => ['Nubank', 'Itaú', 'Livelo', 'C6', 'Inter', 'Santander', 'Bradesco', 'Amex', 'Caixa', 'BTG'].some(b => t.includes(b)))
+        if (found) bancoLabel = found
     }
-    const label = p.ai_summary ?? String(p.titulo ?? '').slice(0, 100)
+
+    const parts = [`${i + 1}. ${tipoLabel} ${programaLabel}`]
+
+    if (tipo === 'bonus_transferencia' && bancoLabel && bonus > 0) {
+        const ratioEfetivo = 1 + bonus / 100
+        parts.push(`| Banco parceiro: ${bancoLabel}`)
+        parts.push(`| Bônus: +${bonus}% — ratio efetivo ${ratioEfetivo.toFixed(2)}:1`)
+        parts.push(`| Exemplo: 1.000 pts ${bancoLabel} = ${Math.round(1000 * ratioEfetivo).toLocaleString('pt-BR')} ${programaLabel} (com promo)`)
+    } else {
+        if (bonus > 0) parts.push(`+${bonus}% bônus`)
+        if (bancoLabel) parts.push(`via ${bancoLabel}`)
+    }
+
+    const label = p.ai_summary ?? String(p.titulo ?? '').slice(0, 120)
     parts.push(`— ${label}`)
     if (p.valid_until) parts.push(`(expira ${new Date(p.valid_until).toLocaleDateString('pt-BR')})`)
     return parts.join(' ')
@@ -1340,8 +1351,12 @@ serve(async (req) => {
 
         if (seatsContext) {
             const lines = [
-                `Disponibilidade REAL encontrada (Seats.aero):`,
-                `  Programa: ${seatsContext.program}`,
+                `⚠️ LEIA COM ATENÇÃO: Esta disponibilidade é EXCLUSIVA do programa "${seatsContext.program}".`,
+                `Cada programa de fidelidade acessa estoques SEPARADOS de assentos prêmio e cobra PREÇOS DIFERENTES em milhas para o mesmo voo.`,
+                `As ${seatsContext.totalMilhas.toLocaleString('pt-BR')} pts abaixo são ESPECÍFICAS do ${seatsContext.program} — NÃO equivalem às milhas de outros programas.`,
+                `Os preços dos outros programas na seção COMPARAÇÃO são calculados com tabelas oficiais separadas.`,
+                ``,
+                `Disponibilidade REAL confirmada (Seats.aero) — programa: ${seatsContext.program}:`,
                 `  Ida: ${seatsContext.idaMilhas.toLocaleString('pt-BR')} pts (${seatsContext.origem} → ${seatsContext.destino})`,
             ]
             if (seatsContext.isRoundTrip && seatsContext.voltaMilhas) {
@@ -1424,8 +1439,12 @@ REGRAS OBRIGATÓRIAS:
 3. Gere steps/step_details para o programa marcado como "★ MELHOR OPÇÃO".
 4. No motivo (máx 3 frases): explique POR QUE este programa é melhor — cite diferenças de custo entre os programas. Se vale_a_pena: false, explique que comprar milhas sai mais caro que o voo em dinheiro, MAS que SE o usuário já tiver milhas o resgate continua sendo bom (CPM X c/pt).
 5. NUNCA sugira solicitar ou contratar novo cartão de crédito — PROIBIDO.
-6. ROTAS DE TRANSFERÊNCIA: a seção mostra TODAS as formas de transferir pontos para o programa. SEMPRE gere um passo sobre transferência, mesmo que o usuário não tenha saldo cadastrado — instrua-o a VERIFICAR os pontos nos cartões de crédito que já possui.
-7. Se há promo de transferência (ex: "★ PROMO +30% Nubank→Smiles"), gere um passo dedicado explicando: qual cartão, quanto transferir, o ratio efetivo (ex: "1:1 base + 30% promo = 1.3:1"), quantas milhas vai receber, e o URL de transferência. Mencione o cadastro prévio obrigatório se indicado.
+6. ORDEM E CONTEÚDO DOS STEPS — determine o estado do usuário pelos dados da COMPARAÇÃO:
+   • ESTADO A (saldo_direto >= milhas_necessarias no programa recomendado): gere 2 steps: (1) Confirmar disponibilidade no site do programa, (2) Emitir o bilhete. NÃO gere passo de transferência — o usuário JÁ TEM milhas suficientes no programa correto.
+   • ESTADO B (saldo_direto parcial + transferências cobrindo o déficit): gere 3 steps: (1) Confirmar disponibilidade ANTES de qualquer ação, (2) Transferir pontos necessários (⚠️ transferência é IRREVERSÍVEL — faça SOMENTE após confirmar disponibilidade), (3) Emitir rapidamente pois disponibilidade prêmio pode desaparecer.
+   • ESTADO C (sem milhas suficientes, déficit não coberto por transferências): gere 3-4 steps: (1) Adquirir milhas conforme a COMPARAÇÃO (melhor custo), (2) Transferir se aplicável, (3) Confirmar disponibilidade, (4) Emitir.
+   REGRA CRÍTICA: NUNCA coloque o passo de emissão antes de o usuário ter as milhas necessárias. Emissão sempre é o ÚLTIMO passo.
+7. EXPLICAÇÃO DE PROMOÇÕES PARA INICIANTES: quando há promo de transferência, o step_detail DEVE explicar: (a) O QUE É o programa de pontos origem em linguagem simples (ex: "Nubank Rewards são os pontos acumulados no cartão Nubank — você já pode ter sem saber"); (b) COMO FUNCIONA a transferência (ex: "você envia seus pontos pelo app Nubank para a Smiles, e eles viram milhas na sua conta"); (c) O RATIO com e sem bônus (ex: "normalmente 1 ponto Nubank = 1 milha Smiles, mas com esta promo = 1,3 milha"); (d) O IMPACTO CONCRETO neste voo calculado com os números da COMPARAÇÃO (ex: "para as 44.000 milhas, você precisaria transferir apenas 33.846 pontos Nubank"); (e) URL exato de transferência; (f) AVISO se cadastro prévio é obrigatório. Nunca diga apenas "aproveite a promoção" — todo iniciante precisa saber o que fazer, passo a passo.
 8. Se há "✓ COBRE TUDO" na comparação, o passo 1 DEVE usar o saldo existente. Se há saldo parcial + transferência, combine os dois.
 9. Se deficit > 0 E comprar milhas não é a melhor opção (vale_a_pena: false): sugira transferir pontos de cartão como alternativa mais barata que comprar. Só recomende compra se for realmente vantajoso.
 10. Se o usuário tem clube (ex: Smiles Diamante), mencione o desconto nas taxas EXPLICITAMENTE.
@@ -1433,7 +1452,8 @@ REGRAS OBRIGATÓRIAS:
 11. steps: TÍTULO curto (máx 8 palavras). step_details: explicação didática completa — onde clicar, qual site/app, o que fazer, quanto tempo leva. Inclua URLs exatas e valores em R$.
 12. Se vale_a_pena: false: steps devem ser (1) reservar em dinheiro agora, (2) como acumular/transferir milhas para o futuro, (3) quando monitorar promos.
 13. Se há "PROMOÇÕES DE ACÚMULO" e o usuário tem déficit de milhas, gere um passo dedicado: qual programa, qual parceiro, quanto gastar para cobrir o déficit. Ex: "Comprando R$ 670 na Natura esta semana você ganha 10.050 pts Livelo — suficiente para cobrir o déficit sem comprar milhas diretamente."
-13. Responda APENAS em JSON válido, sem texto adicional.`,
+13. Responda APENAS em JSON válido, sem texto adicional.
+14. DISTINÇÃO ENTRE PROGRAMAS (CRÍTICO): o usuário selecionou um voo com disponibilidade confirmada no programa "${seatsContext?.program ?? targetProgram}". O programa recomendado pela análise é "${effectiveTargetProgram}". SE OS DOIS PROGRAMAS SÃO DIFERENTES: explique no motivo (a) por que o programa recomendado tem melhor custo, (b) que a disponibilidade precisa ser verificada SEPARADAMENTE no site do ${effectiveTargetProgram} pois cada programa tem estoque próprio de assentos prêmio, (c) que milhas de programas diferentes NÃO são equivalentes — por isso os preços diferem. SE OS DOIS PROGRAMAS SÃO IGUAIS: não adicione caveats desnecessários. PROIBIDO tratar milhas de programas diferentes como intercambiáveis.`,
                     },
                     { role: 'user', content: userPrompt },
                 ],
