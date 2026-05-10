@@ -1417,7 +1417,12 @@ serve(async (req) => {
 
         // 4. Build context (cache miss)
         const iata = extractIata(flight.companhia)
-        const programs = AIRLINE_PROGRAMS[iata] ?? ['Smiles', 'LATAM Pass', 'TudoAzul']
+        // When client provides real Seats.aero prices, use those programs directly
+        // so comparison is 100% based on actual availability — not a static airline map
+        const clientPrograms = Array.isArray(allProgramPrices) && allProgramPrices.length > 0
+            ? (allProgramPrices as ProgramPrice[]).map(p => p.program).filter(Boolean)
+            : null
+        const programs = clientPrograms ?? AIRLINE_PROGRAMS[iata] ?? ['Smiles', 'LATAM Pass', 'TudoAzul']
         const targetProgram = seatsContext?.program ?? programs[0] ?? 'Smiles'
         const neededMiles = seatsContext?.totalMilhas ?? (flight.preco_brl ? Math.round((flight.preco_brl * 55) / 1000) * 1000 : 0)
 
