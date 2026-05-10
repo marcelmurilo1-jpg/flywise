@@ -1082,7 +1082,7 @@ function buildMultiProgramComparison(
     userData: UserData | null,
     allPromos: PromoRow[],
     cashPrice: number | null | undefined,
-    confirmedProgram: string | null
+    _confirmedProgram: string | null
 ): { analyses: ProgramAnalysis[]; comparisonStr: string } {
     if (milhasNecessarias <= 0 || programs.length === 0) {
         return { analyses: [], comparisonStr: '' }
@@ -1090,16 +1090,16 @@ function buildMultiProgramComparison(
 
     const hasPriceMap = programPriceMap !== null && programPriceMap.size > 0
 
-    const analyses = programs.map(p => {
-        // Use real Seats.aero price for this program if available, else fall back to default
+    // When real Seats.aero prices are available, only compare programs with confirmed availability
+    const programsToAnalyze = hasPriceMap
+        ? programs.filter(p => programPriceMap.has(p) || programPriceMap.has(p.toLowerCase()))
+        : programs
+
+    const analyses = programsToAnalyze.map(p => {
         const actualMiles = hasPriceMap
             ? (programPriceMap.get(p) ?? programPriceMap.get(p.toLowerCase()) ?? milhasNecessarias)
             : milhasNecessarias
-        // Confirmed = price came from Seats.aero for this specific program
-        const isConfirmed = hasPriceMap
-            ? (programPriceMap.has(p) || programPriceMap.has(p.toLowerCase()))
-            : (p === confirmedProgram)
-        return analyzeProgram(p, actualMiles, userData, allPromos, cashPrice, isConfirmed ? p : null)
+        return analyzeProgram(p, actualMiles, userData, allPromos, cashPrice, p)
     })
 
     // Sort: programs cheaper than cash first, then by coverage, then by total cost
@@ -1155,13 +1155,6 @@ function buildMultiProgramComparison(
         lines.push(`  Taxas estimadas: ~R$ ${a.taxas_estimadas_brl.toLocaleString('pt-BR')}`)
         const econStr = cashPrice ? ` | Economia: R$ ${a.economia_vs_cash_brl.toLocaleString('pt-BR')} (${a.economia_vs_cash_pct}%)` : ''
         lines.push(`  CUSTO TOTAL: ~R$ ${a.custo_total_brl.toLocaleString('pt-BR')}${econStr}`)
-        if (!a.disponibilidade_confirmada) {
-            if (hasPriceMap) {
-                lines.push(`  ⚠ PREÇO ESTIMADO (sem assento confirmado no Seats.aero) — ${a.milhas_necessarias.toLocaleString('pt-BR')} pts é referência, verifique disponibilidade e preço real`)
-            } else {
-                lines.push(`  ⚠ Disponibilidade não confirmada — verifique no site do programa`)
-            }
-        }
         lines.push('')
     }
 

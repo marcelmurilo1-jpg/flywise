@@ -384,9 +384,6 @@ export function StrategyContent({ strategy, seatsContext, cashPrice = 0, onRegen
                                         {prog.economia_vs_cash_pct < 0 && (
                                             <div style={{ fontSize: 10, color: '#DC2626', textAlign: 'right', fontWeight: 700 }}>⚠ {Math.abs(prog.economia_vs_cash_pct)}% mais caro que dinheiro</div>
                                         )}
-                                        {!prog.disponibilidade_confirmada && (
-                                            <div style={{ fontSize: 10, color: '#F59E0B', fontWeight: 600, marginTop: 2 }}>⚠ Verifique disponibilidade</div>
-                                        )}
                                     </div>
                                 </div>
                             )
