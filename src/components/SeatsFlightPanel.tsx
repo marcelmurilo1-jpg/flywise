@@ -7,6 +7,13 @@ import type { WatchlistModalProps } from '@/components/WatchlistModal'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export interface ProgramPrice {
+    program: string
+    idaMilhas: number
+    voltaMilhas?: number
+    totalMilhas: number
+}
+
 export interface SeatsFlightData {
     tipo: 'ida' | 'volta'
     companhiaAerea: string
@@ -40,7 +47,7 @@ interface SeatsFlightPanelProps {
     cashVoltaSel: ResultadoVoo | null
     originIata: string
     destIata: string
-    onOpenStrategy: (ctx: SeatsContext, cashPrice: number) => void
+    onOpenStrategy: (ctx: SeatsContext, cashPrice: number, allProgramPrices?: ProgramPrice[]) => void
     onOpenWatchlist: (data: Omit<WatchlistModalProps, 'open' | 'onClose'>) => void
     onRetry?: () => void
 }
@@ -138,6 +145,46 @@ function calcBestCash(
     }
 }
 
+// ─── buildAllProgramPrices ────────────────────────────────────────────────────
+
+function buildAllProgramPrices(
+    seatsFlights: SeatsFlightData[],
+    isRoundTrip: boolean,
+    sourceProgramMap: Record<string, { name: string; color: string; bg: string }>
+): ProgramPrice[] {
+    const idaMin = new Map<string, number>()
+    const voltaMin = new Map<string, number>()
+
+    for (const flight of seatsFlights) {
+        if (!flight.precoMilhas || flight.precoMilhas <= 0) continue
+        const prog = flight.programName
+            || sourceProgramMap[(flight.source ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')]?.name
+            || flight.source
+            || ''
+        if (!prog) continue
+        if (flight.tipo === 'ida') {
+            const cur = idaMin.get(prog)
+            if (cur === undefined || flight.precoMilhas < cur) idaMin.set(prog, flight.precoMilhas)
+        } else {
+            const cur = voltaMin.get(prog)
+            if (cur === undefined || flight.precoMilhas < cur) voltaMin.set(prog, flight.precoMilhas)
+        }
+    }
+
+    const result: ProgramPrice[] = []
+    for (const [prog, idaMilhas] of idaMin.entries()) {
+        if (isRoundTrip) {
+            const voltaMilhas = voltaMin.get(prog)
+            if (voltaMilhas !== undefined) {
+                result.push({ program: prog, idaMilhas, voltaMilhas, totalMilhas: idaMilhas + voltaMilhas })
+            }
+        } else {
+            result.push({ program: prog, idaMilhas, totalMilhas: idaMilhas })
+        }
+    }
+    return result
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function SeatsFlightPanel({
@@ -210,7 +257,8 @@ export function SeatsFlightPanel({
             voltaEscalas: voltaSel?.escalas,
             voltaDuracaoMin: voltaSel?.duracaoMin,
         }
-        onOpenStrategy(ctx, isFinite(best.value) ? best.value : 0)
+        const allProgramPrices = buildAllProgramPrices(seatsFlights, !!voltaSel, SOURCE_PROGRAM)
+        onOpenStrategy(ctx, isFinite(best.value) ? best.value : 0, allProgramPrices)
     }
 
     // ── Loading / error / empty states ────────────────────────────────────────

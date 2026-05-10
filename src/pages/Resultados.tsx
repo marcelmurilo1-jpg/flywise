@@ -11,6 +11,7 @@ import { PlaneWindowLoader } from '@/components/PlaneWindowLoader'
 import { Sidebar, type FilterState } from '@/components/Sidebar'
 import { SearchBarTop } from '@/components/SearchBarTop'
 import { SeatsFlightPanel } from '@/components/SeatsFlightPanel'
+import type { ProgramPrice } from '@/components/SeatsFlightPanel'
 import { motion } from 'framer-motion'
 import { WatchlistModal, type WatchlistModalProps } from '@/components/WatchlistModal'
 import { PriceGraphPanel } from '@/components/PriceGraphPanel'
@@ -56,6 +57,7 @@ export default function Resultados() {
     const [stratOpen, setStratOpen] = useState(false)
     const [stratContext, setStratContext] = useState<SeatsContext | null>(null)
     const [stratCashPrice, setStratCashPrice] = useState(0)
+    const [stratAllPrograms, setStratAllPrograms] = useState<ProgramPrice[]>([])
 
     // Price graph from Google Flights
     const [priceGraph, setPriceGraph] = useState<PriceGraph | null>(null)
@@ -468,9 +470,10 @@ export default function Resultados() {
                                             cashVoltaSel={cashVoltaSel}
                                             originIata={originIata}
                                             destIata={destIata}
-                                            onOpenStrategy={(ctx, cashPrice) => {
+                                            onOpenStrategy={(ctx, cashPrice, allProgramPrices) => {
                                                 setStratContext(ctx)
                                                 setStratCashPrice(cashPrice)
+                                                setStratAllPrograms(allProgramPrices ?? [])
                                                 setStratOpen(true)
                                             }}
                                             onOpenWatchlist={setWatchlistModal}
@@ -492,6 +495,7 @@ export default function Resultados() {
                 cashPrice={stratCashPrice}
                 buscaId={buscaId}
                 onClose={() => setStratOpen(false)}
+                allProgramPrices={stratAllPrograms}
             />
         )}
 

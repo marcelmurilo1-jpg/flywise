@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import type { ProgramPrice } from '@/components/SeatsFlightPanel'
 import { X, Zap, ArrowRight, Loader2, AlertTriangle, Sparkles, Lock } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -43,9 +44,10 @@ interface StrategyPanelProps {
     flight?: ResultadoVoo | null; buscaId: number; cashPrice?: number
     seatsContext?: SeatsContext
     initialStrategy?: StrategyResult
+    allProgramPrices?: ProgramPrice[]
 }
 
-export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice = 0, seatsContext, initialStrategy }: StrategyPanelProps) {
+export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice = 0, seatsContext, initialStrategy, allProgramPrices }: StrategyPanelProps) {
     const { user, session } = useAuth()
     const navigate = useNavigate()
     const { canGenerateStrategy, strategiesUsed, strategyLimit, plan, refresh: refreshPlan } = usePlan()
@@ -106,6 +108,7 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                     cashPrice: cashPrice || undefined,
                     seatsContext: seatsContext || undefined,
                     buscaId: buscaId || undefined,
+                    allProgramPrices: allProgramPrices && allProgramPrices.length > 0 ? allProgramPrices : undefined,
                 }),
             })
 

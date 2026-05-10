@@ -49,6 +49,13 @@ interface UserData {
     clubTiers: Record<string, string>
 }
 
+interface ProgramPrice {
+    program: string
+    idaMilhas: number
+    voltaMilhas?: number
+    totalMilhas: number
+}
+
 interface TransferPathDetail {
     source: string
     saldo_usuario: number
@@ -282,7 +289,7 @@ async function fetchPromos(
     targetProgram: string,
     relatedPrograms: string[],
     sb: ReturnType<typeof createClient>
-): Promise<{ promoStr: string; transferPromos: PromoRow[]; purchasePromos: PromoRow[] }> {
+): Promise<{ promoStr: string; transferPromos: PromoRow[]; purchasePromos: PromoRow[]; allRows: PromoRow[]; acumuloRows: PromoRow[] }> {
     try {
         const now = new Date().toISOString()
         const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
@@ -410,10 +417,10 @@ async function fetchPromos(
             promoMatchesProgram(p, targetProgram)
         )
 
-        return { promoStr, transferPromos, purchasePromos, allRows: rows }
+        return { promoStr, transferPromos, purchasePromos, allRows: rows, acumuloRows }
     } catch (err) {
         console.error('[strategy] fetchPromos error:', err)
-        return { promoStr: 'Nenhuma promoção disponível.', transferPromos: [], purchasePromos: [], allRows: [] }
+        return { promoStr: 'Nenhuma promoção disponível.', transferPromos: [], purchasePromos: [], allRows: [], acumuloRows: [] }
     }
 }
 
@@ -976,9 +983,102 @@ function analyzeProgram(
     }
 }
 
+function buildDeficitSection(
+    bestAnalysis: ProgramAnalysis,
+    acumuloPromos: PromoRow[],
+    allPromos: PromoRow[]
+): string {
+    if (bestAnalysis.deficit <= 0) return ''
+
+    const deficit = bestAnalysis.deficit
+    const programa = bestAnalysis.programa
+    const costToBuy = bestAnalysis.custo_compra_milhas_brl
+    const custoEfetivo = bestAnalysis.custo_efetivo_por_mil
+    const promoCompra = bestAnalysis.promo_compra_ativa
+
+    const lines: string[] = [`=== COMO COBRIR O DÉFICIT DE ${deficit.toLocaleString('pt-BR')} pts ${programa} ===`]
+
+    // Opção A: comprar diretamente
+    lines.push(`OPÇÃO A — COMPRAR ${deficit.toLocaleString('pt-BR')} MILHAS ${programa.toUpperCase()} DIRETAMENTE:`)
+    lines.push(`  Custo: R$ ${costToBuy.toLocaleString('pt-BR')} (R$ ${custoEfetivo}/mil)`)
+    if (promoCompra) lines.push(`  ★ Promoção ativa: ${promoCompra}`)
+    const buyUrl = PROGRAM_TRANSFER_URLS[programa] ?? `${programa.toLowerCase().replace(/\s+/g, '')}.com.br`
+    lines.push(`  URL: https://${buyUrl}`)
+
+    // Opção B: transferir de cartão
+    const transferBases = TRANSFER_BASES[programa] ?? []
+    const transferPromos = allPromos.filter(p =>
+        resolvePromoType(p) === 'bonus_transferencia' &&
+        promoMatchesProgram(p, programa)
+    )
+    if (transferBases.length > 0) {
+        lines.push(`\nOPÇÃO B — TRANSFERIR PONTOS DE CARTÃO PARA ${programa.toUpperCase()}:`)
+        for (const base of transferBases.slice(0, 4)) {
+            const sourceFirst = base.source.toLowerCase().split(' ')[0]
+            const promo = transferPromos.find(p => {
+                const parceiro = (p.parceiro ?? '').toLowerCase()
+                const resolvedSource = BANK_TAG_TO_TRANSFER_SOURCE[parceiro]
+                if (resolvedSource === base.source) return true
+                if (parceiro && (base.source.toLowerCase().includes(parceiro) || parceiro.includes(sourceFirst))) return true
+                return (p.programas_tags ?? []).some(tag => {
+                    const t = tag.toLowerCase()
+                    return BANK_TAG_TO_TRANSFER_SOURCE[t] === base.source || base.source.toLowerCase().includes(t) || t.includes(sourceFirst)
+                })
+            })
+            const bonus = promo ? effectiveBonus(promo) : 0
+            const ratioEfetivo = base.ratio * (1 + bonus / 100)
+            const sourcePtsNeeded = Math.ceil(deficit / ratioEfetivo)
+            const sourceCostPerK = BANK_COST_PER_K[base.source] ?? 45
+            const estimatedCost = Math.ceil(sourcePtsNeeded / 1000 * sourceCostPerK)
+            const promoNote = bonus > 0
+                ? ` | ★ PROMO ATIVA +${bonus}%: ratio efetivo ${ratioEfetivo.toFixed(2)}:1`
+                : ` | ratio ${base.ratio}:1, sem promo ativa`
+            lines.push(`  ${base.source}${promoNote}: precisa de ${sourcePtsNeeded.toLocaleString('pt-BR')} pts ≈ custo R$ ${estimatedCost.toLocaleString('pt-BR')}`)
+            if (promo?.valid_until && bonus > 0) lines.push(`    Promo expira: ${new Date(promo.valid_until).toLocaleDateString('pt-BR')}`)
+        }
+        const transferUrl = PROGRAM_TRANSFER_URLS[programa]
+        if (transferUrl) lines.push(`  URL de transferência: https://${transferUrl}`)
+    }
+
+    // Opção C: acúmulo via parceiro
+    if (acumuloPromos.length > 0) {
+        lines.push(`\nOPÇÃO C — GANHAR PONTOS VIA PARCEIRO (alternativa a comprar milhas):`)
+        for (const promo of acumuloPromos.slice(0, 3)) {
+            const titulo = String(promo.titulo ?? '').slice(0, 100)
+            const prog = promo.programa ?? (promo.programas_tags ?? []).find(t =>
+                !['Nubank', 'Itaú', 'Livelo', 'C6', 'Inter', 'Santander', 'Bradesco', 'Amex'].includes(t)
+            ) ?? 'Geral'
+            const ratioMatch = titulo.match(/(\d+)\s*(?:pontos?|pts?|milhas?)\s*(?:por|\/)\s*(?:real|R\$\s*1|\bR\$)/i)
+            if (ratioMatch) {
+                const ratio = parseInt(ratioMatch[1])
+                if (ratio > 0) {
+                    const spendNeeded = Math.ceil(deficit / ratio)
+                    lines.push(`  ★ ${prog}: ${titulo}`)
+                    lines.push(`    → gaste R$ ${spendNeeded.toLocaleString('pt-BR')} neste parceiro → receba ${deficit.toLocaleString('pt-BR')} pts → transfira para ${programa}`)
+                    if (promo.valid_until) lines.push(`    Expira: ${new Date(promo.valid_until).toLocaleDateString('pt-BR')}`)
+                } else {
+                    lines.push(`  ★ ${prog}: ${titulo}`)
+                }
+            } else {
+                lines.push(`  ★ ${prog}: ${titulo}`)
+                if (promo.valid_until) lines.push(`    Expira: ${new Date(promo.valid_until).toLocaleDateString('pt-BR')}`)
+            }
+        }
+    }
+
+    lines.push(`\n⚠️ INSTRUÇÃO: O step_detail do passo de aquisição de milhas faltantes DEVE incluir:`)
+    lines.push(`1. Custo exato de comprar as ${deficit.toLocaleString('pt-BR')} milhas: R$ ${costToBuy.toLocaleString('pt-BR')}`)
+    lines.push(`2. Se Opção B (transferência) for mais barata, recomende ela com os cálculos acima`)
+    lines.push(`3. Se Opção C (acúmulo) existir e for vantajosa, apresente com valor a gastar e loja`)
+    lines.push(`4. Compare as opções em R$ e recomende a mais vantajosa neste caso específico`)
+
+    return lines.join('\n')
+}
+
 function buildMultiProgramComparison(
     programs: string[],
     milhasNecessarias: number,
+    programPriceMap: Map<string, number> | null,
     userData: UserData | null,
     allPromos: PromoRow[],
     cashPrice: number | null | undefined,
@@ -988,9 +1088,19 @@ function buildMultiProgramComparison(
         return { analyses: [], comparisonStr: '' }
     }
 
-    const analyses = programs.map(p =>
-        analyzeProgram(p, milhasNecessarias, userData, allPromos, cashPrice, confirmedProgram)
-    )
+    const hasPriceMap = programPriceMap !== null && programPriceMap.size > 0
+
+    const analyses = programs.map(p => {
+        // Use real Seats.aero price for this program if available, else fall back to default
+        const actualMiles = hasPriceMap
+            ? (programPriceMap.get(p) ?? programPriceMap.get(p.toLowerCase()) ?? milhasNecessarias)
+            : milhasNecessarias
+        // Confirmed = price came from Seats.aero for this specific program
+        const isConfirmed = hasPriceMap
+            ? (programPriceMap.has(p) || programPriceMap.has(p.toLowerCase()))
+            : (p === confirmedProgram)
+        return analyzeProgram(p, actualMiles, userData, allPromos, cashPrice, isConfirmed ? p : null)
+    })
 
     // Sort: programs cheaper than cash first, then by coverage, then by total cost
     const cashN = (cashPrice ?? 0) > 0 ? cashPrice! : Infinity
@@ -1014,6 +1124,9 @@ function buildMultiProgramComparison(
             : `FALTAM ${a.deficit.toLocaleString('pt-BR')} pts (tem ${a.total_potencial.toLocaleString('pt-BR')} / precisa ${a.milhas_necessarias.toLocaleString('pt-BR')})`
 
         lines.push(`${a.melhor_opcao ? '★ MELHOR OPÇÃO — ' : ''}${a.programa} | ${coverageStr}`)
+        if (hasPriceMap && a.disponibilidade_confirmada) {
+            lines.push(`  ✓ Preço confirmado via Seats.aero: ${a.milhas_necessarias.toLocaleString('pt-BR')} pts`)
+        }
 
         if (a.saldo_direto > 0) {
             lines.push(`  Saldo direto: ${a.saldo_direto.toLocaleString('pt-BR')} pts`)
@@ -1043,7 +1156,11 @@ function buildMultiProgramComparison(
         const econStr = cashPrice ? ` | Economia: R$ ${a.economia_vs_cash_brl.toLocaleString('pt-BR')} (${a.economia_vs_cash_pct}%)` : ''
         lines.push(`  CUSTO TOTAL: ~R$ ${a.custo_total_brl.toLocaleString('pt-BR')}${econStr}`)
         if (!a.disponibilidade_confirmada) {
-            lines.push(`  ⚠ Disponibilidade não confirmada — verifique no site do programa`)
+            if (hasPriceMap) {
+                lines.push(`  ⚠ PREÇO ESTIMADO (sem assento confirmado no Seats.aero) — ${a.milhas_necessarias.toLocaleString('pt-BR')} pts é referência, verifique disponibilidade e preço real`)
+            } else {
+                lines.push(`  ⚠ Disponibilidade não confirmada — verifique no site do programa`)
+            }
         }
         lines.push('')
     }
@@ -1172,7 +1289,7 @@ serve(async (req) => {
                 { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
         }
 
-        const { flightId, userId, cashPrice, seatsContext, buscaId } = await req.json()
+        const { flightId, userId, cashPrice, seatsContext, buscaId, allProgramPrices } = await req.json()
         if (!flightId && !seatsContext) {
             return new Response(JSON.stringify({ ok: false, error: 'flightId or seatsContext required' }),
                 { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -1316,10 +1433,22 @@ serve(async (req) => {
             userId ? fetchUserData(userId, sb) : Promise.resolve(null),
         ])
 
+        // Build per-program price map from client-provided Seats.aero data
+        const programPriceMap = new Map<string, number>()
+        if (Array.isArray(allProgramPrices)) {
+            for (const pp of allProgramPrices as ProgramPrice[]) {
+                if (pp.program && pp.totalMilhas > 0) {
+                    programPriceMap.set(pp.program, pp.totalMilhas)
+                    programPriceMap.set(pp.program.toLowerCase(), pp.totalMilhas)
+                }
+            }
+        }
+
         // Multi-program cost comparison (deterministic server-side math)
         const effectiveCashPrice = cashPrice || flight.preco_brl
         const { analyses, comparisonStr } = buildMultiProgramComparison(
-            programs, neededMiles, userData, promoResult.allRows, effectiveCashPrice,
+            programs, neededMiles, programPriceMap.size > 0 ? programPriceMap : null,
+            userData, promoResult.allRows, effectiveCashPrice,
             seatsContext?.program ?? null
         )
         const bestAnalysis = analyses.find(a => a.melhor_opcao) ?? null
@@ -1375,7 +1504,15 @@ serve(async (req) => {
         if (comparisonStr) {
             sections.push('\n=== COMPARAÇÃO PRÉ-CALCULADA DE PROGRAMAS (dados verificados) ===', comparisonStr)
             sections.push('IMPORTANTE: Use os números desta seção nos step_details. NÃO invente custos diferentes.')
-        } else if (!userData || Object.keys(userData.miles).length === 0) {
+        }
+
+        // Deficit section — generated only when best program has a coverage gap
+        if (bestAnalysis && bestAnalysis.deficit > 0) {
+            const deficitSection = buildDeficitSection(bestAnalysis, promoResult.acumuloRows ?? [], promoResult.allRows)
+            if (deficitSection) sections.push('\n' + deficitSection)
+        }
+
+        if (!comparisonStr && (!userData || Object.keys(userData.miles).length === 0)) {
             // No wallet — show cost to acquire miles from scratch
             const transferUrl = PROGRAM_TRANSFER_URLS[effectiveTargetProgram] ?? `${effectiveTargetProgram.toLowerCase().replace(/\s+/g, '')}.com`
             const purchaseSection = buildPurchaseSection(effectiveTargetProgram, neededMiles, promoResult.purchasePromos, effectiveCashPrice)
@@ -1446,7 +1583,7 @@ REGRAS OBRIGATÓRIAS:
    REGRA CRÍTICA: NUNCA coloque o passo de emissão antes de o usuário ter as milhas necessárias. Emissão sempre é o ÚLTIMO passo.
 7. EXPLICAÇÃO DE PROMOÇÕES PARA INICIANTES: quando há promo de transferência, o step_detail DEVE explicar: (a) O QUE É o programa de pontos origem em linguagem simples (ex: "Nubank Rewards são os pontos acumulados no cartão Nubank — você já pode ter sem saber"); (b) COMO FUNCIONA a transferência (ex: "você envia seus pontos pelo app Nubank para a Smiles, e eles viram milhas na sua conta"); (c) O RATIO com e sem bônus (ex: "normalmente 1 ponto Nubank = 1 milha Smiles, mas com esta promo = 1,3 milha"); (d) O IMPACTO CONCRETO neste voo calculado com os números da COMPARAÇÃO (ex: "para as 44.000 milhas, você precisaria transferir apenas 33.846 pontos Nubank"); (e) URL exato de transferência; (f) AVISO se cadastro prévio é obrigatório. Nunca diga apenas "aproveite a promoção" — todo iniciante precisa saber o que fazer, passo a passo.
 8. Se há "✓ COBRE TUDO" na comparação, o passo 1 DEVE usar o saldo existente. Se há saldo parcial + transferência, combine os dois.
-9. Se deficit > 0 E comprar milhas não é a melhor opção (vale_a_pena: false): sugira transferir pontos de cartão como alternativa mais barata que comprar. Só recomende compra se for realmente vantajoso.
+9. DÉFICIT DE MILHAS: quando há seção "COMO COBRIR O DÉFICIT", use os dados calculados: (a) cite o custo exato de comprar (ex: "comprar 26.500 Smiles custa R$ 1.113"); (b) se a Opção B (transferência) for mais barata, recomende ela como passo principal; (c) se a Opção C (acúmulo via parceiro) existir, calcule e apresente o valor a gastar na loja com o benefício final; (d) compare as opções em R$ no step_detail e recomende a mais vantajosa. NUNCA diga apenas "verifique se tem pontos no cartão" sem dar o custo alternativo.
 10. Se o usuário tem clube (ex: Smiles Diamante), mencione o desconto nas taxas EXPLICITAMENTE.
 11. Se a comparação mostrar "★ CLUBE X: R$ Y/mês | Z% desconto → economia de ~R$ W nesta emissão", gere um passo dedicado explicando: o que é o clube, quanto custa por mês, quanto economiza NESTA emissão específica, e se o clube se paga nessa compra ou em quantos meses. Seja específico com os valores R$ da seção COMPARAÇÃO.
 11. steps: TÍTULO curto (máx 8 palavras). step_details: explicação didática completa — onde clicar, qual site/app, o que fazer, quanto tempo leva. Inclua URLs exatas e valores em R$.
