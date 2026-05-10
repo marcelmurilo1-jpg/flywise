@@ -1163,4 +1163,151 @@ router.post('/api/admin/generate-post', requireAdminJWT, async (req, res) => {
     }
 });
 
+// ─── Referral codes ──────────────────────────────────────────────────────────
+
+function generateReferralCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let suffix = '';
+    for (let i = 0; i < 5; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+    return `FW-${suffix}`;
+}
+
+router.get('/api/admin/referral-codes', requireAdminJWT, async (_req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const { data: codes, error } = await supabase
+            .from('referral_codes')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+
+        const { data: signups, error: signupsErr } = await supabase
+            .from('user_profiles')
+            .select('referral_code_used, plan')
+            .not('referral_code_used', 'is', null);
+        if (signupsErr) throw signupsErr;
+
+        const stats = {};
+        for (const row of signups ?? []) {
+            const code = row.referral_code_used;
+            if (!stats[code]) stats[code] = { signups: 0, paying: 0, planBreakdown: {} };
+            stats[code].signups += 1;
+            const plan = row.plan ?? 'free';
+            stats[code].planBreakdown[plan] = (stats[code].planBreakdown[plan] ?? 0) + 1;
+            if (plan !== 'free') stats[code].paying += 1;
+        }
+
+        const enriched = (codes ?? []).map(c => ({
+            ...c,
+            signups_count: stats[c.code]?.signups ?? 0,
+            paying_count:  stats[c.code]?.paying  ?? 0,
+            plan_breakdown: stats[c.code]?.planBreakdown ?? {},
+        }));
+
+        res.json({ codes: enriched });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/api/admin/referral-codes', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const { owner_name, owner_contact, notes } = req.body ?? {};
+        if (!owner_name?.trim()) return res.status(400).json({ error: 'Nome do divulgador é obrigatório' });
+
+        let code = null;
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const candidate = generateReferralCode();
+            const { data: exists } = await supabase
+                .from('referral_codes')
+                .select('id')
+                .eq('code', candidate)
+                .maybeSingle();
+            if (!exists) { code = candidate; break; }
+        }
+        if (!code) return res.status(500).json({ error: 'Não foi possível gerar código único' });
+
+        const { data, error } = await supabase
+            .from('referral_codes')
+            .insert({
+                code,
+                owner_name: owner_name.trim(),
+                owner_contact: owner_contact?.trim() || null,
+                notes: notes?.trim() || null,
+            })
+            .select()
+            .single();
+        if (error) throw error;
+
+        res.json({ code: data });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.patch('/api/admin/referral-codes/:id', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+
+        const { owner_name, owner_contact, notes, active } = req.body ?? {};
+        const patch = {};
+        if (owner_name !== undefined)    patch.owner_name    = owner_name?.trim() || null;
+        if (owner_contact !== undefined) patch.owner_contact = owner_contact?.trim() || null;
+        if (notes !== undefined)         patch.notes         = notes?.trim() || null;
+        if (active !== undefined)        patch.active        = !!active;
+
+        if (Object.keys(patch).length === 0) return res.status(400).json({ error: 'Nada para atualizar' });
+
+        const { data, error } = await supabase
+            .from('referral_codes')
+            .update(patch)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+
+        res.json({ code: data });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.delete('/api/admin/referral-codes/:id', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+
+        const { error } = await supabase.from('referral_codes').delete().eq('id', id);
+        if (error) throw error;
+
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/api/referral-codes/validate/:code', async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const code = req.params.code?.trim().toUpperCase();
+        if (!code) return res.status(400).json({ error: 'Código inválido' });
+
+        const { data, error } = await supabase
+            .from('referral_codes')
+            .select('code, owner_name, active')
+            .eq('code', code)
+            .maybeSingle();
+        if (error) throw error;
+
+        if (!data || !data.active) return res.json({ valid: false });
+        res.json({ valid: true, owner_name: data.owner_name });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;
