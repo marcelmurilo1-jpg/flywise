@@ -2,7 +2,7 @@ name: Watchlist Check — FlyWise
 
 on:
   schedule:
-    - cron: '0 7 * * *'   # Todo dia às 7h UTC (4h BRT)
+    - cron: '0 15 * * *'   # Todo dia às 15h UTC (12h BRT)
   workflow_dispatch:
 
 jobs:

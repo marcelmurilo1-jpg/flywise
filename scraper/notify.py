@@ -28,7 +28,7 @@ load_dotenv()
 TZ           = ZoneInfo("America/Sao_Paulo")
 DB_URL       = os.getenv("DATABASE_URL")
 RESEND_KEY   = os.getenv("RESEND_API_KEY")
-FROM_EMAIL   = os.getenv("FROM_EMAIL", "FlyWise <noreply@flywise.com.br>")
+FROM_EMAIL   = os.getenv("FROM_EMAIL", "FlyWise <alertas@flywise.app>")
 RESEND_URL   = "https://api.resend.com/emails"
 MAX_PROMOS   = 5          # máx. de promoções por e-mail
 RATE_SLEEP   = 0.3        # segundos entre chamadas à API do Resend
@@ -104,7 +104,10 @@ def buscar_preferencias_usuarios(conn) -> list[dict]:
                 np.milhas,
                 np.programas,
                 np.alerta_promocao,
-                np.alerta_award_space
+                np.alerta_award_space,
+                COALESCE(np.alerta_acumulo,  FALSE) AS alerta_acumulo,
+                COALESCE(np.alerta_noticias, FALSE) AS alerta_noticias,
+                COALESCE(np.alerta_compras,  FALSE) AS alerta_compras
             FROM notification_preferences np
             JOIN auth.users u ON u.id = np.user_id
             LEFT JOIN user_profiles up ON up.id = np.user_id
@@ -120,7 +123,15 @@ def buscar_preferencias_usuarios(conn) -> list[dict]:
 # ─── Matching ─────────────────────────────────────────────────────────────────
 
 def promos_para_usuario(usuario: dict, promos: list[dict], ja_enviadas: set[int]) -> list[dict]:
-    """Filtra promoções que interessam a um usuário específico."""
+    """Filtra promoções que interessam a um usuário específico.
+
+    Mapeamento categoria → toggle do usuário:
+      passagens                          → alerta_promocao
+      milhas / subcategoria=transferencia → alerta_acumulo
+      milhas / subcategoria=acumulo      → alerta_acumulo
+      milhas / subcategoria=clube        → alerta_compras
+      milhas / outros                    → alerta_award_space
+    """
     resultado = []
     for p in promos:
         if p["id"] in ja_enviadas:
@@ -130,14 +141,24 @@ def promos_para_usuario(usuario: dict, promos: list[dict], ja_enviadas: set[int]
         subcategoria = p.get("subcategoria")
         tags = p["programas_tags"] or []
 
-        if cat == "passagens" and usuario["passagens"]:
+        if cat == "passagens":
+            if not usuario["alerta_promocao"]:
+                continue
             resultado.append(p)
-        elif cat == "milhas" and usuario["milhas"]:
-            # Respeita alerta_promocao (transferência) e alerta_award_space (clubes)
-            if subcategoria == "transferencia" and not usuario["alerta_promocao"]:
-                continue
-            if subcategoria == "clube" and not usuario["alerta_award_space"]:
-                continue
+
+        elif cat == "milhas":
+            # Decide qual toggle controla este tipo de promoção de milhas
+            if subcategoria in ("transferencia", "acumulo"):
+                if not usuario["alerta_acumulo"]:
+                    continue
+            elif subcategoria == "clube":
+                if not usuario["alerta_compras"]:
+                    continue
+            else:
+                # Award space / disponibilidade geral de milhas
+                if not usuario["alerta_award_space"]:
+                    continue
+
             # Filtro por programa: se usuário selecionou programas, exige match;
             # se não selecionou nenhum, recebe todas as promoções de milhas
             prefs_prog = usuario["programas"] or []
