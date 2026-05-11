@@ -6,6 +6,7 @@ import {
     DollarSign, MapPin, Clock, UserX, Receipt,
     Plus, Trash2, ChevronLeft, ChevronRight,
     TrendingDown, Home, Image,
+    Megaphone,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
@@ -13,7 +14,7 @@ import { supabase } from '@/lib/supabase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SectionId = 'dashboard' | 'usuarios' | 'custos' | 'promocoes' | 'logs' | 'posts'
+type SectionId = 'dashboard' | 'usuarios' | 'custos' | 'promocoes' | 'logs' | 'posts' | 'codigos'
 type Plan = 'free' | 'essencial' | 'pro' | 'elite' | 'admin'
 
 interface Stats {
@@ -76,6 +77,7 @@ const SECTIONS: { id: SectionId; label: string; icon: React.ElementType; descrip
     { id: 'custos',     label: 'Custos',       icon: Receipt,    description: 'Controle de gastos' },
     { id: 'promocoes',  label: 'Promoções',    icon: Tag,        description: 'Bônus de transferência' },
     { id: 'logs',       label: 'Logs',         icon: FileText,   description: 'Histórico de sincronização' },
+    { id: 'codigos',    label: 'Divulgação',   icon: Megaphone,  description: 'Códigos de divulgação' },
     { id: 'posts',      label: 'Posts',        icon: Image,      description: 'Gerador de slides Instagram' },
 ]
 
@@ -1527,6 +1529,312 @@ function inputSt(extra: React.CSSProperties = {}): React.CSSProperties {
     return { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, color: '#f1f5f9', fontSize: 13, padding: '8px 12px', outline: 'none', width: '100%', ...extra }
 }
 
+// ─── Codigos (Divulgação) ────────────────────────────────────────────────────
+
+interface ReferralCode {
+    id: number
+    code: string
+    owner_name: string
+    owner_contact: string | null
+    notes: string | null
+    active: boolean
+    created_at: string
+    updated_at: string
+    signups_count: number
+    paying_count: number
+    plan_breakdown: Record<string, number>
+}
+
+function Codigos({ token }: { token: string }) {
+    const [codes, setCodes] = useState<ReferralCode[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [creating, setCreating] = useState(false)
+    const [editing, setEditing] = useState<ReferralCode | null>(null)
+    const [showCreate, setShowCreate] = useState(false)
+
+    const load = useCallback(async () => {
+        setLoading(true)
+        setError(null)
+        try {
+            const data = await adminFetch('/api/admin/referral-codes', token)
+            setCodes(data.codes ?? [])
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e))
+        } finally {
+            setLoading(false)
+        }
+    }, [token])
+
+    useEffect(() => { load() }, [load])
+
+    const handleCreate = async (payload: { owner_name: string; owner_contact: string; notes: string }) => {
+        setCreating(true)
+        try {
+            await adminFetch('/api/admin/referral-codes', token, {
+                method: 'POST',
+                body: JSON.stringify(payload),
+            })
+            setShowCreate(false)
+            await load()
+        } catch (e) {
+            alert(e instanceof Error ? e.message : String(e))
+        } finally {
+            setCreating(false)
+        }
+    }
+
+    const handleToggleActive = async (c: ReferralCode) => {
+        try {
+            await adminFetch(`/api/admin/referral-codes/${c.id}`, token, {
+                method: 'PATCH',
+                body: JSON.stringify({ active: !c.active }),
+            })
+            await load()
+        } catch (e) {
+            alert(e instanceof Error ? e.message : String(e))
+        }
+    }
+
+    const handleDelete = async (c: ReferralCode) => {
+        if (!confirm(`Remover o código ${c.code} de ${c.owner_name}? Os usuários já cadastrados mantêm o vínculo.`)) return
+        try {
+            await adminFetch(`/api/admin/referral-codes/${c.id}`, token, { method: 'DELETE' })
+            await load()
+        } catch (e) {
+            alert(e instanceof Error ? e.message : String(e))
+        }
+    }
+
+    const handleCopy = (code: string) => {
+        navigator.clipboard.writeText(code)
+    }
+
+    if (loading) return <Spinner />
+    if (error) return <ErrBox msg={error} onRetry={load} />
+
+    const thSt: React.CSSProperties = {
+        padding: '12px 14px', textAlign: 'left', color: '#475569',
+        fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
+    }
+    const tdSt: React.CSSProperties = {
+        padding: '12px 14px', fontSize: 13, color: '#cbd5e1', borderTop: '1px solid #1e293b',
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <BlockTitle icon={Megaphone} title="Códigos de divulgação" subtitle={`${codes.length} divulgador${codes.length !== 1 ? 'es' : ''}`} />
+                <button onClick={() => setShowCreate(true)} style={S.btnPrimary}>
+                    <Plus size={14} style={{ marginRight: 6 }} />Novo divulgador
+                </button>
+            </div>
+
+            <div style={{ borderRadius: 12, border: '1px solid #1e293b', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ background: '#0f172a' }}>
+                        <tr>
+                            <th style={thSt}>Código</th>
+                            <th style={thSt}>Divulgador</th>
+                            <th style={thSt}>Contato</th>
+                            <th style={thSt}>Cadastros</th>
+                            <th style={thSt}>Pagantes</th>
+                            <th style={thSt}>Status</th>
+                            <th style={thSt}>Criado</th>
+                            <th style={thSt}>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {codes.length === 0 && (
+                            <tr>
+                                <td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                                    Nenhum código cadastrado ainda.
+                                </td>
+                            </tr>
+                        )}
+                        {codes.map((c, i) => (
+                            <tr key={c.id} style={{ background: i % 2 === 0 ? '#111827' : '#0d1520' }}>
+                                <td style={tdSt}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <code style={{ color: '#60a5fa', fontWeight: 700 }}>{c.code}</code>
+                                        <button onClick={() => handleCopy(c.code)} style={{ ...S.btnXs, padding: '2px 6px' }} title="Copiar código">
+                                            Copiar
+                                        </button>
+                                    </div>
+                                </td>
+                                <td style={tdSt}>{c.owner_name}</td>
+                                <td style={{ ...tdSt, color: '#94a3b8' }}>{c.owner_contact ?? '—'}</td>
+                                <td style={{ ...tdSt, fontWeight: 700, color: '#f1f5f9' }}>{c.signups_count}</td>
+                                <td style={{ ...tdSt, fontWeight: 700, color: c.paying_count > 0 ? '#10b981' : '#64748b' }}>
+                                    {c.paying_count}
+                                    {c.paying_count > 0 && (
+                                        <span style={{ color: '#64748b', fontWeight: 400, fontSize: 11, marginLeft: 6 }}>
+                                            ({Object.entries(c.plan_breakdown)
+                                                .filter(([p]) => p !== 'free')
+                                                .map(([p, n]) => `${n} ${p}`)
+                                                .join(', ')})
+                                        </span>
+                                    )}
+                                </td>
+                                <td style={tdSt}>
+                                    <span style={{
+                                        padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                                        background: c.active ? '#064e3b' : '#451a1a',
+                                        color: c.active ? '#10b981' : '#ef4444',
+                                    }}>
+                                        {c.active ? 'Ativo' : 'Inativo'}
+                                    </span>
+                                </td>
+                                <td style={{ ...tdSt, color: '#94a3b8', fontSize: 12 }}>{fmtDate(c.created_at)}</td>
+                                <td style={tdSt}>
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                        <button onClick={() => setEditing(c)} style={S.btnXs}>Editar</button>
+                                        <button onClick={() => handleToggleActive(c)} style={S.btnXs}>
+                                            {c.active ? 'Pausar' : 'Reativar'}
+                                        </button>
+                                        <button onClick={() => handleDelete(c)} style={{ ...S.btnXs, color: '#ef4444' }}>
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {showCreate && (
+                <CreateReferralModal
+                    onClose={() => setShowCreate(false)}
+                    onSave={handleCreate}
+                    saving={creating}
+                />
+            )}
+            {editing && (
+                <EditReferralModal
+                    code={editing}
+                    token={token}
+                    onClose={() => setEditing(null)}
+                    onSaved={() => { setEditing(null); load() }}
+                />
+            )}
+        </div>
+    )
+}
+
+function CreateReferralModal({
+    onClose, onSave, saving,
+}: {
+    onClose: () => void
+    onSave: (p: { owner_name: string; owner_contact: string; notes: string }) => void
+    saving: boolean
+}) {
+    const [ownerName, setOwnerName] = useState('')
+    const [ownerContact, setOwnerContact] = useState('')
+    const [notes, setNotes] = useState('')
+    const [err, setErr] = useState<string | null>(null)
+
+    const submit = () => {
+        if (!ownerName.trim()) { setErr('Nome é obrigatório'); return }
+        setErr(null)
+        onSave({ owner_name: ownerName, owner_contact: ownerContact, notes })
+    }
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+            onClick={e => e.target === e.currentTarget && onClose()}>
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 28, width: '100%', maxWidth: 440 }}>
+                <p style={{ color: '#f1f5f9', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Novo divulgador</p>
+                <p style={{ color: '#475569', fontSize: 12, marginBottom: 20 }}>O código será gerado automaticamente.</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <label style={S.label}>Nome do divulgador *
+                        <input value={ownerName} onChange={e => setOwnerName(e.target.value)} style={inputSt()} placeholder="Ex: Maria Silva" />
+                    </label>
+                    <label style={S.label}>Contato
+                        <input value={ownerContact} onChange={e => setOwnerContact(e.target.value)} style={inputSt()} placeholder="Email, telefone ou @instagram" />
+                    </label>
+                    <label style={S.label}>Notas internas
+                        <textarea value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inputSt(), minHeight: 60, fontFamily: 'inherit' }} placeholder="Opcional" />
+                    </label>
+                </div>
+                {err && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 12 }}>{err}</p>}
+                <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+                    <button onClick={onClose} style={S.btnSm}>Cancelar</button>
+                    <button onClick={submit} disabled={saving} style={S.btnPrimary}>
+                        {saving ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : 'Criar'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function EditReferralModal({
+    code, token, onClose, onSaved,
+}: {
+    code: ReferralCode
+    token: string
+    onClose: () => void
+    onSaved: () => void
+}) {
+    const [ownerName, setOwnerName] = useState(code.owner_name)
+    const [ownerContact, setOwnerContact] = useState(code.owner_contact ?? '')
+    const [notes, setNotes] = useState(code.notes ?? '')
+    const [saving, setSaving] = useState(false)
+    const [err, setErr] = useState<string | null>(null)
+
+    const save = async () => {
+        if (!ownerName.trim()) { setErr('Nome é obrigatório'); return }
+        setSaving(true)
+        setErr(null)
+        try {
+            await adminFetch(`/api/admin/referral-codes/${code.id}`, token, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    owner_name: ownerName,
+                    owner_contact: ownerContact,
+                    notes,
+                }),
+            })
+            onSaved()
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : String(e))
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+            onClick={e => e.target === e.currentTarget && onClose()}>
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 28, width: '100%', maxWidth: 440 }}>
+                <p style={{ color: '#f1f5f9', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Editar divulgador</p>
+                <p style={{ color: '#475569', fontSize: 12, marginBottom: 20 }}>
+                    Código: <code style={{ color: '#60a5fa' }}>{code.code}</code>
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <label style={S.label}>Nome *
+                        <input value={ownerName} onChange={e => setOwnerName(e.target.value)} style={inputSt()} />
+                    </label>
+                    <label style={S.label}>Contato
+                        <input value={ownerContact} onChange={e => setOwnerContact(e.target.value)} style={inputSt()} />
+                    </label>
+                    <label style={S.label}>Notas internas
+                        <textarea value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inputSt(), minHeight: 60, fontFamily: 'inherit' }} />
+                    </label>
+                </div>
+                {err && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 12 }}>{err}</p>}
+                <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+                    <button onClick={onClose} style={S.btnSm}>Cancelar</button>
+                    <button onClick={save} disabled={saving} style={S.btnPrimary}>
+                        {saving ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : 'Salvar'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // ─── Layout principal ─────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -1599,6 +1907,7 @@ export default function Admin() {
                     {section === 'custos'     && <Custos         token={token} />}
                     {section === 'promocoes'  && <Promocoes      token={token} />}
                     {section === 'logs'       && <Logs           token={token} />}
+                    {section === 'codigos'    && <Codigos        token={token} />}
                     {section === 'posts'      && <PostGenerator  token={token} />}
                 </main>
             </div>
