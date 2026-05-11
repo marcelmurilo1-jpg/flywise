@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, ArrowLeft, Loader2, RefreshCw, Copy, Check, Clock, CreditCard, Landmark, ExternalLink } from 'lucide-react'
+import { CheckCircle2, ArrowLeft, Loader2, RefreshCw, Copy, Check, Clock, CreditCard, Landmark } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import confetti from 'canvas-confetti'
 import { useAuth } from '@/contexts/AuthContext'
@@ -39,9 +39,16 @@ export default function Checkout() {
     const [copied, setCopied] = useState(false)
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-    // Card state
-    const [cardLoading, setCardLoading] = useState(false)
-    const [cardError, setCardError] = useState<string | null>(null)
+    // Card form state
+    const [cardHolder, setCardHolder]         = useState('')
+    const [cardNumber, setCardNumber]         = useState('')
+    const [cardExpiry, setCardExpiry]         = useState('')
+    const [cardCvv, setCardCvv]               = useState('')
+    const [cardBrand, setCardBrand]           = useState<string | null>(null)
+    const [installments, setInstallments]     = useState(1)
+    const [cardProcessing, setCardProcessing] = useState(false)
+    const [cardFormError, setCardFormError]   = useState<string | null>(null)
+    const [cardBillingUrl, setCardBillingUrl] = useState<string | null>(null)
 
     useEffect(() => {
         if (!state) navigate('/planos', { replace: true })
@@ -96,47 +103,9 @@ export default function Checkout() {
         }
     }
 
-    // Card: create billing and redirect to AbacatePay hosted checkout
-    async function handleCardPayment() {
-        setCardLoading(true)
-        setCardError(null)
-        try {
-            const res = await fetch('/api/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    origin: 'PLANO',
-                    destination: state!.planName.toUpperCase(),
-                    totalBrl: state!.priceVal,
-                    outboundCompany: `FlyWise ${state!.planName}`,
-                    customerEmail: state!.customerEmail,
-                    customerName: state!.customerName,
-                    customerTaxId: state!.customerTaxId,
-                    customerPhone: state!.customerPhone,
-                    userId: user?.id,
-                    billingType: state!.billing,
-                    paymentMethod: 'cartao',
-                }),
-            })
-            const data = await res.json()
-            if (!res.ok || data.error) throw new Error(data.error || 'Erro ao criar cobrança')
-            if (!data.url) throw new Error('URL de pagamento não retornada')
-
-            // Save billingId so Onboarding can activate the plan on return
-            sessionStorage.setItem('flywise_pending_billing', data.id)
-            sessionStorage.setItem('flywise_pending_plan', state!.planName)
-
-            // Redirect to AbacatePay hosted card checkout
-            window.location.href = data.url
-        } catch (err: any) {
-            setCardError(err.message)
-            setCardLoading(false)
-        }
-    }
-
-    // Poll PIX payment status
+    // Poll payment status (PIX and tokenized card)
     useEffect(() => {
-        if (!billingId || paymentStatus !== 'PENDING' || paymentMethod !== 'pix') return
+        if (!billingId || paymentStatus !== 'PENDING' || (paymentMethod !== 'pix' && paymentMethod !== 'cartao')) return
         pollRef.current = setInterval(async () => {
             try {
                 const r = await fetch(`/api/checkout/status/${billingId}`)
@@ -174,7 +143,116 @@ export default function Checkout() {
         // Stop PIX polling when switching away
         if (pollRef.current) clearInterval(pollRef.current)
         setPaymentMethod(method)
-        setCardError(null)
+        setCardFormError(null)
+    }
+
+    function formatCardNumber(v: string): string {
+        return v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim()
+    }
+
+    function detectBrand(num: string): string | null {
+        const n = num.replace(/\s/g, '')
+        if (/^4/.test(n)) return 'VISA'
+        if (/^5[1-5]|^2[2-7]/.test(n)) return 'Master'
+        if (/^6(?:362[89]|3[89]|4\d{4}|5\d{4})\d*/.test(n)) return 'Elo'
+        if (/^3[47]/.test(n)) return 'Amex'
+        return null
+    }
+
+    function formatExpiry(v: string): string {
+        const d = v.replace(/\D/g, '').slice(0, 4)
+        return d.length >= 3 ? d.slice(0, 2) + '/' + d.slice(2) : d
+    }
+
+    function getInstallmentOptions(price: number) {
+        return Array.from({ length: 12 }, (_, i) => {
+            const n = i + 1
+            const amt = (price / n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            return { n, label: n === 1 ? `1x de R$ ${amt} (sem juros)` : `${n}x de R$ ${amt}` }
+        })
+    }
+
+    async function handleNativeCardPayment() {
+        if (!cardHolder.trim()) { setCardFormError('Informe o nome no cartão'); return }
+        if (cardNumber.replace(/\s/g, '').length < 16) { setCardFormError('Número do cartão inválido'); return }
+        const [month, year] = cardExpiry.split('/')
+        if (!month || !year || month.length !== 2 || year.length !== 2) { setCardFormError('Data de validade inválida (MM/AA)'); return }
+        if (cardCvv.length < 3) { setCardFormError('CVV inválido'); return }
+
+        setCardProcessing(true)
+        setCardFormError(null)
+        setCardBillingUrl(null)
+
+        try {
+            const tokenRes = await fetch('/api/checkout/tokenize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cardNumber: cardNumber.replace(/\s/g, ''),
+                    cardHolder: cardHolder.trim(),
+                    expiryMonth: month,
+                    expiryYear: '20' + year,
+                    cvv: cardCvv,
+                }),
+            })
+            const tokenData = await tokenRes.json()
+
+            if (tokenData.fallbackToUrl || !tokenRes.ok) {
+                // AbacatePay tokenization not available — create billing and show URL in iframe
+                const billingRes = await fetch('/api/checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        origin: 'PLANO',
+                        destination: state!.planName.toUpperCase(),
+                        totalBrl: state!.priceVal,
+                        outboundCompany: `FlyWise ${state!.planName}`,
+                        customerEmail: state!.customerEmail,
+                        customerName: state!.customerName,
+                        customerTaxId: state!.customerTaxId,
+                        customerPhone: state!.customerPhone,
+                        userId: user?.id,
+                        billingType: state!.billing,
+                        paymentMethod: 'cartao',
+                    }),
+                })
+                const billingData = await billingRes.json()
+                if (!billingRes.ok || billingData.error) throw new Error(billingData.error || 'Erro ao criar cobrança')
+                if (!billingData.url) throw new Error('URL de pagamento não retornada')
+                setBillingId(billingData.id)
+                setCardBillingUrl(billingData.url)
+                return
+            }
+
+            // Tokenization succeeded — create billing with token
+            const billingRes = await fetch('/api/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    origin: 'PLANO',
+                    destination: state!.planName.toUpperCase(),
+                    totalBrl: state!.priceVal,
+                    outboundCompany: `FlyWise ${state!.planName}`,
+                    customerEmail: state!.customerEmail,
+                    customerName: state!.customerName,
+                    customerTaxId: state!.customerTaxId,
+                    customerPhone: state!.customerPhone,
+                    userId: user?.id,
+                    billingType: state!.billing,
+                    paymentMethod: 'cartao_tokenizado',
+                    cardToken: tokenData.token,
+                    installments,
+                }),
+            })
+            const billingData = await billingRes.json()
+            if (!billingRes.ok || billingData.error) throw new Error(billingData.error || 'Erro ao criar cobrança')
+            setBillingId(billingData.id)
+            // Polling useEffect handles PAID detection
+        } catch (err: any) {
+            setCardFormError(err.message)
+        } finally {
+            setCardProcessing(false)
+        }
     }
 
     if (!state) return null
@@ -420,63 +498,145 @@ export default function Checkout() {
                     {paymentStatus !== 'PAID' && paymentMethod === 'cartao' && (
                         <motion.div key="card-section"
                             initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }}
-                            style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 24 }}>
+                            style={{ width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', gap: 24 }}>
 
                             <div style={{ textAlign: 'center' }}>
                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#EEF2F8', borderRadius: 999, padding: '5px 14px', marginBottom: 16 }}>
                                     <CreditCard size={14} color="#2A60C2" />
                                     <span style={{ fontSize: 12, fontWeight: 700, color: '#2A60C2', letterSpacing: '0.04em' }}>Cartão de crédito</span>
                                 </div>
-                                <div style={{ fontSize: 22, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em', marginBottom: 4 }}>Pague com cartão</div>
-                                <div style={{ fontSize: 13, color: '#64748B' }}>Você será redirecionado para a página segura de pagamento</div>
+                                <div style={{ fontSize: 22, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em', marginBottom: 4 }}>
+                                    {cardBillingUrl ? 'Conclua o pagamento abaixo' : 'Pague com cartão'}
+                                </div>
+                                <div style={{ fontSize: 13, color: '#64748B' }}>
+                                    {cardBillingUrl ? 'Seus dados estão protegidos por SSL' : 'Preencha os dados do cartão — tudo acontece aqui'}
+                                </div>
                             </div>
 
-                            <div style={{ background: '#fff', borderRadius: 20, padding: '28px', boxShadow: '0 4px 32px rgba(14,42,85,0.08)', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                            {/* Iframe fallback when tokenization is unavailable */}
+                            {cardBillingUrl ? (
+                                <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 4px 32px rgba(14,42,85,0.08)', border: '1px solid #E2EAF5' }}>
+                                    <iframe
+                                        src={cardBillingUrl}
+                                        title="Pagamento seguro"
+                                        style={{ width: '100%', height: 560, border: 'none', display: 'block' }}
+                                    />
+                                </div>
+                            ) : (
+                                /* Native card form */
+                                <div style={{ background: '#fff', borderRadius: 20, padding: '28px', boxShadow: '0 4px 32px rgba(14,42,85,0.08)', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-                                {/* Price summary */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', background: '#F7F9FC', borderRadius: 12, border: '1px solid #E2EAF5' }}>
+                                    {/* Price summary */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#F7F9FC', borderRadius: 12, border: '1px solid #E2EAF5' }}>
+                                        <div>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>Plano {state.planName}</div>
+                                            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Renova automaticamente — cancele quando quiser</div>
+                                        </div>
+                                        <div style={{ fontSize: 22, fontWeight: 900, color: '#0E2A55' }}>R$ {state.priceVal}</div>
+                                    </div>
+
+                                    {/* Cardholder name */}
                                     <div>
-                                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>Plano {state.planName}</div>
-                                        <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{state.billing === 'anual' ? 'Cobrança anual única' : 'Cobrança mensal'}</div>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 6 }}>Nome no cartão</div>
+                                        <input
+                                            type="text" value={cardHolder} placeholder="Como aparece no cartão"
+                                            onChange={e => setCardHolder(e.target.value)}
+                                            style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #E2EAF5', borderRadius: 10, padding: '11px 13px', fontSize: 14, color: '#0E2A55', fontFamily: 'inherit', outline: 'none' }}
+                                        />
                                     </div>
-                                    <div style={{ fontSize: 22, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em' }}>R$ {state.priceVal}</div>
-                                </div>
 
-                                {/* Accepted cards */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Aceito</div>
-                                    <div style={{ display: 'flex', gap: 6 }}>
-                                        {['VISA', 'Master', 'Elo', 'Amex'].map(brand => (
-                                            <div key={brand} style={{ padding: '3px 8px', background: '#F1F5F9', borderRadius: 6, fontSize: 10, fontWeight: 800, color: '#475569', border: '1px solid #E2EAF5' }}>{brand}</div>
-                                        ))}
+                                    {/* Card number */}
+                                    <div>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 6 }}>Número do cartão</div>
+                                        <div style={{ position: 'relative' }}>
+                                            <input
+                                                type="text" inputMode="numeric" value={cardNumber} placeholder="0000 0000 0000 0000"
+                                                onChange={e => {
+                                                    const v = formatCardNumber(e.target.value)
+                                                    setCardNumber(v)
+                                                    setCardBrand(detectBrand(v))
+                                                }}
+                                                style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #E2EAF5', borderRadius: 10, padding: '11px 44px 11px 13px', fontSize: 14, color: '#0E2A55', fontFamily: 'monospace', outline: 'none' }}
+                                            />
+                                            {cardBrand && (
+                                                <div style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 800, color: '#475569', background: '#F1F5F9', padding: '2px 7px', borderRadius: 5, border: '1px solid #E2EAF5' }}>
+                                                    {cardBrand}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Expiry + CVV */}
+                                    <div style={{ display: 'flex', gap: 12 }}>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 6 }}>Validade</div>
+                                            <input
+                                                type="text" inputMode="numeric" value={cardExpiry} placeholder="MM/AA"
+                                                onChange={e => setCardExpiry(formatExpiry(e.target.value))}
+                                                style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #E2EAF5', borderRadius: 10, padding: '11px 13px', fontSize: 14, color: '#0E2A55', fontFamily: 'inherit', outline: 'none' }}
+                                            />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 6 }}>CVV</div>
+                                            <input
+                                                type="password" inputMode="numeric" value={cardCvv} placeholder="•••"
+                                                maxLength={4}
+                                                onChange={e => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                                                style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #E2EAF5', borderRadius: 10, padding: '11px 13px', fontSize: 14, color: '#0E2A55', fontFamily: 'inherit', outline: 'none' }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Installments */}
+                                    <div>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 6 }}>Parcelas</div>
+                                        <select
+                                            value={installments}
+                                            onChange={e => setInstallments(Number(e.target.value))}
+                                            style={{ width: '100%', border: '1.5px solid #E2EAF5', borderRadius: 10, padding: '11px 13px', fontSize: 14, color: '#0E2A55', fontFamily: 'inherit', background: '#fff', outline: 'none', cursor: 'pointer' }}
+                                        >
+                                            {getInstallmentOptions(state.priceVal).map(opt => (
+                                                <option key={opt.n} value={opt.n}>{opt.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Accepted brands */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.05em' }}>Aceito</span>
+                                        <div style={{ display: 'flex', gap: 5 }}>
+                                            {['VISA', 'Master', 'Elo', 'Amex'].map(b => (
+                                                <span key={b} style={{ padding: '2px 8px', background: cardBrand === b ? '#E0EAFF' : '#F1F5F9', border: `1px solid ${cardBrand === b ? '#93C5FD' : '#E2EAF5'}`, borderRadius: 5, fontSize: 10, fontWeight: 800, color: cardBrand === b ? '#1D4ED8' : '#475569' }}>{b}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {cardFormError && (
+                                        <div style={{ fontSize: 13, color: '#DC2626', background: '#FEF2F2', borderRadius: 10, padding: '10px 14px', border: '1px solid #FECACA' }}>
+                                            {cardFormError}
+                                        </div>
+                                    )}
+
+                                    <button
+                                        onClick={handleNativeCardPayment}
+                                        disabled={cardProcessing}
+                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: 15, background: cardProcessing ? '#94A3B8' : '#0E2A55', color: '#fff', border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 800, cursor: cardProcessing ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background .2s' }}
+                                    >
+                                        {cardProcessing
+                                            ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Processando…</>
+                                            : <>🔒 Pagar R$ {state.priceVal}</>
+                                        }
+                                    </button>
+
+                                    <div style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', lineHeight: 1.6 }}>
+                                        Dados protegidos por SSL · PCI DSS<br />
+                                        Cancele a qualquer momento em Configurações
                                     </div>
                                 </div>
-
-                                {cardError && (
-                                    <div style={{ fontSize: 13, color: '#DC2626', background: '#FEF2F2', borderRadius: 10, padding: '10px 14px', border: '1px solid #FECACA' }}>
-                                        {cardError}
-                                    </div>
-                                )}
-
-                                <button
-                                    onClick={handleCardPayment}
-                                    disabled={cardLoading}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '15px', background: cardLoading ? '#94A3B8' : '#0E2A55', color: '#fff', border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 800, cursor: cardLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background .2s' }}
-                                >
-                                    {cardLoading
-                                        ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Aguarde…</>
-                                        : <><ExternalLink size={16} /> Ir para pagamento seguro</>
-                                    }
-                                </button>
-
-                                <div style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', lineHeight: 1.6 }}>
-                                    Você será redirecionado para o ambiente seguro da AbacatePay.<br />
-                                    Após o pagamento, volte aqui automaticamente.
-                                </div>
-                            </div>
+                            )}
 
                             <div style={{ display: 'flex', justifyContent: 'center', gap: 20 }}>
-                                {['🔒 SSL', '🛡️ PCI DSS', '✓ AbacatePay'].map(t => (
+                                {['🔒 SSL', '🛡️ PCI DSS', '🔄 Renovação automática'].map(t => (
                                     <div key={t} style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600 }}>{t}</div>
                                 ))}
                             </div>
