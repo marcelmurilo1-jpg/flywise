@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { resend, RESEND_FROM } from '../lib/resend.js';
+import { requireUserJWT } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -77,13 +78,15 @@ router.post('/api/checkout', async (req, res) => {
         const methods = methodMap[req.body.paymentMethod] ?? ['PIX'];
 
         const billingPayload = {
-            frequency: 'ONE_TIME',
+            frequency: billingType === 'anual' ? 'YEARLY' : 'MONTHLY',
             methods,
             customerId,
             products: [productEntry],
             returnUrl: `${process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:5173'}${returnPath || '/onboarding'}`,
             completionUrl: `${process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:5173'}${returnPath || '/onboarding'}`,
             metadata: { origin, destination, departureDate, returnDate, outboundCompany, returnCompany, userId, billingType },
+            ...(req.body.cardToken ? { card: { token: req.body.cardToken } } : {}),
+            ...(req.body.installments > 1 ? { installments: Number(req.body.installments) } : {}),
         };
 
         const abRes = await fetch(`${ABACATEPAY_BASE}/billing/create`, {
@@ -373,6 +376,71 @@ router.post('/api/checkout/activate', async (req, res) => {
         console.error('[Activate] Exceção:', err.message);
         res.status(500).json({ error: err.message });
     }
+});
+
+router.post('/api/checkout/tokenize', async (req, res) => {
+    const { cardNumber, cardHolder, expiryMonth, expiryYear, cvv } = req.body ?? {};
+    if (!cardNumber || !cardHolder || !expiryMonth || !expiryYear || !cvv) {
+        return res.status(400).json({ error: 'Dados do cartão incompletos' });
+    }
+    try {
+        const r = await fetch(`${ABACATEPAY_BASE}/card/tokenize`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${ABACATEPAY_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                cardNumber: cardNumber.replace(/\s/g, ''),
+                holderName: cardHolder,
+                expiryMonth,
+                expiryYear,
+                cvv,
+            }),
+            signal: AbortSignal.timeout(15000),
+        });
+        const data = await r.json();
+        if (!r.ok) {
+            console.error('[Tokenize] AbacatePay erro:', data);
+            return res.status(r.status).json({ error: data.error || 'Erro ao tokenizar cartão', fallbackToUrl: true });
+        }
+        res.json({ token: data.data?.token ?? data.token });
+    } catch (err) {
+        console.error('[Tokenize] Exceção:', err.message);
+        res.status(500).json({ error: err.message, fallbackToUrl: true });
+    }
+});
+
+router.post('/api/user/cancel-plan', requireUserJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    const { reason, reasonDetail } = req.body ?? {};
+    if (!reason) return res.status(400).json({ error: 'reason é obrigatório' });
+
+    const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('plan')
+        .eq('id', req.userId)
+        .single();
+
+    const { error: upErr } = await supabase
+        .from('user_profiles')
+        .update({ plan: null, plan_expires_at: null, plan_billing: null })
+        .eq('id', req.userId);
+
+    if (upErr) {
+        console.error('[CancelPlan] Erro ao cancelar plano:', upErr);
+        return res.status(500).json({ error: upErr.message });
+    }
+
+    await supabase.from('plan_cancellations').insert({
+        user_id: req.userId,
+        plan: profile?.plan ?? null,
+        reason,
+        reason_detail: reasonDetail ?? null,
+    });
+
+    console.log(`[CancelPlan] Plano cancelado para ${req.userId} — motivo: ${reason}`);
+    res.json({ ok: true });
 });
 
 export default router;
