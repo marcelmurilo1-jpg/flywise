@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import CancelPlanModal from '@/components/CancelPlanModal'
 import {
     User, Lock, Plane, Bell, Trash2, LogOut, Check, Loader2,
     ChevronLeft, Eye, EyeOff, AlertTriangle, ShieldCheck, Crown, Zap, Star,
@@ -300,7 +301,9 @@ export default function Configuracoes() {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
     // Plan state
-    const [planoAtivo, setPlanoAtivo] = useState<string | null>(null)
+    const [planoAtivo, setPlanoAtivo]           = useState<string | null>(null)
+    const [planExpiresAt, setPlanExpiresAt]     = useState<string | null>(null)
+    const [cancelModalOpen, setCancelModalOpen] = useState(false)
 
     // Watchlist state
     const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([])
@@ -336,6 +339,7 @@ export default function Configuracoes() {
                     home_airport_lock:  (profileData.home_airport_lock as boolean) ?? true,
                 })
                 setPlanoAtivo(profileData.plano_ativo ?? null)
+                setPlanExpiresAt(profileData.plan_expires_at ?? null)
             }
             if (notifData) {
                 setNotifPrefs({
@@ -1220,7 +1224,7 @@ export default function Configuracoes() {
                                         })()}
                                         <div style={{ display: 'flex', gap: 10 }}>
                                             <button
-                                                onClick={() => setPlanoAtivo(null)}
+                                                onClick={() => setCancelModalOpen(true)}
                                                 style={{
                                                     padding: '10px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600,
                                                     border: '1.5px solid var(--border-light)', background: '#fff',
@@ -1374,6 +1378,17 @@ export default function Configuracoes() {
                     )}
                 </div>
             </main>
+
+            <CancelPlanModal
+                isOpen={cancelModalOpen}
+                onClose={() => setCancelModalOpen(false)}
+                currentPlan={planoAtivo ?? ''}
+                planExpiresAt={planExpiresAt}
+                onCancelled={() => {
+                    setPlanoAtivo(null)
+                    setPlanExpiresAt(null)
+                }}
+            />
         </div>
     )
 }
