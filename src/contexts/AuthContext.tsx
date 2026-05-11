@@ -7,7 +7,7 @@ interface AuthContextType {
     session: Session | null
     loading: boolean
     signIn: (email: string, password: string) => Promise<{ error: Error | null }>
-    signUp: (email: string, password: string, name: string) => Promise<{ error: Error | null }>
+    signUp: (email: string, password: string, name: string, referralCode?: string) => Promise<{ error: Error | null }>
     signInWithGoogle: () => Promise<{ error: Error | null }>
     signOut: () => Promise<void>
 }
@@ -40,8 +40,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error }
     }
 
-    const signUp = async (email: string, password: string, name: string) => {
-        const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } })
+    const signUp = async (email: string, password: string, name: string, referralCode?: string) => {
+        const metadata: Record<string, string> = { full_name: name }
+        if (referralCode) metadata.referral_code = referralCode.toUpperCase()
+        const { error } = await supabase.auth.signUp({ email, password, options: { data: metadata } })
         return { error }
     }
 

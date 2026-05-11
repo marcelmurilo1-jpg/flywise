@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle, User } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle, User, Tag, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -18,6 +18,9 @@ export default function Auth() {
     const [googleLoading, setGoogleLoading] = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
+    const [referralCode, setReferralCode] = useState('')
+    const [referralStatus, setReferralStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
+    const [referralOwner, setReferralOwner] = useState<string | null>(null)
     const { signIn, signUp, signInWithGoogle, user } = useAuth()
     const navigate = useNavigate()
 
@@ -26,6 +29,27 @@ export default function Auth() {
     useEffect(() => { if (user) navigate(next, { replace: true }) }, [user, navigate])
 
     const switchTab = (t: 'login' | 'signup') => { setTab(t); setError(''); setSuccess('') }
+
+    const validateReferralCode = async () => {
+        const code = referralCode.trim().toUpperCase()
+        if (!code) { setReferralStatus('idle'); setReferralOwner(null); return }
+        setReferralStatus('checking')
+        try {
+            const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
+            const res = await fetch(`${apiBase}/api/referral-codes/validate/${encodeURIComponent(code)}`)
+            const data = await res.json()
+            if (data.valid) {
+                setReferralStatus('valid')
+                setReferralOwner(data.owner_name)
+            } else {
+                setReferralStatus('invalid')
+                setReferralOwner(null)
+            }
+        } catch {
+            setReferralStatus('invalid')
+            setReferralOwner(null)
+        }
+    }
 
     const handleSubmit = async (e: React.FormEvent, formType: 'login' | 'signup') => {
         e.preventDefault()
@@ -40,7 +64,8 @@ export default function Auth() {
                     navigate(pendingBilling ? '/onboarding' : next, { replace: true })
                 }
             } else {
-                const { error } = await signUp(email, password, name)
+                const code = referralStatus === 'valid' ? referralCode.trim().toUpperCase() : undefined
+                const { error } = await signUp(email, password, name, code)
                 if (error) setError(error.message || 'Erro ao criar conta.')
                 else {
                     const pendingBilling = sessionStorage.getItem('flywise_pending_billing')
@@ -163,6 +188,51 @@ export default function Auth() {
                             </button>
                         </div>
                     </div>
+
+                    {/* Código de divulgação — apenas no cadastro */}
+                    {formType === 'signup' && (() => {
+                        const borderColor =
+                            referralStatus === 'valid'   ? '#10b981' :
+                            referralStatus === 'invalid' ? '#ef4444' :
+                            '#E2EAF5'
+                        const focusShadow =
+                            referralStatus === 'valid'   ? '0 0 0 3px rgba(16,185,129,0.12)' :
+                            referralStatus === 'invalid' ? '0 0 0 3px rgba(239,68,68,0.12)' :
+                            '0 0 0 3px rgba(42,96,194,0.12)'
+                        const focusBorder = referralStatus === 'idle' || referralStatus === 'checking' ? BLUE : borderColor
+                        return (
+                            <div>
+                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#6B7A99', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>Código de divulgação <span style={{ color: '#A0AECB', fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>(opcional)</span></label>
+                                <div style={{ position: 'relative' }}>
+                                    <Tag size={14} style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', color: '#A0AECB' }} />
+                                    <input
+                                        type="text" placeholder="FW-XXXXX" value={referralCode}
+                                        onChange={e => { setReferralCode(e.target.value.toUpperCase()); setReferralStatus('idle'); setReferralOwner(null) }}
+                                        onBlur={validateReferralCode}
+                                        maxLength={10}
+                                        tabIndex={isActive ? 0 : -1}
+                                        style={{ ...inputBase, padding: '11px 14px 11px 38px', borderColor, textTransform: 'uppercase', letterSpacing: '0.04em' }}
+                                        onFocus={e => { e.target.style.borderColor = focusBorder; e.target.style.boxShadow = focusShadow }}
+                                    />
+                                </div>
+                                {referralStatus === 'checking' && (
+                                    <p style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#6B7A99', fontSize: 11.5, margin: '6px 0 0' }}>
+                                        <Loader2 size={11} className="spin" /> Verificando...
+                                    </p>
+                                )}
+                                {referralStatus === 'valid' && referralOwner && (
+                                    <p style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#10b981', fontSize: 11.5, margin: '6px 0 0' }}>
+                                        <CheckCircle size={11} /> Código válido — indicado por {referralOwner}
+                                    </p>
+                                )}
+                                {referralStatus === 'invalid' && (
+                                    <p style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#ef4444', fontSize: 11.5, margin: '6px 0 0' }}>
+                                        <AlertCircle size={11} /> Código não encontrado ou inativo
+                                    </p>
+                                )}
+                            </div>
+                        )
+                    })()}
 
                     {/* Feedback */}
                     <AnimatePresence>
