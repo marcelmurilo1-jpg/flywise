@@ -1310,4 +1310,110 @@ router.get('/api/referral-codes/validate/:code', async (req, res) => {
     }
 });
 
+// ─── Usage stats (métricas de uso por usuário) ───────────────────────────────
+
+router.get('/api/admin/usage-stats', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const period = req.query.period ?? 'month'; // today | 7d | 30d | month | all
+
+        let sinceISO = null;
+        const now = new Date();
+        if (period === 'today') {
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            sinceISO = startOfDay.toISOString();
+        } else if (period === '7d') {
+            sinceISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        } else if (period === '30d') {
+            sinceISO = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        } else if (period === 'month') {
+            sinceISO = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        }
+        // 'all' deixa sinceISO null
+
+        const buildBuscasQuery = () => {
+            let q = supabase.from('buscas').select('user_id, created_at');
+            if (sinceISO) q = q.gte('created_at', sinceISO);
+            return q;
+        };
+        const buildItinerariesQuery = () => {
+            let q = supabase.from('itineraries').select('user_id, created_at');
+            if (sinceISO) q = q.gte('created_at', sinceISO);
+            return q;
+        };
+
+        const [buscasRes, itinerariesRes, profilesRes] = await Promise.all([
+            buildBuscasQuery(),
+            buildItinerariesQuery(),
+            supabase.from('user_profiles').select('id, full_name, plan'),
+        ]);
+
+        if (buscasRes.error) throw buscasRes.error;
+        if (itinerariesRes.error) throw itinerariesRes.error;
+        if (profilesRes.error) throw profilesRes.error;
+
+        const usageMap = {};
+        const ensureUser = (uid) => {
+            if (!uid) return null;
+            if (!usageMap[uid]) {
+                usageMap[uid] = { user_id: uid, buscas_count: 0, roteiros_count: 0, last_activity: null };
+            }
+            return usageMap[uid];
+        };
+
+        const updateLastActivity = (entry, iso) => {
+            if (!entry || !iso) return;
+            if (!entry.last_activity || new Date(iso) > new Date(entry.last_activity)) {
+                entry.last_activity = iso;
+            }
+        };
+
+        for (const row of buscasRes.data ?? []) {
+            const entry = ensureUser(row.user_id);
+            if (entry) {
+                entry.buscas_count += 1;
+                updateLastActivity(entry, row.created_at);
+            }
+        }
+        for (const row of itinerariesRes.data ?? []) {
+            const entry = ensureUser(row.user_id);
+            if (entry) {
+                entry.roteiros_count += 1;
+                updateLastActivity(entry, row.created_at);
+            }
+        }
+
+        const profileMap = {};
+        for (const p of profilesRes.data ?? []) profileMap[p.id] = p;
+
+        const userIds = Object.keys(usageMap);
+        const emailMap = {};
+        if (userIds.length > 0) {
+            const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+            for (const au of authUsers?.users ?? []) {
+                emailMap[au.id] = au.email;
+            }
+        }
+
+        const users = Object.values(usageMap)
+            .map(entry => ({
+                ...entry,
+                full_name: profileMap[entry.user_id]?.full_name ?? null,
+                email: emailMap[entry.user_id] ?? null,
+                plan: profileMap[entry.user_id]?.plan ?? 'free',
+            }))
+            .sort((a, b) => (b.buscas_count + b.roteiros_count) - (a.buscas_count + a.roteiros_count));
+
+        const totals = {
+            total_buscas: buscasRes.data?.length ?? 0,
+            total_roteiros: itinerariesRes.data?.length ?? 0,
+            active_users: userIds.length,
+        };
+
+        res.json({ period, totals, users });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;

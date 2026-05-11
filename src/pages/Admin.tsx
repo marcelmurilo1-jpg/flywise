@@ -6,7 +6,7 @@ import {
     DollarSign, MapPin, Clock, UserX, Receipt,
     Plus, Trash2, ChevronLeft, ChevronRight,
     TrendingDown, Home, Image,
-    Megaphone,
+    Megaphone, BarChart3,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
@@ -14,7 +14,7 @@ import { supabase } from '@/lib/supabase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SectionId = 'dashboard' | 'usuarios' | 'custos' | 'promocoes' | 'logs' | 'posts' | 'codigos'
+type SectionId = 'dashboard' | 'usuarios' | 'custos' | 'promocoes' | 'logs' | 'posts' | 'codigos' | 'uso'
 type Plan = 'free' | 'essencial' | 'pro' | 'elite' | 'admin'
 
 interface Stats {
@@ -78,6 +78,7 @@ const SECTIONS: { id: SectionId; label: string; icon: React.ElementType; descrip
     { id: 'promocoes',  label: 'Promoções',    icon: Tag,        description: 'Bônus de transferência' },
     { id: 'logs',       label: 'Logs',         icon: FileText,   description: 'Histórico de sincronização' },
     { id: 'codigos',    label: 'Divulgação',   icon: Megaphone,  description: 'Códigos de divulgação' },
+    { id: 'uso',        label: 'Uso',          icon: BarChart3,  description: 'Métricas de uso por usuário' },
     { id: 'posts',      label: 'Posts',        icon: Image,      description: 'Gerador de slides Instagram' },
 ]
 
@@ -1835,6 +1836,191 @@ function EditReferralModal({
     )
 }
 
+// ─── Uso (Métricas de uso por usuário) ───────────────────────────────────────
+
+type UsagePeriod = 'today' | '7d' | '30d' | 'month' | 'all'
+
+interface UsageUser {
+    user_id: string
+    full_name: string | null
+    email: string | null
+    plan: Plan
+    buscas_count: number
+    roteiros_count: number
+    last_activity: string | null
+}
+
+interface UsageStats {
+    period: UsagePeriod
+    totals: {
+        total_buscas: number
+        total_roteiros: number
+        active_users: number
+    }
+    users: UsageUser[]
+}
+
+const PERIOD_OPTIONS: { id: UsagePeriod; label: string }[] = [
+    { id: 'today', label: 'Hoje' },
+    { id: '7d',    label: '7 dias' },
+    { id: '30d',   label: '30 dias' },
+    { id: 'month', label: 'Este mês' },
+    { id: 'all',   label: 'Total' },
+]
+
+function Uso({ token }: { token: string }) {
+    const [period, setPeriod] = useState<UsagePeriod>('month')
+    const [stats, setStats] = useState<UsageStats | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [search, setSearch] = useState('')
+
+    const load = useCallback(async () => {
+        setLoading(true)
+        setError(null)
+        try {
+            const data = await adminFetch(`/api/admin/usage-stats?period=${period}`, token)
+            setStats(data)
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e))
+        } finally {
+            setLoading(false)
+        }
+    }, [token, period])
+
+    useEffect(() => { load() }, [load])
+
+    if (loading) return <Spinner />
+    if (error) return <ErrBox msg={error} onRetry={load} />
+    if (!stats) return null
+
+    const filteredUsers = search.trim()
+        ? stats.users.filter(u => {
+            const s = search.toLowerCase()
+            return u.full_name?.toLowerCase().includes(s) || u.email?.toLowerCase().includes(s)
+        })
+        : stats.users
+
+    const thSt: React.CSSProperties = {
+        padding: '12px 14px', textAlign: 'left', color: '#475569',
+        fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
+    }
+    const tdSt: React.CSSProperties = {
+        padding: '12px 14px', fontSize: 13, color: '#cbd5e1', borderTop: '1px solid #1e293b',
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                <BlockTitle icon={BarChart3} title="Uso por usuário" subtitle={`${stats.users.length} usuário${stats.users.length !== 1 ? 's' : ''} ativo${stats.users.length !== 1 ? 's' : ''} no período`} />
+                <div style={{ display: 'flex', gap: 6, background: '#0f172a', padding: 4, borderRadius: 10, border: '1px solid #1e293b' }}>
+                    {PERIOD_OPTIONS.map(opt => (
+                        <button
+                            key={opt.id}
+                            onClick={() => setPeriod(opt.id)}
+                            style={{
+                                padding: '6px 12px',
+                                fontSize: 12,
+                                fontWeight: 600,
+                                borderRadius: 6,
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: period === opt.id ? '#2A60C2' : 'transparent',
+                                color: period === opt.id ? '#fff' : '#94a3b8',
+                                transition: 'all 0.15s',
+                            }}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Cards de totais */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+                <div style={S.card}>
+                    <p style={S.cardLabel}>Buscas realizadas</p>
+                    <p style={{ color: '#f1f5f9', fontSize: 28, fontWeight: 800, marginTop: 4 }}>
+                        {stats.totals.total_buscas.toLocaleString('pt-BR')}
+                    </p>
+                </div>
+                <div style={S.card}>
+                    <p style={S.cardLabel}>Roteiros gerados</p>
+                    <p style={{ color: '#f1f5f9', fontSize: 28, fontWeight: 800, marginTop: 4 }}>
+                        {stats.totals.total_roteiros.toLocaleString('pt-BR')}
+                    </p>
+                </div>
+                <div style={S.card}>
+                    <p style={S.cardLabel}>Usuários ativos</p>
+                    <p style={{ color: '#f1f5f9', fontSize: 28, fontWeight: 800, marginTop: 4 }}>
+                        {stats.totals.active_users.toLocaleString('pt-BR')}
+                    </p>
+                </div>
+            </div>
+
+            {/* Barra de busca */}
+            <div style={{ position: 'relative', maxWidth: 400 }}>
+                <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                <input
+                    type="text"
+                    placeholder="Buscar por nome ou email..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    style={{
+                        width: '100%',
+                        padding: '10px 14px 10px 36px',
+                        borderRadius: 10,
+                        border: '1px solid #1e293b',
+                        background: '#0f172a',
+                        color: '#f1f5f9',
+                        fontSize: 13,
+                        outline: 'none',
+                    }}
+                />
+            </div>
+
+            {/* Tabela */}
+            <div style={{ borderRadius: 12, border: '1px solid #1e293b', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ background: '#0f172a' }}>
+                        <tr>
+                            <th style={thSt}>Usuário</th>
+                            <th style={thSt}>Email</th>
+                            <th style={thSt}>Plano</th>
+                            <th style={thSt}>Buscas</th>
+                            <th style={thSt}>Roteiros</th>
+                            <th style={thSt}>Última atividade</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filteredUsers.length === 0 && (
+                            <tr>
+                                <td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                                    {search ? 'Nenhum usuário encontrado.' : 'Nenhuma atividade no período selecionado.'}
+                                </td>
+                            </tr>
+                        )}
+                        {filteredUsers.map((u, i) => (
+                            <tr key={u.user_id} style={{ background: i % 2 === 0 ? '#111827' : '#0d1520' }}>
+                                <td style={tdSt}>{u.full_name ?? <span style={{ color: '#64748b' }}>—</span>}</td>
+                                <td style={{ ...tdSt, color: '#94a3b8' }}>{u.email ?? '—'}</td>
+                                <td style={tdSt}><PlanBadge plan={u.plan} /></td>
+                                <td style={{ ...tdSt, fontWeight: 700, color: u.buscas_count > 0 ? '#f1f5f9' : '#64748b' }}>
+                                    {u.buscas_count}
+                                </td>
+                                <td style={{ ...tdSt, fontWeight: 700, color: u.roteiros_count > 0 ? '#f1f5f9' : '#64748b' }}>
+                                    {u.roteiros_count}
+                                </td>
+                                <td style={{ ...tdSt, color: '#94a3b8', fontSize: 12 }}>{fmtDateTime(u.last_activity)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    )
+}
+
 // ─── Layout principal ─────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -1908,6 +2094,7 @@ export default function Admin() {
                     {section === 'promocoes'  && <Promocoes      token={token} />}
                     {section === 'logs'       && <Logs           token={token} />}
                     {section === 'codigos'    && <Codigos        token={token} />}
+                    {section === 'uso'        && <Uso            token={token} />}
                     {section === 'posts'      && <PostGenerator  token={token} />}
                 </main>
             </div>
