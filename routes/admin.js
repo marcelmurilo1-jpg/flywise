@@ -1346,7 +1346,7 @@ router.get('/api/admin/usage-stats', requireAdminJWT, async (req, res) => {
         const [buscasRes, itinerariesRes, profilesRes] = await Promise.all([
             buildBuscasQuery(),
             buildItinerariesQuery(),
-            supabase.from('user_profiles').select('id, full_name, plan'),
+            supabase.from('user_profiles').select('id, full_name, email, plan'),
         ]);
 
         if (buscasRes.error) throw buscasRes.error;
@@ -1388,14 +1388,6 @@ router.get('/api/admin/usage-stats', requireAdminJWT, async (req, res) => {
         for (const p of profilesRes.data ?? []) profileMap[p.id] = p;
 
         const userIds = Object.keys(usageMap);
-        const emailMap = {};
-        if (userIds.length > 0) {
-            const { data: authUsers, error: authErr } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-            if (authErr) console.warn('[usage-stats] auth.admin.listUsers falhou:', authErr.message);
-            for (const au of authUsers?.users ?? []) {
-                if (au.email) emailMap[au.id] = au.email;
-            }
-        }
 
         if (includeInactive) {
             for (const p of profilesRes.data ?? []) {
@@ -1409,7 +1401,7 @@ router.get('/api/admin/usage-stats', requireAdminJWT, async (req, res) => {
             .map(entry => ({
                 ...entry,
                 full_name: profileMap[entry.user_id]?.full_name ?? null,
-                email: emailMap[entry.user_id] ?? null,
+                email: profileMap[entry.user_id]?.email ?? null,
                 plan: profileMap[entry.user_id]?.plan ?? 'free',
             }))
             .sort((a, b) => (b.buscas_count + b.roteiros_count) - (a.buscas_count + a.roteiros_count));
