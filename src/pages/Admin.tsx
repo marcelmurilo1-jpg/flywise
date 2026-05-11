@@ -1874,19 +1874,20 @@ function Uso({ token }: { token: string }) {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [search, setSearch] = useState('')
+    const [includeInactive, setIncludeInactive] = useState(false)
 
     const load = useCallback(async () => {
         setLoading(true)
         setError(null)
         try {
-            const data = await adminFetch(`/api/admin/usage-stats?period=${period}`, token)
+            const data = await adminFetch(`/api/admin/usage-stats?period=${period}&include_inactive=${includeInactive}`, token)
             setStats(data)
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e))
         } finally {
             setLoading(false)
         }
-    }, [token, period])
+    }, [token, period, includeInactive])
 
     useEffect(() => { load() }, [load])
 
@@ -1912,7 +1913,15 @@ function Uso({ token }: { token: string }) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                <BlockTitle icon={BarChart3} title="Uso por usuário" subtitle={`${stats.users.length} usuário${stats.users.length !== 1 ? 's' : ''} ativo${stats.users.length !== 1 ? 's' : ''} no período`} />
+                <BlockTitle
+                    icon={BarChart3}
+                    title="Uso por usuário"
+                    subtitle={
+                        includeInactive
+                            ? `${stats.users.length} usuário${stats.users.length !== 1 ? 's' : ''} no total`
+                            : `${stats.users.length} usuário${stats.users.length !== 1 ? 's' : ''} ativo${stats.users.length !== 1 ? 's' : ''} no período`
+                    }
+                />
                 <div style={{ display: 'flex', gap: 6, background: '#0f172a', padding: 4, borderRadius: 10, border: '1px solid #1e293b' }}>
                     {PERIOD_OPTIONS.map(opt => (
                         <button
@@ -1934,6 +1943,19 @@ function Uso({ token }: { token: string }) {
                         </button>
                     ))}
                 </div>
+            </div>
+
+            {/* Toggle "todos os usuários" */}
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#cbd5e1' }}>
+                    <input
+                        type="checkbox"
+                        checked={includeInactive}
+                        onChange={e => setIncludeInactive(e.target.checked)}
+                        style={{ cursor: 'pointer', accentColor: '#2A60C2', width: 16, height: 16 }}
+                    />
+                    Mostrar todos os usuários (incluindo sem atividade)
+                </label>
             </div>
 
             {/* Cards de totais */}
@@ -1996,7 +2018,11 @@ function Uso({ token }: { token: string }) {
                         {filteredUsers.length === 0 && (
                             <tr>
                                 <td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
-                                    {search ? 'Nenhum usuário encontrado.' : 'Nenhuma atividade no período selecionado.'}
+                                    {search
+                                        ? 'Nenhum usuário encontrado.'
+                                        : includeInactive
+                                            ? 'Nenhum usuário cadastrado ainda.'
+                                            : 'Nenhuma atividade no período selecionado.'}
                                 </td>
                             </tr>
                         )}

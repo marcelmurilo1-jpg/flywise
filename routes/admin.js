@@ -1316,6 +1316,7 @@ router.get('/api/admin/usage-stats', requireAdminJWT, async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
     try {
         const period = req.query.period ?? 'month'; // today | 7d | 30d | month | all
+        const includeInactive = req.query.include_inactive === 'true';
 
         let sinceISO = null;
         const now = new Date();
@@ -1389,9 +1390,18 @@ router.get('/api/admin/usage-stats', requireAdminJWT, async (req, res) => {
         const userIds = Object.keys(usageMap);
         const emailMap = {};
         if (userIds.length > 0) {
-            const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+            const { data: authUsers, error: authErr } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+            if (authErr) console.warn('[usage-stats] auth.admin.listUsers falhou:', authErr.message);
             for (const au of authUsers?.users ?? []) {
-                emailMap[au.id] = au.email;
+                if (au.email) emailMap[au.id] = au.email;
+            }
+        }
+
+        if (includeInactive) {
+            for (const p of profilesRes.data ?? []) {
+                if (!usageMap[p.id]) {
+                    usageMap[p.id] = { user_id: p.id, buscas_count: 0, roteiros_count: 0, last_activity: null };
+                }
             }
         }
 
