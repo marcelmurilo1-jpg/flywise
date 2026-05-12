@@ -1388,7 +1388,7 @@ router.get('/api/admin/usage-stats', requireAdminJWT, async (req, res) => {
             supabase.from('strategies').select('user_id, created_at'),
             supabase.from('strategies').select('user_id, created_at').gte('created_at', monthStart),
             supabase.from('itineraries').select('user_id, created_at').gte('created_at', monthStart),
-            supabase.from('user_profiles').select('id, full_name, plan'),
+            supabase.from('user_profiles').select('id, full_name, email, plan'),
         ]);
 
         if (seatsRes.error) throw seatsRes.error;
@@ -1457,6 +1457,7 @@ router.get('/api/admin/usage-stats', requireAdminJWT, async (req, res) => {
             return {
                 ...entry,
                 full_name: profile?.full_name ?? null,
+                email: profile?.email ?? null,
                 plan,
                 strategies_used: stratUsed,
                 strategies_limit: stratLimit,

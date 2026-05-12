@@ -2144,6 +2144,7 @@ type UsagePeriod = 'today' | '7d' | '30d' | 'month' | 'all'
 interface UsageUser {
     user_id: string
     full_name: string | null
+    email: string | null
     plan: Plan
     seats_calls_count: number
     roteiros_count: number
