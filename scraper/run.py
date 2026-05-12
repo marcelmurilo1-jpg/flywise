@@ -136,6 +136,20 @@ _NOTICIAS_KEYWORDS = [
     "fusão", "acordo", "parceria estratégica",
 ]
 
+# Palavras no TÍTULO que indicam conteúdo fora do tema viagem/milhas.
+# Qualquer match aqui reclassifica para 'noticias' antes do scoring normal.
+_FORA_TEMA_TITULO = [
+    "hamburguer", "hambúrguer", "hamburgeria", "hamburgueria",
+    "restaurante", "gastronomia", "culinária", "culinaria",
+    "ranking de restaurante", "ranking de hambur", "melhores hambur",
+    "melhores restaurantes", "melhor restaurante", "melhores bares",
+    "receita de", "dica de restaurante",
+    "cerveja artesanal", "vinho tinto", "vinho branco",
+    "pizza delivery", "sushi delivery",
+    "fashion week", "moda ", "beleza e",
+    "série da netflix", "lançamento do filme",
+]
+
 
 def classificar(titulo: str, conteudo: str) -> tuple[str | None, str | None, list[str]]:
     """Retorna (categoria, subcategoria, programas_tags) a partir do texto da promoção."""
@@ -145,6 +159,12 @@ def classificar(titulo: str, conteudo: str) -> tuple[str | None, str | None, lis
         prog for prog, kws in _PROGRAMAS_KEYWORDS.items()
         if any(kw in titulo_lower for kw in kws)
     ]
+
+    # Off-topic: palavras no TÍTULO que indicam conteúdo fora do tema.
+    # Tem prioridade máxima — evita que "viagem" no título de um ranking de
+    # restaurantes seja classificado como passagens.
+    if any(kw in titulo_lower for kw in _FORA_TEMA_TITULO):
+        return "noticias", None, []
 
     # categoria e subcategoria: usa título + conteúdo
     texto = (titulo + " " + (conteudo or "")).lower()
