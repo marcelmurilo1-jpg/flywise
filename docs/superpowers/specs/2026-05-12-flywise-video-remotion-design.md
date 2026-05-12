@@ -10,7 +10,7 @@ Vídeo de apresentação do FlyWise para pitch com investidores, parceiros e eve
 
 | Dimensão | Decisão |
 |----------|---------|
-| Estilo | Premium & Aspiracional — navy escuro, animações suaves, fontes grandes |
+| Estilo | Premium & Aspiracional — fundo branco (#F7F9FC), texto navy, logo FlyWise persistente, animações suaves |
 | Formato | 16:9 horizontal, 1920×1080 |
 | Duração | ~62s (1860 frames a 30fps) |
 | Áudio | Sem narração embutida — placeholder de silêncio; música ambiente opcional no futuro |
@@ -23,14 +23,15 @@ Vídeo de apresentação do FlyWise para pitch com investidores, parceiros e eve
 ## Storyboard — Cenas e Timing
 
 ### Cena 1 — Abertura (frames 0–180, 0–6s)
-- Fundo: `#0E2A55` navy escuro
-- Logo FlyWise entra com fade-in suave (0–2s)
-- Tagline aparece palavra a palavra com stagger (2–5s): *"Milhas que você tem. Destinos que você ainda não imaginou."*
+- Fundo: `#F7F9FC` branco/claro
+- Logo FlyWise centralizada, entra com fade-in suave (0–2s)
+- Tagline aparece palavra a palavra com stagger (2–5s) em `#0E2A55`: *"Milhas que você tem. Destinos que você ainda não imaginou."*
 - Transição: fade para Cena 2
 
 ### Cena 2 — Problema (frames 180–390, 6–13s)
-- Fundo: navy escuro (`#0E2A55`)
-- Texto aparece em 3 blocos com stagger:
+- Fundo: `#F7F9FC` branco/claro
+- Logo FlyWise pequena no canto superior esquerdo (persiste daqui em diante)
+- Texto em `#0E2A55` aparece em 3 blocos com stagger:
   1. *"Você tem pontos acumulando…"*
   2. *"mas não sabe para onde ir,"*
   3. *"quando transferir ou quanto vai custar."*
@@ -40,9 +41,10 @@ Vídeo de apresentação do FlyWise para pitch com investidores, parceiros e eve
 ### Cenas 3–8 — Features (frames 390–1650, 13–55s) — ~7s cada
 
 Cada feature segue o template `<FeatureScene>`:
-- 0.5s: screenshot/vídeo entra com zoom suave (scale 1.05 → 1.0) + fade-in
+- Fundo: `#F7F9FC` branco/claro; logo FlyWise pequena no canto superior esquerdo
+- 0.5s: screenshot/vídeo entra com zoom suave (scale 1.05 → 1.0) + fade-in, centralizado com sombra suave
 - 0.5–5.5s: screenshot visível, zoom lento contínuo (1.0 → 1.03) — Ken Burns effect
-- 5.5–7s: label e sublabel animam para baixo, fade-out da cena
+- 5.5–7s: label (`#0E2A55`) e sublabel (`#64748b`) animam para baixo, fade-out da cena
 
 | Índice | Feature | Screenshot/Vídeo | Label | Sublabel |
 |--------|---------|-----------------|-------|---------|
@@ -54,12 +56,11 @@ Cada feature segue o template `<FeatureScene>`:
 | 8 | Promoções & Alertas | Feed de promoções e alertas | Alertas em tempo real enquanto você dorme | Nunca perca um bônus de transferência |
 
 ### Cena 9 — CTA (frames 1650–1860, 55–62s)
-- Fundo: navy escuro, fade-in
-- *"FlyWise"* aparece grande com fade (55–57s)
-- Subtítulo: *"Entre na lista de espera"* (57–58.5s)
-- URL ou badge animado: `flywise.app` (58.5–60.5s)
-- Partículas sutis ou brilho suave no fundo (60–62s)
-- Fade-out final
+- Fundo: `#F7F9FC` branco/claro
+- Logo FlyWise centralizada (maior que o watermark), fade-in suave (55–57s)
+- Subtítulo em `#0E2A55`: *"Entre na lista de espera"* (57–58.5s)
+- URL em `#2A60C2` com underline animado: `flywise.app` (58.5–60.5s)
+- Fade-out final suave
 
 ---
 
@@ -73,7 +74,7 @@ src/video/
 │   ├── AberturaScene.tsx     # logo + tagline stagger
 │   ├── ProblemaScene.tsx     # texto em 3 blocos com stagger
 │   ├── FeatureScene.tsx      # componente reutilizável (screenshot + Ken Burns + label)
-│   └── CTAScene.tsx          # navy + URL + partículas
+│   └── CTAScene.tsx          # branco + logo centralizada + URL
 ├── components/
 │   ├── AnimatedText.tsx      # stagger de palavras/letras
 │   ├── KenBurns.tsx          # wrapper de zoom suave para imagem/vídeo
