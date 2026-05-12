@@ -599,6 +599,14 @@ body {
   }
 }
 
+/* ── Wallet tab switcher (scroll horizontal no mobile) ── */
+.wallet-tab-switcher {
+  scrollbar-width: none;
+}
+.wallet-tab-switcher::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Configuracoes layout ── */
 @media (max-width: 768px) {
   .config-layout {

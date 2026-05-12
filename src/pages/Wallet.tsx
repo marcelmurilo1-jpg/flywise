@@ -304,7 +304,7 @@ export default function Wallet() {
                 </div>
 
                 {/* Tab switcher */}
-                <div style={{ display: 'flex', gap: 4, background: 'var(--bg-white)', border: '1.5px solid var(--border-light)', borderRadius: 14, padding: 4, marginBottom: 28, width: 'fit-content' }}>
+                <div className="wallet-tab-switcher" style={{ display: 'flex', gap: 4, background: 'var(--bg-white)', border: '1.5px solid var(--border-light)', borderRadius: 14, padding: 4, marginBottom: 28, width: 'fit-content', maxWidth: '100%', overflowX: 'auto' }}>
                     {([
                         { id: 'carteira', label: 'Meus Saldos', Icon: WalletIcon },
                         { id: 'simulador', label: 'Simulador de Transferência', Icon: ArrowLeftRight },
@@ -323,6 +323,7 @@ export default function Wallet() {
                                 fontSize: 13, fontWeight: 700,
                                 transition: 'all .18s',
                                 whiteSpace: 'nowrap',
+                                flexShrink: 0,
                             }}
                         >
                             <tab.Icon size={15} />
