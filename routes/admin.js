@@ -1197,12 +1197,26 @@ router.get('/api/admin/referral-codes', requireAdminJWT, async (_req, res) => {
             if (plan !== 'free') stats[code].paying += 1;
         }
 
-        const enriched = (codes ?? []).map(c => ({
-            ...c,
-            signups_count: stats[c.code]?.signups ?? 0,
-            paying_count:  stats[c.code]?.paying  ?? 0,
-            plan_breakdown: stats[c.code]?.planBreakdown ?? {},
-        }));
+        const enriched = (codes ?? []).map(c => {
+            const s = stats[c.code] ?? { signups: 0, paying: 0, planBreakdown: {} };
+            // Estimate monthly revenue from paying users of this code
+            let monthly_revenue = 0;
+            for (const [plan, count] of Object.entries(s.planBreakdown)) {
+                const price = PLAN_PRICES[plan]?.mensal ?? 0;
+                monthly_revenue += price * count;
+            }
+            const commission_pct = Number(c.commission_pct ?? 0);
+            const commission_owed = parseFloat((monthly_revenue * commission_pct / 100).toFixed(2));
+            return {
+                ...c,
+                signups_count:   s.signups,
+                paying_count:    s.paying,
+                plan_breakdown:  s.planBreakdown,
+                monthly_revenue,
+                commission_pct,
+                commission_owed,
+            };
+        });
 
         res.json({ codes: enriched });
     } catch (err) {
@@ -1213,7 +1227,7 @@ router.get('/api/admin/referral-codes', requireAdminJWT, async (_req, res) => {
 router.post('/api/admin/referral-codes', requireAdminJWT, async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
     try {
-        const { owner_name, owner_contact, notes } = req.body ?? {};
+        const { owner_name, owner_contact, notes, commission_pct } = req.body ?? {};
         if (!owner_name?.trim()) return res.status(400).json({ error: 'Nome do divulgador é obrigatório' });
 
         let code = null;
@@ -1235,6 +1249,7 @@ router.post('/api/admin/referral-codes', requireAdminJWT, async (req, res) => {
                 owner_name: owner_name.trim(),
                 owner_contact: owner_contact?.trim() || null,
                 notes: notes?.trim() || null,
+                commission_pct: commission_pct != null ? Number(commission_pct) : 0,
             })
             .select()
             .single();
@@ -1252,12 +1267,13 @@ router.patch('/api/admin/referral-codes/:id', requireAdminJWT, async (req, res) 
         const id = parseInt(req.params.id, 10);
         if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
 
-        const { owner_name, owner_contact, notes, active } = req.body ?? {};
+        const { owner_name, owner_contact, notes, active, commission_pct } = req.body ?? {};
         const patch = {};
-        if (owner_name !== undefined)    patch.owner_name    = owner_name?.trim() || null;
-        if (owner_contact !== undefined) patch.owner_contact = owner_contact?.trim() || null;
-        if (notes !== undefined)         patch.notes         = notes?.trim() || null;
-        if (active !== undefined)        patch.active        = !!active;
+        if (owner_name !== undefined)     patch.owner_name     = owner_name?.trim() || null;
+        if (owner_contact !== undefined)  patch.owner_contact  = owner_contact?.trim() || null;
+        if (notes !== undefined)          patch.notes          = notes?.trim() || null;
+        if (active !== undefined)         patch.active         = !!active;
+        if (commission_pct !== undefined) patch.commission_pct = Number(commission_pct);
 
         if (Object.keys(patch).length === 0) return res.status(400).json({ error: 'Nada para atualizar' });
 
@@ -1413,6 +1429,50 @@ router.get('/api/admin/usage-stats', requireAdminJWT, async (req, res) => {
         };
 
         res.json({ period, totals, users });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Seats.aero daily API call quota ─────────────────────────────────────────
+
+router.get('/api/admin/seatsaero-usage', requireAdminJWT, async (_req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const today = new Date();
+        const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+
+        // Last 7 days
+        const since7d = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+        since7d.setHours(0, 0, 0, 0);
+
+        const { data: rows, error } = await supabase
+            .from('seatsaero_api_log')
+            .select('called_at')
+            .gte('called_at', since7d.toISOString())
+            .order('called_at', { ascending: false });
+
+        if (error) throw error;
+
+        const todayStr = today.toISOString().slice(0, 10);
+        let todayCount = 0;
+        const byDay = {};
+
+        for (const row of rows ?? []) {
+            const day = row.called_at.slice(0, 10);
+            byDay[day] = (byDay[day] ?? 0) + 1;
+            if (day === todayStr) todayCount++;
+        }
+
+        const DAILY_LIMIT = 1000;
+        const dailyBreakdown = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
+            const key = d.toISOString().slice(0, 10);
+            dailyBreakdown.push({ date: key, calls: byDay[key] ?? 0 });
+        }
+
+        res.json({ todayCount, dailyLimit: DAILY_LIMIT, dailyBreakdown });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

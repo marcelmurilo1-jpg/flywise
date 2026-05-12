@@ -165,9 +165,9 @@ function Spinner() {
 
 function ErrBox({ msg, onRetry }: { msg: string; onRetry: () => void }) {
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#1a0a0a', border: '1px solid #7f1d1d', borderRadius: 10, padding: '14px 18px' }}>
-            <AlertTriangle size={15} style={{ color: '#ef4444', flexShrink: 0 }} />
-            <span style={{ color: '#fca5a5', fontSize: 13, flex: 1 }}>{msg}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '14px 18px' }}>
+            <AlertTriangle size={15} style={{ color: '#DC2626', flexShrink: 0 }} />
+            <span style={{ color: '#B91C1C', fontSize: 13, flex: 1 }}>{msg}</span>
             <button onClick={onRetry} style={S.btnSm}>Tentar novamente</button>
         </div>
     )
@@ -176,12 +176,12 @@ function ErrBox({ msg, onRetry }: { msg: string; onRetry: () => void }) {
 function BlockTitle({ icon: Icon, title, subtitle }: { icon: React.ElementType; title: string; subtitle: string }) {
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <div style={{ background: '#1e293b', borderRadius: 8, padding: 7 }}>
+            <div style={{ background: '#EFF4FF', borderRadius: 8, padding: 7 }}>
                 <Icon size={15} style={{ color: '#2A60C2', display: 'block' }} />
             </div>
             <div>
-                <p style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 800, margin: 0 }}>{title}</p>
-                <p style={{ color: '#475569', fontSize: 11, margin: 0 }}>{subtitle}</p>
+                <p style={{ color: '#0E2A55', fontSize: 14, fontWeight: 800, margin: 0 }}>{title}</p>
+                <p style={{ color: '#94A3B8', fontSize: 11, margin: 0 }}>{subtitle}</p>
             </div>
         </div>
     )
@@ -191,10 +191,10 @@ function KPI({ label, value, sub, color, tooltip }: {
     label: string; value: string | number; sub?: string; color?: string; tooltip?: string
 }) {
     return (
-        <div title={tooltip} style={{ background: '#111827', border: `1px solid ${color ? color + '30' : '#1e293b'}`, borderRadius: 12, padding: '16px 18px' }}>
-            <p style={{ fontSize: 11, color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>{label}</p>
-            <p style={{ fontSize: 24, fontWeight: 800, color: color ?? '#f1f5f9', margin: '0 0 4px' }}>{value}</p>
-            {sub && <p style={{ fontSize: 11, color: '#475569', margin: 0 }}>{sub}</p>}
+        <div title={tooltip} style={{ background: '#FFFFFF', border: `1px solid ${color ? color + '30' : '#E2E8F0'}`, borderRadius: 12, padding: '16px 18px' }}>
+            <p style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>{label}</p>
+            <p style={{ fontSize: 24, fontWeight: 800, color: color ?? '#0E2A55', margin: '0 0 4px' }}>{value}</p>
+            {sub && <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>{sub}</p>}
         </div>
     )
 }
@@ -208,7 +208,7 @@ function PlanBadge({ plan }: { plan: Plan }) {
 }
 
 function Divider() {
-    return <div style={{ height: 1, background: '#1e293b', margin: '28px 0' }} />
+    return <div style={{ height: 1, background: '#E2E8F0', margin: '28px 0' }} />
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -268,16 +268,16 @@ function Dashboard({ token }: { token: string }) {
                 </div>
 
                 {revenue.expiringIn7Days.length > 0 && (
-                    <div style={{ marginTop: 10, background: '#1a1200', border: '1px solid #854d0e', borderRadius: 10, padding: '12px 16px' }}>
+                    <div style={{ marginTop: 10, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                            <Clock size={13} style={{ color: '#f59e0b' }} />
-                            <span style={{ color: '#fcd34d', fontSize: 13, fontWeight: 700 }}>
+                            <Clock size={13} style={{ color: '#D97706' }} />
+                            <span style={{ color: '#92400E', fontSize: 13, fontWeight: 700 }}>
                                 {revenue.expiringIn7Days.length} plano(s) expirando nos próximos 7 dias — considere entrar em contato
                             </span>
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                             {revenue.expiringIn7Days.map(u => (
-                                <span key={u.id} style={{ fontSize: 11, color: '#b45309', background: '#451a03', borderRadius: 6, padding: '3px 8px' }}>
+                                <span key={u.id} style={{ fontSize: 11, color: '#92400E', background: '#FEF3C7', borderRadius: 6, padding: '3px 8px' }}>
                                     {PLAN_LABELS[u.plan]} · expira {fmtDate(u.plan_expires_at)}
                                 </span>
                             ))}
@@ -310,10 +310,10 @@ function Dashboard({ token }: { token: string }) {
                             return (
                                 <div key={p} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                     <span style={{ width: 72, fontSize: 12, fontWeight: 700, color: PLAN_COLORS[p] }}>{PLAN_LABELS[p]}</span>
-                                    <div style={{ flex: 1, background: '#1e293b', borderRadius: 4, height: 7 }}>
+                                    <div style={{ flex: 1, background: '#E2E8F0', borderRadius: 4, height: 7 }}>
                                         <div style={{ width: `${pct}%`, height: '100%', background: PLAN_COLORS[p], borderRadius: 4, transition: 'width 0.6s' }} />
                                     </div>
-                                    <span style={{ width: 32, textAlign: 'right', fontSize: 12, color: '#94a3b8', fontWeight: 700 }}>{count}</span>
+                                    <span style={{ width: 32, textAlign: 'right', fontSize: 12, color: '#64748B', fontWeight: 700 }}>{count}</span>
                                 </div>
                             )
                         })}
@@ -346,7 +346,7 @@ function Dashboard({ token }: { token: string }) {
                                             width: '100%', background: '#2A60C2', borderRadius: '3px 3px 0 0',
                                             height: `${Math.max(((d.count as number) / max) * 48, 2)}px`, transition: 'height 0.3s',
                                         }} />
-                                        <span style={{ fontSize: 9, color: '#334155', writingMode: 'vertical-rl', transform: 'rotate(180deg)', height: 24 }}>
+                                        <span style={{ fontSize: 9, color: '#94A3B8', writingMode: 'vertical-rl', transform: 'rotate(180deg)', height: 24 }}>
                                             {d.date.slice(5)}
                                         </span>
                                     </div>
@@ -370,13 +370,13 @@ function Dashboard({ token }: { token: string }) {
                         const max = engagement.topRoutes[0]?.count ?? 1
                         const pct = ((r.count as number) / (max as number)) * 100
                         return (
-                            <div key={r.route} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderBottom: i < engagement.topRoutes.length - 1 ? '1px solid #0f172a' : 'none' }}>
-                                <span style={{ width: 18, fontSize: 11, color: '#475569', fontWeight: 700 }}>#{i + 1}</span>
-                                <span style={{ flex: 1, fontSize: 13, color: '#f1f5f9', fontWeight: 600 }}>{r.route}</span>
-                                <div style={{ width: 72, background: '#1e293b', borderRadius: 4, height: 5 }}>
+                            <div key={r.route} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderBottom: i < engagement.topRoutes.length - 1 ? '1px solid #E2E8F0' : 'none' }}>
+                                <span style={{ width: 18, fontSize: 11, color: '#94A3B8', fontWeight: 700 }}>#{i + 1}</span>
+                                <span style={{ flex: 1, fontSize: 13, color: '#0E2A55', fontWeight: 600 }}>{r.route}</span>
+                                <div style={{ width: 72, background: '#E2E8F0', borderRadius: 4, height: 5 }}>
                                     <div style={{ width: `${pct}%`, height: '100%', background: '#2A60C2', borderRadius: 4 }} />
                                 </div>
-                                <span style={{ width: 24, textAlign: 'right', fontSize: 12, color: '#94a3b8', fontWeight: 700 }}>{r.count}</span>
+                                <span style={{ width: 24, textAlign: 'right', fontSize: 12, color: '#64748B', fontWeight: 700 }}>{r.count}</span>
                             </div>
                         )
                     })}
@@ -402,14 +402,14 @@ function Dashboard({ token }: { token: string }) {
                 {apiStatus && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {apiStatus.checks.map(c => (
-                            <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#111827', border: `1px solid ${c.ok ? '#14532d' : '#7f1d1d'}`, borderRadius: 10, padding: '11px 16px' }}>
-                                {c.ok ? <CheckCircle size={15} style={{ color: '#22c55e', flexShrink: 0 }} /> : <XCircle size={15} style={{ color: '#ef4444', flexShrink: 0 }} />}
-                                <span style={{ flex: 1, color: '#f1f5f9', fontSize: 13, fontWeight: 600 }}>{c.name}</span>
-                                <span style={{ fontSize: 11, color: '#475569' }}>{c.latency}ms</span>
-                                {!c.ok && c.error && <span style={{ fontSize: 11, color: '#fca5a5', maxWidth: 180, textAlign: 'right' }}>{c.error}</span>}
+                            <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FFFFFF', border: `1px solid ${c.ok ? '#BBF7D0' : '#FECACA'}`, borderRadius: 10, padding: '11px 16px' }}>
+                                {c.ok ? <CheckCircle size={15} style={{ color: '#16A34A', flexShrink: 0 }} /> : <XCircle size={15} style={{ color: '#DC2626', flexShrink: 0 }} />}
+                                <span style={{ flex: 1, color: '#0E2A55', fontSize: 13, fontWeight: 600 }}>{c.name}</span>
+                                <span style={{ fontSize: 11, color: '#94A3B8' }}>{c.latency}ms</span>
+                                {!c.ok && c.error && <span style={{ fontSize: 11, color: '#B91C1C', maxWidth: 180, textAlign: 'right' }}>{c.error}</span>}
                             </div>
                         ))}
-                        <p style={{ fontSize: 11, color: '#334155', textAlign: 'right', marginTop: 4 }}>Verificado em {fmtDateTime(apiStatus.checkedAt)}</p>
+                        <p style={{ fontSize: 11, color: '#94A3B8', textAlign: 'right', marginTop: 4 }}>Verificado em {fmtDateTime(apiStatus.checkedAt)}</p>
                     </div>
                 )}
             </section>
@@ -468,31 +468,31 @@ function Usuarios({ token }: { token: string }) {
             {error && <ErrBox msg={error} onRetry={load} />}
             {!loading && !error && (
                 <>
-                    <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #1e293b' }}>
+                    <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #E2E8F0' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                             <thead>
-                                <tr style={{ background: '#0f172a' }}>
+                                <tr style={{ background: '#F7F9FC' }}>
                                     {['Nome / Email', 'Plano', 'Expira em', 'Cobrança', 'Atualizado', ''].map(h => (
-                                        <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#475569', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                                        <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#94A3B8', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
                                 {users.map((u, i) => (
-                                    <tr key={u.id} style={{ borderTop: '1px solid #0f172a', background: i % 2 === 0 ? '#111827' : '#0d1520' }}>
+                                    <tr key={u.id} style={{ borderTop: '1px solid #E2E8F0', background: i % 2 === 0 ? '#FFFFFF' : '#F7F9FC' }}>
                                         <td style={{ padding: '11px 14px' }}>
-                                            <div style={{ color: '#f1f5f9', fontWeight: 600 }}>{u.full_name || '—'}</div>
-                                            <div style={{ color: '#475569', fontSize: 11 }}>{u.email ?? u.id.slice(0, 8)}</div>
+                                            <div style={{ color: '#0E2A55', fontWeight: 600 }}>{u.full_name || '—'}</div>
+                                            <div style={{ color: '#94A3B8', fontSize: 11 }}>{u.email ?? u.id.slice(0, 8)}</div>
                                         </td>
                                         <td style={{ padding: '11px 14px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 <PlanBadge plan={u.plan} />
-                                                {u.is_admin && <span title="Admin" style={{ display: 'flex' }}><Shield size={11} style={{ color: '#dc2626' }} /></span>}
+                                                {u.is_admin && <span title="Admin" style={{ display: 'flex' }}><Shield size={11} style={{ color: '#DC2626' }} /></span>}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '11px 14px', color: '#94a3b8', fontSize: 12 }}>{fmtDate(u.plan_expires_at)}</td>
-                                        <td style={{ padding: '11px 14px', color: '#94a3b8', fontSize: 12 }}>{u.plan_billing ?? '—'}</td>
-                                        <td style={{ padding: '11px 14px', color: '#475569', fontSize: 11 }}>{fmtDate(u.updated_at)}</td>
+                                        <td style={{ padding: '11px 14px', color: '#64748B', fontSize: 12 }}>{fmtDate(u.plan_expires_at)}</td>
+                                        <td style={{ padding: '11px 14px', color: '#64748B', fontSize: 12 }}>{u.plan_billing ?? '—'}</td>
+                                        <td style={{ padding: '11px 14px', color: '#94A3B8', fontSize: 11 }}>{fmtDate(u.updated_at)}</td>
                                         <td style={{ padding: '11px 14px' }}>
                                             <button onClick={() => setEditing(u)} style={S.btnXs}>Editar</button>
                                         </td>
@@ -500,12 +500,12 @@ function Usuarios({ token }: { token: string }) {
                                 ))}
                             </tbody>
                         </table>
-                        {users.length === 0 && <p style={{ textAlign: 'center', color: '#475569', padding: 28, fontSize: 13 }}>Nenhum usuário encontrado.</p>}
+                        {users.length === 0 && <p style={{ textAlign: 'center', color: '#94A3B8', padding: 28, fontSize: 13 }}>Nenhum usuário encontrado.</p>}
                     </div>
                     {pages > 1 && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
                             <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} style={S.btnSm}><ChevronLeft size={14} /></button>
-                            <span style={{ color: '#94a3b8', fontSize: 13 }}>{page} / {pages}</span>
+                            <span style={{ color: '#64748B', fontSize: 13 }}>{page} / {pages}</span>
                             <button disabled={page >= pages} onClick={() => setPage(p => p + 1)} style={S.btnSm}><ChevronRight size={14} /></button>
                         </div>
                     )}
@@ -544,9 +544,9 @@ function EditUserModal({ user, token, onClose, onSaved }: {
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
             onClick={e => e.target === e.currentTarget && onClose()}>
-            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400 }}>
-                <p style={{ color: '#f1f5f9', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Editar usuário</p>
-                <p style={{ color: '#475569', fontSize: 12, marginBottom: 20 }}>{user.email ?? user.id}</p>
+            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400 }}>
+                <p style={{ color: '#0E2A55', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Editar usuário</p>
+                <p style={{ color: '#94A3B8', fontSize: 12, marginBottom: 20 }}>{user.email ?? user.id}</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <label style={S.label}>Plano
                         <select value={plan} onChange={e => setPlan(e.target.value as Plan)} style={inputSt()}>
@@ -566,8 +566,8 @@ function EditUserModal({ user, token, onClose, onSaved }: {
                     <label style={{ ...S.label, flexDirection: 'row', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                         <input type="checkbox" checked={isAdmin} onChange={e => setIsAdmin(e.target.checked)} />
                         <div>
-                            <span style={{ color: '#f1f5f9' }}>Acesso de admin</span>
-                            <p style={{ fontSize: 11, color: '#475569', margin: '2px 0 0' }}>Permite acessar este painel</p>
+                            <span style={{ color: '#0E2A55' }}>Acesso de admin</span>
+                            <p style={{ fontSize: 11, color: '#94A3B8', margin: '2px 0 0' }}>Permite acessar este painel</p>
                         </div>
                     </label>
                 </div>
@@ -670,10 +670,10 @@ function Custos({ token }: { token: string }) {
                                     return (
                                         <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                             <span style={{ width: 110, fontSize: 12, fontWeight: 600, color }}>{cat}</span>
-                                            <div style={{ flex: 1, background: '#1e293b', borderRadius: 4, height: 7 }}>
+                                            <div style={{ flex: 1, background: '#E2E8F0', borderRadius: 4, height: 7 }}>
                                                 <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.4s' }} />
                                             </div>
-                                            <span style={{ width: 72, textAlign: 'right', fontSize: 12, color: '#94a3b8', fontWeight: 700 }}>{fmtBRL(val)}</span>
+                                            <span style={{ width: 72, textAlign: 'right', fontSize: 12, color: '#64748B', fontWeight: 700 }}>{fmtBRL(val)}</span>
                                         </div>
                                     )
                                 })}
@@ -689,12 +689,12 @@ function Custos({ token }: { token: string }) {
                                 {history.map(h => (
                                     <div key={h.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                                         <div title={`${monthLabel(h.month)}: ${fmtBRL(h.total)}`} style={{
-                                            width: '100%', background: h.month === month ? '#ef4444' : '#7f1d1d',
+                                            width: '100%', background: h.month === month ? '#EF4444' : '#FECACA',
                                             borderRadius: '3px 3px 0 0',
                                             height: `${Math.max((h.total / histMax) * 52, 2)}px`,
                                             transition: 'height 0.3s',
                                         }} />
-                                        <span style={{ fontSize: 10, color: '#475569' }}>{monthLabel(h.month)}</span>
+                                        <span style={{ fontSize: 10, color: '#94A3B8' }}>{monthLabel(h.month)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -703,37 +703,37 @@ function Custos({ token }: { token: string }) {
 
                     {/* ── Lista de lançamentos ── */}
                     <div>
-                        <p style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                        <p style={{ color: '#64748B', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
                             Lançamentos — {monthLabel(month)}
                         </p>
                         {costs.length === 0 && (
                             <div style={{ ...S.card, textAlign: 'center' }}>
-                                <TrendingDown size={28} style={{ color: '#1e293b', margin: '0 auto 8px' }} />
-                                <p style={{ color: '#475569', fontSize: 13, margin: 0 }}>Nenhum custo registrado para este mês.</p>
-                                <p style={{ color: '#334155', fontSize: 12, marginTop: 4 }}>Clique em "Adicionar" para lançar o primeiro.</p>
+                                <TrendingDown size={28} style={{ color: '#CBD5E1', margin: '0 auto 8px' }} />
+                                <p style={{ color: '#94A3B8', fontSize: 13, margin: 0 }}>Nenhum custo registrado para este mês.</p>
+                                <p style={{ color: '#94A3B8', fontSize: 12, marginTop: 4 }}>Clique em "Adicionar" para lançar o primeiro.</p>
                             </div>
                         )}
                         {costs.length > 0 && (
-                            <div style={{ borderRadius: 12, border: '1px solid #1e293b', overflow: 'hidden' }}>
+                            <div style={{ borderRadius: 12, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                                     <thead>
-                                        <tr style={{ background: '#0f172a' }}>
+                                        <tr style={{ background: '#F7F9FC' }}>
                                             {['Serviço', 'Categoria', 'Valor', 'Observação', ''].map(h => (
-                                                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#475569', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                                                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#94A3B8', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                                             ))}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {costs.map((c, i) => (
-                                            <tr key={c.id} style={{ borderTop: '1px solid #0f172a', background: i % 2 === 0 ? '#111827' : '#0d1520' }}>
-                                                <td style={{ padding: '11px 14px', color: '#f1f5f9', fontWeight: 600 }}>{c.service}</td>
+                                            <tr key={c.id} style={{ borderTop: '1px solid #E2E8F0', background: i % 2 === 0 ? '#FFFFFF' : '#F7F9FC' }}>
+                                                <td style={{ padding: '11px 14px', color: '#0E2A55', fontWeight: 600 }}>{c.service}</td>
                                                 <td style={{ padding: '11px 14px' }}>
-                                                    <span style={{ fontSize: 11, fontWeight: 700, color: CATEGORY_COLORS[c.category as CostCategory] ?? '#64748b', background: (CATEGORY_COLORS[c.category as CostCategory] ?? '#64748b') + '22', borderRadius: 5, padding: '2px 7px' }}>{c.category}</span>
+                                                    <span style={{ fontSize: 11, fontWeight: 700, color: CATEGORY_COLORS[c.category as CostCategory] ?? '#64748B', background: (CATEGORY_COLORS[c.category as CostCategory] ?? '#64748B') + '22', borderRadius: 5, padding: '2px 7px' }}>{c.category}</span>
                                                 </td>
-                                                <td style={{ padding: '11px 14px', color: '#ef4444', fontWeight: 700 }}>{fmtBRL(Number(c.amount_brl))}</td>
-                                                <td style={{ padding: '11px 14px', color: '#64748b', fontSize: 12 }}>{c.notes ?? '—'}</td>
+                                                <td style={{ padding: '11px 14px', color: '#EF4444', fontWeight: 700 }}>{fmtBRL(Number(c.amount_brl))}</td>
+                                                <td style={{ padding: '11px 14px', color: '#64748B', fontSize: 12 }}>{c.notes ?? '—'}</td>
                                                 <td style={{ padding: '11px 14px' }}>
-                                                    <button onClick={() => deleteCost(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: 4, display: 'flex' }} title="Remover">
+                                                    <button onClick={() => deleteCost(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 4, display: 'flex' }} title="Remover">
                                                         <Trash2 size={13} />
                                                     </button>
                                                 </td>
@@ -789,9 +789,9 @@ function AddCostModal({ token, defaultMonth, onClose, onSaved }: {
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
             onClick={e => e.target === e.currentTarget && onClose()}>
-            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 28, width: '100%', maxWidth: 420 }}>
-                <p style={{ color: '#f1f5f9', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Adicionar custo</p>
-                <p style={{ color: '#475569', fontSize: 12, marginBottom: 20 }}>Registre um gasto operacional do FlyWise</p>
+            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 16, padding: 28, width: '100%', maxWidth: 420 }}>
+                <p style={{ color: '#0E2A55', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Adicionar custo</p>
+                <p style={{ color: '#94A3B8', fontSize: 12, marginBottom: 20 }}>Registre um gasto operacional do FlyWise</p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <label style={S.label}>Mês de referência
@@ -817,7 +817,7 @@ function AddCostModal({ token, defaultMonth, onClose, onSaved }: {
                     <label style={S.label}>Valor (R$)
                         <input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0,00" style={inputSt()} />
                     </label>
-                    <label style={S.label}>Observação <span style={{ color: '#334155', fontWeight: 400 }}>(opcional)</span>
+                    <label style={S.label}>Observação <span style={{ color: '#94A3B8', fontWeight: 400 }}>(opcional)</span>
                         <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ex: plano Pro, 10 usuários…" style={inputSt()} />
                     </label>
                 </div>
@@ -875,13 +875,13 @@ function EditPromoModal({ promo, token, onClose, onSaved }: {
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
             onClick={e => e.target === e.currentTarget && onClose()}>
-            <div style={{ background: '#111827', border: '1px solid #1e293b', borderRadius: 16, padding: 24, width: '100%', maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 16, padding: 24, width: '100%', maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <p style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 15, margin: 0 }}>{promo.card_id}</p>
-                        <p style={{ color: '#475569', fontSize: 12, margin: 0 }}>{promo.program}</p>
+                        <p style={{ color: '#0E2A55', fontWeight: 700, fontSize: 15, margin: 0 }}>{promo.card_id}</p>
+                        <p style={{ color: '#94A3B8', fontSize: 12, margin: 0 }}>{promo.program}</p>
                     </div>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -1042,17 +1042,17 @@ function Promocoes({ token }: { token: string }) {
                 <BlockTitle icon={Tag} title="Promoções de transferência" subtitle="Bônus exibidos no simulador. Edite diretamente ou dispare o sync com IA." />
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     {syncingAI && syncStep && (
-                        <span style={{ fontSize: 11, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 11, color: '#2A60C2', display: 'flex', alignItems: 'center', gap: 4 }}>
                             <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} />
                             {syncStep}
                         </span>
                     )}
-                    {!syncingAI && syncMsg && <span style={{ fontSize: 12, color: syncMsg.startsWith('✓') ? '#22c55e' : syncMsg.startsWith('Erro') ? '#f87171' : '#94a3b8' }}>{syncMsg}</span>}
+                    {!syncingAI && syncMsg && <span style={{ fontSize: 12, color: syncMsg.startsWith('✓') ? '#16A34A' : syncMsg.startsWith('Erro') ? '#DC2626' : '#64748B' }}>{syncMsg}</span>}
                     <button onClick={syncCache} disabled={syncing || syncingAI} style={S.btnSm}>
                         {syncing ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={13} />}
                         Cache
                     </button>
-                    <button onClick={syncAI} disabled={syncingAI} style={{ ...S.btnSm, borderColor: '#1e3a5f', color: '#60a5fa' }}>
+                    <button onClick={syncAI} disabled={syncingAI} style={{ ...S.btnSm, borderColor: '#BFDBFE', color: '#2A60C2' }}>
                         {syncingAI ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={13} />}
                         Sync AI
                     </button>
@@ -1060,24 +1060,24 @@ function Promocoes({ token }: { token: string }) {
             </div>
 
             {isStale && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#451a03', border: '1px solid #92400e', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#fbbf24' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#92400E' }}>
                     <AlertTriangle size={14} style={{ flexShrink: 0 }} />
                     Dados com mais de 45 dias sem confirmação. Edite as promoções ou use "Sync AI" para atualizar automaticamente.
                 </div>
             )}
 
             <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
-                <span style={{ color: '#22c55e' }}>{activeCount} ativas</span>
-                <span style={{ color: '#334155' }}>·</span>
-                <span style={{ color: '#475569' }}>{promos.length - activeCount} inativas</span>
+                <span style={{ color: '#16A34A' }}>{activeCount} ativas</span>
+                <span style={{ color: '#CBD5E1' }}>·</span>
+                <span style={{ color: '#94A3B8' }}>{promos.length - activeCount} inativas</span>
             </div>
 
-            <div style={{ borderRadius: 12, border: '1px solid #1e293b', overflow: 'hidden' }}>
+            <div style={{ borderRadius: 12, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
-                        <tr style={{ background: '#0f172a' }}>
+                        <tr style={{ background: '#F7F9FC' }}>
                             {['Cartão', 'Programa', 'Base', 'Clube', 'Última conf.', 'Per.', 'Ativo', ''].map(h => (
-                                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#475569', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#94A3B8', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                             ))}
                         </tr>
                     </thead>
@@ -1088,21 +1088,21 @@ function Promocoes({ token }: { token: string }) {
                             const confirmedDate = mi >= 0 && yr ? new Date(parseInt('20' + yr.trim()), mi, 1) : null
                             const rowStale = !confirmedDate || (today.getTime() - confirmedDate.getTime()) > 45 * 24 * 60 * 60 * 1000
                             return (
-                                <tr key={p.id} style={{ borderTop: '1px solid #0f172a', background: i % 2 === 0 ? '#111827' : '#0d1520', opacity: p.active ? 1 : 0.4 }}>
-                                    <td style={{ padding: '11px 14px', color: '#f1f5f9', fontWeight: 600, whiteSpace: 'nowrap' }}>{p.card_id}</td>
-                                    <td style={{ padding: '11px 14px', color: '#94a3b8' }}>{p.program}</td>
-                                    <td style={{ padding: '11px 14px', color: '#22c55e', fontWeight: 700 }}>+{p.bonus_percent}%</td>
-                                    <td style={{ padding: '11px 14px', color: '#60a5fa', fontWeight: 600 }}>+{p.club_bonus_percent ?? 0}%</td>
-                                    <td style={{ padding: '11px 14px', color: rowStale ? '#fbbf24' : '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>
+                                <tr key={p.id} style={{ borderTop: '1px solid #E2E8F0', background: i % 2 === 0 ? '#FFFFFF' : '#F7F9FC', opacity: p.active ? 1 : 0.4 }}>
+                                    <td style={{ padding: '11px 14px', color: '#0E2A55', fontWeight: 600, whiteSpace: 'nowrap' }}>{p.card_id}</td>
+                                    <td style={{ padding: '11px 14px', color: '#64748B' }}>{p.program}</td>
+                                    <td style={{ padding: '11px 14px', color: '#16A34A', fontWeight: 700 }}>+{p.bonus_percent}%</td>
+                                    <td style={{ padding: '11px 14px', color: '#2A60C2', fontWeight: 600 }}>+{p.club_bonus_percent ?? 0}%</td>
+                                    <td style={{ padding: '11px 14px', color: rowStale ? '#D97706' : '#64748B', fontSize: 11, whiteSpace: 'nowrap' }}>
                                         {rowStale && <AlertTriangle size={10} style={{ marginRight: 4, verticalAlign: 'middle' }} />}
                                         {p.last_confirmed ?? '—'}
                                     </td>
                                     <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                                        {p.is_periodic ? <CheckCircle size={13} style={{ color: '#22c55e' }} /> : <XCircle size={13} style={{ color: '#334155' }} />}
+                                        {p.is_periodic ? <CheckCircle size={13} style={{ color: '#16A34A' }} /> : <XCircle size={13} style={{ color: '#CBD5E1' }} />}
                                     </td>
                                     <td style={{ padding: '11px 14px', textAlign: 'center' }}>
                                         <button onClick={() => toggleActive(p.id, p.active)} title={p.active ? 'Desativar' : 'Ativar'} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                                            {p.active ? <CheckCircle size={15} style={{ color: '#22c55e' }} /> : <XCircle size={15} style={{ color: '#334155' }} />}
+                                            {p.active ? <CheckCircle size={15} style={{ color: '#16A34A' }} /> : <XCircle size={15} style={{ color: '#CBD5E1' }} />}
                                         </button>
                                     </td>
                                     <td style={{ padding: '8px 14px' }}>
@@ -1143,35 +1143,35 @@ function Logs({ token }: { token: string }) {
                 <BlockTitle icon={FileText} title="Logs de sincronização" subtitle="Histórico do sync automático de promoções de transferência. Útil para detectar falhas ou confirmar atualização dos dados." />
                 <button onClick={load} style={{ ...S.btnSm, marginTop: 2 }}><RefreshCw size={13} /></button>
             </div>
-            {logs.length === 0 && <p style={{ color: '#475569', textAlign: 'center', padding: 32, fontSize: 13 }}>Nenhum log encontrado.</p>}
+            {logs.length === 0 && <p style={{ color: '#94A3B8', textAlign: 'center', padding: 32, fontSize: 13 }}>Nenhum log encontrado.</p>}
             {logs.map(log => {
                 // Separate Claude summary from field-level diffs stored after \n\nMUDANÇAS:
                 const [summaryPart, diffsPart] = (log.summary ?? '').split('\n\nMUDANÇAS:\n')
                 const diffLines = diffsPart ? diffsPart.split('\n').filter(Boolean) : []
                 return (
-                <div key={log.id} style={{ background: '#111827', border: `1px solid ${log.changes_detected ? '#1e3a5f' : '#1e293b'}`, borderRadius: 10, padding: '13px 16px' }}>
+                <div key={log.id} style={{ background: '#FFFFFF', border: `1px solid ${log.changes_detected ? '#BFDBFE' : '#E2E8F0'}`, borderRadius: 10, padding: '13px 16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             {log.changes_detected
-                                ? <CheckCircle size={14} style={{ color: '#22c55e', flexShrink: 0 }} />
-                                : <UserX size={14} style={{ color: '#475569', flexShrink: 0 }} />}
-                            <span style={{ color: '#f1f5f9', fontSize: 13, fontWeight: 600 }}>
+                                ? <CheckCircle size={14} style={{ color: '#16A34A', flexShrink: 0 }} />
+                                : <UserX size={14} style={{ color: '#94A3B8', flexShrink: 0 }} />}
+                            <span style={{ color: '#0E2A55', fontSize: 13, fontWeight: 600 }}>
                                 {log.changes_detected ? `${log.rows_updated} linha(s) atualizada(s)` : 'Sem alterações detectadas'}
                             </span>
                         </div>
-                        <span style={{ color: '#475569', fontSize: 11, whiteSpace: 'nowrap' }}>{fmtDateTime(log.synced_at)}</span>
+                        <span style={{ color: '#94A3B8', fontSize: 11, whiteSpace: 'nowrap' }}>{fmtDateTime(log.synced_at)}</span>
                     </div>
-                    {summaryPart && <p style={{ color: '#64748b', fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{summaryPart}</p>}
+                    {summaryPart && <p style={{ color: '#64748B', fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>{summaryPart}</p>}
                     {diffLines.length > 0 && (
                         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
                             {diffLines.map((line, i) => (
-                                <span key={i} style={{ fontFamily: 'monospace', fontSize: 11, color: line.startsWith('+') ? '#4ade80' : '#fbbf24', background: '#0f172a', borderRadius: 4, padding: '2px 6px' }}>
+                                <span key={i} style={{ fontFamily: 'monospace', fontSize: 11, color: line.startsWith('+') ? '#16A34A' : '#D97706', background: '#F7F9FC', borderRadius: 4, padding: '2px 6px' }}>
                                     {line}
                                 </span>
                             ))}
                         </div>
                     )}
-                    <p style={{ color: '#334155', fontSize: 11, marginTop: 6 }}>{log.sources_scraped} fonte(s) verificada(s)</p>
+                    <p style={{ color: '#94A3B8', fontSize: 11, marginTop: 6 }}>{log.sources_scraped} fonte(s) verificada(s)</p>
                 </div>
                 )
             })}
@@ -1286,15 +1286,15 @@ function PostGenerator({ token }: { token: string }) {
     }
 
     const labelSt: React.CSSProperties = {
-        color: '#475569', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em',
+        color: '#94A3B8', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em',
         textTransform: 'uppercase', display: 'block', marginBottom: 6,
     }
 
     const chipSt = (active: boolean, color = '#2A60C2'): React.CSSProperties => ({
         padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-        background: active ? color : '#1e293b',
-        border: `1.5px solid ${active ? color : '#334155'}`,
-        color: active ? '#fff' : '#64748b',
+        background: active ? color : '#F7F9FC',
+        border: `1.5px solid ${active ? color : '#E2E8F0'}`,
+        color: active ? '#fff' : '#64748B',
         transition: 'all 0.15s',
     })
 
@@ -1303,11 +1303,11 @@ function PostGenerator({ token }: { token: string }) {
             <BlockTitle icon={Image} title="Gerador de Posts" subtitle="Crie conteúdo para o Instagram do FlyWise com IA" />
 
             {/* ── Painel de Criação ── */}
-            <div style={{ background: '#0d1117', border: '1px solid #1e293b', borderRadius: 12, padding: 24 }}>
+            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, padding: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
                     <Zap size={14} style={{ color: '#2A60C2' }} />
-                    <span style={{ color: '#f1f5f9', fontSize: 13, fontWeight: 700 }}>Gerar conteúdo com IA</span>
-                    <span style={{ marginLeft: 'auto', color: '#334155', fontSize: 11, background: '#111827', border: '1px solid #1e293b', borderRadius: 6, padding: '3px 8px' }}>
+                    <span style={{ color: '#0E2A55', fontSize: 13, fontWeight: 700 }}>Gerar conteúdo com IA</span>
+                    <span style={{ marginLeft: 'auto', color: '#94A3B8', fontSize: 11, background: '#F7F9FC', border: '1px solid #E2E8F0', borderRadius: 6, padding: '3px 8px' }}>
                         {rec.label}
                     </span>
                 </div>
@@ -1353,20 +1353,20 @@ function PostGenerator({ token }: { token: string }) {
                             style={inputSt()}
                             onKeyDown={e => e.key === 'Enter' && generateContent()}
                         />
-                        <p style={{ color: '#334155', fontSize: 11, marginTop: 6 }}>
+                        <p style={{ color: '#94A3B8', fontSize: 11, marginTop: 6 }}>
                             Deixe em branco para a IA escolher o melhor tema para o {DAY_NAMES[dow].toLowerCase()}.
                         </p>
                     </div>
 
                     {aiErr && (
-                        <div style={{ background: '#2a0a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: '#fca5a5', fontSize: 12 }}>
+                        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', color: '#B91C1C', fontSize: 12 }}>
                             {aiErr}
                         </div>
                     )}
 
                     <button onClick={generateContent} disabled={aiLoading} style={{
-                        background: aiLoading ? '#1e293b' : 'linear-gradient(135deg, #2A60C2, #7c3aed)',
-                        border: 'none', borderRadius: 10, color: aiLoading ? '#475569' : '#fff',
+                        background: aiLoading ? '#E2E8F0' : 'linear-gradient(135deg, #2A60C2, #7c3aed)',
+                        border: 'none', borderRadius: 10, color: aiLoading ? '#94A3B8' : '#fff',
                         fontSize: 14, fontWeight: 700, padding: '13px 22px', cursor: aiLoading ? 'not-allowed' : 'pointer',
                         alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s',
                     }}>
@@ -1380,7 +1380,7 @@ function PostGenerator({ token }: { token: string }) {
             {/* ── Editor de Slides ── */}
             {slides.length > 0 && <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <p style={{ color: '#64748b', fontSize: 12, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0 }}>
+                    <p style={{ color: '#64748B', fontSize: 12, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0 }}>
                         {slides.length} slides gerados — edite se necessário
                     </p>
                     {slides.length < 7 && (
@@ -1391,14 +1391,14 @@ function PostGenerator({ token }: { token: string }) {
                 </div>
 
                 {slides.map((slide, i) => (
-                    <div key={i} style={{ background: '#0d1117', border: '1px solid #1e293b', borderRadius: 12, padding: 20 }}>
+                    <div key={i} style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <div style={{ width: 18, height: 18, borderRadius: 4, background: BG_COLORS[slide.background], border: '1px solid #334155', flexShrink: 0 }} />
-                                <span style={{ color: '#94a3b8', fontSize: 13, fontWeight: 700 }}>Slide {i + 1}</span>
+                                <div style={{ width: 18, height: 18, borderRadius: 4, background: BG_COLORS[slide.background], border: '1px solid #E2E8F0', flexShrink: 0 }} />
+                                <span style={{ color: '#64748B', fontSize: 13, fontWeight: 700 }}>Slide {i + 1}</span>
                             </div>
                             {slides.length > 1 && (
-                                <button onClick={() => removeSlide(i)} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: 4 }}>
+                                <button onClick={() => removeSlide(i)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: 4 }}>
                                     <Trash2 size={13} />
                                 </button>
                             )}
@@ -1408,9 +1408,9 @@ function PostGenerator({ token }: { token: string }) {
                             {(['navy', 'white', 'snow', 'vibrant'] as SlideBg[]).map(bg => (
                                 <button key={bg} onClick={() => updateSlide(i, 'background', bg)} style={{
                                     padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                                    background: slide.background === bg ? BG_COLORS[bg] : '#1e293b',
-                                    border: `1.5px solid ${slide.background === bg ? BG_COLORS[bg] : '#334155'}`,
-                                    color: slide.background === bg ? BG_TEXT[bg] : '#64748b',
+                                    background: slide.background === bg ? BG_COLORS[bg] : '#F7F9FC',
+                                    border: `1.5px solid ${slide.background === bg ? BG_COLORS[bg] : '#E2E8F0'}`,
+                                    color: slide.background === bg ? BG_TEXT[bg] : '#64748B',
                                     transition: 'all 0.12s',
                                 }}>
                                     {BG_LABELS[bg]}
@@ -1448,7 +1448,7 @@ function PostGenerator({ token }: { token: string }) {
                 ))}
 
                 {/* Caption */}
-                <div style={{ background: '#0d1117', border: '1px solid #1e293b', borderRadius: 12, padding: 20 }}>
+                <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }}>
                     <label style={labelSt}>Caption (Instagram)</label>
                     <textarea value={caption} onChange={e => setCaption(e.target.value)}
                         rows={6} placeholder="Caption com hashtags..."
@@ -1463,14 +1463,14 @@ function PostGenerator({ token }: { token: string }) {
 
                 {/* Gerar imagens */}
                 {imgErr && (
-                    <div style={{ background: '#2a0a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: '#fca5a5', fontSize: 12 }}>
+                    <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', color: '#B91C1C', fontSize: 12 }}>
                         {imgErr}
                     </div>
                 )}
 
                 <button onClick={generateImages} disabled={imgLoading} style={{
-                    background: imgLoading ? '#1e293b' : '#2A60C2', border: 'none', borderRadius: 10,
-                    color: imgLoading ? '#475569' : '#fff', fontSize: 14, fontWeight: 700, padding: '13px 22px',
+                    background: imgLoading ? '#E2E8F0' : '#2A60C2', border: 'none', borderRadius: 10,
+                    color: imgLoading ? '#94A3B8' : '#fff', fontSize: 14, fontWeight: 700, padding: '13px 22px',
                     cursor: imgLoading ? 'not-allowed' : 'pointer', alignSelf: 'flex-start',
                     display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
                 }}>
@@ -1481,13 +1481,13 @@ function PostGenerator({ token }: { token: string }) {
 
                 {/* Resultados */}
                 {images.length > 0 && (
-                    <div style={{ background: '#0d1117', border: '1px solid #166534', borderRadius: 12, padding: 24 }}>
+                    <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: 24 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <CheckCircle size={15} style={{ color: '#22c55e' }} />
-                                <span style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 700 }}>{images.length} slides prontos</span>
+                                <CheckCircle size={15} style={{ color: '#16A34A' }} />
+                                <span style={{ color: '#0E2A55', fontSize: 14, fontWeight: 700 }}>{images.length} slides prontos</span>
                             </div>
-                            <button onClick={downloadAll} style={{ ...S.btnSm, background: '#14532d', borderColor: '#166534', color: '#4ade80' }}>
+                            <button onClick={downloadAll} style={{ ...S.btnSm, background: '#DCFCE7', borderColor: '#BBF7D0', color: '#16A34A' }}>
                                 Baixar tudo ({images.length} PNGs)
                             </button>
                         </div>
@@ -1499,8 +1499,8 @@ function PostGenerator({ token }: { token: string }) {
                                         style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', textDecoration: 'none' }}
                                         title={`Clique para baixar ${name}`}>
                                         <img src={`data:image/png;base64,${data}`} alt={name}
-                                            style={{ width: 96, height: th, objectFit: 'cover', borderRadius: 8, border: '1px solid #1e293b' }} />
-                                        <span style={{ color: '#475569', fontSize: 10 }}>{name}</span>
+                                            style={{ width: 96, height: th, objectFit: 'cover', borderRadius: 8, border: '1px solid #E2E8F0' }} />
+                                        <span style={{ color: '#94A3B8', fontSize: 10 }}>{name}</span>
                                     </a>
                                 )
                             })}
@@ -1518,16 +1518,16 @@ const S = {
     grid5: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))', gap: 10 } as React.CSSProperties,
     grid4: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: 10 } as React.CSSProperties,
     grid3: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: 10 } as React.CSSProperties,
-    card: { background: '#111827', border: '1px solid #1e293b', borderRadius: 12, padding: '16px 20px' } as React.CSSProperties,
-    cardLabel: { fontSize: 11, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 } as React.CSSProperties,
+    card: { background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 20px' } as React.CSSProperties,
+    cardLabel: { fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 } as React.CSSProperties,
     btnPrimary: { background: '#2A60C2', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 } as React.CSSProperties,
-    btnSm: { background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', borderRadius: 8, padding: '7px 13px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 } as React.CSSProperties,
-    btnXs: { background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' } as React.CSSProperties,
-    label: { display: 'flex', flexDirection: 'column', gap: 6, color: '#94a3b8', fontSize: 12, fontWeight: 600 } as React.CSSProperties,
+    btnSm: { background: '#F7F9FC', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 8, padding: '7px 13px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 } as React.CSSProperties,
+    btnXs: { background: '#F7F9FC', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' } as React.CSSProperties,
+    label: { display: 'flex', flexDirection: 'column', gap: 6, color: '#64748B', fontSize: 12, fontWeight: 600 } as React.CSSProperties,
 }
 
 function inputSt(extra: React.CSSProperties = {}): React.CSSProperties {
-    return { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, color: '#f1f5f9', fontSize: 13, padding: '8px 12px', outline: 'none', width: '100%', ...extra }
+    return { background: '#F7F9FC', border: '1px solid #E2E8F0', borderRadius: 8, color: '#0E2A55', fontSize: 13, padding: '8px 12px', outline: 'none', width: '100%', ...extra }
 }
 
 // ─── Codigos (Divulgação) ────────────────────────────────────────────────────
@@ -1544,6 +1544,9 @@ interface ReferralCode {
     signups_count: number
     paying_count: number
     plan_breakdown: Record<string, number>
+    commission_pct: number
+    monthly_revenue: number
+    commission_owed: number
 }
 
 function Codigos({ token }: { token: string }) {
@@ -1569,7 +1572,7 @@ function Codigos({ token }: { token: string }) {
 
     useEffect(() => { load() }, [load])
 
-    const handleCreate = async (payload: { owner_name: string; owner_contact: string; notes: string }) => {
+    const handleCreate = async (payload: { owner_name: string; owner_contact: string; notes: string; commission_pct: number }) => {
         setCreating(true)
         try {
             await adminFetch('/api/admin/referral-codes', token, {
@@ -1615,11 +1618,11 @@ function Codigos({ token }: { token: string }) {
     if (error) return <ErrBox msg={error} onRetry={load} />
 
     const thSt: React.CSSProperties = {
-        padding: '12px 14px', textAlign: 'left', color: '#475569',
+        padding: '12px 14px', textAlign: 'left', color: '#94A3B8',
         fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
     }
     const tdSt: React.CSSProperties = {
-        padding: '12px 14px', fontSize: 13, color: '#cbd5e1', borderTop: '1px solid #1e293b',
+        padding: '12px 14px', fontSize: 13, color: '#334155', borderTop: '1px solid #E2E8F0',
     }
 
     return (
@@ -1631,15 +1634,17 @@ function Codigos({ token }: { token: string }) {
                 </button>
             </div>
 
-            <div style={{ borderRadius: 12, border: '1px solid #1e293b', overflow: 'hidden' }}>
+            <div style={{ borderRadius: 12, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead style={{ background: '#0f172a' }}>
+                    <thead style={{ background: '#F7F9FC' }}>
                         <tr>
                             <th style={thSt}>Código</th>
                             <th style={thSt}>Divulgador</th>
                             <th style={thSt}>Contato</th>
                             <th style={thSt}>Cadastros</th>
                             <th style={thSt}>Pagantes</th>
+                            <th style={thSt}>Receita/mês</th>
+                            <th style={thSt}>Comissão</th>
                             <th style={thSt}>Status</th>
                             <th style={thSt}>Criado</th>
                             <th style={thSt}>Ações</th>
@@ -1648,28 +1653,28 @@ function Codigos({ token }: { token: string }) {
                     <tbody>
                         {codes.length === 0 && (
                             <tr>
-                                <td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                                <td colSpan={10} style={{ padding: 24, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
                                     Nenhum código cadastrado ainda.
                                 </td>
                             </tr>
                         )}
                         {codes.map((c, i) => (
-                            <tr key={c.id} style={{ background: i % 2 === 0 ? '#111827' : '#0d1520' }}>
+                            <tr key={c.id} style={{ background: i % 2 === 0 ? '#FFFFFF' : '#F7F9FC' }}>
                                 <td style={tdSt}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <code style={{ color: '#60a5fa', fontWeight: 700 }}>{c.code}</code>
+                                        <code style={{ color: '#2A60C2', fontWeight: 700 }}>{c.code}</code>
                                         <button onClick={() => handleCopy(c.code)} style={{ ...S.btnXs, padding: '2px 6px' }} title="Copiar código">
                                             Copiar
                                         </button>
                                     </div>
                                 </td>
-                                <td style={tdSt}>{c.owner_name}</td>
-                                <td style={{ ...tdSt, color: '#94a3b8' }}>{c.owner_contact ?? '—'}</td>
-                                <td style={{ ...tdSt, fontWeight: 700, color: '#f1f5f9' }}>{c.signups_count}</td>
-                                <td style={{ ...tdSt, fontWeight: 700, color: c.paying_count > 0 ? '#10b981' : '#64748b' }}>
+                                <td style={{ ...tdSt, color: '#0E2A55', fontWeight: 600 }}>{c.owner_name}</td>
+                                <td style={{ ...tdSt, color: '#94A3B8' }}>{c.owner_contact ?? '—'}</td>
+                                <td style={{ ...tdSt, fontWeight: 700, color: '#0E2A55' }}>{c.signups_count}</td>
+                                <td style={{ ...tdSt, fontWeight: 700, color: c.paying_count > 0 ? '#16A34A' : '#94A3B8' }}>
                                     {c.paying_count}
                                     {c.paying_count > 0 && (
-                                        <span style={{ color: '#64748b', fontWeight: 400, fontSize: 11, marginLeft: 6 }}>
+                                        <span style={{ color: '#94A3B8', fontWeight: 400, fontSize: 11, marginLeft: 6 }}>
                                             ({Object.entries(c.plan_breakdown)
                                                 .filter(([p]) => p !== 'free')
                                                 .map(([p, n]) => `${n} ${p}`)
@@ -1677,23 +1682,36 @@ function Codigos({ token }: { token: string }) {
                                         </span>
                                     )}
                                 </td>
+                                <td style={{ ...tdSt, fontWeight: 700, color: c.monthly_revenue > 0 ? '#0E2A55' : '#94A3B8' }}>
+                                    {c.monthly_revenue > 0 ? fmtBRL(c.monthly_revenue) : '—'}
+                                </td>
+                                <td style={{ ...tdSt }}>
+                                    {c.commission_pct > 0 ? (
+                                        <span>
+                                            <span style={{ color: '#D97706', fontWeight: 700 }}>{fmtBRL(c.commission_owed)}</span>
+                                            <span style={{ color: '#94A3B8', fontSize: 11, marginLeft: 4 }}>({c.commission_pct}%)</span>
+                                        </span>
+                                    ) : (
+                                        <span style={{ color: '#94A3B8' }}>—</span>
+                                    )}
+                                </td>
                                 <td style={tdSt}>
                                     <span style={{
                                         padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                                        background: c.active ? '#064e3b' : '#451a1a',
-                                        color: c.active ? '#10b981' : '#ef4444',
+                                        background: c.active ? '#DCFCE7' : '#FEF2F2',
+                                        color: c.active ? '#16A34A' : '#DC2626',
                                     }}>
                                         {c.active ? 'Ativo' : 'Inativo'}
                                     </span>
                                 </td>
-                                <td style={{ ...tdSt, color: '#94a3b8', fontSize: 12 }}>{fmtDate(c.created_at)}</td>
+                                <td style={{ ...tdSt, color: '#94A3B8', fontSize: 12 }}>{fmtDate(c.created_at)}</td>
                                 <td style={tdSt}>
                                     <div style={{ display: 'flex', gap: 6 }}>
                                         <button onClick={() => setEditing(c)} style={S.btnXs}>Editar</button>
                                         <button onClick={() => handleToggleActive(c)} style={S.btnXs}>
                                             {c.active ? 'Pausar' : 'Reativar'}
                                         </button>
-                                        <button onClick={() => handleDelete(c)} style={{ ...S.btnXs, color: '#ef4444' }}>
+                                        <button onClick={() => handleDelete(c)} style={{ ...S.btnXs, color: '#DC2626' }}>
                                             <Trash2 size={12} />
                                         </button>
                                     </div>
@@ -1727,26 +1745,27 @@ function CreateReferralModal({
     onClose, onSave, saving,
 }: {
     onClose: () => void
-    onSave: (p: { owner_name: string; owner_contact: string; notes: string }) => void
+    onSave: (p: { owner_name: string; owner_contact: string; notes: string; commission_pct: number }) => void
     saving: boolean
 }) {
     const [ownerName, setOwnerName] = useState('')
     const [ownerContact, setOwnerContact] = useState('')
     const [notes, setNotes] = useState('')
+    const [commissionPct, setCommissionPct] = useState('0')
     const [err, setErr] = useState<string | null>(null)
 
     const submit = () => {
         if (!ownerName.trim()) { setErr('Nome é obrigatório'); return }
         setErr(null)
-        onSave({ owner_name: ownerName, owner_contact: ownerContact, notes })
+        onSave({ owner_name: ownerName, owner_contact: ownerContact, notes, commission_pct: parseFloat(commissionPct) || 0 })
     }
 
     return (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
             onClick={e => e.target === e.currentTarget && onClose()}>
-            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 28, width: '100%', maxWidth: 440 }}>
-                <p style={{ color: '#f1f5f9', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Novo divulgador</p>
-                <p style={{ color: '#475569', fontSize: 12, marginBottom: 20 }}>O código será gerado automaticamente.</p>
+            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 16, padding: 28, width: '100%', maxWidth: 440 }}>
+                <p style={{ color: '#0E2A55', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Novo divulgador</p>
+                <p style={{ color: '#94A3B8', fontSize: 12, marginBottom: 20 }}>O código será gerado automaticamente.</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <label style={S.label}>Nome do divulgador *
                         <input value={ownerName} onChange={e => setOwnerName(e.target.value)} style={inputSt()} placeholder="Ex: Maria Silva" />
@@ -1754,11 +1773,14 @@ function CreateReferralModal({
                     <label style={S.label}>Contato
                         <input value={ownerContact} onChange={e => setOwnerContact(e.target.value)} style={inputSt()} placeholder="Email, telefone ou @instagram" />
                     </label>
+                    <label style={S.label}>Comissão (%)
+                        <input type="number" min="0" max="100" step="0.5" value={commissionPct} onChange={e => setCommissionPct(e.target.value)} style={inputSt()} placeholder="Ex: 10" />
+                    </label>
                     <label style={S.label}>Notas internas
                         <textarea value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inputSt(), minHeight: 60, fontFamily: 'inherit' }} placeholder="Opcional" />
                     </label>
                 </div>
-                {err && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 12 }}>{err}</p>}
+                {err && <p style={{ color: '#DC2626', fontSize: 12, marginTop: 12 }}>{err}</p>}
                 <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
                     <button onClick={onClose} style={S.btnSm}>Cancelar</button>
                     <button onClick={submit} disabled={saving} style={S.btnPrimary}>
@@ -1781,6 +1803,7 @@ function EditReferralModal({
     const [ownerName, setOwnerName] = useState(code.owner_name)
     const [ownerContact, setOwnerContact] = useState(code.owner_contact ?? '')
     const [notes, setNotes] = useState(code.notes ?? '')
+    const [commissionPct, setCommissionPct] = useState(String(code.commission_pct ?? 0))
     const [saving, setSaving] = useState(false)
     const [err, setErr] = useState<string | null>(null)
 
@@ -1795,6 +1818,7 @@ function EditReferralModal({
                     owner_name: ownerName,
                     owner_contact: ownerContact,
                     notes,
+                    commission_pct: parseFloat(commissionPct) || 0,
                 }),
             })
             onSaved()
@@ -1805,14 +1829,37 @@ function EditReferralModal({
         }
     }
 
+    const commPct = parseFloat(commissionPct) || 0
+    const commOwed = parseFloat((code.monthly_revenue * commPct / 100).toFixed(2))
+    const netRevenue = code.monthly_revenue - commOwed
+
     return (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
             onClick={e => e.target === e.currentTarget && onClose()}>
-            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 28, width: '100%', maxWidth: 440 }}>
-                <p style={{ color: '#f1f5f9', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Editar divulgador</p>
-                <p style={{ color: '#475569', fontSize: 12, marginBottom: 20 }}>
-                    Código: <code style={{ color: '#60a5fa' }}>{code.code}</code>
+            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 16, padding: 28, width: '100%', maxWidth: 500 }}>
+                <p style={{ color: '#0E2A55', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Editar divulgador</p>
+                <p style={{ color: '#94A3B8', fontSize: 12, marginBottom: 20 }}>
+                    Código: <code style={{ color: '#2A60C2' }}>{code.code}</code>
                 </p>
+
+                {/* Revenue summary */}
+                {code.paying_count > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
+                        <div style={{ background: '#F7F9FC', borderRadius: 10, padding: '12px 14px', border: '1px solid #E2E8F0' }}>
+                            <p style={{ fontSize: 10, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 4px' }}>Receita/mês</p>
+                            <p style={{ fontSize: 18, fontWeight: 800, color: '#0E2A55', margin: 0 }}>{fmtBRL(code.monthly_revenue)}</p>
+                        </div>
+                        <div style={{ background: '#FFFBEB', borderRadius: 10, padding: '12px 14px', border: '1px solid #FDE68A' }}>
+                            <p style={{ fontSize: 10, color: '#92400E', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 4px' }}>Comissão ({commPct}%)</p>
+                            <p style={{ fontSize: 18, fontWeight: 800, color: '#D97706', margin: 0 }}>{fmtBRL(commOwed)}</p>
+                        </div>
+                        <div style={{ background: '#F0FDF4', borderRadius: 10, padding: '12px 14px', border: '1px solid #BBF7D0' }}>
+                            <p style={{ fontSize: 10, color: '#14532D', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 4px' }}>Líquido</p>
+                            <p style={{ fontSize: 18, fontWeight: 800, color: '#16A34A', margin: 0 }}>{fmtBRL(netRevenue)}</p>
+                        </div>
+                    </div>
+                )}
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <label style={S.label}>Nome *
                         <input value={ownerName} onChange={e => setOwnerName(e.target.value)} style={inputSt()} />
@@ -1820,11 +1867,14 @@ function EditReferralModal({
                     <label style={S.label}>Contato
                         <input value={ownerContact} onChange={e => setOwnerContact(e.target.value)} style={inputSt()} />
                     </label>
+                    <label style={S.label}>Comissão (%)
+                        <input type="number" min="0" max="100" step="0.5" value={commissionPct} onChange={e => setCommissionPct(e.target.value)} style={inputSt()} placeholder="Ex: 10" />
+                    </label>
                     <label style={S.label}>Notas internas
                         <textarea value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inputSt(), minHeight: 60, fontFamily: 'inherit' }} />
                     </label>
                 </div>
-                {err && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 12 }}>{err}</p>}
+                {err && <p style={{ color: '#DC2626', fontSize: 12, marginTop: 12 }}>{err}</p>}
                 <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
                     <button onClick={onClose} style={S.btnSm}>Cancelar</button>
                     <button onClick={save} disabled={saving} style={S.btnPrimary}>
@@ -1860,6 +1910,12 @@ interface UsageStats {
     users: UsageUser[]
 }
 
+interface SeatsAeroUsage {
+    todayCount: number
+    dailyLimit: number
+    dailyBreakdown: { date: string; calls: number }[]
+}
+
 const PERIOD_OPTIONS: { id: UsagePeriod; label: string }[] = [
     { id: 'today', label: 'Hoje' },
     { id: '7d',    label: '7 dias' },
@@ -1871,6 +1927,7 @@ const PERIOD_OPTIONS: { id: UsagePeriod; label: string }[] = [
 function Uso({ token }: { token: string }) {
     const [period, setPeriod] = useState<UsagePeriod>('month')
     const [stats, setStats] = useState<UsageStats | null>(null)
+    const [seatsUsage, setSeatsUsage] = useState<SeatsAeroUsage | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [search, setSearch] = useState('')
@@ -1880,8 +1937,12 @@ function Uso({ token }: { token: string }) {
         setLoading(true)
         setError(null)
         try {
-            const data = await adminFetch(`/api/admin/usage-stats?period=${period}&include_inactive=${includeInactive}`, token)
+            const [data, seats] = await Promise.all([
+                adminFetch(`/api/admin/usage-stats?period=${period}&include_inactive=${includeInactive}`, token),
+                adminFetch('/api/admin/seatsaero-usage', token),
+            ])
             setStats(data)
+            setSeatsUsage(seats)
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e))
         } finally {
@@ -1903,15 +1964,80 @@ function Uso({ token }: { token: string }) {
         : stats.users
 
     const thSt: React.CSSProperties = {
-        padding: '12px 14px', textAlign: 'left', color: '#475569',
+        padding: '12px 14px', textAlign: 'left', color: '#94A3B8',
         fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
     }
     const tdSt: React.CSSProperties = {
-        padding: '12px 14px', fontSize: 13, color: '#cbd5e1', borderTop: '1px solid #1e293b',
+        padding: '12px 14px', fontSize: 13, color: '#334155', borderTop: '1px solid #E2E8F0',
     }
+
+    const quotaPct = seatsUsage ? Math.round((seatsUsage.todayCount / seatsUsage.dailyLimit) * 100) : 0
+    const quotaColor = quotaPct >= 90 ? '#DC2626' : quotaPct >= 70 ? '#D97706' : '#16A34A'
+    const seatsMax = seatsUsage ? Math.max(...seatsUsage.dailyBreakdown.map(d => d.calls), 1) : 1
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* ── Seats.aero quota ── */}
+            {seatsUsage && (
+                <div style={{ ...S.card, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                            <p style={{ ...S.cardLabel, marginBottom: 4 }}>Seats.aero API — cota diária</p>
+                            <p style={{ margin: 0, fontSize: 13, color: '#64748B' }}>
+                                Limite: <strong style={{ color: '#0E2A55' }}>{seatsUsage.dailyLimit.toLocaleString('pt-BR')}</strong> chamadas/dia
+                            </p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                            <p style={{ margin: 0, fontSize: 28, fontWeight: 800, color: quotaColor }}>
+                                {seatsUsage.todayCount}
+                            </p>
+                            <p style={{ margin: 0, fontSize: 11, color: '#94A3B8' }}>hoje · {quotaPct}% usado</p>
+                        </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div style={{ background: '#E2E8F0', borderRadius: 6, height: 10, overflow: 'hidden' }}>
+                        <div style={{
+                            height: '100%', borderRadius: 6,
+                            width: `${Math.min(quotaPct, 100)}%`,
+                            background: quotaColor,
+                            transition: 'width 0.4s',
+                        }} />
+                    </div>
+
+                    {quotaPct >= 80 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#92400E' }}>
+                            <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+                            Você está se aproximando do limite diário. Considere fazer upgrade do plano Seats.aero.
+                        </div>
+                    )}
+
+                    {/* 7-day breakdown */}
+                    <div>
+                        <p style={{ ...S.cardLabel, marginBottom: 10 }}>Últimos 7 dias</p>
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 60 }}>
+                            {seatsUsage.dailyBreakdown.map(d => {
+                                const isToday = d.date === new Date().toISOString().slice(0, 10)
+                                const barH = Math.max((d.calls / seatsMax) * 48, d.calls > 0 ? 4 : 2)
+                                return (
+                                    <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                        <div title={`${d.date}: ${d.calls} chamadas`} style={{
+                                            width: '100%',
+                                            height: `${barH}px`,
+                                            background: isToday ? quotaColor : '#BFDBFE',
+                                            borderRadius: '3px 3px 0 0',
+                                            transition: 'height 0.3s',
+                                        }} />
+                                        <span style={{ fontSize: 9, color: '#94A3B8' }}>{d.date.slice(5)}</span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                 <BlockTitle
                     icon={BarChart3}
@@ -1922,7 +2048,7 @@ function Uso({ token }: { token: string }) {
                             : `${stats.users.length} usuário${stats.users.length !== 1 ? 's' : ''} ativo${stats.users.length !== 1 ? 's' : ''} no período`
                     }
                 />
-                <div style={{ display: 'flex', gap: 6, background: '#0f172a', padding: 4, borderRadius: 10, border: '1px solid #1e293b' }}>
+                <div style={{ display: 'flex', gap: 6, background: '#F7F9FC', padding: 4, borderRadius: 10, border: '1px solid #E2E8F0' }}>
                     {PERIOD_OPTIONS.map(opt => (
                         <button
                             key={opt.id}
@@ -1935,7 +2061,7 @@ function Uso({ token }: { token: string }) {
                                 border: 'none',
                                 cursor: 'pointer',
                                 background: period === opt.id ? '#2A60C2' : 'transparent',
-                                color: period === opt.id ? '#fff' : '#94a3b8',
+                                color: period === opt.id ? '#fff' : '#64748B',
                                 transition: 'all 0.15s',
                             }}
                         >
@@ -1947,7 +2073,7 @@ function Uso({ token }: { token: string }) {
 
             {/* Toggle "todos os usuários" */}
             <div style={{ display: 'flex', alignItems: 'center' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#cbd5e1' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#64748B' }}>
                     <input
                         type="checkbox"
                         checked={includeInactive}
@@ -1962,19 +2088,19 @@ function Uso({ token }: { token: string }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
                 <div style={S.card}>
                     <p style={S.cardLabel}>Buscas realizadas</p>
-                    <p style={{ color: '#f1f5f9', fontSize: 28, fontWeight: 800, marginTop: 4 }}>
+                    <p style={{ color: '#0E2A55', fontSize: 28, fontWeight: 800, marginTop: 4 }}>
                         {stats.totals.total_buscas.toLocaleString('pt-BR')}
                     </p>
                 </div>
                 <div style={S.card}>
                     <p style={S.cardLabel}>Roteiros gerados</p>
-                    <p style={{ color: '#f1f5f9', fontSize: 28, fontWeight: 800, marginTop: 4 }}>
+                    <p style={{ color: '#0E2A55', fontSize: 28, fontWeight: 800, marginTop: 4 }}>
                         {stats.totals.total_roteiros.toLocaleString('pt-BR')}
                     </p>
                 </div>
                 <div style={S.card}>
                     <p style={S.cardLabel}>Usuários ativos</p>
-                    <p style={{ color: '#f1f5f9', fontSize: 28, fontWeight: 800, marginTop: 4 }}>
+                    <p style={{ color: '#0E2A55', fontSize: 28, fontWeight: 800, marginTop: 4 }}>
                         {stats.totals.active_users.toLocaleString('pt-BR')}
                     </p>
                 </div>
@@ -1982,29 +2108,20 @@ function Uso({ token }: { token: string }) {
 
             {/* Barra de busca */}
             <div style={{ position: 'relative', maxWidth: 400 }}>
-                <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
                 <input
                     type="text"
                     placeholder="Buscar por nome ou email..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    style={{
-                        width: '100%',
-                        padding: '10px 14px 10px 36px',
-                        borderRadius: 10,
-                        border: '1px solid #1e293b',
-                        background: '#0f172a',
-                        color: '#f1f5f9',
-                        fontSize: 13,
-                        outline: 'none',
-                    }}
+                    style={inputSt({ paddingLeft: 36 })}
                 />
             </div>
 
             {/* Tabela */}
-            <div style={{ borderRadius: 12, border: '1px solid #1e293b', overflow: 'hidden' }}>
+            <div style={{ borderRadius: 12, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead style={{ background: '#0f172a' }}>
+                    <thead style={{ background: '#F7F9FC' }}>
                         <tr>
                             <th style={thSt}>Usuário</th>
                             <th style={thSt}>Email</th>
@@ -2017,7 +2134,7 @@ function Uso({ token }: { token: string }) {
                     <tbody>
                         {filteredUsers.length === 0 && (
                             <tr>
-                                <td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                                <td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
                                     {search
                                         ? 'Nenhum usuário encontrado.'
                                         : includeInactive
@@ -2027,17 +2144,17 @@ function Uso({ token }: { token: string }) {
                             </tr>
                         )}
                         {filteredUsers.map((u, i) => (
-                            <tr key={u.user_id} style={{ background: i % 2 === 0 ? '#111827' : '#0d1520' }}>
-                                <td style={tdSt}>{u.full_name ?? <span style={{ color: '#64748b' }}>—</span>}</td>
-                                <td style={{ ...tdSt, color: '#94a3b8' }}>{u.email ?? '—'}</td>
+                            <tr key={u.user_id} style={{ background: i % 2 === 0 ? '#FFFFFF' : '#F7F9FC' }}>
+                                <td style={{ ...tdSt, color: '#0E2A55', fontWeight: 600 }}>{u.full_name ?? <span style={{ color: '#94A3B8' }}>—</span>}</td>
+                                <td style={{ ...tdSt, color: '#64748B' }}>{u.email ?? '—'}</td>
                                 <td style={tdSt}><PlanBadge plan={u.plan} /></td>
-                                <td style={{ ...tdSt, fontWeight: 700, color: u.buscas_count > 0 ? '#f1f5f9' : '#64748b' }}>
+                                <td style={{ ...tdSt, fontWeight: 700, color: u.buscas_count > 0 ? '#0E2A55' : '#94A3B8' }}>
                                     {u.buscas_count}
                                 </td>
-                                <td style={{ ...tdSt, fontWeight: 700, color: u.roteiros_count > 0 ? '#f1f5f9' : '#64748b' }}>
+                                <td style={{ ...tdSt, fontWeight: 700, color: u.roteiros_count > 0 ? '#0E2A55' : '#94A3B8' }}>
                                     {u.roteiros_count}
                                 </td>
-                                <td style={{ ...tdSt, color: '#94a3b8', fontSize: 12 }}>{fmtDateTime(u.last_activity)}</td>
+                                <td style={{ ...tdSt, color: '#64748B', fontSize: 12 }}>{fmtDateTime(u.last_activity)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -2058,21 +2175,21 @@ export default function Admin() {
     const active = SECTIONS.find(s => s.id === section)!
 
     return (
-        <div style={{ minHeight: '100vh', background: '#080a10', fontFamily: 'Manrope, sans-serif', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ minHeight: '100vh', background: '#F7F9FC', fontFamily: 'Inter, Manrope, sans-serif', display: 'flex', flexDirection: 'column' }}>
             <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } * { box-sizing: border-box; }`}</style>
 
             {/* ── Top bar ── */}
-            <div style={{ background: '#0d1117', borderBottom: '1px solid #1e293b', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'sticky', top: 0, zIndex: 20 }}>
+            <div style={{ background: '#FFFFFF', borderBottom: '1px solid #E2E8F0', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'sticky', top: 0, zIndex: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ background: '#1a0a0a', border: '1px solid #7f1d1d44', borderRadius: 8, padding: '5px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Shield size={14} style={{ color: '#dc2626' }} />
-                        <span style={{ color: '#ef4444', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em' }}>ADMIN</span>
+                    <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '5px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Shield size={14} style={{ color: '#DC2626' }} />
+                        <span style={{ color: '#DC2626', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em' }}>ADMIN</span>
                     </div>
-                    <span style={{ color: '#1e293b', fontSize: 16 }}>·</span>
-                    <span style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 700 }}>FlyWise</span>
+                    <span style={{ color: '#E2E8F0', fontSize: 16 }}>·</span>
+                    <span style={{ color: '#0E2A55', fontSize: 14, fontWeight: 700 }}>FlyWise</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ color: '#475569', fontSize: 12 }}>{user?.email}</span>
+                    <span style={{ color: '#94A3B8', fontSize: 12 }}>{user?.email}</span>
                     <button onClick={() => navigate('/home')} style={{ ...S.btnSm, gap: 5 }}>
                         <Home size={13} /> Voltar ao app
                     </button>
@@ -2082,23 +2199,23 @@ export default function Admin() {
             <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
                 {/* ── Sidebar ── */}
-                <aside style={{ width: 220, background: '#0d1117', borderRight: '1px solid #1e293b', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, position: 'sticky', top: 56, height: 'calc(100vh - 56px)', overflowY: 'auto' }}>
-                    <p style={{ color: '#334155', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 8px', marginBottom: 8 }}>Navegação</p>
+                <aside style={{ width: 220, background: '#FFFFFF', borderRight: '1px solid #E2E8F0', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, position: 'sticky', top: 56, height: 'calc(100vh - 56px)', overflowY: 'auto' }}>
+                    <p style={{ color: '#94A3B8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 8px', marginBottom: 8 }}>Navegação</p>
 
                     {SECTIONS.map(({ id, label, icon: Icon, description }) => {
                         const isActive = section === id
                         return (
                             <button key={id} onClick={() => setSection(id)} style={{
-                                background: isActive ? '#1e293b' : 'none',
-                                border: `1px solid ${isActive ? '#334155' : 'transparent'}`,
+                                background: isActive ? '#EFF4FF' : 'none',
+                                border: `1px solid ${isActive ? '#BFDBFE' : 'transparent'}`,
                                 borderRadius: 10, padding: '10px 12px', cursor: 'pointer',
                                 textAlign: 'left', width: '100%', transition: 'all 0.15s',
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                                    <Icon size={15} style={{ color: isActive ? '#2A60C2' : '#475569', flexShrink: 0 }} />
+                                    <Icon size={15} style={{ color: isActive ? '#2A60C2' : '#94A3B8', flexShrink: 0 }} />
                                     <div>
-                                        <p style={{ margin: 0, fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? '#f1f5f9' : '#94a3b8' }}>{label}</p>
-                                        <p style={{ margin: 0, fontSize: 10, color: '#334155', marginTop: 1 }}>{description}</p>
+                                        <p style={{ margin: 0, fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? '#0E2A55' : '#64748B' }}>{label}</p>
+                                        <p style={{ margin: 0, fontSize: 10, color: '#94A3B8', marginTop: 1 }}>{description}</p>
                                     </div>
                                 </div>
                             </button>
@@ -2111,7 +2228,7 @@ export default function Admin() {
                     {/* Breadcrumb */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
                         <active.icon size={16} style={{ color: '#2A60C2' }} />
-                        <h1 style={{ color: '#f1f5f9', fontSize: 18, fontWeight: 800, margin: 0 }}>{active.label}</h1>
+                        <h1 style={{ color: '#0E2A55', fontSize: 18, fontWeight: 800, margin: 0 }}>{active.label}</h1>
                     </div>
 
                     {section === 'dashboard'  && <Dashboard      token={token} />}
