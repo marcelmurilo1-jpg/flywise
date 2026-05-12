@@ -46,9 +46,9 @@ export default function Checkout() {
     const [cardCvv, setCardCvv]               = useState('')
     const [cardBrand, setCardBrand]           = useState<string | null>(null)
     const [installments, setInstallments]     = useState(1)
-    const [cardProcessing, setCardProcessing] = useState(false)
-    const [cardFormError, setCardFormError]   = useState<string | null>(null)
-    const [cardBillingUrl, setCardBillingUrl] = useState<string | null>(null)
+    const [cardProcessing, setCardProcessing]       = useState(false)
+    const [cardFormError, setCardFormError]         = useState<string | null>(null)
+    const [cardAwaitingPayment, setCardAwaitingPayment] = useState(false)
 
     useEffect(() => {
         if (!state) navigate('/planos', { replace: true })
@@ -181,7 +181,7 @@ export default function Checkout() {
 
         setCardProcessing(true)
         setCardFormError(null)
-        setCardBillingUrl(null)
+        setCardAwaitingPayment(false)
 
         try {
             const tokenRes = await fetch('/api/checkout/tokenize', {
@@ -220,7 +220,8 @@ export default function Checkout() {
                 if (!billingRes.ok || billingData.error) throw new Error(billingData.error || 'Erro ao criar cobrança')
                 if (!billingData.url) throw new Error('URL de pagamento não retornada')
                 setBillingId(billingData.id)
-                setCardBillingUrl(billingData.url)
+                setCardAwaitingPayment(true)
+                window.open(billingData.url, '_blank')
                 return
             }
 
@@ -506,21 +507,23 @@ export default function Checkout() {
                                     <span style={{ fontSize: 12, fontWeight: 700, color: '#2A60C2', letterSpacing: '0.04em' }}>Cartão de crédito</span>
                                 </div>
                                 <div style={{ fontSize: 22, fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em', marginBottom: 4 }}>
-                                    {cardBillingUrl ? 'Conclua o pagamento abaixo' : 'Pague com cartão'}
+                                    {cardAwaitingPayment ? 'Pagamento em andamento' : 'Pague com cartão'}
                                 </div>
                                 <div style={{ fontSize: 13, color: '#64748B' }}>
-                                    {cardBillingUrl ? 'Seus dados estão protegidos por SSL' : 'Preencha os dados do cartão — tudo acontece aqui'}
+                                    {cardAwaitingPayment ? 'Continue na aba que abrimos para você' : 'Preencha os dados do cartão — tudo acontece aqui'}
                                 </div>
                             </div>
 
-                            {/* Iframe fallback when tokenization is unavailable */}
-                            {cardBillingUrl ? (
-                                <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 4px 32px rgba(14,42,85,0.08)', border: '1px solid #E2EAF5' }}>
-                                    <iframe
-                                        src={cardBillingUrl}
-                                        title="Pagamento seguro"
-                                        style={{ width: '100%', height: 560, border: 'none', display: 'block' }}
-                                    />
+                            {/* Awaiting payment in new tab (fallback when tokenization unavailable) */}
+                            {cardAwaitingPayment ? (
+                                <div style={{ background: '#fff', borderRadius: 20, padding: '36px 28px', boxShadow: '0 4px 32px rgba(14,42,85,0.08)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
+                                    <Loader2 size={36} color="#2A60C2" style={{ animation: 'spin 1s linear infinite' }} />
+                                    <div style={{ fontSize: 17, fontWeight: 800, color: '#0E2A55' }}>Aguardando pagamento…</div>
+                                    <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>
+                                        Uma nova aba foi aberta com a página de pagamento.<br />
+                                        Assim que confirmarmos, você será redirecionado automaticamente.
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#94A3B8' }}>Verificando a cada 3 segundos</div>
                                 </div>
                             ) : (
                                 /* Native card form */
