@@ -78,7 +78,7 @@ router.post('/api/checkout', async (req, res) => {
         const methods = methodMap[req.body.paymentMethod] ?? ['PIX'];
 
         const billingPayload = {
-            frequency: billingType === 'anual' ? 'YEARLY' : 'MONTHLY',
+            frequency: 'ONE_TIME',
             methods,
             customerId,
             products: [productEntry],
