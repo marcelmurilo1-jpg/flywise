@@ -97,6 +97,11 @@ _PASSAGENS_KEYWORDS = [
     "passagem", "passagens", "voo", "voos", "flight", "tarifa", "tarifas",
     "bilhete", "bilhetes", "promoção aérea", "promocao aerea",
     "viagem", "destino", "ida e volta", "só ida", "so ida",
+    # hospedagem/pacotes de viagem
+    "hoteis.com", "hotel.com", "booking.com", "pousada", "chalé", "chale",
+    "resort com", "diária a partir", "diaria a partir",
+    "pacote de viagem", "hospedagem em", "hospedagens em",
+    "hotéis em", "hoteis em",
 ]
 
 # Sub-categorias dentro de milhas
@@ -124,13 +129,20 @@ _COMPRAS_KEYWORDS = [
     "desconto em compras", "shopee", "amazon", "americanas",
     "iof zero", "conta global", "cartão pré-pago", "compre dólares",
     "compre euros", "câmbio", "dólar baixo", "abra sua conta",
+    # marketplaces — maior gap detectado
+    "mercado livre", "mercadolivre", "magalu", "magazine luiza",
+    "a partir de r$", "com até % de desconto", "off na shopee",
+    "desconto na shopee", "desconto no mercado livre",
+    "desconto na amazon", "off no mercado livre",
     # fintech / câmbio
     "compre dólar", "taxa de conversão zero", "isenção da taxa de conversão",
-    "compre agora com a menor taxa", "menor taxa pelo arq",
+    "compre agora com a menor taxa", "menor taxa pelo arq", "dolarapp",
     "abra a conta nomad", "abra sua conta nomad", "dólar a r$",
+    "dólar caiu", "dólar apenas r$",
     "invista no exterior", "concorra a diversos prêmios",
     # benefícios de cartão / programa de parceiros
-    "mastercard surpreenda", "porto bank",
+    "mastercard surpreenda", "porto bank", "cashback em compras",
+    "elo oferece", "wise e visa",
 ]
 
 _NOTICIAS_KEYWORDS = [
@@ -151,9 +163,18 @@ _NOTICIAS_KEYWORDS = [
     "inaugura estação", "conexão com o metrô", "disputa participação",
     "pedido bilionário", "anuncia retomada", "retomada de operações",
     "vai expandir terminal", "lança loja online",
+    "apresenta dois novos modelos", "revela nova cabine", "maior oferta de assentos",
+    "anuncia aumento da anuidade", "muda regras e exclui", "amplia acordo de codeshare",
+    "vai suspender consulta", "cria app ", "anuncia a maior",
+    "aprova financiamento", "zera imposto do combustível de avião",
+    "clonagem de cartões de crédito", "perda de principalidade",
+    "novo sistema de entrada", "sistema de entrada", "caução de até",
+    "passa a atingir mais vistos",
     # passaportes / documentos / tech
     "passaporte comemorativo", "id digital", "carteira do google",
     "carteira de identidade", "wi-fi rápido em todas",
+    "vai viajar para a europa", "entenda como funciona",
+    "sala vip do ", "sunset ", "promove ",
 ]
 
 # Palavras no TÍTULO que indicam conteúdo fora do tema viagem/milhas.
