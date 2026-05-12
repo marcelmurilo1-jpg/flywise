@@ -16,13 +16,12 @@ export default function Auth() {
     const [showPass, setShowPass] = useState(false)
     const [loading, setLoading] = useState(false)
     const [googleLoading, setGoogleLoading] = useState(false)
-    const [appleLoading, setAppleLoading]   = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
     const [referralCode, setReferralCode] = useState('')
     const [referralStatus, setReferralStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
     const [referralOwner, setReferralOwner] = useState<string | null>(null)
-    const { signIn, signUp, signInWithGoogle, signInWithApple, user } = useAuth()
+    const { signIn, signUp, signInWithGoogle, user } = useAuth()
     const navigate = useNavigate()
 
     const next = searchParams.get('next') || '/home'
@@ -94,73 +93,39 @@ export default function Auth() {
         if (error) { setError(error.message || 'Erro ao conectar com Google.'); setGoogleLoading(false) }
     }
 
-    const handleAppleSignIn = async () => {
-        setAppleLoading(true)
-        setError('')
-        const { error } = await signInWithApple()
-        if (error) { setError(error.message || 'Erro ao conectar com Apple.'); setAppleLoading(false) }
-    }
 
     const renderForm = (formType: 'login' | 'signup') => {
         const isActive = tab === formType
         const isSubmitting = loading && isActive
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* Social buttons — Google + Apple */}
-                <div style={{ display: 'flex', gap: 8 }}>
-                    {/* Google */}
-                    <button type="button" onClick={handleGoogleSignIn} disabled={googleLoading || appleLoading} tabIndex={isActive ? 0 : -1}
-                        style={{
-                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            padding: '11px 10px', background: '#fff', border: '1.5px solid #E2EAF5', borderRadius: '11px',
-                            fontSize: '13.5px', fontWeight: 600, color: NAVY, cursor: googleLoading ? 'not-allowed' : 'pointer',
-                            fontFamily: 'inherit', transition: 'all 0.2s ease', opacity: googleLoading ? 0.6 : 1,
-                            boxShadow: '0 1px 4px rgba(14,42,85,0.07)',
-                        }}
-                        onMouseEnter={e => { if (!googleLoading) { e.currentTarget.style.borderColor = '#A0AECB'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(14,42,85,0.12)' } }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2EAF5'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(14,42,85,0.07)' }}
-                    >
-                        {googleLoading ? (
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="spin">
-                                <circle cx="12" cy="12" r="10" stroke={NAVY} strokeWidth="3" strokeOpacity="0.3" />
-                                <path d="M12 2a10 10 0 0110 10" stroke={NAVY} strokeWidth="3" strokeLinecap="round" />
-                            </svg>
-                        ) : (
-                            <svg width="17" height="17" viewBox="0 0 48 48" fill="none">
-                                <path d="M43.6 20.5H42V20H24v8h11.3C33.7 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.4 6.8 29.4 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 20-9 20-20 0-1.2-.1-2.3-.4-3.5z" fill="#FFC107"/>
-                                <path d="M6.3 14.7l6.6 4.8C14.7 16.3 19 13 24 13c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.4 6.8 29.4 4 24 4c-7.7 0-14.3 4.4-17.7 10.7z" fill="#FF3D00"/>
-                                <path d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.5 26.7 36 24 36c-5.3 0-9.7-3.4-11.3-8H6.1c3.4 7.3 10.7 12 17.9 12z" fill="#4CAF50"/>
-                                <path d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.5l6.2 5.2C37.2 39.4 44 34 44 24c0-1.2-.1-2.3-.4-3.5z" fill="#1976D2"/>
-                            </svg>
-                        )}
-                        Google
-                    </button>
-
-                    {/* Apple */}
-                    <button type="button" onClick={handleAppleSignIn} disabled={googleLoading || appleLoading} tabIndex={isActive ? 0 : -1}
-                        style={{
-                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            padding: '11px 10px', background: '#fff', border: '1.5px solid #E2EAF5', borderRadius: '11px',
-                            fontSize: '13.5px', fontWeight: 600, color: NAVY, cursor: appleLoading ? 'not-allowed' : 'pointer',
-                            fontFamily: 'inherit', transition: 'all 0.2s ease', opacity: appleLoading ? 0.6 : 1,
-                            boxShadow: '0 1px 4px rgba(14,42,85,0.07)',
-                        }}
-                        onMouseEnter={e => { if (!appleLoading) { e.currentTarget.style.borderColor = '#A0AECB'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(14,42,85,0.12)' } }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2EAF5'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(14,42,85,0.07)' }}
-                    >
-                        {appleLoading ? (
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="spin">
-                                <circle cx="12" cy="12" r="10" stroke={NAVY} strokeWidth="3" strokeOpacity="0.3" />
-                                <path d="M12 2a10 10 0 0110 10" stroke={NAVY} strokeWidth="3" strokeLinecap="round" />
-                            </svg>
-                        ) : (
-                            <svg width="16" height="16" viewBox="0 0 814 1000" fill={NAVY}>
-                                <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-57.8-155.5-127.4C46 405.8 8.4 325 8.4 247.8c0-140.5 91.5-214.7 181.2-214.7 103.2 0 169.7 66.7 225.1 66.7 52.6 0 135.6-70.2 253.5-70.2 41.3 0 166.7 4.8 241.3 99.2zm-287.5-155.5c36.8-43.5 64.4-104.3 64.4-165.1 0-8.4-.6-16.8-2.1-23.6-60.8 2.4-132.9 40.8-176.5 90.3-33.6 37.8-66.7 98-66.7 159.6 0 9 1.5 18 2.4 20.7 3.9.6 10.2 1.5 16.5 1.5 54.8 0 122.5-36.5 162-83.4z"/>
-                            </svg>
-                        )}
-                        Apple
-                    </button>
-                </div>
+                {/* Google button */}
+                <button type="button" onClick={handleGoogleSignIn} disabled={googleLoading} tabIndex={isActive ? 0 : -1}
+                    style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                        padding: '11px 14px', background: '#fff', border: '1.5px solid #E2EAF5', borderRadius: '11px',
+                        fontSize: '14px', fontWeight: 600, color: NAVY, cursor: googleLoading ? 'not-allowed' : 'pointer',
+                        fontFamily: 'inherit', transition: 'all 0.2s ease', opacity: googleLoading ? 0.6 : 1,
+                        boxShadow: '0 1px 4px rgba(14,42,85,0.07)',
+                    }}
+                    onMouseEnter={e => { if (!googleLoading) { e.currentTarget.style.borderColor = '#A0AECB'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(14,42,85,0.12)' } }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2EAF5'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(14,42,85,0.07)' }}
+                >
+                    {googleLoading ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="spin">
+                            <circle cx="12" cy="12" r="10" stroke={NAVY} strokeWidth="3" strokeOpacity="0.3" />
+                            <path d="M12 2a10 10 0 0110 10" stroke={NAVY} strokeWidth="3" strokeLinecap="round" />
+                        </svg>
+                    ) : (
+                        <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
+                            <path d="M43.6 20.5H42V20H24v8h11.3C33.7 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.4 6.8 29.4 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 20-9 20-20 0-1.2-.1-2.3-.4-3.5z" fill="#FFC107"/>
+                            <path d="M6.3 14.7l6.6 4.8C14.7 16.3 19 13 24 13c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.4 6.8 29.4 4 24 4c-7.7 0-14.3 4.4-17.7 10.7z" fill="#FF3D00"/>
+                            <path d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.5 26.7 36 24 36c-5.3 0-9.7-3.4-11.3-8H6.1c3.4 7.3 10.7 12 17.9 12z" fill="#4CAF50"/>
+                            <path d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.5l6.2 5.2C37.2 39.4 44 34 44 24c0-1.2-.1-2.3-.4-3.5z" fill="#1976D2"/>
+                        </svg>
+                    )}
+                    {formType === 'login' ? 'Entrar com Google' : 'Cadastrar com Google'}
+                </button>
 
                 {/* Divider */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
