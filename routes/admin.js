@@ -646,33 +646,41 @@ router.get('/api/admin/users', requireAdminJWT, async (req, res) => {
         const page = parseInt(req.query.page ?? '1', 10);
         const pageSize = 20;
         const offset = (page - 1) * pageSize;
+        const sortBy = req.query.sort_by ?? 'updated_at'; // updated_at | created_at | plan_expires_at
+        const churned = req.query.churned === 'true';
+
+        const sortCol = sortBy === 'created_at' ? 'created_at'
+            : sortBy === 'plan_expires_at' ? 'plan_expires_at'
+            : 'updated_at';
 
         let query = supabase
             .from('user_profiles')
-            .select('id, full_name, plan, plan_expires_at, plan_billing, is_admin, updated_at', { count: 'exact' })
-            .order('updated_at', { ascending: false })
+            .select('id, full_name, plan, plan_expires_at, plan_billing, is_admin, updated_at, created_at, phone', { count: 'exact' })
+            .order(sortCol, { ascending: false })
             .range(offset, offset + pageSize - 1);
 
-        if (plan) query = query.eq('plan', plan);
+        if (churned) {
+            query = query
+                .in('plan', ['essencial', 'pro', 'elite'])
+                .lt('plan_expires_at', new Date().toISOString());
+        } else if (plan) {
+            query = query.eq('plan', plan);
+        }
 
         const { data, count, error } = await query;
         if (error) throw error;
 
-        const ids = (data ?? []).map(u => u.id);
-        let emailMap = {};
-        if (ids.length > 0) {
-            const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-            for (const au of authUsers?.users ?? []) {
-                emailMap[au.id] = au.email;
-            }
-        }
+        const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+        const emailMap = {};
+        for (const au of authUsers?.users ?? []) emailMap[au.id] = au.email;
 
         let users = (data ?? []).map(u => ({ ...u, email: emailMap[u.id] ?? null }));
         if (search) {
             const s = search.toLowerCase();
             users = users.filter(u =>
                 u.full_name?.toLowerCase().includes(s) ||
-                u.email?.toLowerCase().includes(s)
+                u.email?.toLowerCase().includes(s) ||
+                u.phone?.toLowerCase().includes(s)
             );
         }
 
@@ -685,7 +693,7 @@ router.get('/api/admin/users', requireAdminJWT, async (req, res) => {
 router.patch('/api/admin/users/:id/plan', requireAdminJWT, async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
     const { id } = req.params;
-    const { plan, plan_expires_at, plan_billing } = req.body;
+    const { plan, plan_expires_at, plan_billing, phone } = req.body;
 
     const allowed = ['free', 'essencial', 'pro', 'elite', 'admin'];
     if (plan && !allowed.includes(plan)) return res.status(400).json({ error: 'Plano inválido' });
@@ -695,7 +703,19 @@ router.patch('/api/admin/users/:id/plan', requireAdminJWT, async (req, res) => {
         if (plan !== undefined) update.plan = plan;
         if (plan_expires_at !== undefined) update.plan_expires_at = plan_expires_at;
         if (plan_billing !== undefined) update.plan_billing = plan_billing;
+        if (phone !== undefined) update.phone = phone || null;
         const { error } = await supabase.from('user_profiles').update(update).eq('id', id);
+        if (error) throw error;
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.delete('/api/admin/users/:id', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const { error } = await supabase.auth.admin.deleteUser(req.params.id);
         if (error) throw error;
         res.json({ ok: true });
     } catch (err) {
@@ -1328,6 +1348,14 @@ router.get('/api/referral-codes/validate/:code', async (req, res) => {
 
 // ─── Usage stats (métricas de uso por usuário) ───────────────────────────────
 
+const PLAN_LIMITS_ADMIN = {
+    free:     { strategiesLifetime: 1,    strategiesPerMonth: null, roteiroPerMonth: 0 },
+    essencial:{ strategiesLifetime: null, strategiesPerMonth: 3,    roteiroPerMonth: 1 },
+    pro:      { strategiesLifetime: null, strategiesPerMonth: 5,    roteiroPerMonth: 3 },
+    elite:    { strategiesLifetime: null, strategiesPerMonth: 10,   roteiroPerMonth: 5 },
+    admin:    { strategiesLifetime: null, strategiesPerMonth: null,  roteiroPerMonth: 999 },
+};
+
 router.get('/api/admin/usage-stats', requireAdminJWT, async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
     try {
@@ -1337,8 +1365,7 @@ router.get('/api/admin/usage-stats', requireAdminJWT, async (req, res) => {
         let sinceISO = null;
         const now = new Date();
         if (period === 'today') {
-            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            sinceISO = startOfDay.toISOString();
+            sinceISO = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
         } else if (period === '7d') {
             sinceISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
         } else if (period === '30d') {
@@ -1346,89 +1373,173 @@ router.get('/api/admin/usage-stats', requireAdminJWT, async (req, res) => {
         } else if (period === 'month') {
             sinceISO = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         }
-        // 'all' deixa sinceISO null
 
-        const buildBuscasQuery = () => {
-            let q = supabase.from('buscas').select('user_id, created_at');
-            if (sinceISO) q = q.gte('created_at', sinceISO);
-            return q;
-        };
-        const buildItinerariesQuery = () => {
-            let q = supabase.from('itineraries').select('user_id, created_at');
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+        const buildQuery = (table, cols) => {
+            let q = supabase.from(table).select(cols);
             if (sinceISO) q = q.gte('created_at', sinceISO);
             return q;
         };
 
-        const [buscasRes, itinerariesRes, profilesRes] = await Promise.all([
-            buildBuscasQuery(),
-            buildItinerariesQuery(),
-            supabase.from('user_profiles').select('id, full_name, email, plan'),
+        const [seatsRes, itinerariesRes, strategiesRes, strategiesMonthRes, itinerariesMonthRes, profilesRes] = await Promise.all([
+            (() => { let q = supabase.from('seatsaero_api_log').select('user_id, called_at').not('user_id', 'is', null); if (sinceISO) q = q.gte('called_at', sinceISO); return q; })(),
+            buildQuery('itineraries', 'user_id, created_at'),
+            supabase.from('strategies').select('user_id, created_at'),
+            supabase.from('strategies').select('user_id, created_at').gte('created_at', monthStart),
+            supabase.from('itineraries').select('user_id, created_at').gte('created_at', monthStart),
+            supabase.from('user_profiles').select('id, full_name, plan'),
         ]);
 
-        if (buscasRes.error) throw buscasRes.error;
+        if (seatsRes.error) throw seatsRes.error;
         if (itinerariesRes.error) throw itinerariesRes.error;
+        if (strategiesRes.error) throw strategiesRes.error;
         if (profilesRes.error) throw profilesRes.error;
-
-        const usageMap = {};
-        const ensureUser = (uid) => {
-            if (!uid) return null;
-            if (!usageMap[uid]) {
-                usageMap[uid] = { user_id: uid, buscas_count: 0, roteiros_count: 0, last_activity: null };
-            }
-            return usageMap[uid];
-        };
-
-        const updateLastActivity = (entry, iso) => {
-            if (!entry || !iso) return;
-            if (!entry.last_activity || new Date(iso) > new Date(entry.last_activity)) {
-                entry.last_activity = iso;
-            }
-        };
-
-        for (const row of buscasRes.data ?? []) {
-            const entry = ensureUser(row.user_id);
-            if (entry) {
-                entry.buscas_count += 1;
-                updateLastActivity(entry, row.created_at);
-            }
-        }
-        for (const row of itinerariesRes.data ?? []) {
-            const entry = ensureUser(row.user_id);
-            if (entry) {
-                entry.roteiros_count += 1;
-                updateLastActivity(entry, row.created_at);
-            }
-        }
 
         const profileMap = {};
         for (const p of profilesRes.data ?? []) profileMap[p.id] = p;
 
-        const userIds = Object.keys(usageMap);
+        // Lifetime strategies per user (for free plan limit)
+        const strategiesLifetime = {};
+        for (const row of strategiesRes.data ?? []) {
+            if (row.user_id) strategiesLifetime[row.user_id] = (strategiesLifetime[row.user_id] ?? 0) + 1;
+        }
+        // This month strategies per user
+        const strategiesMonth = {};
+        for (const row of strategiesMonthRes.data ?? []) {
+            if (row.user_id) strategiesMonth[row.user_id] = (strategiesMonth[row.user_id] ?? 0) + 1;
+        }
+        // This month roteiros per user
+        const itinerariesMonth = {};
+        for (const row of itinerariesMonthRes.data ?? []) {
+            if (row.user_id) itinerariesMonth[row.user_id] = (itinerariesMonth[row.user_id] ?? 0) + 1;
+        }
+
+        const usageMap = {};
+        const ensureUser = (uid) => {
+            if (!uid) return null;
+            if (!usageMap[uid]) usageMap[uid] = { user_id: uid, seats_calls_count: 0, roteiros_count: 0, last_activity: null };
+            return usageMap[uid];
+        };
+        const updateLastActivity = (entry, iso) => {
+            if (!entry || !iso) return;
+            if (!entry.last_activity || new Date(iso) > new Date(entry.last_activity)) entry.last_activity = iso;
+        };
+
+        for (const row of seatsRes.data ?? []) {
+            const entry = ensureUser(row.user_id);
+            if (entry) { entry.seats_calls_count += 1; updateLastActivity(entry, row.called_at); }
+        }
+        for (const row of itinerariesRes.data ?? []) {
+            const entry = ensureUser(row.user_id);
+            if (entry) { entry.roteiros_count += 1; updateLastActivity(entry, row.created_at); }
+        }
+
+        const activeUserIds = Object.keys(usageMap);
 
         if (includeInactive) {
             for (const p of profilesRes.data ?? []) {
-                if (!usageMap[p.id]) {
-                    usageMap[p.id] = { user_id: p.id, buscas_count: 0, roteiros_count: 0, last_activity: null };
-                }
+                if (!usageMap[p.id]) usageMap[p.id] = { user_id: p.id, seats_calls_count: 0, roteiros_count: 0, last_activity: null };
             }
         }
 
-        const users = Object.values(usageMap)
-            .map(entry => ({
+        const users = Object.values(usageMap).map(entry => {
+            const profile = profileMap[entry.user_id];
+            const plan = profile?.plan ?? 'free';
+            const limits = PLAN_LIMITS_ADMIN[plan] ?? PLAN_LIMITS_ADMIN.free;
+            const stratUsed = limits.strategiesLifetime != null
+                ? (strategiesLifetime[entry.user_id] ?? 0)
+                : (strategiesMonth[entry.user_id] ?? 0);
+            const stratLimit = limits.strategiesLifetime ?? limits.strategiesPerMonth ?? null;
+            const roteiroUsed = itinerariesMonth[entry.user_id] ?? 0;
+            const roteiroLimit = limits.roteiroPerMonth;
+
+            return {
                 ...entry,
-                full_name: profileMap[entry.user_id]?.full_name ?? null,
-                email: profileMap[entry.user_id]?.email ?? null,
-                plan: profileMap[entry.user_id]?.plan ?? 'free',
-            }))
-            .sort((a, b) => (b.buscas_count + b.roteiros_count) - (a.buscas_count + a.roteiros_count));
+                full_name: profile?.full_name ?? null,
+                plan,
+                strategies_used: stratUsed,
+                strategies_limit: stratLimit,
+                roteiros_used: roteiroUsed,
+                roteiros_limit: roteiroLimit,
+            };
+        }).sort((a, b) => (b.seats_calls_count + b.roteiros_count) - (a.seats_calls_count + a.roteiros_count));
 
         const totals = {
-            total_buscas: buscasRes.data?.length ?? 0,
+            total_seats_calls: seatsRes.data?.length ?? 0,
             total_roteiros: itinerariesRes.data?.length ?? 0,
-            active_users: userIds.length,
+            active_users: activeUserIds.length,
         };
 
         res.json({ period, totals, users });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── Partners (sócios) ────────────────────────────────────────────────────────
+
+router.get('/api/admin/partners', requireAdminJWT, async (_req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const { data, error } = await supabase
+            .from('admin_partners')
+            .select('*')
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+        res.json({ partners: data ?? [] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/api/admin/partners', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    const { name, profit_pct, cost_pct, salary_brl, notes } = req.body ?? {};
+    if (!name?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
+    try {
+        const { data, error } = await supabase
+            .from('admin_partners')
+            .insert({ name: name.trim(), profit_pct: profit_pct ?? 0, cost_pct: cost_pct ?? 0, salary_brl: salary_brl ?? 0, notes: notes || null })
+            .select()
+            .single();
+        if (error) throw error;
+        res.json({ partner: data });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.patch('/api/admin/partners/:id', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+        const { name, profit_pct, cost_pct, salary_brl, notes, active } = req.body ?? {};
+        const patch = {};
+        if (name !== undefined) patch.name = name?.trim() || null;
+        if (profit_pct !== undefined) patch.profit_pct = Number(profit_pct);
+        if (cost_pct !== undefined) patch.cost_pct = Number(cost_pct);
+        if (salary_brl !== undefined) patch.salary_brl = Number(salary_brl);
+        if (notes !== undefined) patch.notes = notes?.trim() || null;
+        if (active !== undefined) patch.active = !!active;
+        if (Object.keys(patch).length === 0) return res.status(400).json({ error: 'Nada para atualizar' });
+        const { data, error } = await supabase.from('admin_partners').update(patch).eq('id', id).select().single();
+        if (error) throw error;
+        res.json({ partner: data });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.delete('/api/admin/partners/:id', requireAdminJWT, async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+        const { error } = await supabase.from('admin_partners').delete().eq('id', id);
+        if (error) throw error;
+        res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

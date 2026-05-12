@@ -7,7 +7,7 @@ const router = Router();
 
 // Rota de busca via API oficial do Seats.aero
 router.post('/api/search-flights', async (req, res) => {
-    const { origem, destino, data_ida, data_volta } = req.body;
+    const { origem, destino, data_ida, data_volta, user_id } = req.body;
     console.log(`[Express] /api/search-flights — ${req.body?.origem} → ${req.body?.destino} | SEATS_AERO_API_KEY: ${SEATS_AERO_API_KEY ? '✅' : '❌ AUSENTE'}`)
 
     if (!SEATS_AERO_API_KEY) {
@@ -48,8 +48,8 @@ router.post('/api/search-flights', async (req, res) => {
         }
 
         // ── 2. Busca na API em paralelo (ida + volta) ─────────────────────────
-        const promessas = [fetchSeatsAeroAPI(origem, destino, data_ida, data_ida)];
-        if (data_volta) promessas.push(fetchSeatsAeroAPI(destino, origem, data_volta, data_volta));
+        const promessas = [fetchSeatsAeroAPI(origem, destino, data_ida, data_ida, user_id)];
+        if (data_volta) promessas.push(fetchSeatsAeroAPI(destino, origem, data_volta, data_volta, user_id));
 
         const [itemsIda, itemsVolta = []] = await Promise.all(promessas);
         const resultadosFinais = [

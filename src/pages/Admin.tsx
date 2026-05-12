@@ -46,9 +46,9 @@ interface ApiCheck { name: string; ok: boolean; latency: number; error?: string 
 interface ApiStatus { checks: ApiCheck[]; checkedAt: string }
 
 interface AdminUser {
-    id: string; full_name: string | null; email: string | null
+    id: string; full_name: string | null; email: string | null; phone: string | null
     plan: Plan; plan_expires_at: string | null; plan_billing: string | null
-    is_admin: boolean; updated_at: string
+    is_admin: boolean; updated_at: string; created_at: string
 }
 
 interface TransferPromo {
@@ -74,11 +74,11 @@ interface CostHistory { month: string; total: number }
 const SECTIONS: { id: SectionId; label: string; icon: React.ElementType; description: string }[] = [
     { id: 'dashboard',  label: 'Dashboard',   icon: BarChart2,  description: 'Visão geral do negócio' },
     { id: 'usuarios',   label: 'Usuários',     icon: Users,      description: 'Gerenciar contas e planos' },
+    { id: 'uso',        label: 'Uso',          icon: BarChart3,  description: 'Métricas de uso por usuário' },
     { id: 'custos',     label: 'Custos',       icon: Receipt,    description: 'Controle de gastos' },
     { id: 'promocoes',  label: 'Promoções',    icon: Tag,        description: 'Bônus de transferência' },
     { id: 'logs',       label: 'Logs',         icon: FileText,   description: 'Histórico de sincronização' },
     { id: 'codigos',    label: 'Divulgação',   icon: Megaphone,  description: 'Códigos de divulgação' },
-    { id: 'uso',        label: 'Uso',          icon: BarChart3,  description: 'Métricas de uso por usuário' },
     { id: 'posts',      label: 'Posts',        icon: Image,      description: 'Gerador de slides Instagram' },
 ]
 
@@ -425,21 +425,25 @@ function Usuarios({ token }: { token: string }) {
     const [page, setPage] = useState(1)
     const [planFilter, setPlanFilter] = useState<Plan | ''>('')
     const [search, setSearch] = useState('')
+    const [sortBy, setSortBy] = useState('updated_at')
+    const [churned, setChurned] = useState(false)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [editing, setEditing] = useState<AdminUser | null>(null)
+    const [viewing, setViewing] = useState<AdminUser | null>(null)
 
     const load = useCallback(async () => {
         setLoading(true); setError(null)
         try {
-            const p = new URLSearchParams({ page: String(page) })
-            if (planFilter) p.set('plan', planFilter)
+            const p = new URLSearchParams({ page: String(page), sort_by: sortBy })
+            if (churned) { p.set('churned', 'true') }
+            else if (planFilter) p.set('plan', planFilter)
             if (search) p.set('search', search)
             const data = await adminFetch(`/api/admin/users?${p}`, token)
             setUsers(data.users); setTotal(data.total)
         } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Erro') }
         finally { setLoading(false) }
-    }, [token, page, planFilter, search])
+    }, [token, page, planFilter, search, sortBy, churned])
 
     useEffect(() => { load() }, [load])
 
@@ -449,17 +453,40 @@ function Usuarios({ token }: { token: string }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <BlockTitle icon={Users} title="Gerenciar usuários" subtitle="Edite plano, expiração e permissões de cada conta" />
 
+            {/* Tabs: ativos / churnados */}
+            <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                    onClick={() => { setChurned(false); setPage(1) }}
+                    style={{ ...S.btnSm, background: !churned ? '#EFF4FF' : '#F7F9FC', borderColor: !churned ? '#BFDBFE' : '#E2E8F0', color: !churned ? '#2A60C2' : '#64748B', fontWeight: !churned ? 700 : 500 }}
+                >
+                    Todos os usuários
+                </button>
+                <button
+                    onClick={() => { setChurned(true); setPlanFilter(''); setPage(1) }}
+                    style={{ ...S.btnSm, background: churned ? '#FEF2F2' : '#F7F9FC', borderColor: churned ? '#FECACA' : '#E2E8F0', color: churned ? '#DC2626' : '#64748B', fontWeight: churned ? 700 : 500 }}
+                >
+                    <UserX size={13} /> Churnados
+                </button>
+            </div>
+
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
                     <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
                     <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
-                        placeholder="Buscar por nome ou email…" style={inputSt({ paddingLeft: 30 })} />
+                        placeholder="Buscar por nome, email ou WhatsApp…" style={inputSt({ paddingLeft: 30 })} />
                 </div>
-                <select value={planFilter} onChange={e => { setPlanFilter(e.target.value as Plan | ''); setPage(1) }} style={inputSt({ width: 148 })}>
-                    <option value="">Todos os planos</option>
-                    {(['free', 'essencial', 'pro', 'elite', 'admin'] as Plan[]).map(p => (
-                        <option key={p} value={p}>{PLAN_LABELS[p]}</option>
-                    ))}
+                {!churned && (
+                    <select value={planFilter} onChange={e => { setPlanFilter(e.target.value as Plan | ''); setPage(1) }} style={inputSt({ width: 148 })}>
+                        <option value="">Todos os planos</option>
+                        {(['free', 'essencial', 'pro', 'elite', 'admin'] as Plan[]).map(p => (
+                            <option key={p} value={p}>{PLAN_LABELS[p]}</option>
+                        ))}
+                    </select>
+                )}
+                <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1) }} style={inputSt({ width: 176 })}>
+                    <option value="updated_at">+ recente atualização</option>
+                    <option value="created_at">+ tempo cadastrado</option>
+                    <option value="plan_expires_at">+ tempo pagando</option>
                 </select>
                 <button onClick={load} style={S.btnSm}><RefreshCw size={13} /></button>
             </div>
@@ -468,11 +495,17 @@ function Usuarios({ token }: { token: string }) {
             {error && <ErrBox msg={error} onRetry={load} />}
             {!loading && !error && (
                 <>
+                    {churned && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#92400E' }}>
+                            <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+                            {total} usuário(s) que já foram pagantes mas não renovaram. Entre em contato pelo WhatsApp para reativação.
+                        </div>
+                    )}
                     <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #E2E8F0' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                             <thead>
                                 <tr style={{ background: '#F7F9FC' }}>
-                                    {['Nome / Email', 'Plano', 'Expira em', 'Cobrança', 'Atualizado', ''].map(h => (
+                                    {['Nome / Email', 'WhatsApp', 'Plano', 'Expira em', 'Cadastro', ''].map(h => (
                                         <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#94A3B8', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                                     ))}
                                 </tr>
@@ -484,6 +517,11 @@ function Usuarios({ token }: { token: string }) {
                                             <div style={{ color: '#0E2A55', fontWeight: 600 }}>{u.full_name || '—'}</div>
                                             <div style={{ color: '#94A3B8', fontSize: 11 }}>{u.email ?? u.id.slice(0, 8)}</div>
                                         </td>
+                                        <td style={{ padding: '11px 14px', color: '#64748B', fontSize: 12 }}>
+                                            {u.phone
+                                                ? <a href={`https://wa.me/${u.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" style={{ color: '#16A34A', textDecoration: 'none', fontWeight: 600 }}>{u.phone}</a>
+                                                : <span style={{ color: '#CBD5E1' }}>—</span>}
+                                        </td>
                                         <td style={{ padding: '11px 14px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 <PlanBadge plan={u.plan} />
@@ -491,10 +529,12 @@ function Usuarios({ token }: { token: string }) {
                                             </div>
                                         </td>
                                         <td style={{ padding: '11px 14px', color: '#64748B', fontSize: 12 }}>{fmtDate(u.plan_expires_at)}</td>
-                                        <td style={{ padding: '11px 14px', color: '#64748B', fontSize: 12 }}>{u.plan_billing ?? '—'}</td>
-                                        <td style={{ padding: '11px 14px', color: '#94A3B8', fontSize: 11 }}>{fmtDate(u.updated_at)}</td>
+                                        <td style={{ padding: '11px 14px', color: '#94A3B8', fontSize: 11 }}>{fmtDate(u.created_at)}</td>
                                         <td style={{ padding: '11px 14px' }}>
-                                            <button onClick={() => setEditing(u)} style={S.btnXs}>Editar</button>
+                                            <div style={{ display: 'flex', gap: 6 }}>
+                                                <button onClick={() => setViewing(u)} style={S.btnXs}>Ver</button>
+                                                <button onClick={() => setEditing(u)} style={S.btnXs}>Editar</button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -512,6 +552,36 @@ function Usuarios({ token }: { token: string }) {
                 </>
             )}
             {editing && <EditUserModal user={editing} token={token} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
+            {viewing && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+                    onClick={e => e.target === e.currentTarget && setViewing(null)}>
+                    <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 16, padding: 28, width: '100%', maxWidth: 380 }}>
+                        <p style={{ color: '#0E2A55', fontWeight: 800, fontSize: 15, marginBottom: 20 }}>Informações do usuário</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            {[
+                                { label: 'Nome', value: viewing.full_name || '—' },
+                                { label: 'Email', value: viewing.email || '—' },
+                                { label: 'WhatsApp', value: viewing.phone || '—' },
+                                { label: 'Plano', value: PLAN_LABELS[viewing.plan] },
+                                { label: 'Expira em', value: fmtDate(viewing.plan_expires_at) },
+                                { label: 'Cadastro', value: fmtDate(viewing.created_at) },
+                            ].map(({ label, value }) => (
+                                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, paddingBottom: 10, borderBottom: '1px solid #F1F5F9' }}>
+                                    <span style={{ fontSize: 12, color: '#94A3B8', fontWeight: 600 }}>{label}</span>
+                                    <span style={{ fontSize: 13, color: '#0E2A55', fontWeight: 600, textAlign: 'right' }}>{value}</span>
+                                </div>
+                            ))}
+                        </div>
+                        {viewing.phone && (
+                            <a href={`https://wa.me/${viewing.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer"
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20, background: '#16A34A', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                                Abrir WhatsApp
+                            </a>
+                        )}
+                        <button onClick={() => setViewing(null)} style={{ ...S.btnSm, width: '100%', justifyContent: 'center', marginTop: 10 }}>Fechar</button>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
@@ -523,7 +593,9 @@ function EditUserModal({ user, token, onClose, onSaved }: {
     const [expiresAt, setExpiresAt] = useState(user.plan_expires_at ? user.plan_expires_at.slice(0, 10) : '')
     const [billing, setBilling] = useState(user.plan_billing ?? '')
     const [isAdmin, setIsAdmin] = useState(user.is_admin)
+    const [phone, setPhone] = useState(user.phone ?? '')
     const [saving, setSaving] = useState(false)
+    const [deleting, setDeleting] = useState(false)
     const [err, setErr] = useState<string | null>(null)
 
     async function save() {
@@ -531,7 +603,7 @@ function EditUserModal({ user, token, onClose, onSaved }: {
         try {
             await adminFetch(`/api/admin/users/${user.id}/plan`, token, {
                 method: 'PATCH',
-                body: JSON.stringify({ plan, plan_expires_at: expiresAt ? new Date(expiresAt).toISOString() : null, plan_billing: billing || null }),
+                body: JSON.stringify({ plan, plan_expires_at: expiresAt ? new Date(expiresAt).toISOString() : null, plan_billing: billing || null, phone: phone || null }),
             })
             if (isAdmin !== user.is_admin) {
                 await adminFetch(`/api/admin/users/${user.id}/toggle-admin`, token, { method: 'POST', body: JSON.stringify({ is_admin: isAdmin }) })
@@ -541,13 +613,26 @@ function EditUserModal({ user, token, onClose, onSaved }: {
         finally { setSaving(false) }
     }
 
+    async function deleteUser() {
+        if (!confirm(`Excluir permanentemente ${user.full_name ?? user.email ?? user.id}? Esta ação não pode ser desfeita.`)) return
+        setDeleting(true); setErr(null)
+        try {
+            await adminFetch(`/api/admin/users/${user.id}`, token, { method: 'DELETE' })
+            onSaved()
+        } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Erro ao excluir') }
+        finally { setDeleting(false) }
+    }
+
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
             onClick={e => e.target === e.currentTarget && onClose()}>
-            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400 }}>
+            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 16, padding: 28, width: '100%', maxWidth: 420 }}>
                 <p style={{ color: '#0E2A55', fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Editar usuário</p>
                 <p style={{ color: '#94A3B8', fontSize: 12, marginBottom: 20 }}>{user.email ?? user.id}</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <label style={S.label}>WhatsApp / Telefone
+                        <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+55 11 99999-9999" style={inputSt()} />
+                    </label>
                     <label style={S.label}>Plano
                         <select value={plan} onChange={e => setPlan(e.target.value as Plan)} style={inputSt()}>
                             {(['free', 'essencial', 'pro', 'elite', 'admin'] as Plan[]).map(p => <option key={p} value={p}>{PLAN_LABELS[p]}</option>)}
@@ -572,11 +657,17 @@ function EditUserModal({ user, token, onClose, onSaved }: {
                     </label>
                 </div>
                 {err && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 12 }}>{err}</p>}
-                <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-                    <button onClick={onClose} style={S.btnSm}>Cancelar</button>
-                    <button onClick={save} disabled={saving} style={S.btnPrimary}>
-                        {saving ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : 'Salvar'}
+                <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'space-between' }}>
+                    <button onClick={deleteUser} disabled={deleting} style={{ ...S.btnSm, color: '#DC2626', borderColor: '#FECACA' }}>
+                        {deleting ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Trash2 size={12} />}
+                        Excluir
                     </button>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                        <button onClick={onClose} style={S.btnSm}>Cancelar</button>
+                        <button onClick={save} disabled={saving} style={S.btnPrimary}>
+                            {saving ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : 'Salvar'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -747,6 +838,13 @@ function Custos({ token }: { token: string }) {
                 </>
             )}
 
+            {!loading && !error && (
+                <>
+                    <div style={{ height: 1, background: '#E2E8F0', margin: '8px 0' }} />
+                    <PartnersPanel token={token} mrr={mrr} totalCosts={totalMonth} />
+                </>
+            )}
+
             {showForm && (
                 <AddCostModal
                     token={token}
@@ -828,6 +926,159 @@ function AddCostModal({ token, defaultMonth, onClose, onSaved }: {
                     <button onClick={save} disabled={saving} style={S.btnPrimary}>
                         {saving ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : 'Salvar'}
                     </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// ─── Partners (Sócios) ───────────────────────────────────────────────────────
+
+interface Partner {
+    id: number
+    name: string
+    profit_pct: number
+    cost_pct: number
+    salary_brl: number
+    notes: string | null
+    active: boolean
+    created_at: string
+}
+
+function PartnersPanel({ token, mrr, totalCosts }: { token: string; mrr: number; totalCosts: number }) {
+    const [partners, setPartners] = useState<Partner[]>([])
+    const [loading, setLoading] = useState(true)
+    const [showForm, setShowForm] = useState(false)
+    const [editing, setEditing] = useState<Partner | null>(null)
+    const [err, setErr] = useState<string | null>(null)
+
+    const load = useCallback(async () => {
+        setLoading(true)
+        try { const d = await adminFetch('/api/admin/partners', token); setPartners(d.partners ?? []) }
+        catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Erro') }
+        finally { setLoading(false) }
+    }, [token])
+
+    useEffect(() => { load() }, [load])
+
+    const profit = mrr - totalCosts
+    const active = partners.filter(p => p.active)
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <BlockTitle icon={Users} title="Sócios" subtitle="Divisão de lucros, custos e pró-labore" />
+                <button onClick={() => setShowForm(true)} style={S.btnPrimary}><Plus size={14} />Adicionar sócio</button>
+            </div>
+
+            {err && <ErrBox msg={err} onRetry={load} />}
+            {loading ? <Spinner /> : (
+                <>
+                    {active.length > 0 && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                            {active.map(p => {
+                                const profitShare = profit * p.profit_pct / 100
+                                const costShare = totalCosts * p.cost_pct / 100
+                                const total = profitShare + Number(p.salary_brl) - costShare
+                                return (
+                                    <div key={p.id} style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <p style={{ color: '#0E2A55', fontWeight: 800, fontSize: 14, margin: 0 }}>{p.name}</p>
+                                            <button onClick={() => setEditing(p)} style={S.btnXs}>Editar</button>
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
+                                            {p.profit_pct > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                                                <span style={{ color: '#64748B' }}>Lucro ({p.profit_pct}%)</span>
+                                                <span style={{ color: '#16A34A', fontWeight: 700 }}>{fmtBRL(profitShare)}</span>
+                                            </div>}
+                                            {p.salary_brl > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                                                <span style={{ color: '#64748B' }}>Pró-labore</span>
+                                                <span style={{ color: '#0E2A55', fontWeight: 700 }}>{fmtBRL(Number(p.salary_brl))}</span>
+                                            </div>}
+                                            {p.cost_pct > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                                                <span style={{ color: '#64748B' }}>Custos ({p.cost_pct}%)</span>
+                                                <span style={{ color: '#EF4444', fontWeight: 700 }}>−{fmtBRL(costShare)}</span>
+                                            </div>}
+                                            <div style={{ height: 1, background: '#E2E8F0', margin: '4px 0' }} />
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                                <span style={{ color: '#0E2A55', fontWeight: 700 }}>Total este mês</span>
+                                                <span style={{ color: total >= 0 ? '#16A34A' : '#EF4444', fontWeight: 800 }}>{fmtBRL(total)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                    {partners.length === 0 && (
+                        <p style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: 20 }}>Nenhum sócio cadastrado.</p>
+                    )}
+                </>
+            )}
+
+            {showForm && <PartnerFormModal token={token} onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); load() }} />}
+            {editing && <PartnerFormModal token={token} partner={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
+        </div>
+    )
+}
+
+function PartnerFormModal({ token, partner, onClose, onSaved }: {
+    token: string; partner?: Partner; onClose: () => void; onSaved: () => void
+}) {
+    const [name, setName] = useState(partner?.name ?? '')
+    const [profitPct, setProfitPct] = useState(String(partner?.profit_pct ?? 0))
+    const [costPct, setCostPct] = useState(String(partner?.cost_pct ?? 0))
+    const [salary, setSalary] = useState(String(partner?.salary_brl ?? 0))
+    const [notes, setNotes] = useState(partner?.notes ?? '')
+    const [saving, setSaving] = useState(false)
+    const [err, setErr] = useState<string | null>(null)
+
+    async function save() {
+        if (!name.trim()) { setErr('Nome é obrigatório'); return }
+        setSaving(true); setErr(null)
+        try {
+            const body = { name, profit_pct: parseFloat(profitPct) || 0, cost_pct: parseFloat(costPct) || 0, salary_brl: parseFloat(salary) || 0, notes: notes || null }
+            if (partner) {
+                await adminFetch(`/api/admin/partners/${partner.id}`, token, { method: 'PATCH', body: JSON.stringify(body) })
+            } else {
+                await adminFetch('/api/admin/partners', token, { method: 'POST', body: JSON.stringify(body) })
+            }
+            onSaved()
+        } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Erro') }
+        finally { setSaving(false) }
+    }
+
+    async function deletePartner() {
+        if (!partner || !confirm(`Remover ${partner.name}?`)) return
+        setSaving(true)
+        try {
+            await adminFetch(`/api/admin/partners/${partner.id}`, token, { method: 'DELETE' })
+            onSaved()
+        } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Erro') }
+        finally { setSaving(false) }
+    }
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+            onClick={e => e.target === e.currentTarget && onClose()}>
+            <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 16, padding: 28, width: '100%', maxWidth: 400 }}>
+                <p style={{ color: '#0E2A55', fontWeight: 800, fontSize: 15, marginBottom: 20 }}>{partner ? 'Editar sócio' : 'Novo sócio'}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <label style={S.label}>Nome *<input value={name} onChange={e => setName(e.target.value)} style={inputSt()} /></label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <label style={S.label}>% Lucro<input type="number" min="0" max="100" step="0.5" value={profitPct} onChange={e => setProfitPct(e.target.value)} style={inputSt()} /></label>
+                        <label style={S.label}>% Custos<input type="number" min="0" max="100" step="0.5" value={costPct} onChange={e => setCostPct(e.target.value)} style={inputSt()} /></label>
+                    </div>
+                    <label style={S.label}>Pró-labore (R$/mês)<input type="number" min="0" step="100" value={salary} onChange={e => setSalary(e.target.value)} style={inputSt()} /></label>
+                    <label style={S.label}>Notas<textarea value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inputSt(), minHeight: 56, fontFamily: 'inherit' }} /></label>
+                </div>
+                {err && <p style={{ color: '#EF4444', fontSize: 12, marginTop: 12 }}>{err}</p>}
+                <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'space-between' }}>
+                    {partner && <button onClick={deletePartner} disabled={saving} style={{ ...S.btnSm, color: '#DC2626', borderColor: '#FECACA' }}><Trash2 size={12} />Remover</button>}
+                    <div style={{ display: 'flex', gap: 10, marginLeft: 'auto' }}>
+                        <button onClick={onClose} style={S.btnSm}>Cancelar</button>
+                        <button onClick={save} disabled={saving} style={S.btnPrimary}>{saving ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : 'Salvar'}</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1893,17 +2144,20 @@ type UsagePeriod = 'today' | '7d' | '30d' | 'month' | 'all'
 interface UsageUser {
     user_id: string
     full_name: string | null
-    email: string | null
     plan: Plan
-    buscas_count: number
+    seats_calls_count: number
     roteiros_count: number
+    strategies_used: number
+    strategies_limit: number | null
+    roteiros_used: number
+    roteiros_limit: number
     last_activity: string | null
 }
 
 interface UsageStats {
     period: UsagePeriod
     totals: {
-        total_buscas: number
+        total_seats_calls: number
         total_roteiros: number
         active_users: number
     }
@@ -2087,10 +2341,11 @@ function Uso({ token }: { token: string }) {
             {/* Cards de totais */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
                 <div style={S.card}>
-                    <p style={S.cardLabel}>Buscas realizadas</p>
+                    <p style={S.cardLabel}>Chamadas Seats.aero</p>
                     <p style={{ color: '#0E2A55', fontSize: 28, fontWeight: 800, marginTop: 4 }}>
-                        {stats.totals.total_buscas.toLocaleString('pt-BR')}
+                        {stats.totals.total_seats_calls.toLocaleString('pt-BR')}
                     </p>
+                    <p style={{ color: '#94A3B8', fontSize: 11, marginTop: 2 }}>no período</p>
                 </div>
                 <div style={S.card}>
                     <p style={S.cardLabel}>Roteiros gerados</p>
@@ -2124,9 +2379,9 @@ function Uso({ token }: { token: string }) {
                     <thead style={{ background: '#F7F9FC' }}>
                         <tr>
                             <th style={thSt}>Usuário</th>
-                            <th style={thSt}>Email</th>
                             <th style={thSt}>Plano</th>
-                            <th style={thSt}>Buscas</th>
+                            <th style={thSt}>API Seats.aero</th>
+                            <th style={thSt}>Estratégias</th>
                             <th style={thSt}>Roteiros</th>
                             <th style={thSt}>Última atividade</th>
                         </tr>
@@ -2143,20 +2398,26 @@ function Uso({ token }: { token: string }) {
                                 </td>
                             </tr>
                         )}
-                        {filteredUsers.map((u, i) => (
-                            <tr key={u.user_id} style={{ background: i % 2 === 0 ? '#FFFFFF' : '#F7F9FC' }}>
-                                <td style={{ ...tdSt, color: '#0E2A55', fontWeight: 600 }}>{u.full_name ?? <span style={{ color: '#94A3B8' }}>—</span>}</td>
-                                <td style={{ ...tdSt, color: '#64748B' }}>{u.email ?? '—'}</td>
-                                <td style={tdSt}><PlanBadge plan={u.plan} /></td>
-                                <td style={{ ...tdSt, fontWeight: 700, color: u.buscas_count > 0 ? '#0E2A55' : '#94A3B8' }}>
-                                    {u.buscas_count}
-                                </td>
-                                <td style={{ ...tdSt, fontWeight: 700, color: u.roteiros_count > 0 ? '#0E2A55' : '#94A3B8' }}>
-                                    {u.roteiros_count}
-                                </td>
-                                <td style={{ ...tdSt, color: '#64748B', fontSize: 12 }}>{fmtDateTime(u.last_activity)}</td>
-                            </tr>
-                        ))}
+                        {filteredUsers.map((u, i) => {
+                            const stratLimit = u.strategies_limit != null ? String(u.strategies_limit) : '∞'
+                            const roteiroLimit = u.roteiros_limit === 999 ? '∞' : String(u.roteiros_limit)
+                            return (
+                                <tr key={u.user_id} style={{ background: i % 2 === 0 ? '#FFFFFF' : '#F7F9FC' }}>
+                                    <td style={{ ...tdSt, color: '#0E2A55', fontWeight: 600 }}>{u.full_name ?? <span style={{ color: '#94A3B8' }}>—</span>}</td>
+                                    <td style={tdSt}><PlanBadge plan={u.plan} /></td>
+                                    <td style={{ ...tdSt, fontWeight: 700, color: u.seats_calls_count > 0 ? '#0E2A55' : '#94A3B8' }}>
+                                        {u.seats_calls_count}
+                                    </td>
+                                    <td style={{ ...tdSt, fontWeight: 600, color: u.strategies_limit != null && u.strategies_used >= u.strategies_limit ? '#DC2626' : '#0E2A55' }}>
+                                        {u.strategies_used}/{stratLimit}
+                                    </td>
+                                    <td style={{ ...tdSt, fontWeight: 600, color: u.roteiros_limit !== 999 && u.roteiros_used >= u.roteiros_limit ? '#DC2626' : '#0E2A55' }}>
+                                        {u.roteiros_used}/{roteiroLimit}
+                                    </td>
+                                    <td style={{ ...tdSt, color: '#64748B', fontSize: 12 }}>{fmtDateTime(u.last_activity)}</td>
+                                </tr>
+                            )
+                        })}
                     </tbody>
                 </table>
             </div>

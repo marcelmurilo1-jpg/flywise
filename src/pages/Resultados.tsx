@@ -283,7 +283,7 @@ export default function Resultados() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             signal: abort.signal,
-            body: JSON.stringify({ origem: p.orig, destino: p.dest, data_ida: p.date, data_volta: p.ret }),
+            body: JSON.stringify({ origem: p.orig, destino: p.dest, data_ida: p.date, data_volta: p.ret, user_id: user?.id }),
         })
             .then(r => { if (!r.ok) throw new Error(`Servidor retornou ${r.status}`); return r.json() })
             .then(data => {
