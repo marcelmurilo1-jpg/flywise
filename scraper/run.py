@@ -124,6 +124,13 @@ _COMPRAS_KEYWORDS = [
     "desconto em compras", "shopee", "amazon", "americanas",
     "iof zero", "conta global", "cartão pré-pago", "compre dólares",
     "compre euros", "câmbio", "dólar baixo", "abra sua conta",
+    # fintech / câmbio
+    "compre dólar", "taxa de conversão zero", "isenção da taxa de conversão",
+    "compre agora com a menor taxa", "menor taxa pelo arq",
+    "abra a conta nomad", "abra sua conta nomad", "dólar a r$",
+    "invista no exterior", "concorra a diversos prêmios",
+    # benefícios de cartão / programa de parceiros
+    "mastercard surpreenda", "porto bank",
 ]
 
 _NOTICIAS_KEYWORDS = [
@@ -134,6 +141,19 @@ _NOTICIAS_KEYWORDS = [
     "resort", "novo resort", "novo hotel", "eletrocardiograma",
     "power bank", "power banks", "lei ", "regulamento",
     "fusão", "acordo", "parceria estratégica",
+    # notícias aéreas que não são promoções
+    "entra em greve", "fazem greve", "fará greve", "greve da ", "greve impacta",
+    "nova greve", "sequência de greve", "pilotos da ", "comissários da ",
+    "amplia voos em", "amplia suspensão", "estreia nova experiência",
+    "inicia retrofit", "nova cabine", "amplia frota", "assina memorando",
+    "encerrará acesso", "vai retirar boeing", "vai retirar airbus",
+    "revela novos uniformes", "recebe certificação", "celebra anos",
+    "inaugura estação", "conexão com o metrô", "disputa participação",
+    "pedido bilionário", "anuncia retomada", "retomada de operações",
+    "vai expandir terminal", "lança loja online",
+    # passaportes / documentos / tech
+    "passaporte comemorativo", "id digital", "carteira do google",
+    "carteira de identidade", "wi-fi rápido em todas",
 ]
 
 # Palavras no TÍTULO que indicam conteúdo fora do tema viagem/milhas.
@@ -144,8 +164,13 @@ _FORA_TEMA_TITULO = [
     "ranking de restaurante", "ranking de hambur", "melhores hambur",
     "melhores restaurantes", "melhor restaurante", "melhores bares",
     "receita de", "dica de restaurante",
+    # bebidas/eventos off-topic
     "cerveja artesanal", "vinho tinto", "vinho branco",
+    "inaugura espaço", "coworking grátis",
     "pizza delivery", "sushi delivery",
+    # entretenimento/lifestyle
+    "montanha-russa", "parque temático", "chocolate premiado",
+    "cacau show", "cacau park",
     "fashion week", "moda ", "beleza e",
     "série da netflix", "lançamento do filme",
 ]
@@ -176,6 +201,21 @@ def classificar(titulo: str, conteudo: str) -> tuple[str | None, str | None, lis
         "proíbe recarga", "torna obrigatório", "nova regra obrigatória",
         "vai construir resort", "rede internacional vai", "novo resort",
         "eletrocardiograma a bordo", "power banks a bordo",
+        # greves e reestruturação
+        "entram em greve", "fazem greve", "fará greve", "em greve nesta",
+        "greve impacta", "nova greve da", "sequência de greves",
+        # mudanças de serviço/frota
+        "vai eliminar serviço", "deixa de incluir bagagem",
+        "ampliará controle da", "amplia frota comemorativa",
+        "inicia retrofit", "recebe certificação para nova",
+        "revela novos uniformes", "disputa participação na",
+        "assina memorando para", "encerrará acesso a lounges",
+        "vai retirar boeing", "vai retirar airbus",
+        # aeroportos/infraestrutura
+        "pode ter horário estendido", "projeto de lei quer mudar as diárias",
+        "inaugura estação e ganha", "celebra 90 anos", "lança loja online",
+        # Heineken / cerveja / off-topic
+        "inaugura espaço inédito",
     ]
     if any(nd in texto for nd in _NOTICIAS_DEFINITIVAS):
         return "noticias", None, []
