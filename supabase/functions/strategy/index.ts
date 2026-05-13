@@ -1230,8 +1230,19 @@ async function fetchUserData(userId: string, sb: ReturnType<typeof createClient>
         const { data: { user }, error } = await sb.auth.admin.getUserById(userId)
         if (error || !user) return null
         const meta = user.user_metadata ?? {}
+
+        // Merge direct program balances with card points converted to bank programs
+        const miles: Record<string, number> = { ...(meta.miles ?? {}) }
+        const cardPoints = (meta.card_points ?? {}) as Record<string, number>
+        for (const [cardId, pts] of Object.entries(cardPoints)) {
+            const bankInfo = CARD_TO_BANK_PROGRAM[cardId]
+            if (bankInfo && pts > 0) {
+                miles[bankInfo.bank] = (miles[bankInfo.bank] ?? 0) + pts
+            }
+        }
+
         return {
-            miles: (meta.miles ?? {}) as Record<string, number>,
+            miles,
             cards: (meta.activeCards ?? []) as string[],
             clubs: (meta.activeClubs ?? []) as string[],
             clubTiers: (meta.activeClubTiers ?? {}) as Record<string, string>,
