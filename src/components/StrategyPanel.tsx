@@ -65,15 +65,19 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
     useEffect(() => {
         if (!open) return
         const program = seatsContext?.program ?? null
-        if (!program) return
+        const candidatePrograms = Array.from(new Set([
+            ...(program ? [program] : []),
+            ...(allProgramPrices?.map(p => p.program) ?? []),
+        ])).filter(Boolean)
+        if (candidatePrograms.length === 0) return
         supabase
             .from('vw_promocoes_ativas')
             .select('id, titulo, subcategoria, bonus_pct, preco_clube, programas_tags, valid_until')
-            .overlaps('programas_tags', [program])
+            .overlaps('programas_tags', candidatePrograms)
             .order('valid_until', { ascending: true, nullsFirst: false })
-            .limit(3)
+            .limit(6)
             .then(({ data }) => setActivePromos(data ?? []))
-    }, [open, seatsContext?.program])
+    }, [open, seatsContext?.program, allProgramPrices])
 
     if (!flight && !seatsContext && !initialStrategy) return null
     const price = cashPrice || flight?.preco_brl || 0
@@ -109,6 +113,7 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                     seatsContext: seatsContext || undefined,
                     buscaId: buscaId || undefined,
                     allProgramPrices: allProgramPrices && allProgramPrices.length > 0 ? allProgramPrices : undefined,
+                    frontendPromos: activePromos.length > 0 ? activePromos : undefined,
                 }),
             })
 
@@ -207,7 +212,7 @@ export function StrategyPanel({ open, onClose, flight = null, buscaId, cashPrice
                                     {activePromos.length > 0 && (
                                         <div style={{ width: '100%', background: 'linear-gradient(135deg, #EDE9FE, #F5F3FF)', border: '1px solid #C4B5FD', borderRadius: 12, padding: '12px 16px', textAlign: 'left' }}>
                                             <div style={{ fontSize: 11, fontWeight: 700, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
-                                                ⚡ Promoções ativas · {seatsContext?.program}
+                                                ⚡ Promoções ativas · programas candidatos
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                                 {activePromos.map(p => (

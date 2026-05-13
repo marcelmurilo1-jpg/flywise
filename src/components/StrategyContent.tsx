@@ -341,6 +341,10 @@ export function StrategyContent({ strategy, seatsContext, cashPrice = 0, onRegen
                                         )}
                                     </div>
                                     <div>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 5 }}>
+                                            {prog.milhas_necessarias.toLocaleString('pt-BR')} pts
+                                            <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 3 }}>necessários</span>
+                                        </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>
                                             <span>Cobertura</span><span style={{ fontWeight: 700 }}>{coveragePct}%</span>
                                         </div>
@@ -348,7 +352,9 @@ export function StrategyContent({ strategy, seatsContext, cashPrice = 0, onRegen
                                             <div style={{ height: '100%', width: `${coveragePct}%`, background: prog.deficit === 0 ? '#16A34A' : '#3B82F6', borderRadius: 3 }} />
                                         </div>
                                         <div style={{ fontSize: 10, fontWeight: 700, color: prog.deficit === 0 ? '#16A34A' : '#DC2626', marginTop: 3 }}>
-                                            {prog.deficit === 0 ? '✓ Cobre tudo' : `Faltam ${prog.deficit.toLocaleString('pt-BR')} pts`}
+                                            {prog.deficit === 0
+                                                ? `✓ Em carteira: ${prog.total_potencial.toLocaleString('pt-BR')} pts`
+                                                : `Em carteira: ${prog.total_potencial.toLocaleString('pt-BR')} · Faltam: ${prog.deficit.toLocaleString('pt-BR')} pts`}
                                         </div>
                                     </div>
                                     {promoTransfers.slice(0, 2).map(t => (

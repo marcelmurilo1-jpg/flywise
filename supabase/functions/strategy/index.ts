@@ -110,6 +110,7 @@ const AIRLINE_PROGRAMS: Record<string, string[]> = {
 // Source programs that can transfer INTO each target loyalty program (base ratios, sem promos)
 const TRANSFER_BASES: Record<string, Array<{ source: string; ratio: number }>> = {
     'Smiles': [
+        { source: 'Nubank Rewards', ratio: 1.0 },
         { source: 'Livelo', ratio: 1.0 },
         { source: 'Pontos Itaú', ratio: 1.0 },
         { source: 'Esfera', ratio: 1.0 },
@@ -607,6 +608,7 @@ function buildCpmSection(cashPrice: number | null | undefined, totalMilhas: numb
 
 // Market price per 1.000 bank/credit-card points (R$) — for effective cost via transfer
 const BANK_COST_PER_K: Record<string, number> = {
+    'Nubank Rewards': 38,
     'Livelo': 40,
     'Pontos Itaú': 38,
     'Esfera': 38,
@@ -682,8 +684,8 @@ const PROGRAM_TRANSFER_URLS: Record<string, string> = {
 // Maps bank/card-id tags to the transfer source program — fixes promo matching for scraped promos
 // that use bank names (ex: "Nubank") instead of the points currency ("Membership Rewards")
 const BANK_TAG_TO_TRANSFER_SOURCE: Record<string, string> = {
-    'nubank': 'Membership Rewards',
-    'nubank_ultravioleta': 'Membership Rewards',
+    'nubank': 'Nubank Rewards',
+    'nubank_ultravioleta': 'Nubank Rewards',
     'amex': 'Membership Rewards',
     'amex_platinum': 'Membership Rewards',
     'amex_gold': 'Membership Rewards',
@@ -724,7 +726,7 @@ const BANK_TAG_TO_TRANSFER_SOURCE: Record<string, string> = {
 
 // Maps card IDs (from userData.cards) to the bank transfer program they belong to
 const CARD_TO_BANK_PROGRAM: Record<string, { bank: string; label: string }> = {
-    'nubank_ultravioleta': { bank: 'Membership Rewards', label: 'Nubank Ultravioleta (via Amex)' },
+    'nubank_ultravioleta': { bank: 'Nubank Rewards', label: 'Nubank Ultravioleta' },
     'amex_platinum':       { bank: 'Membership Rewards', label: 'Amex Platinum' },
     'amex_gold':           { bank: 'Membership Rewards', label: 'Amex Gold' },
     'amex_green':          { bank: 'Membership Rewards', label: 'Amex Green' },
@@ -1066,11 +1068,22 @@ function buildDeficitSection(
         }
     }
 
+    // Opção Universal: Livelo e Esfera são hubs abertos para qualquer pessoa
+    lines.push(`\nOPÇÃO UNIVERSAL — LIVELO / ESFERA (abertos para qualquer pessoa, sem cartão específico):`)
+    lines.push(`  Qualquer pessoa pode criar conta GRÁTIS no Livelo ou Esfera e comprar milhas com qualquer cartão.`)
+    lines.push(`  → Livelo (livelo.com.br): vende milhas de Smiles, LATAM Pass, TudoAzul, Flying Blue e outros`)
+    lines.push(`  → Esfera (esfera.com.vc): similar ao Livelo, com promoções sazonais`)
+    if (programa !== 'Smiles' && programa !== 'LATAM Pass' && programa !== 'TudoAzul') {
+        lines.push(`  ⚠️ Verifique disponibilidade de ${programa} nas plataformas — nem todos os programas são vendidos via hub.`)
+    }
+    lines.push(`  Use esta opção especialmente se o banco do usuário não transfere diretamente para ${programa}.`)
+
     lines.push(`\n⚠️ INSTRUÇÃO: O step_detail do passo de aquisição de milhas faltantes DEVE incluir:`)
     lines.push(`1. Custo exato de comprar as ${deficit.toLocaleString('pt-BR')} milhas: R$ ${costToBuy.toLocaleString('pt-BR')}`)
     lines.push(`2. Se Opção B (transferência) for mais barata, recomende ela com os cálculos acima`)
-    lines.push(`3. Se Opção C (acúmulo) existir e for vantajosa, apresente com valor a gastar e loja`)
-    lines.push(`4. Compare as opções em R$ e recomende a mais vantajosa neste caso específico`)
+    lines.push(`3. Se banco do usuário NÃO transfere para ${programa}, mencione Livelo/Esfera como alternativa de compra`)
+    lines.push(`4. Se Opção C (acúmulo) existir e for vantajosa, apresente com valor a gastar e loja`)
+    lines.push(`5. Compare as opções em R$ e recomende a mais vantajosa neste caso específico`)
 
     return lines.join('\n')
 }
@@ -1282,7 +1295,7 @@ serve(async (req) => {
                 { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
         }
 
-        const { flightId, userId, cashPrice, seatsContext, buscaId, allProgramPrices } = await req.json()
+        const { flightId, userId, cashPrice, seatsContext, buscaId, allProgramPrices, frontendPromos } = await req.json()
         if (!flightId && !seatsContext) {
             return new Response(JSON.stringify({ ok: false, error: 'flightId or seatsContext required' }),
                 { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -1539,6 +1552,20 @@ serve(async (req) => {
         }
 
         sections.push('\n=== PROMOÇÕES ATIVAS (programas relevantes) ===', promoResult.promoStr)
+
+        // Promoções detectadas pelo frontend (visíveis ao usuário antes de gerar a estratégia)
+        if (Array.isArray(frontendPromos) && frontendPromos.length > 0) {
+            const fpRows = (frontendPromos as PromoRow[]).filter(fp =>
+                !promoResult.allRows.some(r => r.titulo === fp.titulo)
+            )
+            if (fpRows.length > 0) {
+                // Merge into allRows so cost analysis functions can also use them
+                promoResult.allRows.push(...fpRows)
+                const fpStr = fpRows.map((p, i) => formatPromoLine(p, i)).join('\n')
+                sections.push('\n=== PROMOÇÕES ADICIONAIS VISÍVEIS AO USUÁRIO ===', fpStr)
+            }
+        }
+
         sections.push(`\nResponda APENAS com JSON neste formato:\n${JSON_SCHEMA}`)
 
         const userPrompt = sections.join('\n')

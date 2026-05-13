@@ -131,6 +131,8 @@ def promos_para_usuario(usuario: dict, promos: list[dict], ja_enviadas: set[int]
       milhas / subcategoria=acumulo      → alerta_acumulo
       milhas / subcategoria=clube        → alerta_compras
       milhas / outros                    → alerta_award_space
+      noticias                           → alerta_noticias
+      compras                            → alerta_compras
     """
     resultado = []
     for p in promos:
@@ -165,14 +167,29 @@ def promos_para_usuario(usuario: dict, promos: list[dict], ja_enviadas: set[int]
             if not prefs_prog or not tags or any(t in prefs_prog for t in tags):
                 resultado.append(p)
 
+        elif cat == "noticias":
+            if not usuario["alerta_noticias"]:
+                continue
+            resultado.append(p)
+
+        elif cat == "compras":
+            if not usuario["alerta_compras"]:
+                continue
+            resultado.append(p)
+
     return resultado[:MAX_PROMOS]
 
 
 # ─── E-mail HTML ──────────────────────────────────────────────────────────────
 
 def _badge(cat: str) -> str:
-    color = "#2563eb" if cat == "milhas" else "#16a34a"
-    label = "Milhas" if cat == "milhas" else "Passagem"
+    mapping = {
+        "milhas":    ("#2563eb", "Milhas"),
+        "passagens": ("#16a34a", "Passagem"),
+        "noticias":  ("#64748b", "Notícias"),
+        "compras":   ("#9333ea", "Compras"),
+    }
+    color, label = mapping.get(cat, ("#16a34a", "Promoção"))
     return (
         f'<span style="display:inline-block;padding:2px 10px;border-radius:999px;'
         f'background:{color};color:#fff;font-size:11px;font-weight:700;'
