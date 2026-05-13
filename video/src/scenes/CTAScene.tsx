@@ -46,20 +46,21 @@ export const CTAScene: React.FC = () => {
     >
       <Img
         src={staticFile("logo.png")}
-        style={{ height: 96, width: "auto", opacity: logoOpacity }}
+        style={{ height: 200, width: "auto", opacity: logoOpacity }}
       />
       <p
         style={{
           fontFamily: FONT_FAMILY,
-          fontSize: 36,
+          fontSize: 40,
           fontWeight: 600,
           color: COLORS.navy,
           margin: 0,
+          letterSpacing: "-0.5px",
           opacity: subtitleOpacity,
           transform: `translateY(${subtitleY}px)`,
         }}
       >
-        Entre na lista de espera
+        Comece a voar melhor.
       </p>
       <div style={{ opacity: urlOpacity, position: "relative" }}>
         <p

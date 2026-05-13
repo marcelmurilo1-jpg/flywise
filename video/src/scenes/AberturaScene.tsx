@@ -1,20 +1,50 @@
 import { AbsoluteFill, interpolate, useCurrentFrame, Easing, Img, staticFile } from "remotion";
-import { AnimatedText } from "../components/AnimatedText";
 import { COLORS, FONT_FAMILY } from "../theme";
 
 export const AberturaScene: React.FC = () => {
   const frame = useCurrentFrame();
 
-  const logoOpacity = interpolate(frame, [0, 25], [0, 1], {
+  // Logo: scale up + fade in
+  const logoOpacity = interpolate(frame, [0, 30], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
-    easing: Easing.out(Easing.cubic),
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
+  });
+  const logoScale = interpolate(frame, [0, 30], [0.9, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
   });
 
-  const taglineOpacity = interpolate(frame, [50, 65], [0, 1], {
+  // Line 1: slide up + fade, starts at frame 55
+  const line1Opacity = interpolate(frame, [55, 75], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
-    easing: Easing.out(Easing.cubic),
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
+  });
+  const line1Y = interpolate(frame, [55, 75], [24, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
+  });
+
+  // Line 2: slide up + fade, starts at frame 80
+  const line2Opacity = interpolate(frame, [80, 100], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
+  });
+  const line2Y = interpolate(frame, [80, 100], [24, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
+  });
+
+  // Accent line under logo: scales width from 0 to 1
+  const accentScale = interpolate(frame, [35, 60], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
   });
 
   return (
@@ -25,31 +55,64 @@ export const AberturaScene: React.FC = () => {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 32,
+        gap: 28,
       }}
     >
+      {/* Logo */}
       <Img
         src={staticFile("logo.png")}
-        style={{ height: 80, width: "auto", opacity: logoOpacity }}
+        style={{
+          height: 200,
+          width: "auto",
+          opacity: logoOpacity,
+          transform: `scale(${logoScale})`,
+        }}
       />
+
+      {/* Accent divider */}
       <div
         style={{
-          opacity: taglineOpacity,
-          maxWidth: 900,
-          textAlign: "center",
-          lineHeight: 1.3,
+          width: 48,
+          height: 3,
+          backgroundColor: COLORS.blue,
+          borderRadius: 2,
+          transform: `scaleX(${accentScale})`,
+          transformOrigin: "center",
         }}
-      >
-        <AnimatedText
-          text="Milhas que você tem."
-          startFrame={65}
-          style={{ fontSize: 52, fontWeight: 700, display: "block", marginBottom: 8 }}
-        />
-        <AnimatedText
-          text="Destinos que você ainda não imaginou."
-          startFrame={85}
-          style={{ fontSize: 52, fontWeight: 700, color: COLORS.blue }}
-        />
+      />
+
+      {/* Taglines */}
+      <div style={{ textAlign: "center", maxWidth: 860 }}>
+        <p
+          style={{
+            fontFamily: FONT_FAMILY,
+            fontSize: 64,
+            fontWeight: 700,
+            color: COLORS.navy,
+            margin: 0,
+            letterSpacing: "-1.5px",
+            lineHeight: 1.1,
+            opacity: line1Opacity,
+            transform: `translateY(${line1Y}px)`,
+          }}
+        >
+          Pare de acumular milhas.
+        </p>
+        <p
+          style={{
+            fontFamily: FONT_FAMILY,
+            fontSize: 56,
+            fontWeight: 400,
+            color: COLORS.blue,
+            margin: "12px 0 0",
+            letterSpacing: "-1px",
+            lineHeight: 1.1,
+            opacity: line2Opacity,
+            transform: `translateY(${line2Y}px)`,
+          }}
+        >
+          Comece a voar com elas.
+        </p>
       </div>
     </AbsoluteFill>
   );

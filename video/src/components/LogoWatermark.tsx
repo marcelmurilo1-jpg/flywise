@@ -22,7 +22,7 @@ export const LogoWatermark: React.FC<LogoWatermarkProps> = ({ size = "small" }) 
         top: isLarge ? "50%" : 40,
         left: isLarge ? "50%" : 48,
         transform: isLarge ? "translate(-50%, -60%)" : "none",
-        height: isLarge ? 96 : 40,
+        height: isLarge ? 200 : 80,
         width: "auto",
         opacity,
       }}
