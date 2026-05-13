@@ -150,9 +150,6 @@ function monthLabel(ym: string) {
     return `${names[parseInt(m) - 1]}/${y}`
 }
 
-function currentMonth() {
-    return new Date().toISOString().slice(0, 7)
-}
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 
