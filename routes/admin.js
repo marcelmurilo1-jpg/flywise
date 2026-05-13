@@ -649,13 +649,12 @@ router.get('/api/admin/users', requireAdminJWT, async (req, res) => {
         const sortBy = req.query.sort_by ?? 'updated_at'; // updated_at | created_at | plan_expires_at
         const churned = req.query.churned === 'true';
 
-        const sortCol = sortBy === 'created_at' ? 'created_at'
-            : sortBy === 'plan_expires_at' ? 'plan_expires_at'
-            : 'updated_at';
+        // created_at does not exist on user_profiles — comes from auth.users
+        const sortCol = sortBy === 'plan_expires_at' ? 'plan_expires_at' : 'updated_at';
 
         let query = supabase
             .from('user_profiles')
-            .select('id, full_name, plan, plan_expires_at, plan_billing, is_admin, updated_at, created_at, phone', { count: 'exact' })
+            .select('id, full_name, plan, plan_expires_at, plan_billing, is_admin, updated_at, phone', { count: 'exact' })
             .order(sortCol, { ascending: false })
             .range(offset, offset + pageSize - 1);
 
@@ -671,10 +670,26 @@ router.get('/api/admin/users', requireAdminJWT, async (req, res) => {
         if (error) throw error;
 
         const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-        const emailMap = {};
-        for (const au of authUsers?.users ?? []) emailMap[au.id] = au.email;
+        const authMap = {};
+        for (const au of authUsers?.users ?? []) {
+            authMap[au.id] = { email: au.email ?? null, created_at: au.created_at ?? null };
+        }
 
-        let users = (data ?? []).map(u => ({ ...u, email: emailMap[u.id] ?? null }));
+        let users = (data ?? []).map(u => ({
+            ...u,
+            email: authMap[u.id]?.email ?? null,
+            created_at: authMap[u.id]?.created_at ?? null,
+        }));
+
+        // Sort by created_at (from auth.users) if requested — done in JS since it's not in user_profiles
+        if (sortBy === 'created_at') {
+            users.sort((a, b) => {
+                if (!a.created_at && !b.created_at) return 0;
+                if (!a.created_at) return 1;
+                if (!b.created_at) return -1;
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            });
+        }
         if (search) {
             const s = search.toLowerCase();
             users = users.filter(u =>
@@ -909,19 +924,22 @@ router.get('/api/admin/api-status', requireAdminJWT, async (_req, res) => {
 router.get('/api/admin/costs', requireAdminJWT, async (req, res) => {
     if (!supabase) return res.status(503).json({ error: 'Supabase indisponível' });
     try {
-        const month = req.query.month ?? new Date().toISOString().slice(0, 7);
-        const monthStart = `${month}-01`;
-        const [year, mon] = month.split('-').map(Number);
-        const nextMonth = mon === 12
-            ? `${year + 1}-01-01`
-            : `${year}-${String(mon + 1).padStart(2, '0')}-01`;
-        const { data, error } = await supabase
+        const month = req.query.month; // optional — if empty, return all costs
+        let query = supabase
             .from('admin_costs')
             .select('*')
-            .gte('month', monthStart)
-            .lt('month', nextMonth)
+            .order('month', { ascending: false })
             .order('category')
             .order('service');
+        if (month) {
+            const monthStart = `${month}-01`;
+            const [year, mon] = month.split('-').map(Number);
+            const nextMonth = mon === 12
+                ? `${year + 1}-01-01`
+                : `${year}-${String(mon + 1).padStart(2, '0')}-01`;
+            query = query.gte('month', monthStart).lt('month', nextMonth);
+        }
+        const { data, error } = await query;
         if (error) throw error;
         res.json({ costs: data ?? [] });
     } catch (err) {

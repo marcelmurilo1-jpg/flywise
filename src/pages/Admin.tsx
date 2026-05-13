@@ -144,9 +144,10 @@ function fmtBRL(value: number) {
 }
 
 function monthLabel(ym: string) {
+    if (!ym) return 'Todos os registros'
     const [y, m] = ym.split('-')
-    const names = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
-    return `${names[parseInt(m) - 1]}/${y.slice(2)}`
+    const names = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+    return `${names[parseInt(m) - 1]}/${y}`
 }
 
 function currentMonth() {
@@ -677,7 +678,7 @@ function EditUserModal({ user, token, onClose, onSaved }: {
 // ─── Custos ───────────────────────────────────────────────────────────────────
 
 function Custos({ token }: { token: string }) {
-    const [month, setMonth] = useState(currentMonth())
+    const [month, setMonth] = useState('') // empty = all costs
     const [costs, setCosts] = useState<Cost[]>([])
     const [history, setHistory] = useState<CostHistory[]>([])
     const [mrr, setMrr] = useState(0)
@@ -689,7 +690,7 @@ function Custos({ token }: { token: string }) {
         setLoading(true); setError(null)
         try {
             const [c, h, r] = await Promise.all([
-                adminFetch(`/api/admin/costs?month=${month}`, token),
+                adminFetch(`/api/admin/costs${month ? `?month=${month}` : ''}`, token),
                 adminFetch('/api/admin/costs/history', token),
                 adminFetch('/api/admin/revenue', token),
             ])
@@ -726,6 +727,9 @@ function Custos({ token }: { token: string }) {
                 <BlockTitle icon={Receipt} title="Controle de custos" subtitle="Registre e acompanhe todos os gastos operacionais do FlyWise" />
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <input type="month" value={month} onChange={e => setMonth(e.target.value)} style={inputSt({ width: 148 })} />
+                    {month && (
+                        <button onClick={() => setMonth('')} style={S.btnSm} title="Ver todos os registros">Limpar</button>
+                    )}
                     <button onClick={() => setShowForm(true)} style={S.btnPrimary}><Plus size={14} />Adicionar</button>
                 </div>
             </div>
@@ -735,19 +739,23 @@ function Custos({ token }: { token: string }) {
 
             {!loading && !error && (
                 <>
-                    {/* ── KPIs do mês ── */}
+                    {/* ── KPIs ── */}
                     <div style={S.grid4}>
-                        <KPI label="Total de custos" value={fmtBRL(totalMonth)} sub={`Referência: ${monthLabel(month)}`}
+                        <KPI label="Total de custos" value={fmtBRL(totalMonth)} sub={month ? `Referência: ${monthLabel(month)}` : 'Soma de todos os registros'}
                             color={totalMonth > 0 ? '#ef4444' : undefined}
-                            tooltip="Soma de todos os custos registrados no mês selecionado" />
+                            tooltip={month ? 'Soma de todos os custos no mês selecionado' : 'Soma de todos os custos registrados'} />
                         <KPI label="MRR atual" value={fmtBRL(mrr)} sub="Receita mensal recorrente" color="#22c55e"
                             tooltip="MRR calculado a partir dos planos pagantes ativos" />
-                        <KPI label="Lucro bruto" value={fmtBRL(profit)} sub="MRR − custos"
-                            color={profit >= 0 ? '#22c55e' : '#ef4444'}
-                            tooltip="MRR menos os custos do mês selecionado" />
-                        <KPI label="Margem bruta" value={`${margin}%`} sub="Do MRR"
-                            color={typeof margin === 'string' && parseInt(margin) > 50 ? '#22c55e' : parseInt(margin as string) > 0 ? '#f59e0b' : '#ef4444'}
-                            tooltip="(Lucro bruto / MRR) × 100" />
+                        {month && (
+                            <KPI label="Lucro bruto" value={fmtBRL(profit)} sub={`${monthLabel(month)} − custos`}
+                                color={profit >= 0 ? '#22c55e' : '#ef4444'}
+                                tooltip="MRR menos os custos do mês selecionado" />
+                        )}
+                        {month && (
+                            <KPI label="Margem bruta" value={`${margin}%`} sub="Do MRR"
+                                color={typeof margin === 'string' && parseInt(margin) > 50 ? '#22c55e' : parseInt(margin as string) > 0 ? '#f59e0b' : '#ef4444'}
+                                tooltip="(Lucro bruto / MRR) × 100" />
+                        )}
                     </div>
 
                     {/* ── Breakdown por categoria ── */}
@@ -795,12 +803,12 @@ function Custos({ token }: { token: string }) {
                     {/* ── Lista de lançamentos ── */}
                     <div>
                         <p style={{ color: '#64748B', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
-                            Lançamentos — {monthLabel(month)}
+                            {month ? `Lançamentos — ${monthLabel(month)}` : `Todos os lançamentos (${costs.length})`}
                         </p>
                         {costs.length === 0 && (
                             <div style={{ ...S.card, textAlign: 'center' }}>
                                 <TrendingDown size={28} style={{ color: '#CBD5E1', margin: '0 auto 8px' }} />
-                                <p style={{ color: '#94A3B8', fontSize: 13, margin: 0 }}>Nenhum custo registrado para este mês.</p>
+                                <p style={{ color: '#94A3B8', fontSize: 13, margin: 0 }}>Nenhum custo registrado{month ? ' para este mês' : ''}.</p>
                                 <p style={{ color: '#94A3B8', fontSize: 12, marginTop: 4 }}>Clique em "Adicionar" para lançar o primeiro.</p>
                             </div>
                         )}
@@ -809,7 +817,7 @@ function Custos({ token }: { token: string }) {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                                     <thead>
                                         <tr style={{ background: '#F7F9FC' }}>
-                                            {['Serviço', 'Categoria', 'Valor', 'Observação', ''].map(h => (
+                                            {[...(!month ? ['Mês'] : []), 'Serviço', 'Categoria', 'Valor', 'Observação', ''].map(h => (
                                                 <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#94A3B8', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                                             ))}
                                         </tr>
@@ -817,6 +825,11 @@ function Custos({ token }: { token: string }) {
                                     <tbody>
                                         {costs.map((c, i) => (
                                             <tr key={c.id} style={{ borderTop: '1px solid #E2E8F0', background: i % 2 === 0 ? '#FFFFFF' : '#F7F9FC' }}>
+                                                {!month && (
+                                                    <td style={{ padding: '11px 14px', color: '#64748B', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                                        {monthLabel(c.month.slice(0, 7))}
+                                                    </td>
+                                                )}
                                                 <td style={{ padding: '11px 14px', color: '#0E2A55', fontWeight: 600 }}>{c.service}</td>
                                                 <td style={{ padding: '11px 14px' }}>
                                                     <span style={{ fontSize: 11, fontWeight: 700, color: CATEGORY_COLORS[c.category as CostCategory] ?? '#64748B', background: (CATEGORY_COLORS[c.category as CostCategory] ?? '#64748B') + '22', borderRadius: 5, padding: '2px 7px' }}>{c.category}</span>
@@ -841,7 +854,7 @@ function Custos({ token }: { token: string }) {
             {!loading && !error && (
                 <>
                     <div style={{ height: 1, background: '#E2E8F0', margin: '8px 0' }} />
-                    <PartnersPanel token={token} mrr={mrr} totalCosts={totalMonth} />
+                    <PartnersPanel token={token} mrr={mrr} totalCosts={totalMonth} month={month} />
                 </>
             )}
 
@@ -945,7 +958,7 @@ interface Partner {
     created_at: string
 }
 
-function PartnersPanel({ token, mrr, totalCosts }: { token: string; mrr: number; totalCosts: number }) {
+function PartnersPanel({ token, mrr, totalCosts, month }: { token: string; mrr: number; totalCosts: number; month: string }) {
     const [partners, setPartners] = useState<Partner[]>([])
     const [loading, setLoading] = useState(true)
     const [showForm, setShowForm] = useState(false)
@@ -1001,7 +1014,7 @@ function PartnersPanel({ token, mrr, totalCosts }: { token: string; mrr: number;
                                             </div>}
                                             <div style={{ height: 1, background: '#E2E8F0', margin: '4px 0' }} />
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                                <span style={{ color: '#0E2A55', fontWeight: 700 }}>Total este mês</span>
+                                                <span style={{ color: '#0E2A55', fontWeight: 700 }}>{month ? `Total em ${monthLabel(month)}` : 'Total (todos os custos)'}</span>
                                                 <span style={{ color: total >= 0 ? '#16A34A' : '#EF4444', fontWeight: 800 }}>{fmtBRL(total)}</span>
                                             </div>
                                         </div>
