@@ -1027,14 +1027,6 @@ function PartnersPanel({ token, mrr, totalCosts, month, numMonths }: { token: st
                                             </div>
                                         </div>
 
-                                        {/* Lucro líquido */}
-                                        <div style={{ background: lucroLiquido >= 0 ? '#EFF6FF' : '#FFF5F5', borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <span style={{ fontSize: 11, color: lucroLiquido >= 0 ? '#2563EB' : '#EF4444', fontWeight: 700 }}>Lucro líquido</span>
-                                                <span style={{ fontSize: 13, color: lucroLiquido >= 0 ? '#2563EB' : '#EF4444', fontWeight: 800 }}>{fmtBRL(lucroLiquido)}</span>
-                                            </div>
-                                        </div>
-
                                         {Number(p.salary_brl) > 0 && (
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '6px 4px' }}>
                                                 <span style={{ color: '#64748B' }}>Pró-labore</span>
