@@ -1021,31 +1021,44 @@ function PartnersPanel({ token, mrr, totalCosts, month, numMonths }: { token: st
                     {active.length > 0 && (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                             {active.map(p => {
-                                const profitShare = profit * p.profit_pct / 100
-                                const costShare = monthlyCosts * p.cost_pct / 100
-                                const total = profitShare + Number(p.salary_brl) - costShare
+                                const participacao = profit * p.profit_pct / 100
+                                const total = participacao + Number(p.salary_brl)
                                 return (
                                     <div key={p.id} style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            <p style={{ color: '#0E2A55', fontWeight: 800, fontSize: 14, margin: 0 }}>{p.name}</p>
+                                            <div>
+                                                <p style={{ color: '#0E2A55', fontWeight: 800, fontSize: 14, margin: 0 }}>{p.name}</p>
+                                                <p style={{ color: '#94A3B8', fontSize: 10, margin: '2px 0 0', fontWeight: 500 }}>
+                                                    {month ? monthLabel(month) : `Média/mês · ${numMonths}m`}
+                                                </p>
+                                            </div>
                                             <button onClick={() => setEditing(p)} style={S.btnXs}>Editar</button>
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                                                <span style={{ color: '#64748B' }}>MRR</span>
+                                                <span style={{ color: '#16A34A', fontWeight: 600 }}>{fmtBRL(mrr)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                                                <span style={{ color: '#64748B' }}>Custos</span>
+                                                <span style={{ color: '#EF4444', fontWeight: 600 }}>−{fmtBRL(monthlyCosts)}</span>
+                                            </div>
+                                            <div style={{ height: 1, background: '#E2E8F0', margin: '2px 0' }} />
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                                                <span style={{ color: '#64748B' }}>Lucro líquido</span>
+                                                <span style={{ color: profit >= 0 ? '#0E2A55' : '#EF4444', fontWeight: 700 }}>{fmtBRL(profit)}</span>
+                                            </div>
                                             {p.profit_pct > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                                                <span style={{ color: '#64748B' }}>Lucro ({p.profit_pct}%)</span>
-                                                <span style={{ color: '#16A34A', fontWeight: 700 }}>{fmtBRL(profitShare)}</span>
+                                                <span style={{ color: '#64748B' }}>Participação ({p.profit_pct}%)</span>
+                                                <span style={{ color: '#16A34A', fontWeight: 700 }}>{fmtBRL(participacao)}</span>
                                             </div>}
-                                            {p.salary_brl > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                                            {Number(p.salary_brl) > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
                                                 <span style={{ color: '#64748B' }}>Pró-labore</span>
                                                 <span style={{ color: '#0E2A55', fontWeight: 700 }}>{fmtBRL(Number(p.salary_brl))}</span>
                                             </div>}
-                                            {p.cost_pct > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                                                <span style={{ color: '#64748B' }}>Custos ({p.cost_pct}%)</span>
-                                                <span style={{ color: '#EF4444', fontWeight: 700 }}>−{fmtBRL(costShare)}</span>
-                                            </div>}
                                             <div style={{ height: 1, background: '#E2E8F0', margin: '4px 0' }} />
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                                <span style={{ color: '#0E2A55', fontWeight: 700 }}>{month ? `Total em ${monthLabel(month)}` : `Média/mês (${numMonths} ${numMonths === 1 ? 'mês' : 'meses'})`}</span>
+                                                <span style={{ color: '#0E2A55', fontWeight: 700 }}>Total do sócio</span>
                                                 <span style={{ color: total >= 0 ? '#16A34A' : '#EF4444', fontWeight: 800 }}>{fmtBRL(total)}</span>
                                             </div>
                                         </div>
