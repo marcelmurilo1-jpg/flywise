@@ -70,6 +70,13 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Após auto-login (signup com email confirmation off, ou login direto), se houver
+// um plano pendente vindo da Landing, manda direto pra /checkout — o próprio Checkout
+// reconstrói o state a partir do sessionStorage e pede CPF/telefone se necessário.
+function postLoginPath(): string {
+  return sessionStorage.getItem('flywise_pending_plan') ? '/checkout' : '/home'
+}
+
 // Pages that should show BottomNav (authenticated app pages)
 const APP_ROUTES = ['/home', '/resultados', '/promotions', '/wallet', '/saved-strategies', '/chats', '/roteiro', '/configuracoes', '/busca-avancada', '/chat', '/mapa']
 
@@ -103,8 +110,8 @@ function AppRoutes() {
   return (
     <>
       <Routes>
-        <Route path="/" element={user ? <Navigate to="/home" replace /> : <Landing />} />
-        <Route path="/auth" element={user ? <Navigate to="/home" replace /> : <Auth />} />
+        <Route path="/" element={user ? <Navigate to={postLoginPath()} replace /> : <Landing />} />
+        <Route path="/auth" element={user ? <Navigate to={postLoginPath()} replace /> : <Auth />} />
         <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
         <Route path="/resultados" element={<ProtectedRoute><Resultados /></ProtectedRoute>} />
         <Route path="/promotions" element={<ProtectedRoute><Promotions /></ProtectedRoute>} />

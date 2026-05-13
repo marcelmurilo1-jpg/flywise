@@ -1,13 +1,26 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, ArrowLeft, Loader2, RefreshCw, Copy, Check, Clock, CreditCard, Landmark } from 'lucide-react'
+import { CheckCircle2, ArrowLeft, Loader2, RefreshCw, Copy, Check, Clock, CreditCard, Landmark, X } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import confetti from 'canvas-confetti'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import type { StripeElementsOptions } from '@stripe/stripe-js'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 import { getStripe } from '@/lib/stripe'
+
+function maskCPF(v: string) {
+    return v.replace(/\D/g, '').slice(0, 11)
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+}
+function maskPhone(v: string) {
+    return v.replace(/\D/g, '').slice(0, 11)
+        .replace(/(\d{2})(\d)/, '($1) $2')
+        .replace(/(\d{5})(\d)/, '$1-$2')
+}
 
 interface CheckoutState {
     planName: string
@@ -61,7 +74,14 @@ export default function Checkout() {
     const navigate = useNavigate()
     const location = useLocation()
     const { user } = useAuth()
-    const state = location.state as CheckoutState | undefined
+    const locationState = location.state as CheckoutState | undefined
+
+    // Quando o user chega via Landing → Auth, o state vem reconstruído do sessionStorage.
+    // Quando chega via /planos (fluxo padrão logado), vem em location.state.
+    const [state, setState] = useState<CheckoutState | null>(locationState ?? null)
+    const [showDataModal, setShowDataModal] = useState(false)
+    const [savingData, setSavingData] = useState(false)
+    const [reconstructing, setReconstructing] = useState(!locationState)
 
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix')
 
@@ -75,9 +95,79 @@ export default function Checkout() {
     const [copied, setCopied] = useState(false)
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+    // Reconstrói o state a partir do sessionStorage quando o user vem direto da Landing.
     useEffect(() => {
-        if (!state) navigate('/planos', { replace: true })
-    }, [state, navigate])
+        if (state || !user) return
+        const pendingJson = sessionStorage.getItem('flywise_pending_plan')
+        const pendingBilling = sessionStorage.getItem('flywise_pending_billing_period')
+
+        if (!pendingJson) {
+            navigate('/planos', { replace: true })
+            return
+        }
+
+        let plan: any
+        try { plan = JSON.parse(pendingJson) } catch {
+            navigate('/planos', { replace: true })
+            return
+        }
+        if (!plan?.priceVal || !plan?.priceAnualVal) {
+            navigate('/planos', { replace: true })
+            return
+        }
+
+        const billing: 'mensal' | 'anual' = pendingBilling === 'anual' ? 'anual' : 'mensal'
+        const priceVal = billing === 'anual' ? plan.priceAnualVal * 12 : plan.priceVal
+        const priceLabel = billing === 'anual' ? `R$ ${plan.priceAnualVal}` : plan.price
+
+        ;(async () => {
+            const { data: profile } = await supabase
+                .from('user_profiles')
+                .select('cpf, phone')
+                .eq('id', user.id)
+                .single()
+
+            const cpf = (profile as any)?.cpf ?? ''
+            const phone = profile?.phone ?? ''
+
+            const baseState: CheckoutState = {
+                planName: plan.name,
+                planDesc: plan.desc,
+                planFeatures: plan.features,
+                priceVal,
+                priceLabel,
+                billing,
+                customerEmail: user.email ?? '',
+                customerName: user.user_metadata?.full_name || user.email?.split('@')[0] || '',
+                customerTaxId: cpf,
+                customerPhone: phone,
+            }
+            setState(baseState)
+            setReconstructing(false)
+
+            if (!cpf || !phone) {
+                setShowDataModal(true)
+            } else {
+                // Tudo pronto — limpa sessionStorage agora
+                sessionStorage.removeItem('flywise_pending_plan')
+                sessionStorage.removeItem('flywise_pending_billing_period')
+            }
+        })()
+    }, [state, user, navigate])
+
+    async function handleDataSubmit(cpf: string, phone: string) {
+        if (!user || !state) return
+        setSavingData(true)
+        try {
+            await supabase.from('user_profiles').upsert({ id: user.id, cpf, phone })
+            setState({ ...state, customerTaxId: cpf, customerPhone: phone })
+            setShowDataModal(false)
+            sessionStorage.removeItem('flywise_pending_plan')
+            sessionStorage.removeItem('flywise_pending_billing_period')
+        } finally {
+            setSavingData(false)
+        }
+    }
 
     // Auto-create PIX billing when PIX tab is selected and no billing exists yet
     useEffect(() => {
@@ -175,7 +265,17 @@ export default function Checkout() {
         setTimeout(() => navigate('/onboarding', { state: { planName: state?.planName } }), 3500)
     }
 
-    if (!state) return null
+    if (!state || reconstructing) {
+        return (
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F0F4FA', fontFamily: 'Inter, system-ui, sans-serif' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+                    <Loader2 size={38} color="#2A60C2" style={{ animation: 'spin 1s linear infinite' }} />
+                    <div style={{ fontSize: 14, color: '#64748B' }}>Preparando seu checkout…</div>
+                    <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div style={{ minHeight: '100vh', display: 'flex', fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -419,7 +519,80 @@ export default function Checkout() {
 
                 </AnimatePresence>
             </div>
+
+            {/* Modal de CPF/telefone — quando user veio direto da Landing sem ter esses dados */}
+            <AnimatePresence>
+                {showDataModal && (
+                    <CompleteDataModal
+                        loading={savingData}
+                        onSubmit={handleDataSubmit}
+                        onClose={() => navigate('/home')}
+                    />
+                )}
+            </AnimatePresence>
         </div>
+    )
+}
+
+// ─── Modal CPF + Telefone (para usuário recém-cadastrado vindo da Landing) ───
+function CompleteDataModal({ onSubmit, onClose, loading }: {
+    onSubmit: (cpf: string, phone: string) => void
+    onClose: () => void
+    loading: boolean
+}) {
+    const [cpf, setCpf] = useState('')
+    const [phone, setPhone] = useState('')
+    const [err, setErr] = useState('')
+
+    function submit() {
+        const raw = cpf.replace(/\D/g, '')
+        if (raw.length !== 11) { setErr('CPF inválido. Digite os 11 dígitos.'); return }
+        const rawPhone = phone.replace(/\D/g, '')
+        if (rawPhone.length < 10) { setErr('Telefone inválido.'); return }
+        setErr('')
+        onSubmit(raw, rawPhone)
+    }
+
+    return (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(14,42,85,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16, backdropFilter: 'blur(4px)' }}
+        >
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+                style={{ background: '#fff', borderRadius: 24, padding: '32px 28px', maxWidth: 400, width: '100%', boxShadow: '0 24px 80px rgba(14,42,85,0.20)', display: 'flex', flexDirection: 'column', gap: 20 }}
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: '#0E2A55' }}>Falta pouco!</div>
+                        <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>Precisamos do seu CPF e WhatsApp para emitir o pagamento</div>
+                    </div>
+                    <button onClick={onClose} disabled={loading} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>CPF</label>
+                        <input value={cpf} onChange={e => setCpf(maskCPF(e.target.value))} placeholder="000.000.000-00"
+                            style={{ padding: '12px 14px', borderRadius: 12, border: '1.5px solid #E2EAF5', fontSize: 14, fontFamily: 'inherit', outline: 'none', color: '#0E2A55' }}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Telefone (WhatsApp)</label>
+                        <input value={phone} onChange={e => setPhone(maskPhone(e.target.value))} placeholder="(11) 99999-9999"
+                            style={{ padding: '12px 14px', borderRadius: 12, border: '1.5px solid #E2EAF5', fontSize: 14, fontFamily: 'inherit', outline: 'none', color: '#0E2A55' }}
+                        />
+                    </div>
+                    {err && <div style={{ fontSize: 12, color: '#DC2626' }}>{err}</div>}
+                </div>
+
+                <button onClick={submit} disabled={loading}
+                    style={{ padding: '13px', borderRadius: 12, border: 'none', background: '#0E2A55', color: '#fff', fontSize: 14, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: loading ? 0.75 : 1 }}
+                >
+                    {loading ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Salvando…</> : 'Continuar para pagamento'}
+                </button>
+            </motion.div>
+        </motion.div>
     )
 }
 

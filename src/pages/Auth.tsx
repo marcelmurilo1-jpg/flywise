@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle, User, Tag, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const NAVY = '#0E2A55'
@@ -60,21 +61,27 @@ export default function Auth() {
                 const { error } = await signIn(email, password)
                 if (error) setError(error.message || 'Credenciais inválidas.')
                 else {
-                    // Se veio da Landing com plano selecionado, vai pra /planos (toggle billing
-                    // pré-ajustado lá). Senão, segue para o destino padrão.
+                    // Plano pendente vindo da Landing? Vai direto pra /checkout.
                     const pendingPlan = sessionStorage.getItem('flywise_pending_plan')
-                    navigate(pendingPlan ? '/planos' : next, { replace: true })
+                    navigate(pendingPlan ? '/checkout' : next, { replace: true })
                 }
             } else {
                 const code = referralStatus === 'valid' ? referralCode.trim().toUpperCase() : undefined
                 const { error } = await signUp(email, password, name, code)
                 if (error) setError(error.message || 'Erro ao criar conta.')
                 else {
+                    // Se email confirmation off (default), o signup loga automaticamente.
+                    // O onAuthStateChange no AuthContext detecta a sessão e o redirect das rotas
+                    // / e /auth (App.tsx postLoginPath) leva pra /checkout. Aqui só backup:
+                    // se sessão já existe, navega; senão exibe msg de confirmação.
+                    const { data: { session } } = await supabase.auth.getSession()
                     const pendingPlan = sessionStorage.getItem('flywise_pending_plan')
-                    if (pendingPlan) {
-                        setSuccess(`Conta criada! Faça login para assinar o plano ${pendingPlan}.`)
+                    if (session) {
+                        navigate(pendingPlan ? '/checkout' : next, { replace: true })
+                    } else if (pendingPlan) {
+                        setSuccess('Conta criada! Verifique seu email para confirmar e seguir ao pagamento.')
                     } else {
-                        setSuccess('Conta criada! Verifique seu email ou faça login.')
+                        setSuccess('Conta criada! Verifique seu email para ativar sua conta.')
                     }
                 }
             }

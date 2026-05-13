@@ -636,10 +636,19 @@ export default function Landing() {
     const navigate = useNavigate()
     const [billing, setBilling] = useState<'mensal' | 'anual'>('mensal')
 
-    // Visitante escolhe plano → salva no sessionStorage e manda pra /auth?tab=signup
-    // Após cadastro/login, Auth.tsx redireciona pra /planos com o billing pré-selecionado
-    function selectPlanForSignup(planName: string) {
-        sessionStorage.setItem('flywise_pending_plan', planName)
+    // Visitante escolhe plano → salva plano completo no sessionStorage e manda pra /auth?tab=signup.
+    // Após auto-login pós-signup, App.tsx redireciona direto pra /checkout, que reconstrói o
+    // state a partir desses dados (pula /planos).
+    function selectPlanForSignup(plan: typeof PLANS[number]) {
+        sessionStorage.setItem('flywise_pending_plan', JSON.stringify({
+            name: plan.name,
+            desc: plan.desc,
+            features: plan.features,
+            price: plan.price,
+            priceAnual: plan.priceAnual,
+            priceVal: plan.priceVal,
+            priceAnualVal: plan.priceAnualVal,
+        }))
         sessionStorage.setItem('flywise_pending_billing_period', billing)
         navigate('/auth?tab=signup')
     }
@@ -1425,7 +1434,7 @@ export default function Landing() {
                                         >Começar grátis</Link>
                                     ) : (
                                         <button
-                                            onClick={() => selectPlanForSignup(plan.name)}
+                                            onClick={() => selectPlanForSignup(plan)}
                                             style={{
                                                 display: 'block', width: '100%', textAlign: 'center', padding: '14px', borderRadius: '12px', fontWeight: 700, fontSize: '14px', transition: 'all 0.2s', cursor: 'pointer', fontFamily: 'inherit',
                                                 background: plan.featured ? '#2A60C2' : 'transparent',
