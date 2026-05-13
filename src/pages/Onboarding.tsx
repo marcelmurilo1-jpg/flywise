@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, ChevronRight, ChevronLeft, Search, Sparkles, Map, Wallet, BarChart3, CheckCircle2, Loader2 } from 'lucide-react'
 import confetti from 'canvas-confetti'
+import { apiUrl } from '@/lib/api'
 
 interface Step {
     id: number
@@ -174,7 +175,7 @@ export default function Onboarding() {
         sessionStorage.removeItem('flywise_pending_plan')
 
         setActivating(true)
-        fetch('/api/checkout/activate', {
+        fetch(apiUrl('/api/checkout/activate'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ billingId, userId: user?.id ?? null }),

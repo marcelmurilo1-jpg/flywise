@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { apiUrl } from '@/lib/api'
 
 const REASONS = [
     'Preço muito alto',
@@ -54,7 +55,7 @@ export default function CancelPlanModal({ isOpen, onClose, currentPlan, planExpi
     async function handleConfirm() {
         setLoading(true); setError(null)
         try {
-            const res = await fetch('/api/user/cancel-plan', {
+            const res = await fetch(apiUrl('/api/user/cancel-plan'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ reason, reasonDetail: reasonDetail || undefined }),

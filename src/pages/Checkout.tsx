@@ -9,6 +9,7 @@ import type { StripeElementsOptions } from '@stripe/stripe-js'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { getStripe } from '@/lib/stripe'
+import { apiUrl } from '@/lib/api'
 
 function maskCPF(v: string) {
     return v.replace(/\D/g, '').slice(0, 11)
@@ -125,7 +126,7 @@ export default function Checkout() {
                 .from('user_profiles')
                 .select('cpf, phone')
                 .eq('id', user.id)
-                .single()
+                .maybeSingle()
 
             const cpf = (profile as any)?.cpf ?? ''
             const phone = profile?.phone ?? ''
@@ -189,7 +190,7 @@ export default function Checkout() {
         setBillingUrl(null)
         setPaymentStatus('PENDING')
         try {
-            const res = await fetch('/api/checkout', {
+            const res = await fetch(apiUrl('/api/checkout'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -223,11 +224,11 @@ export default function Checkout() {
         if (!billingId || paymentStatus !== 'PENDING' || paymentMethod !== 'pix') return
         pollRef.current = setInterval(async () => {
             try {
-                const r = await fetch(`/api/checkout/status/${billingId}`)
+                const r = await fetch(apiUrl(`/api/checkout/status/${billingId}`))
                 const d = await r.json()
                 if (d.status === 'PAID' || d.status === 'COMPLETED') {
                     if (user && billingId) {
-                        await fetch('/api/checkout/activate', {
+                        await fetch(apiUrl('/api/checkout/activate'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ billingId, userId: user.id }),
@@ -613,7 +614,7 @@ function StripeCardSection({ state, userId, onSuccess }: {
             setLoading(true)
             setError(null)
             try {
-                const res = await fetch('/api/stripe/create-subscription', {
+                const res = await fetch(apiUrl('/api/stripe/create-subscription'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -714,7 +715,7 @@ function StripeCardForm({ state, subscriptionId, onSuccess }: {
         const maxAttempts = 25
         for (let i = 0; i < maxAttempts; i++) {
             try {
-                const r = await fetch(`/api/stripe/subscription/${subscriptionId}/status`)
+                const r = await fetch(apiUrl(`/api/stripe/subscription/${subscriptionId}/status`))
                 const d = await r.json()
                 if (d.planActive) return true
             } catch { /* ignore */ }
