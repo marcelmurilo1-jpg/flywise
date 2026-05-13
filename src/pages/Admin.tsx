@@ -721,12 +721,20 @@ function Custos({ token }: { token: string }) {
     // Histórico dos últimos 6 meses
     const histMax = Math.max(...history.map(h => h.total), 1)
 
+    const availableMonths: string[] = Array.from(new Set([
+        ...costs.map(c => c.month.slice(0, 7)),
+        ...history.map(h => h.month),
+    ])).sort((a, b) => b.localeCompare(a))
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <BlockTitle icon={Receipt} title="Controle de custos" subtitle="Registre e acompanhe todos os gastos operacionais do FlyWise" />
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input type="month" value={month} onChange={e => setMonth(e.target.value)} style={inputSt({ width: 148 })} />
+                    <select value={month} onChange={e => setMonth(e.target.value)} style={inputSt({ width: 160 })}>
+                        <option value="">Todos os meses</option>
+                        {availableMonths.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
+                    </select>
                     {month && (
                         <button onClick={() => setMonth('')} style={S.btnSm} title="Ver todos os registros">Limpar</button>
                     )}
@@ -817,19 +825,44 @@ function Custos({ token }: { token: string }) {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                                     <thead>
                                         <tr style={{ background: '#F7F9FC' }}>
-                                            {[...(!month ? ['Mês'] : []), 'Serviço', 'Categoria', 'Valor', 'Observação', ''].map(h => (
+                                            {['Serviço', 'Categoria', 'Valor', 'Observação', ''].map(h => (
                                                 <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#94A3B8', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                                             ))}
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {costs.map((c, i) => (
-                                            <tr key={c.id} style={{ borderTop: '1px solid #E2E8F0', background: i % 2 === 0 ? '#FFFFFF' : '#F7F9FC' }}>
-                                                {!month && (
-                                                    <td style={{ padding: '11px 14px', color: '#64748B', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                                        {monthLabel(c.month.slice(0, 7))}
+                                        {!month ? (() => {
+                                            const groups: Record<string, Cost[]> = {}
+                                            for (const c of costs) {
+                                                const m = c.month.slice(0, 7)
+                                                if (!groups[m]) groups[m] = []
+                                                groups[m].push(c)
+                                            }
+                                            const sortedMs = Object.keys(groups).sort((a, b) => b.localeCompare(a))
+                                            return sortedMs.flatMap(m => [
+                                                <tr key={`g-${m}`} style={{ background: '#F1F5F9' }}>
+                                                    <td colSpan={5} style={{ padding: '7px 14px', color: '#64748B', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', borderTop: '1px solid #E2E8F0' }}>
+                                                        {monthLabel(m)} · {fmtBRL(groups[m].reduce((s, c) => s + Number(c.amount_brl), 0))}
                                                     </td>
-                                                )}
+                                                </tr>,
+                                                ...groups[m].map(c => (
+                                                    <tr key={c.id} style={{ borderTop: '1px solid #E2E8F0', background: '#FFFFFF' }}>
+                                                        <td style={{ padding: '11px 14px', color: '#0E2A55', fontWeight: 600 }}>{c.service}</td>
+                                                        <td style={{ padding: '11px 14px' }}>
+                                                            <span style={{ fontSize: 11, fontWeight: 700, color: CATEGORY_COLORS[c.category as CostCategory] ?? '#64748B', background: (CATEGORY_COLORS[c.category as CostCategory] ?? '#64748B') + '22', borderRadius: 5, padding: '2px 7px' }}>{c.category}</span>
+                                                        </td>
+                                                        <td style={{ padding: '11px 14px', color: '#EF4444', fontWeight: 700 }}>{fmtBRL(Number(c.amount_brl))}</td>
+                                                        <td style={{ padding: '11px 14px', color: '#64748B', fontSize: 12 }}>{c.notes ?? '—'}</td>
+                                                        <td style={{ padding: '11px 14px' }}>
+                                                            <button onClick={() => deleteCost(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 4, display: 'flex' }} title="Remover">
+                                                                <Trash2 size={13} />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ])
+                                        })() : costs.map((c, i) => (
+                                            <tr key={c.id} style={{ borderTop: '1px solid #E2E8F0', background: i % 2 === 0 ? '#FFFFFF' : '#F7F9FC' }}>
                                                 <td style={{ padding: '11px 14px', color: '#0E2A55', fontWeight: 600 }}>{c.service}</td>
                                                 <td style={{ padding: '11px 14px' }}>
                                                     <span style={{ fontSize: 11, fontWeight: 700, color: CATEGORY_COLORS[c.category as CostCategory] ?? '#64748B', background: (CATEGORY_COLORS[c.category as CostCategory] ?? '#64748B') + '22', borderRadius: 5, padding: '2px 7px' }}>{c.category}</span>
@@ -854,7 +887,7 @@ function Custos({ token }: { token: string }) {
             {!loading && !error && (
                 <>
                     <div style={{ height: 1, background: '#E2E8F0', margin: '8px 0' }} />
-                    <PartnersPanel token={token} mrr={mrr} totalCosts={totalMonth} month={month} />
+                    <PartnersPanel token={token} mrr={mrr} totalCosts={totalMonth} month={month} numMonths={availableMonths.length || 1} />
                 </>
             )}
 
@@ -958,7 +991,7 @@ interface Partner {
     created_at: string
 }
 
-function PartnersPanel({ token, mrr, totalCosts, month }: { token: string; mrr: number; totalCosts: number; month: string }) {
+function PartnersPanel({ token, mrr, totalCosts, month, numMonths }: { token: string; mrr: number; totalCosts: number; month: string; numMonths: number }) {
     const [partners, setPartners] = useState<Partner[]>([])
     const [loading, setLoading] = useState(true)
     const [showForm, setShowForm] = useState(false)
@@ -974,7 +1007,8 @@ function PartnersPanel({ token, mrr, totalCosts, month }: { token: string; mrr: 
 
     useEffect(() => { load() }, [load])
 
-    const profit = mrr - totalCosts
+    const monthlyCosts = !month && numMonths > 1 ? totalCosts / numMonths : totalCosts
+    const profit = mrr - monthlyCosts
     const active = partners.filter(p => p.active)
 
     return (
@@ -991,7 +1025,7 @@ function PartnersPanel({ token, mrr, totalCosts, month }: { token: string; mrr: 
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                             {active.map(p => {
                                 const profitShare = profit * p.profit_pct / 100
-                                const costShare = totalCosts * p.cost_pct / 100
+                                const costShare = monthlyCosts * p.cost_pct / 100
                                 const total = profitShare + Number(p.salary_brl) - costShare
                                 return (
                                     <div key={p.id} style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px' }}>
@@ -1014,7 +1048,7 @@ function PartnersPanel({ token, mrr, totalCosts, month }: { token: string; mrr: 
                                             </div>}
                                             <div style={{ height: 1, background: '#E2E8F0', margin: '4px 0' }} />
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                                <span style={{ color: '#0E2A55', fontWeight: 700 }}>{month ? `Total em ${monthLabel(month)}` : 'Total (todos os custos)'}</span>
+                                                <span style={{ color: '#0E2A55', fontWeight: 700 }}>{month ? `Total em ${monthLabel(month)}` : `Média/mês (${numMonths} ${numMonths === 1 ? 'mês' : 'meses'})`}</span>
                                                 <span style={{ color: total >= 0 ? '#16A34A' : '#EF4444', fontWeight: 800 }}>{fmtBRL(total)}</span>
                                             </div>
                                         </div>
