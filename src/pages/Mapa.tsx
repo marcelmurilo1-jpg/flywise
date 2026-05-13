@@ -162,11 +162,23 @@ export default function Mapa() {
       const map: Record<string, CountryStatus> = {}
       for (const row of visited ?? []) map[row.country_code] = row.status
       setCountries(map)
-      const destinations = [...new Set(
-        (convs ?? [])
-          .map(c => (c.wizard_data as { destination?: string })?.destination?.trim())
-          .filter(Boolean) as string[]
-      )].slice(0, 5)
+      const EXCLUDE = new Set([
+        'múltiplos destinos', 'multiplos destinos',
+        'europa', 'america do norte', 'america do sul', 'nordeste',
+        'sul/sudeste', 'norte/centro-oeste', 'caribe',
+        'oriente médio', 'oriente medio', 'ásia/oceania', 'asia/oceania', 'africa', 'áfrica',
+      ])
+      const seen = new Map<string, string>()
+      for (const c of convs ?? []) {
+        const wd = c.wizard_data as { destination?: string; mode?: string } | null
+        if (wd?.mode === 'para_onde') continue
+        const dest = wd?.destination?.trim()
+        if (!dest) continue
+        const key = dest.toLowerCase()
+        if (EXCLUDE.has(key)) continue
+        if (!seen.has(key)) seen.set(key, dest)
+      }
+      const destinations = [...seen.values()].slice(0, 5)
       setRecommendations(destinations)
       setLoading(false)
     }
