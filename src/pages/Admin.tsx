@@ -783,25 +783,6 @@ function Custos({ token }: { token: string }) {
                     )}
 
                     {/* ── Histórico 6 meses ── */}
-                    {history.length > 0 && (
-                        <div style={S.card}>
-                            <p style={S.cardLabel}>Custos totais — últimos 6 meses</p>
-                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 64, marginTop: 16 }}>
-                                {history.map(h => (
-                                    <div key={h.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                                        <div title={`${monthLabel(h.month)}: ${fmtBRL(h.total)}`} style={{
-                                            width: '100%', background: h.month === month ? '#EF4444' : '#FECACA',
-                                            borderRadius: '3px 3px 0 0',
-                                            height: `${Math.max((h.total / histMax) * 52, 2)}px`,
-                                            transition: 'height 0.3s',
-                                        }} />
-                                        <span style={{ fontSize: 10, color: '#94A3B8' }}>{monthLabel(h.month)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
                     {/* ── Lista de lançamentos ── */}
                     <div>
                         <p style={{ color: '#64748B', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
@@ -1018,11 +999,13 @@ function PartnersPanel({ token, mrr, totalCosts, month, numMonths }: { token: st
                     {active.length > 0 && (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                             {active.map(p => {
-                                const participacao = profit * p.profit_pct / 100
-                                const total = participacao + Number(p.salary_brl)
+                                const lucroBruto = mrr * p.profit_pct / 100
+                                const custoSocio = monthlyCosts * p.cost_pct / 100
+                                const lucroLiquido = lucroBruto - custoSocio
+                                const total = lucroLiquido + Number(p.salary_brl)
                                 return (
-                                    <div key={p.id} style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <div key={p.id} style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px', minWidth: 220 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
                                             <div>
                                                 <p style={{ color: '#0E2A55', fontWeight: 800, fontSize: 14, margin: 0 }}>{p.name}</p>
                                                 <p style={{ color: '#94A3B8', fontSize: 10, margin: '2px 0 0', fontWeight: 500 }}>
@@ -1031,33 +1014,42 @@ function PartnersPanel({ token, mrr, totalCosts, month, numMonths }: { token: st
                                             </div>
                                             <button onClick={() => setEditing(p)} style={S.btnXs}>Editar</button>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                                                <span style={{ color: '#64748B' }}>MRR</span>
-                                                <span style={{ color: '#16A34A', fontWeight: 600 }}>{fmtBRL(mrr)}</span>
+
+                                        {/* Lucro bruto */}
+                                        <div style={{ background: '#F0FDF4', borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: 11, color: '#16A34A', fontWeight: 700 }}>Lucro bruto ({p.profit_pct}% do MRR)</span>
+                                                <span style={{ fontSize: 13, color: '#16A34A', fontWeight: 800 }}>{fmtBRL(lucroBruto)}</span>
                                             </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                                                <span style={{ color: '#64748B' }}>Custos</span>
-                                                <span style={{ color: '#EF4444', fontWeight: 600 }}>−{fmtBRL(monthlyCosts)}</span>
+                                        </div>
+
+                                        {/* Custos */}
+                                        <div style={{ background: '#FFF5F5', borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: 11, color: '#EF4444', fontWeight: 700 }}>Custos ({p.cost_pct}% dos gastos)</span>
+                                                <span style={{ fontSize: 13, color: '#EF4444', fontWeight: 800 }}>−{fmtBRL(custoSocio)}</span>
                                             </div>
-                                            <div style={{ height: 1, background: '#E2E8F0', margin: '2px 0' }} />
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                                                <span style={{ color: '#64748B' }}>Lucro líquido</span>
-                                                <span style={{ color: profit >= 0 ? '#0E2A55' : '#EF4444', fontWeight: 700 }}>{fmtBRL(profit)}</span>
+                                        </div>
+
+                                        {/* Lucro líquido */}
+                                        <div style={{ background: lucroLiquido >= 0 ? '#EFF6FF' : '#FFF5F5', borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: 11, color: lucroLiquido >= 0 ? '#2563EB' : '#EF4444', fontWeight: 700 }}>Lucro líquido</span>
+                                                <span style={{ fontSize: 13, color: lucroLiquido >= 0 ? '#2563EB' : '#EF4444', fontWeight: 800 }}>{fmtBRL(lucroLiquido)}</span>
                                             </div>
-                                            {p.profit_pct > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                                                <span style={{ color: '#64748B' }}>Participação ({p.profit_pct}%)</span>
-                                                <span style={{ color: '#16A34A', fontWeight: 700 }}>{fmtBRL(participacao)}</span>
-                                            </div>}
-                                            {Number(p.salary_brl) > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                                        </div>
+
+                                        {Number(p.salary_brl) > 0 && (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '6px 4px' }}>
                                                 <span style={{ color: '#64748B' }}>Pró-labore</span>
                                                 <span style={{ color: '#0E2A55', fontWeight: 700 }}>{fmtBRL(Number(p.salary_brl))}</span>
-                                            </div>}
-                                            <div style={{ height: 1, background: '#E2E8F0', margin: '4px 0' }} />
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                                <span style={{ color: '#0E2A55', fontWeight: 700 }}>Total do sócio</span>
-                                                <span style={{ color: total >= 0 ? '#16A34A' : '#EF4444', fontWeight: 800 }}>{fmtBRL(total)}</span>
                                             </div>
+                                        )}
+
+                                        <div style={{ height: 1, background: '#E2E8F0', margin: '6px 0' }} />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                            <span style={{ color: '#0E2A55', fontWeight: 700 }}>Total do sócio</span>
+                                            <span style={{ color: total >= 0 ? '#16A34A' : '#EF4444', fontWeight: 800 }}>{fmtBRL(total)}</span>
                                         </div>
                                     </div>
                                 )
