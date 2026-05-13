@@ -746,9 +746,6 @@ function Custos({ token }: { token: string }) {
                 <>
                     {/* ── KPIs ── */}
                     <div style={S.grid4}>
-                        <KPI label="Total de custos" value={fmtBRL(totalMonth)} sub={month ? `Referência: ${monthLabel(month)}` : 'Soma de todos os registros'}
-                            color={totalMonth > 0 ? '#ef4444' : undefined}
-                            tooltip={month ? 'Soma de todos os custos no mês selecionado' : 'Soma de todos os custos registrados'} />
                         <KPI label="MRR atual" value={fmtBRL(mrr)} sub="Receita mensal recorrente" color="#22c55e"
                             tooltip="MRR calculado a partir dos planos pagantes ativos" />
                         {month && (
