@@ -715,9 +715,6 @@ function Custos({ token }: { token: string }) {
     }
     const maxCat = Math.max(...Object.values(byCategory), 1)
 
-    // Histórico dos últimos 6 meses
-    const histMax = Math.max(...history.map(h => h.total), 1)
-
     const availableMonths: string[] = Array.from(new Set([
         ...costs.map(c => c.month.slice(0, 7)),
         ...history.map(h => h.month),
@@ -983,7 +980,6 @@ function PartnersPanel({ token, mrr, totalCosts, month, numMonths }: { token: st
     useEffect(() => { load() }, [load])
 
     const monthlyCosts = !month && numMonths > 1 ? totalCosts / numMonths : totalCosts
-    const profit = mrr - monthlyCosts
     const active = partners.filter(p => p.active)
 
     return (
