@@ -1,6 +1,6 @@
 // src/pages/ParaOndeVoo.tsx
 import { useState, useEffect, useMemo } from 'react'
-import { Loader2, MapPin, AlertCircle, Lock, Bot } from 'lucide-react'
+import { Loader2, MapPin, AlertCircle, Lock, Bot, Info } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePlan } from '@/hooks/usePlan'
@@ -167,6 +167,7 @@ export default function ParaOndeVoo({ milesMap, cardPoints, activeCards, activeC
     const [aiLoading, setAiLoading] = useState(false)
     const [error, setError] = useState('')
     const [rawRoutes, setRawRoutes] = useState<RouteResult[]>([])
+    const [showOriginTip, setShowOriginTip] = useState(false)
 
     const [livePromos, setLivePromos] = useState<TransferPromotion[]>(ACTIVE_PROMOTIONS)
     useEffect(() => {
@@ -175,6 +176,8 @@ export default function ParaOndeVoo({ milesMap, cardPoints, activeCards, activeC
             .then(d => { if (Array.isArray(d.promotions) && d.promotions.length > 0) setLivePromos(d.promotions) })
             .catch(() => {})
     }, [apiBase])
+
+    useEffect(() => { setRawRoutes([]) }, [selectedRegions, selectedMonths])
 
     const monthOptions = useMemo(() => {
         const now = new Date()
@@ -263,6 +266,8 @@ export default function ParaOndeVoo({ milesMap, cardPoints, activeCards, activeC
             activeCards,
             activeClubs,
             activeClubTiers,
+            selectedRegions,
+            selectedRegionLabels: selectedRegions.map(r => REGION_LABELS[r]),
             discoverResults: rawRoutes,
         }
 
@@ -310,6 +315,23 @@ export default function ParaOndeVoo({ milesMap, cardPoints, activeCards, activeC
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 13, color: '#64748B', minWidth: 60 }}>De:</span>
                     <span style={{ fontWeight: 700, color: '#0E2A55', fontSize: 14 }}>{originLabel || originIata}</span>
+                    <button
+                        onClick={() => setShowOriginTip(t => !t)}
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#94A3B8' }}
+                    >
+                        <Info size={14} />
+                    </button>
+                    {showOriginTip && (
+                        <span style={{ fontSize: 12, color: '#64748B', background: '#F1F5F9', borderRadius: 8, padding: '4px 10px', border: '1px solid #E2EAF5' }}>
+                            Para trocar o aeroporto de origem, acesse{' '}
+                            <button
+                                onClick={() => navigate('/configuracoes')}
+                                style={{ background: 'none', border: 'none', padding: 0, color: '#2A60C2', fontWeight: 600, cursor: 'pointer', fontSize: 12 }}
+                            >
+                                Configurações
+                            </button>
+                        </span>
+                    )}
                 </div>
 
                 <div>
