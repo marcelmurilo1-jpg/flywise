@@ -6,7 +6,7 @@ import {
     Search, ArrowRight, ArrowRightLeft, Users,
     ChevronDown, CheckCircle2, BarChart3, Globe, Zap, Shield,
     Twitter, Instagram, Linkedin, Youtube, Flame, Lock, ChevronUp,
-    MapPin, CreditCard, BookOpen, ChevronLeft, Bell, CalendarDays, Loader2, X
+    MapPin, CreditCard, BookOpen, ChevronLeft, Bell, CalendarDays
 } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
@@ -108,18 +108,6 @@ const PLANS = [
         features: ['Buscas ilimitadas de passagens', '10 estratégias/mês', '5 roteiros/mês', 'Alertas por e-mail e WhatsApp'],
     },
 ]
-
-function maskCPF(v: string) {
-    return v.replace(/\D/g, '').slice(0, 11)
-        .replace(/(\d{3})(\d)/, '$1.$2')
-        .replace(/(\d{3})(\d)/, '$1.$2')
-        .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
-}
-function maskPhone(v: string) {
-    return v.replace(/\D/g, '').slice(0, 11)
-        .replace(/(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{5})(\d)/, '$1-$2')
-}
 
 const FAQS = [
     { q: 'O FlyWise mostra passagens em tempo real?', a: 'Não exibimos reservas diretas — somos uma ferramenta analítica que compara o valor das suas milhas com tarifas pagas para você decidir a melhor estratégia de resgate.' },
@@ -645,58 +633,15 @@ function FitParisBounds({ positions }: { positions: [number, number][] }) {
 
 // ─── Landing Page Principal ───────────────────────────────────────────────────
 export default function Landing() {
+    const navigate = useNavigate()
     const [billing, setBilling] = useState<'mensal' | 'anual'>('mensal')
 
-    // ── Checkout anônimo (landing → AbacatePay → auth) ──
-    const [checkoutPlan, setCheckoutPlan] = useState<typeof PLANS[number] | null>(null)
-    const [coName, setCoName] = useState('')
-    const [coEmail, setCoEmail] = useState('')
-    const [coCpf, setCoCpf] = useState('')
-    const [coPhone, setCoPhone] = useState('')
-    const [coLoading, setCoLoading] = useState(false)
-    const [coError, setCoError] = useState('')
-
-    async function handleAnonymousCheckout() {
-        const cpf = coCpf.replace(/\D/g, '')
-        const phone = coPhone.replace(/\D/g, '')
-        if (!coName.trim()) { setCoError('Nome obrigatório.'); return }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(coEmail)) { setCoError('E-mail inválido.'); return }
-        if (cpf.length !== 11) { setCoError('CPF inválido. Digite os 11 dígitos.'); return }
-        if (phone.length < 10) { setCoError('Telefone inválido.'); return }
-        setCoError('')
-        setCoLoading(true)
-        try {
-            const priceVal = billing === 'anual'
-                ? checkoutPlan!.priceAnualVal! * 12
-                : checkoutPlan!.priceVal!
-            const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
-            const res = await fetch(`${apiBase}/api/checkout`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    origin: 'PLANO',
-                    destination: checkoutPlan!.name.toUpperCase(),
-                    totalBrl: priceVal,
-                    outboundCompany: `FlyWise ${checkoutPlan!.name}`,
-                    customerName: coName,
-                    customerEmail: coEmail,
-                    customerTaxId: cpf,
-                    customerPhone: phone,
-                    billingType: billing,
-                    paymentMethod: 'ambos',
-                    returnPath: '/auth?tab=signup',
-                }),
-            })
-            const data = await res.json()
-            if (!res.ok || data.error) throw new Error(data.error || 'Erro ao criar cobrança')
-            if (!data.url) throw new Error('URL de pagamento não retornada pela AbacatePay')
-            sessionStorage.setItem('flywise_pending_billing', data.id)
-            sessionStorage.setItem('flywise_pending_plan', checkoutPlan!.name)
-            window.location.href = data.url
-        } catch (err: any) {
-            setCoError(err.message)
-            setCoLoading(false)
-        }
+    // Visitante escolhe plano → salva no sessionStorage e manda pra /auth?tab=signup
+    // Após cadastro/login, Auth.tsx redireciona pra /planos com o billing pré-selecionado
+    function selectPlanForSignup(planName: string) {
+        sessionStorage.setItem('flywise_pending_plan', planName)
+        sessionStorage.setItem('flywise_pending_billing_period', billing)
+        navigate('/auth?tab=signup')
     }
 
     // ── Hero animated words ──
@@ -1480,7 +1425,7 @@ export default function Landing() {
                                         >Começar grátis</Link>
                                     ) : (
                                         <button
-                                            onClick={() => { setCheckoutPlan(plan); setCoName(''); setCoEmail(''); setCoCpf(''); setCoPhone(''); setCoError('') }}
+                                            onClick={() => selectPlanForSignup(plan.name)}
                                             style={{
                                                 display: 'block', width: '100%', textAlign: 'center', padding: '14px', borderRadius: '12px', fontWeight: 700, fontSize: '14px', transition: 'all 0.2s', cursor: 'pointer', fontFamily: 'inherit',
                                                 background: plan.featured ? '#2A60C2' : 'transparent',
@@ -1570,82 +1515,6 @@ export default function Landing() {
                 </div>
             </footer>
 
-            {/* ── Modal checkout anônimo ── */}
-            <AnimatePresence>
-                {checkoutPlan && (
-                    <motion.div
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        style={{ position: 'fixed', inset: 0, background: 'rgba(14,42,85,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: 16, backdropFilter: 'blur(4px)' }}
-                        onClick={e => { if (e.target === e.currentTarget && !coLoading) setCheckoutPlan(null) }}
-                    >
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 16 }}
-                            style={{ background: '#fff', borderRadius: 24, padding: '32px 28px', maxWidth: 420, width: '100%', boxShadow: '0 24px 80px rgba(14,42,85,0.20)', display: 'flex', flexDirection: 'column', gap: 20 }}
-                        >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <div>
-                                    <div style={{ fontSize: 18, fontWeight: 800, color: '#0E2A55' }}>Assinar plano {checkoutPlan.name}</div>
-                                    <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>Preencha seus dados para prosseguir ao pagamento</div>
-                                </div>
-                                <button onClick={() => { if (!coLoading) setCheckoutPlan(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', flexShrink: 0 }}>
-                                    <X size={20} />
-                                </button>
-                            </div>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                {([
-                                    { label: 'Nome completo', value: coName, set: setCoName, placeholder: 'Seu nome', type: 'text' },
-                                    { label: 'E-mail', value: coEmail, set: setCoEmail, placeholder: 'seu@email.com', type: 'email' },
-                                ] as const).map(f => (
-                                    <div key={f.label} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                                        <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{f.label}</label>
-                                        <input
-                                            type={f.type}
-                                            value={f.value}
-                                            onChange={e => { f.set(e.target.value as any); setCoError('') }}
-                                            placeholder={f.placeholder}
-                                            disabled={coLoading}
-                                            style={{ padding: '11px 14px', borderRadius: 10, border: '1.5px solid #E2EAF5', fontSize: 14, fontFamily: 'inherit', outline: 'none', color: '#0E2A55' }}
-                                        />
-                                    </div>
-                                ))}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                                    <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>CPF</label>
-                                    <input
-                                        value={coCpf}
-                                        onChange={e => { setCoCpf(maskCPF(e.target.value)); setCoError('') }}
-                                        placeholder="000.000.000-00"
-                                        disabled={coLoading}
-                                        style={{ padding: '11px 14px', borderRadius: 10, border: '1.5px solid #E2EAF5', fontSize: 14, fontFamily: 'inherit', outline: 'none', color: '#0E2A55' }}
-                                    />
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                                    <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Telefone (WhatsApp)</label>
-                                    <input
-                                        value={coPhone}
-                                        onChange={e => { setCoPhone(maskPhone(e.target.value)); setCoError('') }}
-                                        placeholder="(11) 99999-9999"
-                                        disabled={coLoading}
-                                        style={{ padding: '11px 14px', borderRadius: 10, border: '1.5px solid #E2EAF5', fontSize: 14, fontFamily: 'inherit', outline: 'none', color: '#0E2A55' }}
-                                    />
-                                </div>
-                                {coError && <div style={{ fontSize: 12, color: '#DC2626' }}>{coError}</div>}
-                            </div>
-
-                            <button
-                                onClick={handleAnonymousCheckout}
-                                disabled={coLoading}
-                                style={{ padding: '13px', borderRadius: 12, border: 'none', background: '#0E2A55', color: '#fff', fontSize: 14, fontWeight: 700, cursor: coLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: coLoading ? 0.75 : 1 }}
-                            >
-                                {coLoading ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Aguarde…</> : 'Ir para pagamento'}
-                            </button>
-                            <div style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center' }}>
-                                Após o pagamento, você criará sua conta para acessar a plataforma.
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </div>
     )
 }

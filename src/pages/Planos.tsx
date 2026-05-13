@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, ChevronLeft, Loader2, X } from 'lucide-react'
@@ -155,6 +155,18 @@ export default function Planos() {
     const [pendingPlan, setPendingPlan] = useState<typeof PLANS[number] | null>(null)
     const [showDataModal, setShowDataModal] = useState(false)
     const [savingData, setSavingData] = useState(false)
+
+    // Visitante que escolheu plano na Landing chega aqui após signup+login. Lê o
+    // billing escolhido (mensal/anual) pra ajustar o toggle e limpa o sessionStorage.
+    useEffect(() => {
+        const pendingBilling = sessionStorage.getItem('flywise_pending_billing_period')
+        if (pendingBilling === 'mensal' || pendingBilling === 'anual') {
+            setBilling(pendingBilling)
+        }
+        sessionStorage.removeItem('flywise_pending_plan')
+        sessionStorage.removeItem('flywise_pending_billing_period')
+        sessionStorage.removeItem('flywise_pending_billing')
+    }, [])
 
     const switchToAnual = useCallback(() => {
         if (billing === 'mensal') {

@@ -24,6 +24,8 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-toast": "^1.2.15",
     "@react-pdf/renderer": "^4.3.2",
+    "@stripe/react-stripe-js": "^6.3.0",
+    "@stripe/stripe-js": "^9.5.0",
     "@studio-freight/lenis": "^1.0.42",
     "@supabase/supabase-js": "^2.97.0",
     "@tabler/icons-react": "^3.38.0",
@@ -56,6 +58,7 @@
     "react-simple-maps": "^3.0.0",
     "react-use-measure": "^2.1.7",
     "resend": "^6.10.0",
+    "stripe": "^22.1.1",
     "tailwind-merge": "^3.5.0",
     "usehooks-ts": "^3.1.1"
   },

@@ -71,22 +71,15 @@ router.post('/api/checkout', async (req, res) => {
             ? { externalId: registeredProductId, name: productName, quantity: 1, price: Math.round(totalBrl * 100) }
             : { externalId, name: productName, quantity: 1, price: Math.round(totalBrl * 100) };
 
-        const methodMap = {
-            cartao: ['CARD'],
-            ambos:  ['PIX', 'CARD'],
-        };
-        const methods = methodMap[req.body.paymentMethod] ?? ['PIX'];
-
+        // AbacatePay agora é exclusivamente PIX — cartão é via Stripe
         const billingPayload = {
             frequency: 'ONE_TIME',
-            methods,
+            methods: ['PIX'],
             customerId,
             products: [productEntry],
             returnUrl: `${process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:5173'}${returnPath || '/onboarding'}`,
             completionUrl: `${process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:5173'}${returnPath || '/onboarding'}`,
             metadata: { origin, destination, departureDate, returnDate, outboundCompany, returnCompany, userId, billingType },
-            ...(req.body.cardToken ? { card: { token: req.body.cardToken } } : {}),
-            ...(req.body.installments > 1 ? { installments: Number(req.body.installments) } : {}),
         };
 
         const abRes = await fetch(`${ABACATEPAY_BASE}/billing/create`, {
@@ -375,39 +368,6 @@ router.post('/api/checkout/activate', async (req, res) => {
     } catch (err) {
         console.error('[Activate] Exceção:', err.message);
         res.status(500).json({ error: err.message });
-    }
-});
-
-router.post('/api/checkout/tokenize', async (req, res) => {
-    const { cardNumber, cardHolder, expiryMonth, expiryYear, cvv } = req.body ?? {};
-    if (!cardNumber || !cardHolder || !expiryMonth || !expiryYear || !cvv) {
-        return res.status(400).json({ error: 'Dados do cartão incompletos' });
-    }
-    try {
-        const r = await fetch(`${ABACATEPAY_BASE}/card/tokenize`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${ABACATEPAY_API_KEY}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                cardNumber: cardNumber.replace(/\s/g, ''),
-                holderName: cardHolder,
-                expiryMonth,
-                expiryYear,
-                cvv,
-            }),
-            signal: AbortSignal.timeout(15000),
-        });
-        const data = await r.json();
-        if (!r.ok) {
-            console.error('[Tokenize] AbacatePay erro:', data);
-            return res.status(r.status).json({ error: data.error || 'Erro ao tokenizar cartão', fallbackToUrl: true });
-        }
-        res.json({ token: data.data?.token ?? data.token });
-    } catch (err) {
-        console.error('[Tokenize] Exceção:', err.message);
-        res.status(500).json({ error: err.message, fallbackToUrl: true });
     }
 });
 

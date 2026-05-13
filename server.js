@@ -10,6 +10,7 @@ import seatsRouter from './routes/seats.js';
 import watchlistRouter from './routes/watchlist.js';
 import amadeusRouter from './routes/amadeus.js';
 import checkoutRouter from './routes/checkout.js';
+import stripeRouter, { webhookHandler as stripeWebhookHandler, webhookRawMiddleware as stripeWebhookRaw } from './routes/stripe.js';
 import awardPricesRouter from './routes/awardPrices.js';
 import transferPromosRouter, { refreshPromotionsCache } from './routes/transferPromos.js';
 import adminRouter, { syncTransferData } from './routes/admin.js';
@@ -39,6 +40,10 @@ process.on('unhandledRejection', reason => console.error('[FATAL] unhandledRejec
 
 const app = express();
 app.use(cors());
+
+// Stripe webhook precisa do raw body para validar assinatura — registrado ANTES de express.json()
+app.post('/api/stripe/webhook', stripeWebhookRaw, stripeWebhookHandler);
+
 app.use(express.json());
 app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
@@ -46,6 +51,7 @@ app.use('/', seatsRouter);
 app.use('/', watchlistRouter);
 app.use('/', amadeusRouter);
 app.use('/', checkoutRouter);
+app.use('/', stripeRouter);
 app.use('/', awardPricesRouter);
 app.use('/', transferPromosRouter);
 app.use('/', adminRouter);

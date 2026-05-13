@@ -60,17 +60,19 @@ export default function Auth() {
                 const { error } = await signIn(email, password)
                 if (error) setError(error.message || 'Credenciais inválidas.')
                 else {
-                    const pendingBilling = sessionStorage.getItem('flywise_pending_billing')
-                    navigate(pendingBilling ? '/onboarding' : next, { replace: true })
+                    // Se veio da Landing com plano selecionado, vai pra /planos (toggle billing
+                    // pré-ajustado lá). Senão, segue para o destino padrão.
+                    const pendingPlan = sessionStorage.getItem('flywise_pending_plan')
+                    navigate(pendingPlan ? '/planos' : next, { replace: true })
                 }
             } else {
                 const code = referralStatus === 'valid' ? referralCode.trim().toUpperCase() : undefined
                 const { error } = await signUp(email, password, name, code)
                 if (error) setError(error.message || 'Erro ao criar conta.')
                 else {
-                    const pendingBilling = sessionStorage.getItem('flywise_pending_billing')
-                    if (pendingBilling) {
-                        setSuccess('Conta criada! Faça login para ativar seu plano.')
+                    const pendingPlan = sessionStorage.getItem('flywise_pending_plan')
+                    if (pendingPlan) {
+                        setSuccess(`Conta criada! Faça login para assinar o plano ${pendingPlan}.`)
                     } else {
                         setSuccess('Conta criada! Verifique seu email ou faça login.')
                     }
