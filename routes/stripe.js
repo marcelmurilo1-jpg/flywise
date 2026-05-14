@@ -106,15 +106,15 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
                     },
                 } : {}),
             },
-            expand: ['latest_invoice.payment_intent'],
+            // API 2026-04-22+ removeu invoice.payment_intent; usa-se confirmation_secret.
+            expand: ['latest_invoice.confirmation_secret'],
             metadata: { userId, plan, billing },
         });
 
-        const paymentIntent = subscription.latest_invoice?.payment_intent;
-        const clientSecret = paymentIntent?.client_secret;
+        const clientSecret = subscription.latest_invoice?.confirmation_secret?.client_secret;
 
         if (!clientSecret) {
-            console.error('[Stripe] Subscription criada mas sem clientSecret:', subscription.id);
+            console.error('[Stripe] Subscription criada mas sem clientSecret:', subscription.id, 'invoice:', subscription.latest_invoice?.id);
             return res.status(500).json({ error: 'PaymentIntent não retornou clientSecret' });
         }
 
