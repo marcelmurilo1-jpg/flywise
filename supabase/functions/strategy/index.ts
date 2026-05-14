@@ -3,7 +3,7 @@
 // Deploy: supabase functions deploy strategy
 //
 // Env vars required (Supabase Dashboard → Project Settings → Edge Functions → Secrets):
-//   OPENAI_API_KEY   — your OpenAI key (GPT-4o-mini)
+//   ANTHROPIC_API_KEY — your Anthropic key (Claude Haiku 4.5)
 //   SUPABASE_URL     — automatically injected by Supabase
 //   SUPABASE_SERVICE_ROLE_KEY — automatically injected by Supabase
 
@@ -1621,39 +1621,39 @@ serve(async (req) => {
         const approxTokens = Math.ceil(userPrompt.length / 4)
         console.log(`[strategy] Flight ${flightId ?? 'seats'} | ~${approxTokens} input tokens | best: ${effectiveTargetProgram} (${analyses.length} programs analyzed)`)
 
-        // 6. Call OpenAI
-        const openaiKey = Deno.env.get('OPENAI_API_KEY')
-        if (!openaiKey) throw new Error('OPENAI_API_KEY not set in Edge Function secrets')
+        // 6. Call Anthropic
+        const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
+        if (!anthropicKey) throw new Error('ANTHROPIC_API_KEY not set in Edge Function secrets')
 
-        const llmRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        const llmRes = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': anthropicKey,
+                'anthropic-version': '2023-06-01',
+            },
             body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [
-                    {
-                        role: 'system',
-                        content: STRATEGY_SYSTEM_PROMPT
-                            .replace(/\{\{CONFIRMED_PROGRAM\}\}/g, seatsContext?.program ?? targetProgram)
-                            .replace(/\{\{RECOMMENDED_PROGRAM\}\}/g, effectiveTargetProgram),
-                    },
-                    { role: 'user', content: userPrompt },
-                ],
-                response_format: { type: 'json_object' },
+                model: 'claude-haiku-4-5-20251001',
                 max_tokens: 2000,
                 temperature: 0.2,
+                system: STRATEGY_SYSTEM_PROMPT
+                    .replace(/\{\{CONFIRMED_PROGRAM\}\}/g, seatsContext?.program ?? targetProgram)
+                    .replace(/\{\{RECOMMENDED_PROGRAM\}\}/g, effectiveTargetProgram),
+                messages: [
+                    { role: 'user', content: userPrompt },
+                ],
             }),
         })
 
         const llmData = await llmRes.json()
         if (!llmRes.ok) {
-            const detail = llmData.error?.message ?? llmData.error?.code ?? JSON.stringify(llmData.error ?? {})
-            console.error(`[strategy] OpenAI error ${llmRes.status}:`, detail)
-            throw new Error(`OpenAI ${llmRes.status}: ${detail}`)
+            const detail = llmData.error?.message ?? JSON.stringify(llmData.error ?? {})
+            console.error(`[strategy] Anthropic error ${llmRes.status}:`, detail)
+            throw new Error(`Anthropic ${llmRes.status}: ${detail}`)
         }
 
-        const strategyJson = llmData.choices?.[0]?.message?.content ?? '{}'
-        const tokensUsed = llmData.usage?.total_tokens ?? 0
+        const strategyJson = llmData.content?.[0]?.text ?? '{}'
+        const tokensUsed = (llmData.usage?.input_tokens ?? 0) + (llmData.usage?.output_tokens ?? 0)
         let parsed: Record<string, unknown> = {}
         try { parsed = JSON.parse(strategyJson) } catch { /* raw fallback */ }
 
@@ -1662,7 +1662,7 @@ serve(async (req) => {
             Array.isArray(parsed.steps) && (parsed.steps as unknown[]).length > 0 &&
             Array.isArray(parsed.step_details) && (parsed.step_details as unknown[]).length > 0
         if (!hasRequiredFields) {
-            console.error('[strategy] GPT response missing required fields:', strategyJson.slice(0, 200))
+            console.error('[strategy] Claude response missing required fields:', strategyJson.slice(0, 200))
             throw new Error('A IA retornou uma resposta incompleta. Tente novamente em instantes.')
         }
 
@@ -1717,7 +1717,7 @@ serve(async (req) => {
                     preco_cash: flight.preco_brl,
                     preco_estrategia: mergedResult.taxas_estimadas_brl ?? null,
                     structured_result: { ...mergedResult, _seatsContext: seatsContext ?? null },
-                    llm_model: 'gpt-4o-mini',
+                    llm_model: 'claude-haiku-4-5',
                     tokens_used: tokensUsed,
                 })
             } catch (saveErr) {

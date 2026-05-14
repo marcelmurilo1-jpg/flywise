@@ -193,27 +193,32 @@ router.get('/api/seats-booking-link', async (req, res) => {
     if (!SEATS_AERO_API_KEY) return res.status(503).json({ error: 'API Key não configurada' });
 
     try {
+        // Docs: GET /partnerapi/trips/{id} — path param, not query param
         const apiRes = await fetch(
-            `${SEATS_AERO_BASE}/trips?availability_id=${availability_id}`,
+            `${SEATS_AERO_BASE}/trips/${availability_id}`,
             {
                 headers: { 'Partner-Authorization': SEATS_AERO_API_KEY, 'Accept': 'application/json' },
                 signal: AbortSignal.timeout(10000),
             }
         );
         if (!apiRes.ok) {
-            console.warn(`[Seats] trips API status ${apiRes.status} para availability_id=${availability_id}`);
+            console.warn(`[Seats] trips API status ${apiRes.status} para id=${availability_id}`);
             return res.status(apiRes.status).json({ error: `Seats.aero retornou ${apiRes.status}` });
         }
         const data = await apiRes.json();
-        console.log('[Seats] trips raw:', JSON.stringify(data).slice(0, 600));
+        console.log('[Seats] trips raw:', JSON.stringify(data).slice(0, 800));
 
-        // Extrai booking links do primeiro trip
+        // booking_links pode estar no nível raiz da resposta ou dentro de cada trip
+        const topLinks = data.booking_links ?? data.BookingLinks ?? [];
         const trips = data.data ?? data.trips ?? (Array.isArray(data) ? data : []);
         const firstTrip = trips[0] ?? null;
-        const links = firstTrip?.BookingLinks ?? firstTrip?.booking_links ?? [];
+        const tripLinks = firstTrip?.booking_links ?? firstTrip?.BookingLinks ?? [];
+        const links = topLinks.length > 0 ? topLinks : tripLinks;
+
         const primary = links.find(l => l.primary || l.Primary) ?? links[0] ?? null;
         const bookingLink = primary?.link ?? primary?.Link ?? primary?.URL ?? primary?.url ?? null;
 
+        console.log(`[Seats] booking_links encontrados: ${links.length}, primary: ${bookingLink}`);
         res.json({ bookingLink, allLinks: links });
     } catch (err) {
         console.error('[Seats] trips error:', err.message);

@@ -26,7 +26,7 @@ Deno.serve(async (req: Request) => {
 
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!
         const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-        const openaiKey = Deno.env.get('OPENAI_API_KEY')!
+        const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!
 
         const supabase = createClient(supabaseUrl, serviceRoleKey)
 
@@ -84,35 +84,35 @@ Responda SOMENTE em JSON com exatamente esta estrutura:
 
 Gere entre 4 e 6 itens por categoria. Para cada item, preencha "lat" e "lng" com coordenadas geográficas decimais reais do local.`
 
-        const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${openaiKey}`,
                 'Content-Type': 'application/json',
+                'x-api-key': anthropicKey,
+                'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify({
-                model: 'gpt-4o-mini',
+                model: 'claude-haiku-4-5-20251001',
+                max_tokens: 2500,
+                temperature: 1.0,
+                system: systemPrompt,
                 messages: [
-                    { role: 'system', content: systemPrompt },
                     { role: 'user', content: userPrompt },
                 ],
-                response_format: { type: 'json_object' },
-                max_tokens: 2500,
-                temperature: 0.9,
             }),
         })
 
-        if (!openaiRes.ok) {
-            const errText = await openaiRes.text()
-            console.error('OpenAI error:', errText)
-            return new Response(JSON.stringify({ error: 'OpenAI API error' }), {
+        if (!anthropicRes.ok) {
+            const errText = await anthropicRes.text()
+            console.error('Anthropic error:', errText)
+            return new Response(JSON.stringify({ error: 'Anthropic API error' }), {
                 status: 502,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             })
         }
 
-        const openaiData = await openaiRes.json()
-        const rawContent = openaiData.choices?.[0]?.message?.content ?? '{}'
+        const anthropicData = await anthropicRes.json()
+        const rawContent = anthropicData.content?.[0]?.text ?? '{}'
         const extras = JSON.parse(rawContent)
 
         // Merge new extras into existing result

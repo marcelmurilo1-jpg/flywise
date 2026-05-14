@@ -25,6 +25,29 @@ const CABIN_COLOR: Record<string, string> = {
     Business: '#0E2A55', First: '#92400E',
 }
 
+function buildGfUrl(origem: string, destino: string, data: string, retData?: string): string {
+    // TFS protobuf builder (same as scraper/FlightResultsGrouped)
+    function varint(buf: number[], v: number) { while (v > 0x7F) { buf.push((v & 0x7F) | 0x80); v >>>= 7 } buf.push(v & 0x7F) }
+    function gfInt(buf: number[], f: number, v: number) { varint(buf, (f << 3) | 0); varint(buf, v) }
+    function gfStr(buf: number[], f: number, s: string) { varint(buf, (f << 3) | 2); varint(buf, s.length); for (let i = 0; i < s.length; i++) buf.push(s.charCodeAt(i)) }
+    function gfMsg(buf: number[], f: number, b: number[]) { varint(buf, (f << 3) | 2); varint(buf, b.length); for (let i = 0; i < b.length; i++) buf.push(b[i]) }
+    function itin(from: string, date: string, to: string) { const b: number[] = []; gfStr(b, 2, date); const seg: number[] = []; gfStr(seg, 1, from); gfStr(seg, 2, date); gfStr(seg, 3, to); gfMsg(b, 4, seg); const e1: number[] = []; gfInt(e1, 1, 1); gfStr(e1, 2, from); gfMsg(b, 13, e1); const e2: number[] = []; gfInt(e2, 1, 1); gfStr(e2, 2, to); gfMsg(b, 14, e2); return b }
+    try {
+        const buf: number[] = []
+        gfInt(buf, 1, 28)
+        gfInt(buf, 2, retData ? 2 : 1)
+        gfMsg(buf, 3, itin(origem.toUpperCase(), data, destino.toUpperCase()))
+        if (retData) gfMsg(buf, 3, itin(destino.toUpperCase(), retData, origem.toUpperCase()))
+        gfInt(buf, 8, 1); gfInt(buf, 9, 1); gfInt(buf, 14, 1)
+        let str = ''; for (let i = 0; i < buf.length; i++) str += String.fromCharCode(buf[i])
+        const b64 = btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+        return `https://www.google.com/travel/flights?tfs=${b64}&hl=pt-BR&gl=BR&curr=BRL`
+    } catch {
+        const q = `Flights from ${origem} to ${destino} on ${data}${retData ? ` returning ${retData}` : ''}`
+        return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}&hl=pt-BR&gl=BR&curr=BRL`
+    }
+}
+
 function extractUrls(text: string): string[] {
     const raw = text.match(/https?:\/\/[^\s\)\,\!\?'"]+/g) ?? []
     return raw.map(u => u.replace(/[.,]+$/, '')).filter(u => u.length > 10)
@@ -266,6 +289,23 @@ export function StrategyContent({ strategy, seatsContext, cashPrice = 0, onRegen
                             <TrendingDown size={13} color="#D97706" />
                             <span style={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>CPM: {strategy.cpm_resgate.toFixed(2)} c/pt — {strategy.cpm_avaliacao}</span>
                         </div>
+                    )}
+                    {seatsContext && (
+                        <a
+                            href={buildGfUrl(seatsContext.origem, seatsContext.destino, seatsContext.dataVoo, seatsContext.voltaData)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                marginTop: 14,
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                background: '#1A73E8', color: '#fff',
+                                borderRadius: 10, padding: '9px 16px',
+                                fontSize: 13, fontWeight: 700, textDecoration: 'none',
+                            }}
+                        >
+                            <ExternalLink size={13} />
+                            Ver voo mais barato no Google Flights
+                        </a>
                     )}
                 </div>
             )}
