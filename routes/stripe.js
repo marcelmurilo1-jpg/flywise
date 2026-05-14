@@ -86,9 +86,9 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
                 .upsert({ id: userId, stripe_customer_id: customerId });
         }
 
-        // 2. Cria Subscription incompleta — Stripe retorna clientSecret do PaymentIntent
-        // Parcelamento (BR-only) habilitado apenas para o plano anual: valor mínimo
-        // viável (~R$144) + parcelamento mensal só faz sentido em assinaturas longas.
+        // 2. Cria Subscription incompleta — Stripe retorna clientSecret via confirmation_secret.
+        // Parcelamento BR fica no PaymentIntent (API 2026-04 removeu installments
+        // de subscription.payment_settings).
         const isAnnual = billing === 'anual';
         const subscription = await stripe.subscriptions.create({
             customer: customerId,
@@ -97,17 +97,8 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
             payment_settings: {
                 save_default_payment_method: 'on_subscription',
                 payment_method_types: ['card'],
-                ...(isAnnual ? {
-                    payment_method_options: {
-                        card: {
-                            request_three_d_secure: 'automatic',
-                            installments: { enabled: true },
-                        },
-                    },
-                } : {}),
             },
-            // API 2026-04-22+ removeu invoice.payment_intent; usa-se confirmation_secret.
-            expand: ['latest_invoice.confirmation_secret'],
+            expand: ['latest_invoice.confirmation_secret', 'latest_invoice.payments'],
             metadata: { userId, plan, billing },
         });
 
@@ -116,6 +107,29 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
         if (!clientSecret) {
             console.error('[Stripe] Subscription criada mas sem clientSecret:', subscription.id, 'invoice:', subscription.latest_invoice?.id);
             return res.status(500).json({ error: 'PaymentIntent não retornou clientSecret' });
+        }
+
+        // Habilita parcelamento (BR-only) no PaymentIntent quando for plano anual:
+        // valor mínimo viável (~R$144) + parcelamento mensal só faz sentido em ciclos longos.
+        if (isAnnual) {
+            const piRef = subscription.latest_invoice?.payments?.data?.[0]?.payment?.payment_intent;
+            const paymentIntentId = typeof piRef === 'string' ? piRef : piRef?.id;
+            if (paymentIntentId) {
+                try {
+                    await stripe.paymentIntents.update(paymentIntentId, {
+                        payment_method_options: {
+                            card: {
+                                request_three_d_secure: 'automatic',
+                                installments: { enabled: true },
+                            },
+                        },
+                    });
+                } catch (e) {
+                    console.warn('[Stripe] Falha ao habilitar installments no PI', paymentIntentId, '—', e.message);
+                }
+            } else {
+                console.warn('[Stripe] PaymentIntent ID não encontrado no invoice — parcelamento não habilitado para sub', subscription.id);
+            }
         }
 
         res.json({
