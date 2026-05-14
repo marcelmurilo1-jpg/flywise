@@ -185,4 +185,40 @@ router.post('/api/discover-routes', async (req, res) => {
     res.json({ routes });
 });
 
+// ─── Booking Link — busca trips de uma disponibilidade específica ─────────────
+// GET /api/seats-booking-link?availability_id=xxx
+router.get('/api/seats-booking-link', async (req, res) => {
+    const { availability_id } = req.query;
+    if (!availability_id) return res.status(400).json({ error: 'availability_id obrigatório' });
+    if (!SEATS_AERO_API_KEY) return res.status(503).json({ error: 'API Key não configurada' });
+
+    try {
+        const apiRes = await fetch(
+            `${(await import('../lib/seatsAero.js')).SEATS_AERO_BASE}/trips?availability_id=${availability_id}`,
+            {
+                headers: { 'Partner-Authorization': SEATS_AERO_API_KEY, 'Accept': 'application/json' },
+                signal: AbortSignal.timeout(10000),
+            }
+        );
+        if (!apiRes.ok) {
+            console.warn(`[Seats] trips API status ${apiRes.status} para availability_id=${availability_id}`);
+            return res.status(apiRes.status).json({ error: `Seats.aero retornou ${apiRes.status}` });
+        }
+        const data = await apiRes.json();
+        console.log('[Seats] trips raw:', JSON.stringify(data).slice(0, 600));
+
+        // Extrai booking links do primeiro trip
+        const trips = data.data ?? data.trips ?? (Array.isArray(data) ? data : []);
+        const firstTrip = trips[0] ?? null;
+        const links = firstTrip?.BookingLinks ?? firstTrip?.booking_links ?? [];
+        const primary = links.find(l => l.primary || l.Primary) ?? links[0] ?? null;
+        const bookingLink = primary?.link ?? primary?.Link ?? primary?.URL ?? primary?.url ?? null;
+
+        res.json({ bookingLink, allLinks: links });
+    } catch (err) {
+        console.error('[Seats] trips error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;

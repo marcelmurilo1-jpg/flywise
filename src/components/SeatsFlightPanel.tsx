@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, ChevronDown, ChevronUp, RefreshCcw } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, RefreshCcw, Loader2 } from 'lucide-react'
 import type { ResultadoVoo } from '@/lib/supabase'
 import type { SeatsContext } from '@/components/StrategyPanel'
 import type { WatchlistModalProps } from '@/components/WatchlistModal'
@@ -35,7 +35,7 @@ export interface SeatsFlightData {
     premiumEconomy?: number | null
     business?: number | null
     first?: number | null
-    bookingLink?: string | null
+    availabilityId?: string | null
 }
 
 interface SeatsFlightPanelProps {
@@ -198,6 +198,21 @@ export function SeatsFlightPanel({
     const [idaSel, setIdaSel] = useState<SeatsFlightData | null>(null)
     const [voltaSel, setVoltaSel] = useState<SeatsFlightData | null>(null)
     const [detailOpen, setDetailOpen] = useState<Set<string>>(new Set())
+    // cache: availabilityId → link | null | 'loading' | 'error'
+    const [bookingLinks, setBookingLinks] = useState<Record<string, string | null | 'loading' | 'error'>>({})
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
+
+    async function fetchBookingLink(availabilityId: string) {
+        if (bookingLinks[availabilityId] !== undefined) return
+        setBookingLinks(prev => ({ ...prev, [availabilityId]: 'loading' }))
+        try {
+            const res = await fetch(`${apiBase}/api/seats-booking-link?availability_id=${availabilityId}`)
+            const data = await res.json()
+            setBookingLinks(prev => ({ ...prev, [availabilityId]: data.bookingLink ?? null }))
+        } catch {
+            setBookingLinks(prev => ({ ...prev, [availabilityId]: 'error' }))
+        }
+    }
 
     // Reset selection when new results arrive
     useEffect(() => {
@@ -210,10 +225,15 @@ export function SeatsFlightPanel({
     const idaFlights = seatsFlights.filter(sf => sf.tipo === 'ida')
     const voltaFlights = seatsFlights.filter(sf => sf.tipo === 'volta')
 
-    function toggleDetail(key: string) {
+    function toggleDetail(key: string, sf: SeatsFlightData) {
         setDetailOpen(prev => {
             const next = new Set(prev)
-            if (next.has(key)) { next.delete(key) } else { next.add(key) }
+            if (next.has(key)) {
+                next.delete(key)
+            } else {
+                next.add(key)
+                if (sf.availabilityId) fetchBookingLink(sf.availabilityId)
+            }
             return next
         })
     }
@@ -468,16 +488,6 @@ export function SeatsFlightPanel({
                                     <div style={{ fontSize: '22px', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em' }}>{sf.precoMilhas.toLocaleString('pt-BR')} pts</div>
                                     {sf.taxas && sf.taxas !== '0' && <div style={{ fontSize: '11px', color: '#94A3B8' }}>+ {sf.taxas} taxas</div>}
                                 </div>
-                                {sf.bookingLink && (
-                                    <a
-                                        href={sf.bookingLink}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        style={{ background: '#F97316', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                    >
-                                        🔗 Reservar
-                                    </a>
-                                )}
                                 <button onClick={() => handleSelect(sf)} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                                     Selecionar →
                                 </button>
@@ -536,37 +546,72 @@ export function SeatsFlightPanel({
 
                         {/* Details toggle */}
                         <div style={{ padding: '0 20px 10px' }}>
-                            <button onClick={() => toggleDetail(cardKey)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#64748B', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit', padding: 0 }}>
+                            <button onClick={() => toggleDetail(cardKey, sf)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#64748B', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit', padding: 0 }}>
                                 {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                                 {isOpen ? 'Ocultar detalhes' : 'Ver detalhes do voo'}
                             </button>
                         </div>
 
                         <AnimatePresence>
-                            {isOpen && (
-                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
-                                    style={{ overflow: 'hidden', borderTop: '1px solid #F0FDF4', background: '#F8FFF8' }}>
-                                    <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                        <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Detalhes do trajeto</div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>{sf.origem}</span>
-                                            {sf.escalas?.map((esc, i) => (
-                                                <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                    <span style={{ fontSize: 11, color: '#94A3B8' }}>→</span>
-                                                    <span style={{ fontSize: 12, fontWeight: 600, color: '#F97316', background: '#FFF7ED', padding: '2px 8px', borderRadius: 6 }}>{esc} (conexão)</span>
-                                                </span>
-                                            ))}
-                                            <span style={{ fontSize: 11, color: '#94A3B8' }}>→</span>
-                                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>{sf.destino}</span>
+                            {isOpen && (() => {
+                                const linkState = sf.availabilityId ? bookingLinks[sf.availabilityId] : undefined
+                                return (
+                                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                                        style={{ overflow: 'hidden', borderTop: '1px solid #F0FDF4', background: '#F8FFF8' }}>
+                                        <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Detalhes do trajeto</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                                <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>{sf.origem}</span>
+                                                {sf.escalas?.map((esc, i) => (
+                                                    <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <span style={{ fontSize: 11, color: '#94A3B8' }}>→</span>
+                                                        <span style={{ fontSize: 12, fontWeight: 600, color: '#F97316', background: '#FFF7ED', padding: '2px 8px', borderRadius: 6 }}>{esc} (conexão)</span>
+                                                    </span>
+                                                ))}
+                                                <span style={{ fontSize: 11, color: '#94A3B8' }}>→</span>
+                                                <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>{sf.destino}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                                                <span style={{ fontSize: 12, color: '#64748B' }}><strong>Paradas:</strong> {(sf.paradas ?? 0) === 0 ? 'Voo direto ✓' : `${sf.paradas} ${sf.paradas === 1 ? 'conexão' : 'conexões'}`}</span>
+                                                {sf.duracaoMin && <span style={{ fontSize: 12, color: '#64748B' }}><strong>Duração:</strong> {fmtDur(sf.duracaoMin)}</span>}
+                                                <span style={{ fontSize: 12, color: '#64748B' }}><strong>Programa:</strong> {prog?.name ?? sf.source}</span>
+                                            </div>
+
+                                            {/* Booking link — lazy loaded */}
+                                            {sf.availabilityId && (
+                                                <div style={{ marginTop: 4 }}>
+                                                    {linkState === 'loading' && (
+                                                        <span style={{ fontSize: 12, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                            <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Buscando link de emissão…
+                                                        </span>
+                                                    )}
+                                                    {linkState === 'error' && (
+                                                        <span style={{ fontSize: 12, color: '#EF4444' }}>Não foi possível obter o link de emissão.</span>
+                                                    )}
+                                                    {typeof linkState === 'string' && linkState !== 'loading' && linkState !== 'error' && (
+                                                        <a
+                                                            href={linkState}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            style={{
+                                                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                                                background: '#F97316', color: '#fff',
+                                                                borderRadius: 10, padding: '9px 16px',
+                                                                fontSize: 13, fontWeight: 700, textDecoration: 'none',
+                                                            }}
+                                                        >
+                                                            🔗 Emitir no site da companhia
+                                                        </a>
+                                                    )}
+                                                    {linkState === null && (
+                                                        <span style={{ fontSize: 12, color: '#94A3B8' }}>Link de emissão não disponível para este voo.</span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
-                                        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                                            <span style={{ fontSize: 12, color: '#64748B' }}><strong>Paradas:</strong> {(sf.paradas ?? 0) === 0 ? 'Voo direto ✓' : `${sf.paradas} ${sf.paradas === 1 ? 'conexão' : 'conexões'}`}</span>
-                                            {sf.duracaoMin && <span style={{ fontSize: 12, color: '#64748B' }}><strong>Duração:</strong> {fmtDur(sf.duracaoMin)}</span>}
-                                            <span style={{ fontSize: 12, color: '#64748B' }}><strong>Programa:</strong> {prog?.name ?? sf.source}</span>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            )}
+                                    </motion.div>
+                                )
+                            })()}
                         </AnimatePresence>
                     </motion.div>
                 )
