@@ -98,7 +98,7 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
                 save_default_payment_method: 'on_subscription',
                 payment_method_types: ['card'],
             },
-            expand: ['latest_invoice.confirmation_secret', 'latest_invoice.payments'],
+            expand: ['latest_invoice.confirmation_secret'],
             metadata: { userId, plan, billing },
         });
 
@@ -109,12 +109,13 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
             return res.status(500).json({ error: 'PaymentIntent não retornou clientSecret' });
         }
 
-        // Habilita parcelamento (BR-only) no PaymentIntent quando for plano anual:
-        // valor mínimo viável (~R$144) + parcelamento mensal só faz sentido em ciclos longos.
+        // Habilita parcelamento (BR-only) no PaymentIntent quando for plano anual.
+        // PI ID é derivado do client_secret (formato pi_XXX_secret_YYY) — mais
+        // confiável que latest_invoice.payments (que pode estar vazio em invoices
+        // recém-criadas com default_incomplete antes de qualquer tentativa de pagamento).
         if (isAnnual) {
-            const piRef = subscription.latest_invoice?.payments?.data?.[0]?.payment?.payment_intent;
-            const paymentIntentId = typeof piRef === 'string' ? piRef : piRef?.id;
-            if (paymentIntentId) {
+            const paymentIntentId = clientSecret.split('_secret_')[0];
+            if (paymentIntentId.startsWith('pi_')) {
                 try {
                     await stripe.paymentIntents.update(paymentIntentId, {
                         payment_method_options: {
@@ -124,11 +125,12 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
                             },
                         },
                     });
+                    console.log('[Stripe] Installments habilitado no PI', paymentIntentId);
                 } catch (e) {
                     console.warn('[Stripe] Falha ao habilitar installments no PI', paymentIntentId, '—', e.message);
                 }
             } else {
-                console.warn('[Stripe] PaymentIntent ID não encontrado no invoice — parcelamento não habilitado para sub', subscription.id);
+                console.warn('[Stripe] client_secret inesperado, não foi possível derivar PI ID:', clientSecret);
             }
         }
 
