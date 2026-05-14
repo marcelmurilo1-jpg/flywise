@@ -107,28 +107,32 @@ export default function Resultados() {
         created_at: new Date().toISOString(),
     } as unknown as ResultadoVoo)
 
-    // Two-phase round-trip: after selecting outbound, scrape return flights
+    // Two-phase round-trip: after selecting outbound, scrape return flights by
+    // re-opening the round-trip TFS page, clicking the selected outbound and collecting
+    // the return list with real combined prices (same as Google Flights shows)
     const handleSelectCashIda = async (flight: ResultadoVoo | null) => {
         setCashIdaSel(flight)
         setCashVoltaSel(null)
-        if (!flight) {
-            setInboundFlights([])
-            return
-        }
-        // One-way search or already have inbound → nothing to do
-        if (!dateBack || inboundFlights.length > 0) return
+        setInboundFlights([])
+        if (!flight || !dateBack) return
 
         setLoadingReturn(true)
         setReturnError('')
         try {
-            const result = await searchFlights({
-                origin: (flight.destino ?? destIata).toUpperCase(),
-                destination: (flight.origem ?? originIata).toUpperCase(),
-                departureDate: dateBack,
-                adults: pax,
-                max: 15,
-            })
-            setInboundFlights(result.flights.map(o => toRow(o, true)))
+            const outboundDeparture = flight.partida?.split('T')[1]?.slice(0, 5) ?? ''
+            const outboundOrigin    = (flight.origem  ?? originIata).toUpperCase()
+            const outboundDest      = (flight.destino ?? destIata).toUpperCase()
+            const outboundDate      = flight.partida?.split('T')[0] ?? dateGo
+
+            const params = new URLSearchParams({ outboundOrigin, outboundDest, outboundDate, returnDate: dateBack, outboundDeparture })
+            const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
+            const res = await fetch(`${apiBase}/api/amadeus/return-flights?${params}`)
+            if (!res.ok) throw new Error(`Servidor retornou ${res.status}`)
+            const data = await res.json()
+            if (data.errors?.length) throw new Error(data.errors[0].detail)
+            const offers: any[] = data.data ?? []
+            if (offers.length === 0) throw new Error('Nenhum voo de volta encontrado. Tente novamente ou busque no Google Flights.')
+            setInboundFlights(offers.map(o => toRow(o, true)))
         } catch (e) {
             setReturnError(e instanceof Error ? e.message : 'Não foi possível buscar os voos de volta.')
         } finally {

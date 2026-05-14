@@ -70,7 +70,7 @@ function buildGfTfsUrl(origin, dest, date, returnDate = null, adults = 1) {
     return `https://www.google.com/travel/flights?tfs=${b64}&hl=pt-BR&gl=BR&curr=BRL`;
 }
 
-async function scrapeOneway(origin, destination, date, returnDate = null) {
+async function scrapeOneway(origin, destination, date, returnDate = null, clickOutboundTime = null) {
     return scrapeLimit(async () => {
         for (let attempt = 1; attempt <= 2; attempt++) {
         let context;
@@ -206,6 +206,50 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 }),
                 { timeout: 18000 }
             ).catch(() => console.log(`[GFlights] ${origin}→${destination}: timeout aguardando cards de voo`));
+
+            // ── Clica no voo de ida específico para navegar para lista de volta ──
+            if (clickOutboundTime) {
+                console.log(`[GFlights] ${origin}→${destination}: clicando no voo de ida ${clickOutboundTime}...`);
+                const clickedTime = await page.evaluate((_targetTime) => {
+                    function to24h(t, ap) {
+                        let [h, m] = t.split(':').map(Number);
+                        if (ap.toUpperCase() === 'PM' && h !== 12) h += 12;
+                        if (ap.toUpperCase() === 'AM' && h === 12) h = 0;
+                        return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+                    }
+                    const divs = [...document.querySelectorAll('div[data-id]')];
+                    for (const el of divs) {
+                        const links = [...el.querySelectorAll('[aria-label]')];
+                        const fl = links.find(l => /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(l.getAttribute('aria-label') ?? ''));
+                        if (!fl) continue;
+                        const a = fl.getAttribute('aria-label') ?? '';
+                        let t = '';
+                        const ptM = a.match(/às (\d{1,2}:\d{2})/i);
+                        if (ptM) { t = ptM[1].padStart(5, '0').replace(/^(\d):/, '0$1:'); }
+                        else { const enM = a.match(/(\d{1,2}:\d{2})\s*(AM|PM)/i); if (enM) t = to24h(enM[1], enM[2]); }
+                        if (!t) { const raw = a.match(/\b(\d{1,2}:\d{2})\b/); if (raw) t = raw[1].padStart(5, '0').replace(/^(\d):/, '0$1:'); }
+                        if (t === _targetTime) {
+                            (el.querySelector('button:not([aria-label*="Monitor"]):not([aria-label*="Detalhes"]):not([aria-label*="details"]), [role="button"]') || el).click();
+                            return t;
+                        }
+                    }
+                    // Fallback: clica no primeiro card
+                    const first = divs[0];
+                    if (first) { (first.querySelector('button, [role="button"]') || first).click(); return 'first'; }
+                    return null;
+                }, clickOutboundTime);
+                console.log(`[GFlights] click no outbound: ${clickedTime ?? 'não encontrado'}`);
+
+                // Aguarda transição SPA para a lista de voos de volta
+                await new Promise(r => setTimeout(r, randInt(2500, 3500)));
+                await page.waitForFunction(
+                    () => [...document.querySelectorAll('div[data-id]')].some(el => {
+                        const a = el.querySelector('[aria-label]')?.getAttribute('aria-label') ?? '';
+                        return /Reais brasileiros|Voo da |From R\$|From BRL|BRL\s*\d|\bflight\b/i.test(a);
+                    }),
+                    { timeout: 15000 }
+                ).catch(() => console.log(`[GFlights] timeout aguardando cards de volta`));
+            }
 
             // ── Comportamento humano: movimento de mouse + scroll aleatório ────
             await page.mouse.move(randInt(200, vw - 200), randInt(100, vh / 2));
@@ -616,7 +660,8 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 }
 
                 return results;
-            }, { _origin: origin.toUpperCase(), _destination: destination.toUpperCase(), _iataToAirline: IATA_TO_AIRLINE });
+            // When scraping returns (after clicking outbound), origin/dest are swapped for layover detection
+            }, { _origin: (clickOutboundTime ? destination : origin).toUpperCase(), _destination: (clickOutboundTime ? origin : destination).toUpperCase(), _iataToAirline: IATA_TO_AIRLINE });
 
             console.log(`[GFlights] ${origin}→${destination}: ${flights.length} voos encontrados`);
             if (flights.length > 0) {
@@ -625,21 +670,23 @@ async function scrapeOneway(origin, destination, date, returnDate = null) {
                 ));
             }
 
-            // Extrai o gráfico de preços ANTES de expandir cards (página em estado inicial)
-            await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
-            await new Promise(r => setTimeout(r, 300));
-            const priceGraph = await scrapePriceGraph(page, origin, destination).catch(e => {
-                console.log('[GFlights] priceGraph erro:', e.message?.slice(0, 80));
-                return null;
-            });
-            if (priceGraph) console.log(`[GFlights] priceGraph: ${priceGraph.bars?.length ?? 0} barras, pageQuality=${priceGraph.pageQuality}`);
-            else console.log('[GFlights] priceGraph: não encontrado (botão não clicou ou sem dados)');
+            // Gráfico de preços e expansão de segmentos — só na busca de ida (não na de volta)
+            let priceGraph = null;
+            if (!clickOutboundTime) {
+                await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+                await new Promise(r => setTimeout(r, 300));
+                priceGraph = await scrapePriceGraph(page, origin, destination).catch(e => {
+                    console.log('[GFlights] priceGraph erro:', e.message?.slice(0, 80));
+                    return null;
+                });
+                if (priceGraph) console.log(`[GFlights] priceGraph: ${priceGraph.bars?.length ?? 0} barras, pageQuality=${priceGraph.pageQuality}`);
+                else console.log('[GFlights] priceGraph: não encontrado');
 
-            // Expande voos com conexão para extrair segmentos detalhados
-            if (flights.length > 0 && flights.some(f => (f.paradas ?? 0) > 0)) {
-                await expandFlightDetails(page, flights).catch(e =>
-                    console.log('[GFlights] expandFlightDetails error:', e.message?.slice(0, 80))
-                );
+                if (flights.length > 0 && flights.some(f => (f.paradas ?? 0) > 0)) {
+                    await expandFlightDetails(page, flights).catch(e =>
+                        console.log('[GFlights] expandFlightDetails error:', e.message?.slice(0, 80))
+                    );
+                }
             }
 
             await context.close();
@@ -941,6 +988,29 @@ async function doScrape(origin, destination, date, returnDate) {
         .filter(i => i.preco_brl > 0)
         .map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
     return { outbound, inbound: [], priceGraph: rawOut.priceGraph ?? null };
+}
+
+// Scrape de voos de volta: reabre a URL TFS round-trip, clica no voo de ida selecionado
+// e raspa a lista de volta com preços combinados reais (igual ao Google Flights)
+export async function doScrapeReturn(outboundOrigin, outboundDest, outboundDate, returnDate, outboundDepartureTime) {
+    console.log(`[GFlights] doScrapeReturn: ${outboundOrigin}→${outboundDest} @${outboundDepartureTime}, volta ${returnDate}`);
+    const raw = await scrapeOneway(outboundOrigin, outboundDest, outboundDate, returnDate, outboundDepartureTime);
+    const returns = raw.flights
+        .filter(i => i.preco_brl > 0)
+        .map((i, idx) => {
+            i.is_roundtrip_total = true;
+            return mapToFlightOffer(i, outboundDest, outboundOrigin, returnDate, idx);
+        });
+    // Deduplica por partida+chegada+preco (Google Flights repete voos em seções diferentes)
+    const seen = new Set();
+    const deduped = returns.filter(f => {
+        const key = `${f.partida}|${f.chegada}|${f.preco_brl}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+    console.log(`[GFlights] doScrapeReturn: ${returns.length} encontrados, ${deduped.length} após dedup`);
+    return { outbound: deduped, inbound: [], priceGraph: null };
 }
 
 // Expande até MAX_EXPAND voos com conexão para extrair segmentos (limitado para não atrasar a resposta)

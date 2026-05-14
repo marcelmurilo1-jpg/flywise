@@ -484,13 +484,13 @@ function FlightCard({
                 <div className="fly-card-right" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: 10, fontWeight: 700, color: '#0E2A55', textTransform: 'uppercase', marginBottom: 2 }}>
-                            {det.returnPartida ? 'Ida + Volta' : 'Preço'}
+                            {det.isRoundtripTotal ? 'Total ida+volta' : det.returnPartida ? 'Ida + Volta' : 'Preço'}
                         </div>
                         <div style={{ fontSize: 18, fontWeight: 800, color: '#0E2A55', letterSpacing: '-0.01em' }}>
                             {(flight.preco_brl ?? 0) > 0 ? `R$ ${flight.preco_brl?.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}` : '—'}
                         </div>
                         <div style={{ fontSize: 9, color: '#94A3B8' }}>
-                            {det.returnPartida ? 'total ida+volta' : ((flight.preco_brl ?? 0) > 0 ? 'preço final' : 'incl. na ida')}
+                            {det.isRoundtripTotal ? 'preço calculado pelo Google' : det.returnPartida ? 'total ida+volta' : ((flight.preco_brl ?? 0) > 0 ? 'preço final' : 'incl. na ida')}
                         </div>
                     </div>
                     {canSelect && !isPinned && (flight.preco_brl ?? 0) > 0 && (
@@ -670,11 +670,14 @@ export function FlightResultsGrouped({
 
     const cashTotal = (() => {
         if (!cashIdaSel) return null
-        const det = (cashIdaSel.detalhes as any) ?? {}
-        // Google Flights round-trip: outbound price is already the combined estimate
-        if (det.isRoundtripTotal) return cashIdaSel.preco_brl ?? 0
+        const idaDet   = (cashIdaSel.detalhes as any) ?? {}
+        const voltaDet = (cashVoltaSel?.detalhes as any) ?? {}
+        // Return flight from doScrapeReturn: combined price for this exact outbound+return combo
+        if (cashVoltaSel && voltaDet.isRoundtripTotal) return cashVoltaSel.preco_brl ?? 0
+        // Outbound combined estimate (includes cheapest return)
+        if (idaDet.isRoundtripTotal) return cashIdaSel.preco_brl ?? 0
         // Amadeus real combined offer
-        if (det.returnPartida && det.returnChegada) return cashIdaSel.preco_brl ?? 0
+        if (idaDet.returnPartida && idaDet.returnChegada) return cashIdaSel.preco_brl ?? 0
         return (cashIdaSel.preco_brl ?? 0) + (cashVoltaSel ? (cashVoltaSel.preco_brl ?? 0) : 0)
     })()
 
@@ -723,20 +726,21 @@ export function FlightResultsGrouped({
                     {(() => {
                         const selDet = (cashIdaSel.detalhes as any) ?? {}
                         const isEstimate = selDet.isRoundtripTotal
+                        const voltaIsExact = cashVoltaSel && (cashVoltaSel.detalhes as any)?.isRoundtripTotal
                         return (
                             <div style={{ background: '#0E2A55', borderRadius: 12, padding: '12px 18px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                                 <div>
                                     <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
-                                        {cashVoltaSel ? 'Ida + Volta selecionadas' : isEstimate ? 'Estimativa total ida + volta' : 'Ida selecionada'}
+                                        {cashVoltaSel ? 'Total ida + volta' : isEstimate ? 'Estimativa total ida + volta' : 'Ida selecionada'}
                                     </div>
                                     <div style={{ fontSize: 20, fontWeight: 900, color: '#fff' }}>
                                         R$ {cashTotal?.toLocaleString('pt-BR')}
                                     </div>
-                                    {isEstimate && (
-                                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
-                                            Preço calculado pelo Google Flights · pode variar com a volta escolhida
-                                        </div>
-                                    )}
+                                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                                        {voltaIsExact ? 'Preço exato do Google Flights para esta combinação'
+                                            : isEstimate ? 'Estimativa Google Flights · confirme ao finalizar'
+                                            : ''}
+                                    </div>
                                 </div>
                                 <button
                                     onClick={() => { onSelectCashIda?.(null); onSelectCashVolta?.(null) }}
