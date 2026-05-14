@@ -7,6 +7,8 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { PARA_ONDE_INSTRUCTIONS } from './prompts/instructions-para-onde.ts'
+import { BUSCA_INSTRUCTIONS } from './prompts/instructions-busca.ts'
 
 const sbAdmin = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
@@ -594,6 +596,11 @@ Destino → programas com milhas disponíveis:
 ${reachableLines}${boostedSection}`
             }
 
+            const resolvedParaOndeInstructions = PARA_ONDE_INSTRUCTIONS
+                .replace('{{ALLIANCES_CONTEXT}}', ALLIANCES_CONTEXT)
+            const resolvedBuscaInstructions = BUSCA_INSTRUCTIONS
+                .replace('{{ALLIANCES_CONTEXT}}', ALLIANCES_CONTEXT)
+
             const systemPrompt = isParaOndeMode
                 ? `Você é o FlyWise AI, especialista em milhas aéreas para brasileiros.
 
@@ -611,33 +618,7 @@ Configuração da busca:
 
 Você tem acesso à ferramenta search_awards para buscar detalhes de disponibilidade em rotas específicas.
 
-ALIANÇAS E PARCERIAS DOS PROGRAMAS (dados verificados — use APENAS estas informações, não invente parcerias):
-${ALLIANCES_CONTEXT}
-
-REGRA DE OURO: Só afirme que um programa parceiro é utilizável em uma rota se search_awards retornou resultados reais para ele. As alianças acima indicam o potencial — a disponibilidade real vem do Seats.aero.
-
-COMO ANALISAR:
-1. Use os dados da carteira para identificar quais destinos são ALCANÇÁVEIS agora (milhas diretas ou via transferência de pontos)
-2. Use o bloco "POTENCIAL COM BÔNUS" para mostrar destinos que ficam alcançáveis COM as promoções de transferência atuais
-3. Para os melhores destinos, use search_awards para verificar disponibilidade real e datas
-4. Foque nos programas que o usuário JÁ tem milhas ou pontos transferíveis
-5. Leve em conta os clubes ativos para bônus extra de transferência
-
-ANÁLISE DE PROMOÇÕES (compra de milhas, clubes, assinaturas):
-- Mencione APENAS promoções que diretamente desbloqueiam um destino ou reduzem o custo desta busca específica
-- Ex útil: falta 15k milhas para voar para Lisboa, há promoção de compra de milhas Smiles → mencione
-- Ex útil: clube Smiles Diamond com 30% de desconto → mencione se Smiles foi o melhor programa encontrado
-- Se a promoção não se encaixa nesta busca → IGNORE completamente, não liste
-
-FORMATO DA ANÁLISE:
-1. **Você pode voar agora** — destinos alcançáveis com saldo atual; programa, milhas necessárias vs disponível
-2. **Com as promoções de transferência** — destinos extras alcançáveis usando os bônus ativos (use os valores calculados)
-3. **Estratégia recomendada** — ação concreta: "transfira X pts do cartão Y para programa Z e reserve voo para W"
-4. **Promoção relevante** — apenas se houver uma que faça diferença real para esta carteira
-5. **Quando reservar** — disponibilidade encontrada e urgência
-
-Use markdown com tabelas. Seja ESPECÍFICO com os números reais da carteira do usuário.
-Para FOLLOW-UPS: use os dados já buscados, sem refazer buscas.`
+${resolvedParaOndeInstructions}`
                 : `Você é o FlyWise AI, especialista em milhas aéreas e viagens para brasileiros.
 
 DADOS DA BUSCA:
@@ -654,29 +635,7 @@ ${milesClubContext}
 
 Você tem acesso à ferramenta search_awards com dados reais do Seats.aero.
 
-ALIANÇAS E PARCERIAS DOS PROGRAMAS (dados verificados — use APENAS estas informações, não invente parcerias):
-${ALLIANCES_CONTEXT}
-
-REGRA DE OURO: Só afirme que um programa é utilizável em uma rota se search_awards retornou resultados reais para ele OU se a pergunta é sobre potencial teórico de aliança. Para recomendações concretas, use sempre dados do Seats.aero.
-
-ESTRATÉGIA DE BUSCA:
-- Sempre busque a rota principal primeiro
-- São Paulo: origem pode ser GRU ou CGH — use o mais relevante (GRU para voos internacionais)
-- Destinos com múltiplos aeroportos: busque todos (Tokyo: NRT + HND; London: LHR + LGW)
-- Modo Hacker: inclua buscas via hubs intermediários (DXB, DOH, IST, FRA, AMS) onde faz sentido
-- Ida e volta: busque as duas direções separadamente
-- Origem flexível: busque dos aeroportos alternativos mais próximos
-
-FORMATO DA ANÁLISE FINAL:
-1. **Melhores opções encontradas** — tabela: programa | milhas | data | cia operadora | direto/escalas | taxas
-2. **Transferências de pontos** — quais cartões brasileiros transferem para os melhores programas encontrados e em qual ratio (priorize: Amex Membership Rewards, C6 Bank, Nubank Ultravioleta, Livelo, Itaú, Bradesco, Smiles, LATAM Pass)
-   - Se houver bônus de transferência ativo para um dos programas encontrados → DESTAQUE com urgência e calcule o ganho
-3. **Disponibilidade** — escassa, moderada ou abundante; quando reservar
-4. **Promoção relevante** — mencione SOMENTE se há promoção de compra de milhas ou clube que resolve um problema concreto desta busca (falta de saldo, custo alto). Se não se encaixa → ignore
-5. **Próximo passo** — instrução única e clara: qual site, qual programa, o que fazer agora
-
-Use markdown com tabelas quando listar opções. Seja ESPECÍFICO: use os números reais dos dados.
-Para FOLLOW-UPS: responda usando os dados já buscados, sem refazer buscas desnecessárias.`
+${resolvedBuscaInstructions}`
 
             // Build conversation
             const loopMessages: any[] = messages.map((m: Message) => ({
