@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import pLimit from 'p-limit';
 import { supabase } from '../lib/supabase.js';
-import { fetchSeatsAeroAPI, mapSeatsAeroItem, SEATS_AERO_API_KEY } from '../lib/seatsAero.js';
+import { fetchSeatsAeroAPI, mapSeatsAeroItem, SEATS_AERO_API_KEY, SEATS_AERO_BASE } from '../lib/seatsAero.js';
 
 const router = Router();
 
@@ -194,7 +194,7 @@ router.get('/api/seats-booking-link', async (req, res) => {
 
     try {
         const apiRes = await fetch(
-            `${(await import('../lib/seatsAero.js')).SEATS_AERO_BASE}/trips?availability_id=${availability_id}`,
+            `${SEATS_AERO_BASE}/trips?availability_id=${availability_id}`,
             {
                 headers: { 'Partner-Authorization': SEATS_AERO_API_KEY, 'Accept': 'application/json' },
                 signal: AbortSignal.timeout(10000),

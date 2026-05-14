@@ -915,17 +915,24 @@ async function scrapePriceGraph(page, origin, destination) {
 
 async function doScrape(origin, destination, date, returnDate) {
     if (returnDate) {
-        // Round-trip: uma busca combinada com returnDate → Google Flights mostra preço total ida+volta
-        // (igual ao que o usuário vê no Google Flights, evita somar dois preços de ida avulsa)
+        // Round-trip: tenta URL combinada (preço total ida+volta)
         const rawOut = await scrapeOneway(origin, destination, date, returnDate);
-        const outbound = rawOut.flights
-            .filter(i => i.preco_brl > 0)
-            .map((i, idx) => {
+        const rtFlights = rawOut.flights.filter(i => i.preco_brl > 0);
+        if (rtFlights.length > 0) {
+            const outbound = rtFlights.map((i, idx) => {
                 i.is_roundtrip_total = true;
                 i.return_partida = `${returnDate}T00:00:00`;
                 return mapToFlightOffer(i, origin, destination, date, idx);
             });
-        return { outbound, inbound: [], priceGraph: rawOut.priceGraph ?? null };
+            return { outbound, inbound: [], priceGraph: rawOut.priceGraph ?? null };
+        }
+        // Fallback: URL combinada não retornou resultados — usa busca de ida simples
+        console.log(`[GFlights] doScrape round-trip retornou 0 voos — fallback para busca de ida simples`);
+        const rawFallback = await scrapeOneway(origin, destination, date, null);
+        const outbound = rawFallback.flights
+            .filter(i => i.preco_brl > 0)
+            .map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
+        return { outbound, inbound: [], priceGraph: rawFallback.priceGraph ?? null };
     }
 
     // Ida simples
