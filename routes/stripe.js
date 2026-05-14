@@ -86,10 +86,9 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
                 .upsert({ id: userId, stripe_customer_id: customerId });
         }
 
-        // 2. Cria Subscription incompleta — Stripe retorna clientSecret via confirmation_secret.
-        // Parcelamento BR fica no PaymentIntent (API 2026-04 removeu installments
-        // de subscription.payment_settings — retorna "unknown parameter" se setar aqui).
-        const isAnnual = billing === 'anual';
+        // Stripe BR não suporta parcelamento em cartão (confirmado pelo suporte
+        // em 2026-05-14). Cobrança anual sai em 1× no cartão. Para parcelar,
+        // integrar gateway local (Pagar.me/Mercado Pago/Iugu) no futuro.
         const subscription = await stripe.subscriptions.create({
             customer: customerId,
             items: [{ price: priceId }],
@@ -109,33 +108,6 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
             return res.status(500).json({ error: 'PaymentIntent não retornou clientSecret' });
         }
 
-        // Habilita parcelamento (BR-only) no PaymentIntent quando for plano anual.
-        // PI ID derivado do client_secret (formato pi_XXX_secret_YYY).
-        if (isAnnual) {
-            const paymentIntentId = clientSecret.split('_secret_')[0];
-            if (paymentIntentId.startsWith('pi_')) {
-                try {
-                    const updated = await stripe.paymentIntents.update(paymentIntentId, {
-                        payment_method_options: {
-                            card: {
-                                request_three_d_secure: 'automatic',
-                                installments: { enabled: true },
-                            },
-                        },
-                    });
-                    const enabled = updated.payment_method_options?.card?.installments?.enabled;
-                    console.log('[Stripe] PI', paymentIntentId, 'installments.enabled =', enabled, '· currency =', updated.currency, '· amount =', updated.amount);
-                    if (!enabled) {
-                        console.warn('[Stripe] Stripe aceitou o update mas installments NÃO ficou habilitado — verifique se a conta tem Brazilian installments ativado no Dashboard (Settings → Payment methods → Cards → Installments).');
-                    }
-                } catch (e) {
-                    console.error('[Stripe] FALHA ao habilitar installments no PI', paymentIntentId, '—', e.message);
-                }
-            } else {
-                console.warn('[Stripe] client_secret inesperado, não foi possível derivar PI ID:', clientSecret);
-            }
-        }
-
         res.json({
             subscriptionId: subscription.id,
             clientSecret,
@@ -143,63 +115,6 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
         });
     } catch (err) {
         console.error('[Stripe] Erro create-subscription:', err.message);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ─── GET /api/stripe/diagnose-installments ───────────────────────────────────
-// Endpoint de diagnóstico: verifica se a conta Stripe + Prices estão aptas a
-// mostrar parcelamento BR. Retorna JSON com TUDO que afeta installments.
-router.get('/api/stripe/diagnose-installments', async (req, res) => {
-    if (!stripe) return res.status(503).json({ error: 'Stripe não configurado' });
-    try {
-        const account = await stripe.accounts.retrieve();
-
-        const priceChecks = {};
-        for (const [key, priceId] of Object.entries(STRIPE_PRICE_IDS)) {
-            if (!priceId) { priceChecks[key] = { configured: false }; continue; }
-            try {
-                const price = await stripe.prices.retrieve(priceId);
-                priceChecks[key] = {
-                    configured: true,
-                    id: price.id,
-                    currency: price.currency,
-                    unit_amount: price.unit_amount,
-                    recurring: price.recurring,
-                    active: price.active,
-                };
-            } catch (e) {
-                priceChecks[key] = { configured: true, id: priceId, error: e.message };
-            }
-        }
-
-        const verdict = [];
-        if (account.country !== 'BR') {
-            verdict.push(`❌ Conta Stripe está no país "${account.country}" — Brazilian installments SÓ funciona com conta com country=BR. Esta é provavelmente a causa raiz.`);
-        } else {
-            verdict.push(`✅ Conta Stripe está em BR.`);
-        }
-        const nonBrlPrices = Object.entries(priceChecks).filter(([, p]) => p.configured && !p.error && p.currency !== 'brl');
-        if (nonBrlPrices.length) {
-            verdict.push(`❌ Os seguintes Prices NÃO estão em BRL: ${nonBrlPrices.map(([k, p]) => `${k}=${p.currency}`).join(', ')}. Recrie em BRL no Stripe Dashboard.`);
-        } else {
-            verdict.push(`✅ Todos os Prices estão em BRL.`);
-        }
-
-        res.json({
-            account: {
-                id: account.id,
-                country: account.country,
-                default_currency: account.default_currency,
-                capabilities: account.capabilities,
-            },
-            prices: priceChecks,
-            verdict,
-            next_steps: account.country !== 'BR'
-                ? 'A conta Stripe precisa estar registrada com país=Brasil. Não é possível mudar país de uma conta existente — você precisaria criar uma nova conta Stripe BR e migrar os Prices.'
-                : 'Tudo OK no nível de conta/Prices. Verifique no Dashboard → Settings → Payment methods → Cards se "Installments" está enabled para BR. Depois teste com cartão BR (4000 0070 2000 0027).',
-        });
-    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });

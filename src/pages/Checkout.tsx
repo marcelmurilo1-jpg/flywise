@@ -766,20 +766,11 @@ function StripeCardForm({ state, subscriptionId, onSuccess }: {
                 <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#0E2A55' }}>Plano {state.planName}</div>
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
-                        {state.billing === 'anual' ? 'Cobrança anual · parcele em até 12×' : 'Cobrança mensal · renova a cada 30 dias'}
+                        {state.billing === 'anual' ? 'Cobrança anual · renova a cada 12 meses' : 'Cobrança mensal · renova a cada 30 dias'}
                     </div>
                 </div>
                 <div style={{ fontSize: 22, fontWeight: 900, color: '#0E2A55' }}>R$ {state.priceVal}</div>
             </div>
-
-            {state.billing === 'anual' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#EEF2F8', border: '1px solid #DBE5F5', borderRadius: 10 }}>
-                    <span style={{ fontSize: 16 }}>💳</span>
-                    <div style={{ fontSize: 12, color: '#2A60C2', fontWeight: 600, lineHeight: 1.4 }}>
-                        Parcele em até <strong>12×</strong> — escolha o número de parcelas no formulário do cartão abaixo.
-                    </div>
-                </div>
-            )}
 
             <PaymentElement options={{ layout: 'tabs' }} />
 
