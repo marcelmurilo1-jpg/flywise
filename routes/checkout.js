@@ -6,109 +6,66 @@ import { requireUserJWT } from '../middleware/auth.js';
 const router = Router();
 
 const ABACATEPAY_API_KEY = process.env.ABACATEPAY_API_KEY || 'abc_dev_GwmHy0SnK5CAeB3YWPKckZrx';
-const ABACATEPAY_BASE = 'https://api.abacatepay.com/v1';
-
-const ABACATEPAY_PRODUCT_IDS = {
-    essencial_mensal: 'prod_YDKXdraxPUfeRsnsZDgMMDCg',
-    essencial_anual:  'prod_Qh0AG6G1K14s2amwwDGjrgZ6',
-    pro_mensal:       'prod_hMpBPa4bJAs5tPe61kx6P5PP',
-    pro_anual:        'prod_Q2L5JHSQspgQ2ESqQrer6qfk',
-    elite_mensal:     'prod_xF0RRKduTfm5mbjBfuL3yDx6',
-    elite_anual:      'prod_LaAabZfjm0KxAT3exn11EQTr',
-};
+const ABACATEPAY_BASE = 'https://api.abacatepay.com/v2';
 
 router.post('/api/checkout', async (req, res) => {
-    const { origin, destination, departureDate, returnDate, totalBrl, outboundCompany, returnCompany, customerName, customerEmail, customerTaxId, customerPhone, userId, billingType, returnPath } = req.body;
+    const { origin, destination, departureDate, returnDate, totalBrl, outboundCompany, returnCompany, customerName, customerEmail, customerTaxId, customerPhone, userId, billingType } = req.body;
 
     if (!totalBrl || totalBrl <= 0) {
         return res.status(400).json({ error: 'totalBrl é obrigatório e deve ser maior que zero' });
     }
 
-    const abHeaders = {
-        'Authorization': `Bearer ${ABACATEPAY_API_KEY}`,
-        'Content-Type': 'application/json',
-    };
-
     try {
-        // 1. Criar ou recuperar cliente
-        const customerPayload = {
-            name: customerName || 'FlyWise User',
-            email: customerEmail || 'user@flywise.app',
-            taxId: customerTaxId || '52998224725',
-            cellphone: customerPhone || '11999999999',
-        };
-
-        const custRes = await fetch(`${ABACATEPAY_BASE}/customer/create`, {
-            method: 'POST',
-            headers: abHeaders,
-            body: JSON.stringify(customerPayload),
-            signal: AbortSignal.timeout(15000),
-        });
-        const custData = await custRes.json();
-        console.log('[AbacatePay] Customer:', JSON.stringify(custData).slice(0, 200));
-
-        const customerId = custData.data?.id;
-        if (!customerId) {
-            console.error('[AbacatePay] Falha ao criar cliente:', custData);
-            return res.status(400).json({ error: custData.error || 'Falha ao criar cliente no AbacatePay' });
-        }
-
-        // 2. Criar cobrança
         const productName = returnDate
             ? `Passagem Aérea ${origin}→${destination} + ${destination}→${origin}`
             : origin === 'PLANO'
                 ? `FlyWise ${destination} — Assinatura`
                 : `Passagem Aérea ${origin}→${destination}`;
 
-        const externalId = `flywise-${origin}-${destination}-${Date.now()}`;
+        const plan = origin === 'PLANO' && typeof destination === 'string' ? destination.toLowerCase() : null;
 
-        const productKey = origin === 'PLANO'
-            ? `${destination.toLowerCase()}_${billingType ?? 'mensal'}`
-            : null;
-        const registeredProductId = productKey ? ABACATEPAY_PRODUCT_IDS[productKey] : null;
-
-        const productEntry = registeredProductId
-            ? { externalId: registeredProductId, name: productName, quantity: 1, price: Math.round(totalBrl * 100) }
-            : { externalId, name: productName, quantity: 1, price: Math.round(totalBrl * 100) };
-
-        // AbacatePay agora é exclusivamente PIX — cartão é via Stripe
-        const billingPayload = {
-            frequency: 'ONE_TIME',
-            methods: ['PIX'],
-            customerId,
-            products: [productEntry],
-            returnUrl: `${process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:5173'}${returnPath || '/onboarding'}`,
-            completionUrl: `${process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:5173'}${returnPath || '/onboarding'}`,
-            metadata: { origin, destination, departureDate, returnDate, outboundCompany, returnCompany, userId, billingType },
+        const payload = {
+            method: 'PIX',
+            data: {
+                amount: Math.round(totalBrl * 100),
+                description: productName.slice(0, 500),
+                expiresIn: 3600,
+                customer: {
+                    name: customerName || 'FlyWise User',
+                    email: customerEmail || 'user@flywise.app',
+                    taxId: customerTaxId || '52998224725',
+                    cellphone: customerPhone || '11999999999',
+                },
+                metadata: {
+                    origin, destination, departureDate, returnDate,
+                    outboundCompany, returnCompany,
+                    userId, billingType, plan,
+                },
+            },
         };
 
-        const abRes = await fetch(`${ABACATEPAY_BASE}/billing/create`, {
+        const abRes = await fetch(`${ABACATEPAY_BASE}/transparents/create`, {
             method: 'POST',
-            headers: abHeaders,
-            body: JSON.stringify(billingPayload),
+            headers: { 'Authorization': `Bearer ${ABACATEPAY_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
             signal: AbortSignal.timeout(15000),
         });
         const abData = await abRes.json();
 
-        if (!abRes.ok || abData.error) {
-            console.error('[AbacatePay] Erro billing:', abData);
-            return res.status(abRes.status).json({ error: abData.error || 'Erro ao criar cobrança' });
+        if (!abRes.ok || abData.success === false || !abData.data) {
+            console.error('[AbacatePay] Erro transparents/create:', JSON.stringify(abData).slice(0, 400));
+            return res.status(abRes.status || 500).json({ error: abData.error || 'Erro ao criar cobrança PIX' });
         }
 
-        console.log('[AbacatePay] Billing criado:', JSON.stringify(abData).slice(0, 400));
-
-        const d = abData.data ?? {};
-        const responseMethods = d.methods ?? [];
-        const pixMethod = responseMethods.find(m => m.method === 'PIX') ?? responseMethods[0] ?? {};
-        const pixCode = pixMethod.pixCode ?? pixMethod.brCode ?? d.brCode ?? d.pixCode ?? d.pixCopyPaste ?? null;
-        const pixQrCode = pixMethod.pixQrCode ?? pixMethod.qrCodeImage ?? d.qrCodeImage ?? null;
+        const d = abData.data;
+        console.log('[AbacatePay] PIX criado:', d.id, '· amount:', d.amount, '· expires:', d.expiresAt);
 
         res.json({
             id: d.id,
-            url: d.url,
-            pixCode,
-            pixQrCode,
+            pixCode: d.brCode,
+            pixQrCodeImg: d.brCodeBase64,
             status: d.status ?? 'PENDING',
+            expiresAt: d.expiresAt,
         });
     } catch (err) {
         console.error('[AbacatePay] Exceção:', err.message);
@@ -119,14 +76,13 @@ router.post('/api/checkout', async (req, res) => {
 router.get('/api/checkout/status/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const abRes = await fetch(`${ABACATEPAY_BASE}/billing/list`, {
+        const abRes = await fetch(`${ABACATEPAY_BASE}/transparents/check?id=${encodeURIComponent(id)}`, {
             headers: { 'Authorization': `Bearer ${ABACATEPAY_API_KEY}` },
             signal: AbortSignal.timeout(10000),
         });
         const abData = await abRes.json();
-        const billings = Array.isArray(abData.data) ? abData.data : [];
-        const billing = billings.find(b => b.id === id) ?? {};
-        res.json({ status: billing.status ?? 'PENDING', id: billing.id ?? id });
+        const d = abData.data ?? {};
+        res.json({ status: d.status ?? 'PENDING', id: d.id ?? id });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -316,26 +272,30 @@ router.post('/api/checkout/activate', async (req, res) => {
     }
 
     try {
-        const abRes = await fetch(`${ABACATEPAY_BASE}/billing/list`, {
+        // /v2/transparents/list?id=... retorna 1 item (a cobrança PIX) incluindo metadata.
+        // /transparents/check (mais leve) NÃO retorna metadata, por isso usamos list aqui.
+        const abRes = await fetch(`${ABACATEPAY_BASE}/transparents/list?id=${encodeURIComponent(billingId)}`, {
             headers: { 'Authorization': `Bearer ${ABACATEPAY_API_KEY}` },
             signal: AbortSignal.timeout(10000),
         });
         const abData = await abRes.json();
-        const billings = Array.isArray(abData.data) ? abData.data : [];
-        const d = billings.find(b => b.id === billingId) ?? {};
+        const list = Array.isArray(abData.data) ? abData.data : [];
+        const d = list.find(b => b.id === billingId) ?? {};
 
-        if (d.status !== 'PAID' && d.status !== 'COMPLETED') {
+        if (d.status !== 'PAID') {
             return res.status(402).json({ error: 'Pagamento ainda não confirmado', status: d.status ?? 'NOT_FOUND' });
         }
 
         const metadata = d.metadata ?? {};
-        const { billingType, origin, destination } = metadata;
+        const { billingType, origin, destination, plan: planFromMeta } = metadata;
 
         if (origin !== 'PLANO' || !destination) {
             return res.status(400).json({ error: 'Cobrança não é de plano' });
         }
 
-        const plan = ['essencial', 'pro', 'elite'].find(p => destination.toLowerCase().includes(p));
+        const plan = planFromMeta && ['essencial', 'pro', 'elite'].includes(planFromMeta)
+            ? planFromMeta
+            : ['essencial', 'pro', 'elite'].find(p => destination.toLowerCase().includes(p));
         if (!plan) {
             return res.status(400).json({ error: 'Plano não identificado: ' + destination });
         }
@@ -361,8 +321,8 @@ router.post('/api/checkout/activate', async (req, res) => {
 
         console.log(`[Activate] Plano ${plan} ativado para ${userId}`);
 
-        const amountCents = d.products?.[0]?.price ?? d.amount ?? null;
-        sendWelcomeEmail({ userId, plan, billingType: billingType ?? 'mensal', expiresAt, billingId: billingId, amountCents }).catch(() => {});
+        const amountCents = d.amount ?? null;
+        sendWelcomeEmail({ userId, plan, billingType: billingType ?? 'mensal', expiresAt, billingId, amountCents }).catch(() => {});
 
         res.json({ ok: true, plan, plan_expires_at: expiresAt });
     } catch (err) {

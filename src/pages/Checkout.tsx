@@ -88,7 +88,6 @@ export default function Checkout() {
 
     // PIX state
     const [billingId, setBillingId] = useState<string | null>(null)
-    const [billingUrl, setBillingUrl] = useState<string | null>(null)
     const [pixCode, setPixCode] = useState<string | null>(null)
     const [creating, setCreating] = useState(false)
     const [createError, setCreateError] = useState<string | null>(null)
@@ -181,7 +180,6 @@ export default function Checkout() {
         setCreateError(null)
         setPixCode(null)
         setBillingId(null)
-        setBillingUrl(null)
         setPaymentStatus('PENDING')
         try {
             const res = await fetch(apiUrl('/api/checkout'), {
@@ -204,7 +202,6 @@ export default function Checkout() {
             const data = await res.json()
             if (!res.ok || data.error) throw new Error(data.error || 'Erro ao criar cobrança')
             setBillingId(data.id)
-            setBillingUrl(data.url ?? null)
             setPixCode(data.pixCode ?? null)
         } catch (err: any) {
             setCreateError(err.message)
@@ -487,17 +484,6 @@ export default function Checkout() {
                                         </span>
                                     </div>
 
-                                    {billingUrl && (
-                                        <div style={{ textAlign: 'center' }}>
-                                            <a href={billingUrl} target="_blank" rel="noopener noreferrer"
-                                                style={{ fontSize: 12, color: '#94A3B8', textDecoration: 'none', borderBottom: '1px solid rgba(148,163,184,0.35)', paddingBottom: 1, transition: 'color .2s' }}
-                                                onMouseEnter={e => (e.currentTarget.style.color = '#64748B')}
-                                                onMouseLeave={e => (e.currentTarget.style.color = '#94A3B8')}
-                                            >
-                                                Prefere pagar pelo site da AbacatePay? Clique aqui →
-                                            </a>
-                                        </div>
-                                    )}
                                 </>
                             )}
                         </motion.div>
