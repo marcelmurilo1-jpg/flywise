@@ -713,6 +713,7 @@ function mapToFlightOffer(item, origin, destination, date, idx) {
         flight_key: `gf-${origin}-${destination}-${date}-${idx}`,
         provider: 'google',
         isRoundtripTotal: item.is_roundtrip_total || false,
+        returnPartida: item.return_partida ?? null,
     };
 }
 
@@ -913,18 +914,26 @@ async function scrapePriceGraph(page, origin, destination) {
 }
 
 async function doScrape(origin, destination, date, returnDate) {
-    // Roda ida e volta em paralelo (scrapeLimit=2 permite 2 contextos simultâneos)
-    const [rawOut, rawIn] = await Promise.all([
-        scrapeOneway(origin, destination, date, null),
-        returnDate
-            ? scrapeOneway(destination, origin, returnDate, null)
-            : Promise.resolve({ flights: [], priceGraph: null }),
-    ]);
+    if (returnDate) {
+        // Round-trip: uma busca combinada com returnDate → Google Flights mostra preço total ida+volta
+        // (igual ao que o usuário vê no Google Flights, evita somar dois preços de ida avulsa)
+        const rawOut = await scrapeOneway(origin, destination, date, returnDate);
+        const outbound = rawOut.flights
+            .filter(i => i.preco_brl > 0)
+            .map((i, idx) => {
+                i.is_roundtrip_total = true;
+                i.return_partida = `${returnDate}T00:00:00`;
+                return mapToFlightOffer(i, origin, destination, date, idx);
+            });
+        return { outbound, inbound: [], priceGraph: rawOut.priceGraph ?? null };
+    }
 
-    const outbound = rawOut.flights.filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
-    const inbound = (rawIn.flights ?? []).filter(i => i.preco_brl > 0).map((i, idx) => mapToFlightOffer(i, destination, origin, returnDate || date, idx));
-
-    return { outbound, inbound, priceGraph: rawOut.priceGraph ?? null };
+    // Ida simples
+    const rawOut = await scrapeOneway(origin, destination, date, null);
+    const outbound = rawOut.flights
+        .filter(i => i.preco_brl > 0)
+        .map((i, idx) => mapToFlightOffer(i, origin, destination, date, idx));
+    return { outbound, inbound: [], priceGraph: rawOut.priceGraph ?? null };
 }
 
 // Expande até MAX_EXPAND voos com conexão para extrair segmentos (limitado para não atrasar a resposta)
