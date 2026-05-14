@@ -35,6 +35,7 @@ export interface SeatsFlightData {
     premiumEconomy?: number | null
     business?: number | null
     first?: number | null
+    bookingLink?: string | null
 }
 
 interface SeatsFlightPanelProps {
@@ -467,6 +468,16 @@ export function SeatsFlightPanel({
                                     <div style={{ fontSize: '22px', fontWeight: 900, color: '#0E2A55', letterSpacing: '-0.02em' }}>{sf.precoMilhas.toLocaleString('pt-BR')} pts</div>
                                     {sf.taxas && sf.taxas !== '0' && <div style={{ fontSize: '11px', color: '#94A3B8' }}>+ {sf.taxas} taxas</div>}
                                 </div>
+                                {sf.bookingLink && (
+                                    <a
+                                        href={sf.bookingLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{ background: '#F97316', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                    >
+                                        🔗 Reservar
+                                    </a>
+                                )}
                                 <button onClick={() => handleSelect(sf)} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                                     Selecionar →
                                 </button>
