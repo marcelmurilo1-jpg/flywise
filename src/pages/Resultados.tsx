@@ -62,10 +62,79 @@ export default function Resultados() {
     // Price graph from Google Flights
     const [priceGraph, setPriceGraph] = useState<PriceGraph | null>(null)
 
+    // Return flight scrape state (two-phase round-trip selection)
+    const [loadingReturn, setLoadingReturn] = useState(false)
+    const [returnError, setReturnError] = useState('')
+
     // Sidebar + watchlist state
     const [filters, setFilters] = useState<FilterState>({ sortBy: 'best', stops: [], airlines: [], maxPrice: null })
     const [showMobileFilters, setShowMobileFilters] = useState(false)
     const [watchlistModal, setWatchlistModal] = useState<Omit<WatchlistModalProps, 'open' | 'onClose'> | null>(null)
+
+    // Row mapper — shared between initial load and return-flight scrape
+    const toRow = (o: any, isReturn = false): ResultadoVoo => ({
+        id: 0,
+        busca_id: buscaId,
+        user_id: user?.id,
+        provider: o.provider,
+        companhia: o.companhia,
+        preco_brl: o.preco_brl,
+        preco_milhas: null,
+        taxas_brl: o.taxas_brl,
+        cpm: null,
+        partida: o.partida,
+        chegada: o.chegada,
+        origem: o.origem,
+        destino: o.destino,
+        duracao_min: o.duracao_min,
+        cabin_class: o.cabin_class,
+        flight_key: o.flight_key,
+        estrategia_disponivel: !isReturn,
+        moeda: 'BRL',
+        segmentos: o.segmentos,
+        detalhes: {
+            paradas: o.paradas, voo_numero: o.voo_numero,
+            carrierCode: o.carrierCode, layoverCity: o.layoverCity,
+            layoverDurations: o.layoverDurations, numeroVoos: o.numeroVoos,
+            aeronaves: o.aeronaves,
+            isRoundtripTotal: o.isRoundtripTotal || false,
+            returnPartida: o.returnPartida, returnChegada: o.returnChegada,
+            returnOrigem: o.returnOrigem, returnDestino: o.returnDestino,
+            returnDuracaoMin: o.returnDuracaoMin, returnParadas: o.returnParadas,
+            returnSegmentos: o.returnSegmentos,
+            ...(isReturn ? { isReturn: true } : {}),
+        },
+        created_at: new Date().toISOString(),
+    } as unknown as ResultadoVoo)
+
+    // Two-phase round-trip: after selecting outbound, scrape return flights
+    const handleSelectCashIda = async (flight: ResultadoVoo | null) => {
+        setCashIdaSel(flight)
+        setCashVoltaSel(null)
+        if (!flight) {
+            setInboundFlights([])
+            return
+        }
+        // One-way search or already have inbound → nothing to do
+        if (!dateBack || inboundFlights.length > 0) return
+
+        setLoadingReturn(true)
+        setReturnError('')
+        try {
+            const result = await searchFlights({
+                origin: (flight.destino ?? destIata).toUpperCase(),
+                destination: (flight.origem ?? originIata).toUpperCase(),
+                departureDate: dateBack,
+                adults: pax,
+                max: 15,
+            })
+            setInboundFlights(result.flights.map(o => toRow(o, true)))
+        } catch (e) {
+            setReturnError(e instanceof Error ? e.message : 'Não foi possível buscar os voos de volta.')
+        } finally {
+            setLoadingReturn(false)
+        }
+    }
 
     // Derived values for sidebar
     const allAirlines = useMemo(() =>
@@ -167,41 +236,6 @@ export default function Resultados() {
                 }
 
                 if (offers.length === 0) throw new Error('Nenhum voo encontrado para esta rota. Tente novamente em alguns instantes.')
-
-                const toRow = (o: any, isReturn = false): ResultadoVoo => ({
-                    id: 0,
-                    busca_id: buscaId,
-                    user_id: userId,
-                    provider: o.provider,
-                    companhia: o.companhia,
-                    preco_brl: o.preco_brl,
-                    preco_milhas: null,
-                    taxas_brl: o.taxas_brl,
-                    cpm: null,
-                    partida: o.partida,
-                    chegada: o.chegada,
-                    origem: o.origem,
-                    destino: o.destino,
-                    duracao_min: o.duracao_min,
-                    cabin_class: o.cabin_class,
-                    flight_key: o.flight_key,
-                    estrategia_disponivel: !isReturn,
-                    moeda: 'BRL',
-                    segmentos: o.segmentos,
-                    detalhes: {
-                        paradas: o.paradas, voo_numero: o.voo_numero,
-                        carrierCode: o.carrierCode, layoverCity: o.layoverCity,
-                        layoverDurations: o.layoverDurations, numeroVoos: o.numeroVoos,
-                        aeronaves: o.aeronaves,
-                        isRoundtripTotal: o.isRoundtripTotal || false,
-                        returnPartida: o.returnPartida, returnChegada: o.returnChegada,
-                        returnOrigem: o.returnOrigem, returnDestino: o.returnDestino,
-                        returnDuracaoMin: o.returnDuracaoMin, returnParadas: o.returnParadas,
-                        returnSegmentos: o.returnSegmentos,
-                        ...(isReturn ? { isReturn: true } : {}),
-                    },
-                    created_at: new Date().toISOString(),
-                } as unknown as ResultadoVoo)
 
                 const rows        = offers.map(o => toRow(o, false))
                 const inboundRows = inboundOffers.map(o => toRow(o, true))
@@ -437,9 +471,11 @@ export default function Resultados() {
                                         sidebarFilters={filters}
                                         returnDate={dateBack || undefined}
                                         cashIdaSel={cashIdaSel}
-                                        onSelectCashIda={setCashIdaSel}
+                                        onSelectCashIda={handleSelectCashIda}
                                         cashVoltaSel={cashVoltaSel}
                                         onSelectCashVolta={setCashVoltaSel}
+                                        loadingReturn={loadingReturn}
+                                        returnError={returnError}
                                         onMonitorar={(flight) => setWatchlistModal({
                                             type: 'cash',
                                             origin: flight.origem || originIata || '',

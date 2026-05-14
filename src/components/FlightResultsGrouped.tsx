@@ -21,6 +21,8 @@ interface FlightResultsGroupedProps {
     cashVoltaSel?: ResultadoVoo | null
     onSelectCashVolta?: (f: ResultadoVoo | null) => void
     onMonitorar?: (flight: ResultadoVoo) => void
+    loadingReturn?: boolean
+    returnError?: string
 }
 
 function formatTime(iso?: string) {
@@ -419,7 +421,9 @@ function FlightCard({
     const segsOut = (flight.segmentos as any[]) ?? []
     const hasReturn = !!det.returnPartida
     const iata = det.carrierCode || extractIata(flight.companhia)
-    const showReturn = hasReturn && !hasInboundFlights
+    // Only show the inline return leg when we have real return data (Amadeus combined offer),
+    // not for Google Flights round-trip results where returnPartida is just a date placeholder.
+    const showReturn = hasReturn && !det.isRoundtripTotal && !!det.returnChegada && !hasInboundFlights
     const layoverCity = det.layoverCity || ''
     const connectionStr = layoverCity || stopCodes(segsOut)
 
@@ -605,6 +609,7 @@ export function FlightResultsGrouped({
     flights, inboundFlights = [], searchInfo, onNewSearch, sidebarFilters,
     returnDate,
     cashIdaSel, onSelectCashIda, cashVoltaSel, onSelectCashVolta, onMonitorar,
+    loadingReturn = false, returnError = '',
 }: Omit<FlightResultsGroupedProps, 'buscaId'> & { buscaId?: number }) {
     const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({})
 
@@ -659,14 +664,17 @@ export function FlightResultsGrouped({
 
     const cashPhase = !canSelect ? 'display'
         : !cashIdaSel ? 'ida'
+        : loadingReturn ? 'loading-return'
         : (hasInbound && !cashVoltaSel) ? 'volta'
         : 'summary'
 
     const cashTotal = (() => {
         if (!cashIdaSel) return null
         const det = (cashIdaSel.detalhes as any) ?? {}
-        // Amadeus combined offer: single record covers both legs (returnPartida present)
-        if (det.returnPartida) return cashIdaSel.preco_brl ?? 0
+        // Google Flights round-trip: outbound price is already the combined estimate
+        if (det.isRoundtripTotal) return cashIdaSel.preco_brl ?? 0
+        // Amadeus real combined offer
+        if (det.returnPartida && det.returnChegada) return cashIdaSel.preco_brl ?? 0
         return (cashIdaSel.preco_brl ?? 0) + (cashVoltaSel ? (cashVoltaSel.preco_brl ?? 0) : 0)
     })()
 
@@ -696,6 +704,7 @@ export function FlightResultsGrouped({
                     <p style={{ fontSize: 12, color: '#94A3B8' }}>
                         {sorted.length} de {flights.length} {flights.length === 1 ? 'opção' : 'opções'} · ordenadas por {labelMap[sidebarFilters?.sortBy ?? 'best']}
                         {cashPhase === 'volta' && <span style={{ color: '#16A34A', fontWeight: 700 }}> · Selecione a volta</span>}
+                        {cashPhase === 'loading-return' && <span style={{ color: '#2A60C2', fontWeight: 700 }}> · Buscando voos de volta…</span>}
                     </p>
                 </div>
             </motion.div>
@@ -711,31 +720,38 @@ export function FlightResultsGrouped({
             {cashPhase === 'summary' && cashIdaSel && (
                 <>
                     {/* Total price bar */}
-                    <div style={{ background: '#0E2A55', borderRadius: 12, padding: '12px 18px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                        <div>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
-                                {cashVoltaSel ? 'Ida + Volta selecionadas' : 'Ida selecionada'}
+                    {(() => {
+                        const selDet = (cashIdaSel.detalhes as any) ?? {}
+                        const isEstimate = selDet.isRoundtripTotal
+                        return (
+                            <div style={{ background: '#0E2A55', borderRadius: 12, padding: '12px 18px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                                <div>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                                        {cashVoltaSel ? 'Ida + Volta selecionadas' : isEstimate ? 'Estimativa total ida + volta' : 'Ida selecionada'}
+                                    </div>
+                                    <div style={{ fontSize: 20, fontWeight: 900, color: '#fff' }}>
+                                        R$ {cashTotal?.toLocaleString('pt-BR')}
+                                    </div>
+                                    {isEstimate && (
+                                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                                            Preço calculado pelo Google Flights · pode variar com a volta escolhida
+                                        </div>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => { onSelectCashIda?.(null); onSelectCashVolta?.(null) }}
+                                    style={{ background: 'none', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontFamily: 'inherit' }}
+                                >
+                                    ← Escolher novamente
+                                </button>
                             </div>
-                            <div style={{ fontSize: 20, fontWeight: 900, color: '#fff' }}>
-                                R$ {cashTotal?.toLocaleString('pt-BR')}
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => { onSelectCashIda?.(null); onSelectCashVolta?.(null) }}
-                            style={{ background: 'none', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontFamily: 'inherit' }}
-                        >
-                            ← Escolher novamente
-                        </button>
-                    </div>
+                        )
+                    })()}
 
-                    {/* Warning: round-trip with no return flights found */}
-                    {isRoundTrip && !hasInbound && !cashVoltaSel && (
-                        <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '10px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ fontSize: 13 }}>⚠️</span>
-                            <div style={{ flex: 1 }}>
-                                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#92400E' }}>Voos de volta não encontrados</p>
-                                <p style={{ margin: 0, fontSize: 11, color: '#B45309' }}>Busque a volta diretamente no Google Flights.</p>
-                            </div>
+                    {/* Error loading return flights */}
+                    {returnError && (
+                        <div style={{ background: '#FFF1F2', border: '1px solid #FECDD3', borderRadius: 10, padding: '10px 16px', marginBottom: 12 }}>
+                            <p style={{ margin: 0, fontSize: 12, color: '#BE123C' }}>{returnError}</p>
                         </div>
                     )}
 
@@ -758,6 +774,30 @@ export function FlightResultsGrouped({
                             onClear={() => onSelectCashVolta?.(null)}
                             hasInboundFlights={hasInbound}
                         />
+                    )}
+                </>
+            )}
+
+            {/* ── Loading-return phase: pinned outbound + spinner ───────────── */}
+            {cashPhase === 'loading-return' && cashIdaSel && (
+                <>
+                    <FlightCard
+                        flight={cashIdaSel} idx={0} isReturn={false} isPinned
+                        isExpanded={!!expandedCards[cashIdaSel.flight_key ?? 'pin-ida-loading']}
+                        onToggleExpand={() => toggleExpand(cashIdaSel.flight_key ?? 'pin-ida-loading')}
+                        canSelect={false} isSelected onSelect={() => {}}
+                        onClear={() => onSelectCashIda?.(null)}
+                        hasInboundFlights={false}
+                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '32px 20px', background: '#fff', border: '1px solid var(--border-light)', borderRadius: 16, marginBottom: 12 }}>
+                        <div style={{ width: 32, height: 32, border: '3px solid #E2EAF5', borderTopColor: '#2A60C2', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#64748B' }}>Buscando voos de volta…</p>
+                        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                    </div>
+                    {returnError && (
+                        <div style={{ background: '#FFF1F2', border: '1px solid #FECDD3', borderRadius: 10, padding: '10px 16px', marginBottom: 12 }}>
+                            <p style={{ margin: 0, fontSize: 12, color: '#BE123C' }}>{returnError}</p>
+                        </div>
                     )}
                 </>
             )}
