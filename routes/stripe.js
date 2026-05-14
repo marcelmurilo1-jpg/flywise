@@ -88,7 +88,7 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
 
         // 2. Cria Subscription incompleta — Stripe retorna clientSecret via confirmation_secret.
         // Parcelamento BR fica no PaymentIntent (API 2026-04 removeu installments
-        // de subscription.payment_settings).
+        // de subscription.payment_settings — retorna "unknown parameter" se setar aqui).
         const isAnnual = billing === 'anual';
         const subscription = await stripe.subscriptions.create({
             customer: customerId,
@@ -110,14 +110,12 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
         }
 
         // Habilita parcelamento (BR-only) no PaymentIntent quando for plano anual.
-        // PI ID é derivado do client_secret (formato pi_XXX_secret_YYY) — mais
-        // confiável que latest_invoice.payments (que pode estar vazio em invoices
-        // recém-criadas com default_incomplete antes de qualquer tentativa de pagamento).
+        // PI ID derivado do client_secret (formato pi_XXX_secret_YYY).
         if (isAnnual) {
             const paymentIntentId = clientSecret.split('_secret_')[0];
             if (paymentIntentId.startsWith('pi_')) {
                 try {
-                    await stripe.paymentIntents.update(paymentIntentId, {
+                    const updated = await stripe.paymentIntents.update(paymentIntentId, {
                         payment_method_options: {
                             card: {
                                 request_three_d_secure: 'automatic',
@@ -125,9 +123,13 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
                             },
                         },
                     });
-                    console.log('[Stripe] Installments habilitado no PI', paymentIntentId);
+                    const enabled = updated.payment_method_options?.card?.installments?.enabled;
+                    console.log('[Stripe] PI', paymentIntentId, 'installments.enabled =', enabled, '· currency =', updated.currency, '· amount =', updated.amount);
+                    if (!enabled) {
+                        console.warn('[Stripe] Stripe aceitou o update mas installments NÃO ficou habilitado — verifique se a conta tem Brazilian installments ativado no Dashboard (Settings → Payment methods → Cards → Installments).');
+                    }
                 } catch (e) {
-                    console.warn('[Stripe] Falha ao habilitar installments no PI', paymentIntentId, '—', e.message);
+                    console.error('[Stripe] FALHA ao habilitar installments no PI', paymentIntentId, '—', e.message);
                 }
             } else {
                 console.warn('[Stripe] client_secret inesperado, não foi possível derivar PI ID:', clientSecret);

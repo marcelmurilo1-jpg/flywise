@@ -170,17 +170,11 @@ export default function Checkout() {
         }
     }
 
-    // Auto-create PIX billing when PIX tab is selected and no billing exists yet
+    // Auto-create PIX billing apenas quando a aba PIX está ativa e ainda não temos cobrança.
     useEffect(() => {
         if (!state || paymentMethod !== 'pix' || billingId || creating) return
         createPixBilling()
-    }, [paymentMethod]) // eslint-disable-line react-hooks/exhaustive-deps
-
-    // Auto-create on first mount with PIX
-    useEffect(() => {
-        if (!state) return
-        createPixBilling()
-    }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [state, paymentMethod]) // eslint-disable-line react-hooks/exhaustive-deps
 
     async function createPixBilling() {
         setCreating(true)
