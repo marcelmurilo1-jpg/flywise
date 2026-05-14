@@ -11,7 +11,9 @@
     "build": "tsc -b && vite build",
     "postinstall": "node scripts/install-playwright.cjs || true",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "setup-hooks": "cp scripts/hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push && echo 'Hooks instalados.'",
+    "sync-knowledge": "node scripts/sync-knowledge.js"
   },
   "dependencies": {
     "@number-flow/react": "^0.6.0",

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# ─── Hook pre-push: sincroniza knowledge/ com Supabase ───────────────────────
+# Instalado em .git/hooks/pre-push via: npm run setup-hooks
+# Só roda o sync se houver mudanças na pasta knowledge/ no commit sendo pushado.
+# Nunca bloqueia o push — erro no sync é avisado mas não impede o envio.
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Carrega variáveis de ambiente
+if [ -f "$REPO_ROOT/.env" ]; then
+  set -o allexport
+  source "$REPO_ROOT/.env"
+  set +o allexport
+fi
+if [ -f "$REPO_ROOT/.env.local" ]; then
+  set -o allexport
+  source "$REPO_ROOT/.env.local"
+  set +o allexport
+fi
+
+# Mapeia VITE_SUPABASE_URL → SUPABASE_URL (se necessário)
+export SUPABASE_URL="${SUPABASE_URL:-$VITE_SUPABASE_URL}"
+
+# Verifica se as vars necessárias estão presentes
+if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+  echo "⚠️  [knowledge-sync] SUPABASE_SERVICE_ROLE_KEY não encontrada no .env.local — sync ignorado."
+  echo "   Adicione a chave e rode manualmente: node scripts/sync-knowledge.js"
+  exit 0
+fi
+
+# Só sincroniza se houver mudanças em knowledge/ no que está sendo pushado
+CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep "^knowledge/" | wc -l | tr -d ' ')
+if [ "$CHANGED" = "0" ]; then
+  exit 0
+fi
+
+echo "📚 [knowledge-sync] $CHANGED arquivo(s) em knowledge/ alterado(s) — sincronizando com Supabase..."
+
+OBSIDIAN_VAULT_PATH="$REPO_ROOT/knowledge" \
+SUPABASE_URL="$SUPABASE_URL" \
+SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" \
+  node "$REPO_ROOT/scripts/sync-knowledge.js"
+
+if [ $? -eq 0 ]; then
+  echo "✅ [knowledge-sync] Sincronização concluída."
+else
+  echo "❌ [knowledge-sync] Erro no sync — verifique as credenciais. Push continua normalmente."
+fi
+
+exit 0
