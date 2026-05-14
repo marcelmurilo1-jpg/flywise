@@ -1224,6 +1224,37 @@ function buildMultiProgramComparison(
     return { analyses, comparisonStr }
 }
 
+// ─── Knowledge base RAG ───────────────────────────────────────────────────────
+
+async function fetchKnowledge(
+    programs: string[],
+    topics: string[],
+    sb: ReturnType<typeof createClient>
+): Promise<string> {
+    try {
+        const filters: string[] = []
+        if (programs.length > 0) filters.push(`programs.cs.{${programs.map(p => p.toLowerCase()).join(',')}}`)
+        if (topics.length > 0)   filters.push(`topics.cs.{${topics.join(',')}}`)
+        if (filters.length === 0) return ''
+
+        const { data } = await sb
+            .from('knowledge_base')
+            .select('title, content')
+            .eq('active', true)
+            .or(filters.join(','))
+            .order('updated_at', { ascending: false })
+            .limit(5)
+
+        if (!data?.length) return ''
+        const chunks = (data as { title: string; content: string }[])
+            .map(n => `## ${n.title}\n${n.content}`)
+        return `=== CONHECIMENTO BASE ===\n${chunks.join('\n\n---\n\n')}\n=== FIM DO CONHECIMENTO ===`
+    } catch (err) {
+        console.error('[strategy] fetchKnowledge error:', err)
+        return ''
+    }
+}
+
 // ─── User data ────────────────────────────────────────────────────────────────
 
 async function fetchUserData(userId: string, sb: ReturnType<typeof createClient>): Promise<UserData | null> {
@@ -1451,9 +1482,11 @@ serve(async (req) => {
         const targetProgram = seatsContext?.program ?? programs[0] ?? 'Smiles'
         const neededMiles = seatsContext?.totalMilhas ?? (flight.preco_brl ? Math.round((flight.preco_brl * 55) / 1000) * 1000 : 0)
 
-        const [promoResult, userData] = await Promise.all([
+        const knowledgeTopics = ['sweet-spots', 'parceiros', 'aliança', 'routing', 'resgate']
+        const [promoResult, userData, knowledgeContext] = await Promise.all([
             fetchPromos(targetProgram, programs, sb),
             userId ? fetchUserData(userId, sb) : Promise.resolve(null),
+            fetchKnowledge(programs, knowledgeTopics, sb),
         ])
 
         // Build per-program price map from client-provided Seats.aero data
@@ -1522,6 +1555,10 @@ serve(async (req) => {
 
         if (cpmSection) {
             sections.push('\n=== ANÁLISE DE VALOR ===', cpmSection)
+        }
+
+        if (knowledgeContext) {
+            sections.push('\n' + knowledgeContext)
         }
 
         if (comparisonStr) {

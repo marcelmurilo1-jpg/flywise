@@ -171,6 +171,32 @@ function toISO(d: Date): string {
     return d.toISOString().split('T')[0]
 }
 
+// ─── Knowledge base RAG ───────────────────────────────────────────────────────
+
+async function fetchKnowledge(programs: string[], topics: string[]): Promise<string> {
+    try {
+        const filters: string[] = []
+        if (programs.length > 0) filters.push(`programs.cs.{${programs.map(p => p.toLowerCase()).join(',')}}`)
+        if (topics.length > 0)   filters.push(`topics.cs.{${topics.join(',')}}`)
+        if (filters.length === 0) return ''
+
+        const { data } = await sbAdmin
+            .from('knowledge_base')
+            .select('title, content')
+            .eq('active', true)
+            .or(filters.join(','))
+            .order('updated_at', { ascending: false })
+            .limit(5)
+
+        if (!data?.length) return ''
+        const chunks = (data as { title: string; content: string }[])
+            .map(n => `## ${n.title}\n${n.content}`)
+        return `\n\nCONHECIMENTO BASE (dados verificados sobre programas e rotas):\n${chunks.join('\n\n---\n\n')}`
+    } catch {
+        return ''
+    }
+}
+
 // ─── Seats.aero API ───────────────────────────────────────────────────────────
 
 interface SeatsAeroResult {
@@ -434,6 +460,7 @@ serve(async (req) => {
             let transferBonusContext = ''
             let milesClubContext = ''
             let rawTransferPromos: any[] = []
+            let knowledgeContext = ''
             await Promise.all([
                 // Promoções de passagens relacionadas ao destino
                 (async () => {
@@ -505,6 +532,14 @@ serve(async (req) => {
                             milesClubContext = '\n\nOUTRAS PROMOÇÕES ATIVAS (compra de milhas, clubes, assinaturas):\n' + lines.join('\n') +
                                 '\n⚠️ REGRA: Mencione SOMENTE se for diretamente relevante para esta busca (ex: falta de milhas que a compra resolve, clube que gera bônus num programa encontrado). Se não se encaixa, ignore.'
                         }
+                    } catch { /* silencioso */ }
+                })(),
+                // Knowledge base — contexto de domínio (sweet spots, alianças, routing)
+                (async () => {
+                    try {
+                        const programs = (wizard_data.programs as string[] | undefined) ?? []
+                        const programList = programs.length > 0 ? programs : ['smiles', 'latam pass', 'livelo']
+                        knowledgeContext = await fetchKnowledge(programList, ['sweet-spots', 'parceiros', 'routing', 'aliança', 'resgate'])
                     } catch { /* silencioso */ }
                 })(),
             ])
@@ -617,6 +652,7 @@ Configuração da busca:
 - Meses: ${(wizard_data.months as string[] | undefined)?.join(', ') ?? datePeriod}
 
 Você tem acesso à ferramenta search_awards para buscar detalhes de disponibilidade em rotas específicas.
+${knowledgeContext}
 
 ${resolvedParaOndeInstructions}`
                 : `Você é o FlyWise AI, especialista em milhas aéreas e viagens para brasileiros.
@@ -634,6 +670,7 @@ ${passagensContext}${transferBonusContext}
 ${milesClubContext}
 
 Você tem acesso à ferramenta search_awards com dados reais do Seats.aero.
+${knowledgeContext}
 
 ${resolvedBuscaInstructions}`
 
