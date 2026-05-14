@@ -9,8 +9,7 @@ import { initBrowser, ensureChromium, closeBrowserIfIdle, chromiumBinaryExists }
 import seatsRouter from './routes/seats.js';
 import watchlistRouter from './routes/watchlist.js';
 import amadeusRouter from './routes/amadeus.js';
-import checkoutRouter from './routes/checkout.js';
-import stripeRouter, { webhookHandler as stripeWebhookHandler, webhookRawMiddleware as stripeWebhookRaw } from './routes/stripe.js';
+import paymentsRouter, { webhookHandler as paymentsWebhookHandler, webhookRawMiddleware as paymentsWebhookRaw } from './routes/payments.js';
 import awardPricesRouter from './routes/awardPrices.js';
 import transferPromosRouter, { refreshPromotionsCache } from './routes/transferPromos.js';
 import adminRouter, { syncTransferData } from './routes/admin.js';
@@ -41,8 +40,10 @@ process.on('unhandledRejection', reason => console.error('[FATAL] unhandledRejec
 const app = express();
 app.use(cors());
 
-// Stripe webhook precisa do raw body para validar assinatura — registrado ANTES de express.json()
-app.post('/api/stripe/webhook', stripeWebhookRaw, stripeWebhookHandler);
+// Webhook do gateway de pagamento precisa do raw body para validar assinatura HMAC —
+// registrado ANTES de express.json(). Quando a próxima gateway for integrada, esse
+// endpoint passa a receber os eventos dela.
+app.post('/api/payments/webhook', paymentsWebhookRaw, paymentsWebhookHandler);
 
 app.use(express.json());
 app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
@@ -50,8 +51,7 @@ app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() 
 app.use('/', seatsRouter);
 app.use('/', watchlistRouter);
 app.use('/', amadeusRouter);
-app.use('/', checkoutRouter);
-app.use('/', stripeRouter);
+app.use('/', paymentsRouter);
 app.use('/', awardPricesRouter);
 app.use('/', transferPromosRouter);
 app.use('/', adminRouter);

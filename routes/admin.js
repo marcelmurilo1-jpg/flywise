@@ -907,15 +907,6 @@ router.get('/api/admin/api-status', requireAdminJWT, async (_req, res) => {
             });
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
         }),
-        check('AbacatePay', async () => {
-            const key = process.env.ABACATEPAY_API_KEY;
-            if (!key) throw new Error('API key não configurada');
-            const r = await fetch('https://api.abacatepay.com/v1/billing/list', {
-                headers: { Authorization: `Bearer ${key}` },
-                signal: AbortSignal.timeout(8000),
-            });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        }),
     ]);
 
     res.json({ checks: results, checkedAt: new Date().toISOString() });

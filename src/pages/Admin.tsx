@@ -104,7 +104,7 @@ const CATEGORY_COLORS: Record<CostCategory, string> = {
 const SUGGESTED_SERVICES: Record<CostCategory, string[]> = {
     Infraestrutura: ['Vercel', 'Railway', 'Supabase', 'Cloudflare', 'Domínio'],
     APIs:           ['Anthropic (Claude)', 'Seats.aero', 'Amadeus', 'Google APIs'],
-    Pagamentos:     ['AbacatePay', 'Stripe', 'Taxas de processamento'],
+    Pagamentos:     ['Gateway de pagamento', 'Taxas de processamento'],
     Marketing:      ['Google Ads', 'Meta Ads', 'Ferramentas de e-mail'],
     Outros:         ['Ferramentas SaaS', 'Design', 'Jurídico'],
 }
