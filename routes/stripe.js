@@ -147,6 +147,63 @@ router.post('/api/stripe/create-subscription', async (req, res) => {
     }
 });
 
+// ─── GET /api/stripe/diagnose-installments ───────────────────────────────────
+// Endpoint de diagnóstico: verifica se a conta Stripe + Prices estão aptas a
+// mostrar parcelamento BR. Retorna JSON com TUDO que afeta installments.
+router.get('/api/stripe/diagnose-installments', async (req, res) => {
+    if (!stripe) return res.status(503).json({ error: 'Stripe não configurado' });
+    try {
+        const account = await stripe.accounts.retrieve();
+
+        const priceChecks = {};
+        for (const [key, priceId] of Object.entries(STRIPE_PRICE_IDS)) {
+            if (!priceId) { priceChecks[key] = { configured: false }; continue; }
+            try {
+                const price = await stripe.prices.retrieve(priceId);
+                priceChecks[key] = {
+                    configured: true,
+                    id: price.id,
+                    currency: price.currency,
+                    unit_amount: price.unit_amount,
+                    recurring: price.recurring,
+                    active: price.active,
+                };
+            } catch (e) {
+                priceChecks[key] = { configured: true, id: priceId, error: e.message };
+            }
+        }
+
+        const verdict = [];
+        if (account.country !== 'BR') {
+            verdict.push(`❌ Conta Stripe está no país "${account.country}" — Brazilian installments SÓ funciona com conta com country=BR. Esta é provavelmente a causa raiz.`);
+        } else {
+            verdict.push(`✅ Conta Stripe está em BR.`);
+        }
+        const nonBrlPrices = Object.entries(priceChecks).filter(([, p]) => p.configured && !p.error && p.currency !== 'brl');
+        if (nonBrlPrices.length) {
+            verdict.push(`❌ Os seguintes Prices NÃO estão em BRL: ${nonBrlPrices.map(([k, p]) => `${k}=${p.currency}`).join(', ')}. Recrie em BRL no Stripe Dashboard.`);
+        } else {
+            verdict.push(`✅ Todos os Prices estão em BRL.`);
+        }
+
+        res.json({
+            account: {
+                id: account.id,
+                country: account.country,
+                default_currency: account.default_currency,
+                capabilities: account.capabilities,
+            },
+            prices: priceChecks,
+            verdict,
+            next_steps: account.country !== 'BR'
+                ? 'A conta Stripe precisa estar registrada com país=Brasil. Não é possível mudar país de uma conta existente — você precisaria criar uma nova conta Stripe BR e migrar os Prices.'
+                : 'Tudo OK no nível de conta/Prices. Verifique no Dashboard → Settings → Payment methods → Cards se "Installments" está enabled para BR. Depois teste com cartão BR (4000 0070 2000 0027).',
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── GET /api/stripe/subscription/:id/status ──────────────────────────────────
 // Usado pelo frontend após confirmPayment para verificar se o webhook já ativou
 router.get('/api/stripe/subscription/:id/status', async (req, res) => {
