@@ -102,13 +102,14 @@ Fly Wise/
 │   │   └── refresh-extras/
 │   │       └── index.ts               ← Atrações extras para roteiros (Claude Haiku 4.5)
 │   └── migrations/                    ← 036 migrations. Nomear: NNN_descricao.sql
-├── knowledge/                         ← Vault Obsidian (knowledge base de domínio)
+├── knowledge/                         ← Vault Obsidian (knowledge base de domínio — lido pela LLM via RAG)
 │   ├── programs/                      ← Sweet spots por programa
 │   ├── concepts/                      ← CPM, quando vale a pena, etc.
 │   ├── routing/                       ← Dicas por rota
 │   └── alliances/                     ← Alianças e parcerias
 ├── scripts/
-│   └── sync-knowledge.js              ← Sync vault Obsidian → Supabase
+│   ├── sync-knowledge.js              ← Sync vault Obsidian → Supabase
+│   └── hooks/pre-push                 ← Hook instalado via npm run setup-hooks
 ├── .github/workflows/
 │   ├── scraper.yml                    ← Scraper Python 2x/dia (08h e 18h BRT)
 │   ├── sync-award-prices.yml          ← Sync preços toda segunda (07h UTC)
@@ -118,7 +119,8 @@ Fly Wise/
 └── docs/
     ├── context/
     │   ├── flywise-project-context.md ← Este arquivo (estado atual)
-    │   └── sessions/                  ← Histórico por sessão (YYYY-MM-DD.md)
+    │   ├── sessions/                  ← Histórico por sessão (YYYY-MM-DD.md)
+    │   └── prompts/                   ← Docs dos prompts das Edge Functions (cofre Obsidian — separado do knowledge/)
     └── superpowers/
         ├── specs/                     ← Design docs
         └── plans/                     ← Planos de implementação
@@ -214,6 +216,8 @@ Steps: `scraping` → `analyzing` → `updating` → `done` (ou `error`)
 | Seats.aero | 429 é normal. Cache de 10min em `seatsaero_searches` **não é opcional** — sem ele o app para |
 | Seats.aero | Cada programa tem estoque **separado** — milhas de programas diferentes não são equivalentes |
 | Edge Functions | Deploy sempre com `--no-verify-jwt` + validação manual via `auth.getUser(token)` |
+| Prompts | Alterar `prompts/*.ts` + push → hook `pre-push` deploya a Edge Function automaticamente |
+| knowledge/ | Só para domínio de milhas (lido pela LLM via RAG). Docs de dev ficam em `docs/context/` |
 | AbacatePay | Pagamento é **assíncrono** — confirmação chega via webhook, nunca no retorno do POST /checkout |
 | Playwright | `PLAYWRIGHT_BROWSERS_PATH` deve ser definido **antes** de qualquer `import 'playwright-extra'` |
 | Playwright | `_browser` é privado — usar `clearBrowserRef()` / `getBrowserRef()` de `browser.js` |
@@ -289,4 +293,4 @@ Estruturas que ficam no código (candidatos futuros ao knowledge base):
 O histórico de mudanças fica em `docs/context/sessions/` — um arquivo por data.
 Este arquivo reflete apenas o **estado atual** do projeto.
 
-Última sessão: [2026-05-14](sessions/2026-05-14.md)
+Última sessão: [2026-05-15](sessions/2026-05-15.md)
