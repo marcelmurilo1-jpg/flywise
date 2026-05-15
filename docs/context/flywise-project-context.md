@@ -117,7 +117,8 @@ Fly Wise/
 │   └── refetch.yml                    ← Reprocessa posts existentes
 └── docs/
     ├── context/
-    │   └── flywise-project-context.md ← Este arquivo
+    │   ├── flywise-project-context.md ← Este arquivo (estado atual)
+    │   └── sessions/                  ← Histórico por sessão (YYYY-MM-DD.md)
     └── superpowers/
         ├── specs/                     ← Design docs
         └── plans/                     ← Planos de implementação
@@ -174,7 +175,7 @@ Todas as Edge Functions usam `ANTHROPIC_API_KEY`. Zero dependência de OpenAI.
 | Arquivo                           | Linguagem            | Onde roda                   |
 | --------------------------------- | -------------------- | --------------------------- |
 | `browser.js` + `googleFlights.js` | Node.js (Playwright) | Processo Express no Railway |
-| `run.py` + `scrape_passageiro.py` | Python               | GitHub Actions (2x/dia)     |
+| `run.py` + `scrape_passageiro.py` + `scrape_melhores_destinos.py` | Python | GitHub Actions (2x/dia) |
 
 O scraper Python acessa Supabase diretamente via `DATABASE_URL` (PostgreSQL) — não passa pelo Express.
 O scraper JS roda dentro do processo Express via Playwright/Chromium.
