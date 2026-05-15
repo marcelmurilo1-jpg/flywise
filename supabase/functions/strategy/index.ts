@@ -1634,7 +1634,7 @@ serve(async (req) => {
             },
             body: JSON.stringify({
                 model: 'claude-haiku-4-5-20251001',
-                max_tokens: 2000,
+                max_tokens: 4096,
                 temperature: 0.2,
                 system: STRATEGY_SYSTEM_PROMPT
                     .replace(/\{\{CONFIRMED_PROGRAM\}\}/g, seatsContext?.program ?? targetProgram)
@@ -1652,8 +1652,11 @@ serve(async (req) => {
             throw new Error(`Anthropic ${llmRes.status}: ${detail}`)
         }
 
-        const strategyJson = llmData.content?.[0]?.text ?? '{}'
+        const rawText = llmData.content?.[0]?.text ?? '{}'
+        const strategyJson = rawText.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()
         const tokensUsed = (llmData.usage?.input_tokens ?? 0) + (llmData.usage?.output_tokens ?? 0)
+        const stopReason = llmData.stop_reason ?? 'unknown'
+        console.log(`[strategy] stop_reason=${stopReason} output_tokens=${llmData.usage?.output_tokens ?? 0}`)
         let parsed: Record<string, unknown> = {}
         try { parsed = JSON.parse(strategyJson) } catch { /* raw fallback */ }
 
@@ -1662,8 +1665,11 @@ serve(async (req) => {
             Array.isArray(parsed.steps) && (parsed.steps as unknown[]).length > 0 &&
             Array.isArray(parsed.step_details) && (parsed.step_details as unknown[]).length > 0
         if (!hasRequiredFields) {
-            console.error('[strategy] Claude response missing required fields:', strategyJson.slice(0, 200))
-            throw new Error('A IA retornou uma resposta incompleta. Tente novamente em instantes.')
+            const reason = stopReason === 'max_tokens'
+                ? 'A resposta foi cortada por limite de tokens. Tente novamente em instantes.'
+                : 'A IA retornou uma resposta incompleta. Tente novamente em instantes.'
+            console.error(`[strategy] Claude response missing required fields (stop_reason=${stopReason}):`, strategyJson.slice(0, 300))
+            throw new Error(reason)
         }
 
         // Merge server-side computed data with LLM narrative output

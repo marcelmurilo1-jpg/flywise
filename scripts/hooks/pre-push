@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# ─── Hook pre-push: sincroniza knowledge/ com Supabase ───────────────────────
-# Instalado em .git/hooks/pre-push via: npm run setup-hooks
-# Só roda o sync se houver mudanças na pasta knowledge/ no commit sendo pushado.
-# Nunca bloqueia o push — erro no sync é avisado mas não impede o envio.
+# ─── Hook pre-push ────────────────────────────────────────────────────────────
+# 1. Sincroniza knowledge/ com Supabase (RAG knowledge base)
+# 2. Deploya Edge Functions cujos prompts/*.ts foram alterados
+# Nunca bloqueia o push — erros são avisados mas não impedem o envio.
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
@@ -18,33 +18,48 @@ if [ -f "$REPO_ROOT/.env.local" ]; then
   set +o allexport
 fi
 
-# Mapeia VITE_SUPABASE_URL → SUPABASE_URL (se necessário)
 export SUPABASE_URL="${SUPABASE_URL:-$VITE_SUPABASE_URL}"
 
-# Verifica se as vars necessárias estão presentes
-if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-  echo "⚠️  [knowledge-sync] SUPABASE_SERVICE_ROLE_KEY não encontrada no .env.local — sync ignorado."
-  echo "   Adicione a chave e rode manualmente: node scripts/sync-knowledge.js"
-  exit 0
+CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null)
+
+# ── 1. Knowledge sync ─────────────────────────────────────────────────────────
+KNOWLEDGE_CHANGED=$(echo "$CHANGED_FILES" | grep "^knowledge/" | wc -l | tr -d ' ')
+
+if [ "$KNOWLEDGE_CHANGED" != "0" ]; then
+  if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+    echo "⚠️  [knowledge-sync] SUPABASE_SERVICE_ROLE_KEY não encontrada — sync ignorado."
+  else
+    echo "📚 [knowledge-sync] $KNOWLEDGE_CHANGED arquivo(s) alterado(s) — sincronizando..."
+    OBSIDIAN_VAULT_PATH="$REPO_ROOT/knowledge" \
+    SUPABASE_URL="$SUPABASE_URL" \
+    SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" \
+      node "$REPO_ROOT/scripts/sync-knowledge.js"
+    [ $? -eq 0 ] \
+      && echo "✅ [knowledge-sync] Sincronização concluída." \
+      || echo "❌ [knowledge-sync] Erro no sync — push continua normalmente."
+  fi
 fi
 
-# Só sincroniza se houver mudanças em knowledge/ no que está sendo pushado
-CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep "^knowledge/" | wc -l | tr -d ' ')
-if [ "$CHANGED" = "0" ]; then
-  exit 0
-fi
+# ── 2. Auto-deploy de Edge Functions com prompts alterados ────────────────────
+deploy_function() {
+  local fn="$1"
+  echo "🚀 [prompts-deploy] Deployando '$fn'..."
+  supabase functions deploy "$fn" --project-ref cwsjdkucffmiptrfvuxn 2>&1
+  [ $? -eq 0 ] \
+    && echo "✅ [prompts-deploy] '$fn' deployada." \
+    || echo "❌ [prompts-deploy] Erro ao deployar '$fn' — push continua normalmente."
+}
 
-echo "📚 [knowledge-sync] $CHANGED arquivo(s) em knowledge/ alterado(s) — sincronizando com Supabase..."
+STRATEGY_CHANGED=$(echo "$CHANGED_FILES" | grep "^supabase/functions/strategy/prompts/" | wc -l | tr -d ' ')
+CHATBUSCA_CHANGED=$(echo "$CHANGED_FILES" | grep "^supabase/functions/chat-busca/prompts/" | wc -l | tr -d ' ')
 
-OBSIDIAN_VAULT_PATH="$REPO_ROOT/knowledge" \
-SUPABASE_URL="$SUPABASE_URL" \
-SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" \
-  node "$REPO_ROOT/scripts/sync-knowledge.js"
-
-if [ $? -eq 0 ]; then
-  echo "✅ [knowledge-sync] Sincronização concluída."
-else
-  echo "❌ [knowledge-sync] Erro no sync — verifique as credenciais. Push continua normalmente."
+if [ "$STRATEGY_CHANGED" != "0" ] || [ "$CHATBUSCA_CHANGED" != "0" ]; then
+  if ! command -v supabase &>/dev/null; then
+    echo "⚠️  [prompts-deploy] CLI supabase não encontrada — deploy ignorado. Rode manualmente."
+  else
+    [ "$STRATEGY_CHANGED" != "0" ] && deploy_function "strategy"
+    [ "$CHATBUSCA_CHANGED" != "0" ] && deploy_function "chat-busca"
+  fi
 fi
 
 exit 0
