@@ -16,18 +16,18 @@ Produto em produção ativa. Desenvolvedor = fundador e único engenheiro.
 
 ## Tech Stack
 
-| Camada | Tecnologia |
-|---|---|
-| Frontend | React + TypeScript + Vite + Tailwind CSS v4 |
-| Backend (Express) | Node.js — Railway (auto-deploy via git push) |
-| Edge Functions | Deno — Supabase |
-| Banco de dados | Supabase (PostgreSQL) |
-| API de milhas | Seats.aero (disponibilidade award) |
-| Preços cash | Google Flights scraper (Playwright) |
-| IA estratégia | GPT-4o-mini via OpenAI |
+| Camada            | Tecnologia                                       |
+| ----------------- | ------------------------------------------------ |
+| Frontend          | React + TypeScript + Vite + Tailwind CSS v4      |
+| Backend (Express) | Node.js — Railway (auto-deploy via git push)     |
+| Edge Functions    | Deno — Supabase                                  |
+| Banco de dados    | Supabase (PostgreSQL)                            |
+| API de milhas     | Seats.aero (disponibilidade award)               |
+| Preços cash       | Google Flights scraper (Playwright)              |
+| IA estratégia     | Claude Haiku 4.5 (Anthropic)                     |
 | IA busca avançada | Claude Haiku 4.5 (buscas) + Sonnet 4.6 (análise) |
-| IA sync promoções | Claude Sonnet 4.6 (extração de RSS/blogs) |
-| Pagamento | AbacatePay (PIX + cartão, webhook assíncrono) |
+| IA sync promoções | Claude Sonnet 4.6 (extração de RSS/blogs)        |
+| Pagamento         | AbacatePay (PIX + cartão, webhook assíncrono)    |
 
 ---
 
@@ -58,7 +58,7 @@ Fly Wise/
 │   │                                    ⚠️ É .js — NUNCA adicionar TS annotations
 │   ├── amadeus.js                     ← Google Flights (ponte para scraper)
 │   ├── watchlist.js                   ← /api/watchlist (CRUD + sync)
-│   ├── checkout.js                    ← /api/checkout + webhook AbacatePay
+│   ├── payments.js                    ← /api/payments + webhook AbacatePay
 │   ├── awardPrices.js                 ← /api/award-prices
 │   ├── transferPromos.js              ← /api/transfer-promotions (cache in-memory)
 │   └── admin.js                       ← /api/admin/* (sync, stats, users, posts)
@@ -66,8 +66,9 @@ Fly Wise/
 │   ├── browser.js                     ← Playwright browser manager (Google Flights)
 │   ├── googleFlights.js               ← Extração de preços Google Flights
 │   ├── airlineMaps.js                 ← Mapas IATA → nome da cia/cidade
-│   ├── run.py                         ← Scraper promoções RSS (GitHub Actions 2x/dia)
+│   ├── run.py                         ← Orquestrador: chama Passageiro + Melhores Destinos (GitHub Actions 2x/dia)
 │   ├── scrape_passageiro.py           ← Scraper site Passageiro de Primeira
+│   ├── scrape_melhores_destinos.py    ← Scraper site Melhores Destinos
 │   └── notify.py                      ← Emails de alerta via Resend
 ├── middleware/
 │   └── auth.js                        ← requireAdminJWT, getWatchlistLimit
@@ -91,11 +92,15 @@ Fly Wise/
 │   │   ├── strategy/
 │   │   │   ├── index.ts               ← Edge Function de estratégia
 │   │   │   └── prompts/system.ts      ← Prompt do sistema (extraído)
-│   │   └── chat-busca/
-│   │       ├── index.ts               ← Edge Function de busca avançada
-│   │       └── prompts/
-│   │           ├── instructions-busca.ts
-│   │           └── instructions-para-onde.ts
+│   │   ├── chat-busca/
+│   │   │   ├── index.ts               ← Edge Function de busca avançada
+│   │   │   └── prompts/
+│   │   │       ├── instructions-busca.ts
+│   │   │       └── instructions-para-onde.ts
+│   │   ├── itinerary/
+│   │   │   └── index.ts               ← Edge Function de roteiros (Claude Sonnet 4.6)
+│   │   └── refresh-extras/
+│   │       └── index.ts               ← Atrações extras para roteiros (Claude Haiku 4.5)
 │   └── migrations/                    ← 036 migrations. Nomear: NNN_descricao.sql
 ├── knowledge/                         ← Vault Obsidian (knowledge base de domínio)
 │   ├── programs/                      ← Sweet spots por programa
@@ -106,7 +111,10 @@ Fly Wise/
 │   └── sync-knowledge.js              ← Sync vault Obsidian → Supabase
 ├── .github/workflows/
 │   ├── scraper.yml                    ← Scraper Python 2x/dia (08h e 18h BRT)
-│   └── sync-award-prices.yml          ← Sync preços toda segunda (07h UTC)
+│   ├── sync-award-prices.yml          ← Sync preços toda segunda (07h UTC)
+│   ├── sync-transfer-data.yml         ← Sync bônus de transferência
+│   ├── watchlist-check.yml            ← Verifica alertas da watchlist
+│   └── refetch.yml                    ← Reprocessa posts existentes
 └── docs/
     ├── context/
     │   └── flywise-project-context.md ← Este arquivo
@@ -120,25 +128,26 @@ Fly Wise/
 ## Funcionalidades Ativas
 
 - **Busca de voos**: Google Flights (preços cash) + Seats.aero (milhas award)
-- **Estratégia de milhas**: GPT-4o-mini calcula CPM, compara programas, gera passos executáveis
+- **Estratégia de milhas**: Claude Haiku 4.5 calcula CPM, compara programas, gera passos executáveis
 - **Busca avançada (chat)**: Claude Haiku faz buscas → Sonnet escreve análise final (streaming)
 - **Para onde posso voar**: descobre destinos alcançáveis com a carteira do usuário
 - **Booking links**: link direto ao site do programa via Seats.aero `/trips` API
 - **Knowledge base**: vault Obsidian sincronizado ao Supabase, injetado nas Edge Functions via RAG
 - **Sync bônus de transferência**: Claude Sonnet extrai promoções de RSS/blogs diariamente
-- **Planos de acesso**: free / essencial / pro / elite / admin
+- **Roteiros de viagem**: Claude Sonnet 4.6 gera itinerário day-by-day + atrações extras via `refresh-extras/`
+- **Planos de acesso**: free (1 estratégia lifetime) / essencial (3/mês) / pro (5/mês) / elite (10/mês) / admin
 
 ---
 
 ## Tiers de Plano
 
-| Tier | Watchlist | Estratégias | Roteiros | Alertas email |
-|------|-----------|-------------|----------|---------------|
-| `free` | 0 | 3/mês | 1 | Não |
-| `essencial` | 3 | 10/mês | 5 | Sim |
-| `pro` | 10 | ilimitado | 15 | Sim |
-| `elite` | ilimitado | ilimitado | ilimitado | Sim + SMS |
-| `admin` | ilimitado | ilimitado | ilimitado | Sim |
+| Tier | Watchlist | Estratégias | Alertas email |
+|------|-----------|-------------|---------------|
+| `free` | 0 | 1 lifetime | Não |
+| `essencial` | 3 | 3/mês | Sim |
+| `pro` | 10 | 5/mês | Sim |
+| `elite` | 999 | 10/mês | Sim |
+| `admin` | 999 | ilimitado | Sim |
 
 Verificação no frontend: `usePlan()` + `PLAN_LIMITS` em `src/lib/planLimits.ts`.
 Verificação no backend: `getWatchlistLimit()` em `middleware/auth.js`.
@@ -150,20 +159,22 @@ Ativação: webhook AbacatePay → `user_profiles.plan` + `plan_expires_at`.
 
 | Feature | Modelo | Onde roda |
 |---------|--------|-----------|
-| Estratégias de milhas | OpenAI GPT-4o-mini | Edge Function `strategy/` |
+| Estratégias de milhas | Claude Haiku 4.5 | Edge Function `strategy/` |
 | Busca avançada / para onde | Claude Haiku 4.5 + Sonnet 4.6 | Edge Function `chat-busca/` |
+| Roteiros day-by-day | Claude Sonnet 4.6 | Edge Function `itinerary/` |
+| Atrações extras (roteiros) | Claude Haiku 4.5 | Edge Function `refresh-extras/` |
 | Sync promoções transferência | Claude Sonnet 4.6 | Node.js Express (`routes/admin.js`) |
 
-Edge Functions usam `OPENAI_API_KEY`. Sync de promoções usa `ANTHROPIC_API_KEY`. Completamente separados.
+Todas as Edge Functions usam `ANTHROPIC_API_KEY`. Zero dependência de OpenAI.
 
 ---
 
 ## Dois Scrapers em `scraper/`
 
-| Arquivo | Linguagem | Onde roda |
-|---------|-----------|-----------|
+| Arquivo                           | Linguagem            | Onde roda                   |
+| --------------------------------- | -------------------- | --------------------------- |
 | `browser.js` + `googleFlights.js` | Node.js (Playwright) | Processo Express no Railway |
-| `run.py` + `scrape_passageiro.py` | Python | GitHub Actions (2x/dia) |
+| `run.py` + `scrape_passageiro.py` | Python               | GitHub Actions (2x/dia)     |
 
 O scraper Python acessa Supabase diretamente via `DATABASE_URL` (PostgreSQL) — não passa pelo Express.
 O scraper JS roda dentro do processo Express via Playwright/Chromium.
@@ -209,7 +220,7 @@ Steps: `scraping` → `analyzing` → `updating` → `done` (ou `error`)
 | Google Flights | URL usa parâmetro `tfs` (protobuf em base64url) — não aceita query strings convencionais |
 | Railway | `VERCEL=1` desativa os crons — nunca definir essa variável no Railway |
 | Supabase RLS | Backend usa `SUPABASE_SERVICE_ROLE_KEY` (bypassa RLS). Frontend usa `VITE_SUPABASE_ANON_KEY` |
-| GitHub Actions | Mudanças em `scraper/*.py` afetam produção automaticamente nos workflows |
+| GitHub Actions | 5 workflows — mudanças em `scraper/*.py` afetam produção automaticamente |
 
 ---
 
@@ -272,15 +283,9 @@ Estruturas que ficam no código (candidatos futuros ao knowledge base):
 
 ---
 
-## Mudanças Recentes
+## Histórico de Sessões
 
-### 2026-05-14 — Knowledge Base + Prompt Management + Limpeza
-- **Corrigido bug crítico**: `routes/seats.js` tinha `(l: any)` (TS annotation em arquivo .js) — quebrava todos os endpoints Seats.aero
-- **Novo**: link Google Flights em `StrategyContent.tsx` quando `vale_a_pena === false`
-- **Novo**: prompts extraídos de `strategy/index.ts` e `chat-busca/index.ts` para `prompts/*.ts`
-- **Novo**: migration `036_knowledge_base.sql` — tabelas `knowledge_base` e `knowledge_inbox` (aplicada)
-- **Novo**: `scripts/sync-knowledge.js` — sincroniza vault Obsidian → Supabase (3 notas iniciais)
-- **Novo**: `fetchKnowledge()` em ambas as Edge Functions — RAG por tags injetado no prompt
-- **Novo**: git hook `pre-push` — sincroniza `knowledge/` automaticamente no push
-- **Limpeza**: removidos `FLYWISE_NOTAS.md`, `FLYWISE_CONTEXT.md`, `FLYWISE_DESIGN_SYSTEM.md`, `CLAUDE_PROJECT_INSTRUCTIONS.md` da raiz — conteúdo mesclado neste arquivo
-- **Requer**: `SUPABASE_SERVICE_ROLE_KEY` no `.env.local` para sync local funcionar
+O histórico de mudanças fica em `docs/context/sessions/` — um arquivo por data.
+Este arquivo reflete apenas o **estado atual** do projeto.
+
+Última sessão: [2026-05-14](sessions/2026-05-14.md)
